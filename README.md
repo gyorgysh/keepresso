@@ -61,6 +61,31 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 - ⬆️ **Self-updating.** Built-in auto-updates via [Sparkle](https://sparkle-project.org),
   with an EdDSA-signed appcast on GitHub Releases.
 
+## Screenshots
+
+<table>
+<tr>
+<td align="center" width="50%">
+  <img src="docs/assets/menu_triggers.webp" width="320" alt="Preferences: building a trigger rule set"><br>
+  <sub>Trigger engine: combine AC power, Wi-Fi, displays, and app conditions</sub>
+</td>
+<td align="center" width="50%">
+  <img src="docs/assets/menu_settings.webp" width="320" alt="Preferences: General tab with closed-display mode"><br>
+  <sub>General: keep-awake toggles, closed-display mode, launch at login</sub>
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+  <img src="docs/assets/menu_reminder.webp" width="320" alt="Preferences: still-brewing reminder settings"><br>
+  <sub>Reminders: a "still brewing" alert so a forgotten session can't drain the battery</sub>
+</td>
+<td align="center" width="50%">
+  <img src="docs/assets/menu_display.webp" width="320" alt="Preferences: experimental headless virtual display"><br>
+  <sub>Headless virtual display: crisp Screen Sharing on a Mac with no monitor</sub>
+</td>
+</tr>
+</table>
+
 ## Built for the agentic era
 
 **The only app you'll ever need for a headless Mac setup**, whether it's running
