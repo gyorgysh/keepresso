@@ -1,0 +1,67 @@
+name: Keepresso
+
+options:
+  bundleIdPrefix: sh.gyorgy
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+packages:
+  KeepressoCore:
+    path: .
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.6.0"
+
+targets:
+  Keepresso:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/Keepresso
+    dependencies:
+      - package: KeepressoCore
+        product: KeepressoCore
+      - package: Sparkle
+        product: Sparkle
+    info:
+      path: Sources/Keepresso/Info.plist
+      properties:
+        CFBundleName: Keepresso
+        CFBundleDisplayName: Keepresso
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "7"
+        LSUIElement: true            # menu-bar agent: no Dock icon
+        LSMinimumSystemVersion: "14.0"
+        NSHumanReadableCopyright: "MIT License"
+        # Reading the joined Wi-Fi SSID (for Wi-Fi triggers) needs Location access.
+        NSLocationWhenInUseUsageDescription: "Keepresso reads the name of your current Wi-Fi network so it can keep your Mac awake only on the networks you choose."
+        # Sparkle auto-update. The appcast is published as an asset on the GitHub
+        # Releases page; SUPublicEDKey is the EdDSA key that verifies each update.
+        # Generate the key pair once with Sparkle's `generate_keys` tool and paste
+        # the printed public key below (the private key stays in the Keychain).
+        SUFeedURL: "https://github.com/gyorgysh/keepresso/releases/latest/download/appcast.xml"
+        SUPublicEDKey: "n3mCQxtsVXbnaHZEzhv5Yfzr94+Y6CzwBk4jHtrCmm4="
+        SUEnableAutomaticChecks: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: sh.gyorgy.keepresso
+        MARKETING_VERSION: "0.7.0"
+        CURRENT_PROJECT_VERSION: "5"
+        SWIFT_VERSION: "5.9"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Bridges the Objective-C virtual-display wrapper (private CG API) to Swift.
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/Keepresso/Keepresso-Bridging-Header.h
+        ENABLE_HARDENED_RUNTIME: true
+        CODE_SIGN_STYLE: Automatic
+        # Not sandboxed by design: App Sandbox blocks IOPMAssertion. This is why
+        # Keepresso ships via GitHub/Homebrew, not the Mac App Store.
+        ENABLE_APP_SANDBOX: false
+
+schemes:
+  Keepresso:
+    build:
+      targets:
+        Keepresso: all
+    run:
+      config: Debug

@@ -1,0 +1,436 @@
+import AppKit
+import CoreLocation
+import Observation
+import UserNotifications
+import KeepressoCore
+
+/// App-level glue around ``SessionController``: owns persisted settings, builds
+/// the live trigger engine from saved rules, and keeps the two in sync.
+///
+/// The controller stays UI-free and persistence-free (it lives in
+/// `KeepressoCore`); this `@Observable` model is the thin app-side layer that
+/// loads/saves ``KeepressoSettings`` and re-derives the controller's
+/// ``SessionController/triggerGate`` whenever the rule set changes.
+@MainActor
+@Observable
+final class AppModel {
+    let session: SessionController
+    let disk: DiskKeepAliveController
+    /// Controls closed-display mode (the global `pmset disablesleep` setting that
+    /// keeps the Mac awake with the lid shut). Its state is read live from the
+    /// system, so nothing about it is persisted in ``KeepressoSettings``.
+    let closedDisplay = ClosedDisplayController()
+    /// Backs the headless-readiness Setup screen. Populated on demand via
+    /// ``refreshReadiness()`` — empty until the Setup window first appears.
+    let readiness = SystemReadinessController()
+    /// Experimental headless virtual display (private CoreGraphics API), off by
+    /// default. Uses the real backend; `nil` config means no virtual display.
+    let virtualDisplay = VirtualDisplayController(backend: CGVirtualDisplayBackend())
+
+    private let store: SettingsStore
+    private let factory: TriggerFactory
+    private let notifier: UserNotificationReminder
+    private(set) var settings: KeepressoSettings
+
+    /// The default reminder interval used when the feature is first enabled.
+    static let defaultReminderAfter: TimeInterval = 30 * 60
+
+    init(
+        store: SettingsStore = UserDefaultsSettingsStore(),
+        factory: TriggerFactory = TriggerFactory()
+    ) {
+        self.store = store
+        self.factory = factory
+        let notifier = UserNotificationReminder()
+        self.notifier = notifier
+        let loaded = store.load()
+        self.settings = loaded
+        self.session = SessionController(reminder: notifier)
+        self.session.options = loaded.options
+        self.session.reminderAfter = loaded.reminderAfter
+        self.session.reminderRepeats = loaded.reminderRepeats
+        self.session.reminderSound = loaded.reminderSound
+        self.disk = DiskKeepAliveController()
+        self.disk.config = loaded.diskKeepAlive
+        self.virtualDisplay.config = loaded.virtualDisplay
+        // Launch idle: a manual session waits for the user's toggle, a gated
+        // one waits for its conditions (the ticker's reconcile activates it).
+        applyTriggerGate()
+    }
+
+    // MARK: - Manual activation
+
+    /// Flip a manual (non-gated) session, starting with the saved duration.
+    func toggleManual() {
+        if session.isActive {
+            session.stop()
+        } else {
+            session.start(mode: settings.defaultMode)
+        }
+    }
+
+    // MARK: - Keep-awake options
+
+    /// Mutate the keep-awake options, mirror into settings, and persist.
+    func updateOptions(_ mutate: (inout SleepPreventionOptions) -> Void) {
+        var options = session.options
+        mutate(&options)
+        session.options = options
+        settings.options = options
+        persist()
+    }
+
+    // MARK: - Session mode (manual sessions)
+
+    /// The chosen duration. While idle it reflects the saved default (so the
+    /// picker shows it before activating); while active it restarts the session.
+    var mode: SessionMode {
+        get { session.isActive ? session.mode : settings.defaultMode }
+        set {
+            settings.defaultMode = newValue
+            if session.isActive { session.start(mode: newValue) }
+            persist()
+        }
+    }
+
+    // MARK: - Triggers
+
+    var triggersEnabled: Bool {
+        get { settings.triggersEnabled }
+        set {
+            settings.triggersEnabled = newValue
+            if newValue { session.stop() } // hand activation to the gate
+            applyTriggerGate()
+            persist()
+        }
+    }
+
+    var combine: CombineMode {
+        get { settings.ruleSet.combine }
+        set { settings.ruleSet.combine = newValue; applyTriggerGate(); persist() }
+    }
+
+    var rules: [TriggerRule] { settings.ruleSet.rules }
+
+    func addRule(_ rule: TriggerRule) {
+        guard !settings.ruleSet.rules.contains(rule) else { return }
+        settings.ruleSet.rules.append(rule)
+        applyTriggerGate()
+        persist()
+    }
+
+    func removeRule(at index: Int) {
+        guard settings.ruleSet.rules.indices.contains(index) else { return }
+        settings.ruleSet.rules.remove(at: index)
+        applyTriggerGate()
+        persist()
+    }
+
+    func updateRule(at index: Int, to rule: TriggerRule) {
+        guard settings.ruleSet.rules.indices.contains(index) else { return }
+        settings.ruleSet.rules[index] = rule
+        applyTriggerGate()
+        persist()
+    }
+
+    /// The live engine currently gating the session, kept so the menu can read
+    /// each condition's live state for the next-trigger summary. `nil` when
+    /// trigger gating is off.
+    private(set) var currentEngine: TriggerEngine?
+
+    /// Rebuild (or tear down) the controller's gate to match current settings.
+    private func applyTriggerGate() {
+        let engine = settings.triggersEnabled
+            ? factory.makeEngine(from: settings.ruleSet)
+            : nil
+        currentEngine = engine
+        session.triggerGate = engine
+        // The rules (or the engine) just changed; drop the cached states so the
+        // next read re-evaluates against the new rule set immediately.
+        cachedRuleStates = nil
+        ruleStatesComputedAt = nil
+    }
+
+    /// Cached result of ``ruleStates()`` and when it was computed. Evaluating a
+    /// rule can shell out (a process trigger spawns `ps`), and the menu asks for
+    /// the states several times per render and every second, so the result is
+    /// cached briefly to keep the menu responsive. `@ObservationIgnored` so the
+    /// cache itself never invalidates a view. Cleared in ``applyTriggerGate()``
+    /// whenever the rules change, so edits show immediately.
+    @ObservationIgnored private var cachedRuleStates: [(rule: TriggerRule, satisfied: Bool)]?
+    @ObservationIgnored private var ruleStatesComputedAt: Date?
+    private static let ruleStatesTTL: TimeInterval = 0.9
+
+    /// Live satisfaction of each saved rule, aligned with ``rules`` order, or
+    /// `nil` when trigger gating is off. Drives the menu's next-trigger summary.
+    /// Cached for ``ruleStatesTTL`` seconds (see ``cachedRuleStates``).
+    func ruleStates() -> [(rule: TriggerRule, satisfied: Bool)]? {
+        guard settings.triggersEnabled, let engine = currentEngine else {
+            cachedRuleStates = nil
+            return nil
+        }
+        if let computedAt = ruleStatesComputedAt, let cached = cachedRuleStates,
+           Date().timeIntervalSince(computedAt) < Self.ruleStatesTTL {
+            return cached
+        }
+        let triggers = engine.triggers
+        let states = settings.ruleSet.rules.enumerated().map { index, rule in
+            (rule, index < triggers.count && triggers[index].isSatisfied())
+        }
+        cachedRuleStates = states
+        ruleStatesComputedAt = Date()
+        return states
+    }
+
+    /// One-line summary of trigger state for the menu header: what's holding the
+    /// session on, or what it's waiting for. `nil` when not gated or no rules.
+    func triggerSummary() -> String? {
+        guard let states = ruleStates(), !states.isEmpty else { return nil }
+        func conditions(_ count: Int) -> String { "\(count) condition\(count == 1 ? "" : "s")" }
+        if session.isActive {
+            // The per-condition list is shown right below, so summarize by count
+            // instead of repeating each label.
+            let held = states.filter(\.satisfied).count
+            return held == 0 ? "Active" : "Held by \(conditions(held))"
+        }
+        switch settings.ruleSet.combine {
+        case .any:
+            return "Waiting for any condition"
+        case .all:
+            let pending = states.filter { !$0.satisfied }.count
+            return "Waiting on \(conditions(pending))"
+        }
+    }
+
+    // MARK: - Reminder
+
+    /// Whether the "still brewing" reminder is on. Enabling it requests
+    /// notification permission and seeds a default interval.
+    var reminderEnabled: Bool {
+        get { settings.reminderAfter != nil }
+        set {
+            settings.reminderAfter = newValue
+                ? (settings.reminderAfter ?? Self.defaultReminderAfter)
+                : nil
+            if newValue { notifier.requestAuthorization() }
+            session.reminderAfter = settings.reminderAfter
+            persist()
+        }
+    }
+
+    /// The reminder interval shown in the picker. Reads the default while the
+    /// feature is off so the picker has a sensible selection before enabling.
+    var reminderAfter: TimeInterval {
+        get { settings.reminderAfter ?? Self.defaultReminderAfter }
+        set {
+            settings.reminderAfter = newValue
+            session.reminderAfter = newValue
+            persist()
+        }
+    }
+
+    /// Whether the reminder repeats every interval (vs. firing once).
+    var reminderRepeats: Bool {
+        get { settings.reminderRepeats }
+        set {
+            settings.reminderRepeats = newValue
+            session.reminderRepeats = newValue
+            persist()
+        }
+    }
+
+    /// Whether the reminder also plays a sound.
+    var reminderSound: Bool {
+        get { settings.reminderSound }
+        set {
+            settings.reminderSound = newValue
+            session.reminderSound = newValue
+            persist()
+        }
+    }
+
+    // MARK: - Disk keep-alive
+
+    /// Whether a disk is being kept spun up.
+    var diskKeepAliveEnabled: Bool { settings.diskKeepAlive != nil }
+
+    /// The folder being touched, or `nil` when off.
+    var diskKeepAliveDirectory: URL? { settings.diskKeepAlive?.directory }
+
+    /// The touch cadence shown in the picker (default while off).
+    var diskKeepAliveInterval: TimeInterval {
+        get { settings.diskKeepAlive?.interval ?? DiskKeepAliveConfig.defaultInterval }
+        set {
+            guard var config = settings.diskKeepAlive else { return }
+            config.interval = newValue
+            setDiskConfig(config)
+        }
+    }
+
+    /// Prompt for a folder and start keeping its volume spun up. Keeps the
+    /// current interval; cancelling leaves the feature unchanged.
+    func chooseDiskFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Keep Awake"
+        panel.message = "Choose a folder on the disk you want to keep spun up."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        setDiskConfig(DiskKeepAliveConfig(directory: url, interval: diskKeepAliveInterval))
+    }
+
+    /// Turn the feature off.
+    func disableDiskKeepAlive() { setDiskConfig(nil) }
+
+    private func setDiskConfig(_ config: DiskKeepAliveConfig?) {
+        settings.diskKeepAlive = config
+        disk.config = config
+        persist()
+    }
+
+    private func persist() { store.save(settings) }
+
+    // MARK: - Closed-display mode
+
+    /// Re-read the system sleep setting that backs the closed-display toggle.
+    /// Non-blocking: the underlying `pmset` read runs off the main thread.
+    func refreshClosedDisplay() { Task { await closedDisplay.refresh() } }
+
+    /// Whether the Mac is currently kept awake with the lid closed.
+    var closedDisplayEnabled: Bool { closedDisplay.isEnabled ?? false }
+
+    /// Any error message from the last attempt to change the setting.
+    var closedDisplayError: String? { closedDisplay.lastError }
+
+    /// True while the administrator prompt is on screen.
+    var closedDisplayBusy: Bool { closedDisplay.isBusy }
+
+    /// Turn closed-display mode on or off. Prompts for administrator rights
+    /// (it flips the global `pmset disablesleep` setting); the live state is
+    /// re-read once the prompt is answered.
+    ///
+    /// Keepresso is a background agent (`LSUIElement`), so it must become the
+    /// active app first or the system password dialog can appear unfocused
+    /// behind other windows, leaving the menu in a stuck-looking state.
+    func setClosedDisplay(_ on: Bool) {
+        NSApp.activate(ignoringOtherApps: true)
+        Task { await closedDisplay.set(on) }
+    }
+
+    // MARK: - Virtual display (experimental)
+
+    /// Whether the private virtual-display API exists on this macOS.
+    var virtualDisplaySupported: Bool { virtualDisplay.isSupported }
+
+    /// Whether a virtual display is configured.
+    var virtualDisplayEnabled: Bool { settings.virtualDisplay != nil }
+
+    /// The current virtual-display configuration, or `nil` when off.
+    var virtualDisplayConfig: VirtualDisplayConfig? { settings.virtualDisplay }
+
+    /// Any error from the last attempt to create the virtual display.
+    var virtualDisplayError: String? { virtualDisplay.lastError }
+
+    /// Set (or clear, with `nil`) the virtual display and persist the choice.
+    func setVirtualDisplay(_ config: VirtualDisplayConfig?) {
+        settings.virtualDisplay = config
+        virtualDisplay.config = config
+        persist()
+    }
+
+    // MARK: - Setup / headless readiness
+
+    /// Re-probe the system for the Setup screen. The shell-outs (`pmset`,
+    /// `fdesetup`, `defaults`) are quick; called on the Setup window's appear
+    /// and its "Re-check" button. App-level permission checks (which need app
+    /// frameworks, not the shell) are rebuilt alongside.
+    func refreshReadiness() {
+        Task { await readiness.refresh() }
+        rebuildPermissionChecks()
+    }
+
+    /// Build the app-permission checks and hand them to the readiness controller,
+    /// which appends them after the system checks. The login-item and Location
+    /// statuses read synchronously; the notification status is async, so it lands
+    /// a moment later.
+    private func rebuildPermissionChecks() {
+        var base = [loginItemCheck()]
+        if usesWiFiRule { base.append(locationCheck()) }
+        readiness.permissionChecks = base
+        Task { @MainActor in
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            readiness.permissionChecks = base + [notificationCheck(settings.authorizationStatus)]
+        }
+    }
+
+    /// Whether any saved rule needs the Wi-Fi SSID (and thus Location access).
+    private var usesWiFiRule: Bool {
+        settings.ruleSet.rules.contains { if case .wifiSSID = $0 { return true } else { return false } }
+    }
+
+    private func loginItemCheck() -> ReadinessCheck {
+        let on = LoginItem.isEnabled
+        return ReadinessCheck(
+            id: "perm-login-item",
+            title: "Launch at login",
+            status: on ? .ok : .warning,
+            detail: on
+                ? "Keepresso launches at login, so it returns after a reboot."
+                : "Keepresso isn't set to launch at login, so it won't run after an unattended reboot.",
+            remediation: on ? nil : Remediation(
+                hint: "Turn on “Launch at login” in Keepresso's settings.",
+                settingsURL: URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")
+            )
+        )
+    }
+
+    private func locationCheck() -> ReadinessCheck {
+        let status = CLLocationManager().authorizationStatus
+        let authorized = status == .authorizedAlways || status == .authorized
+        return ReadinessCheck(
+            id: "perm-location",
+            title: "Location access (Wi-Fi rules)",
+            status: authorized ? .ok : .warning,
+            detail: authorized
+                ? "Keepresso can read the current Wi-Fi network name for your Wi-Fi triggers."
+                : "Without Location access Keepresso can't read the Wi-Fi network name, so Wi-Fi triggers won't match.",
+            remediation: authorized ? nil : Remediation(
+                hint: "Allow Location access for Keepresso.",
+                settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices")
+            )
+        )
+    }
+
+    private func notificationCheck(_ status: UNAuthorizationStatus) -> ReadinessCheck {
+        let on = status == .authorized || status == .provisional
+        return ReadinessCheck(
+            id: "perm-notifications",
+            title: "Notifications",
+            status: on ? .ok : .warning,
+            detail: on
+                ? "Keepresso can post the “still brewing” reminder."
+                : "Notifications are off, so the “still brewing” reminder can't appear.",
+            remediation: on ? nil : Remediation(
+                hint: "Allow notifications for Keepresso.",
+                settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.notifications")
+            )
+        )
+    }
+
+    // MARK: - Live system info for the "add condition" menu
+
+    /// The SSID currently joined, for the "add current Wi-Fi" shortcut.
+    func currentSSID() -> String? { CoreWLANNetworkMonitor().current.ssid }
+
+    /// Regular (Dock-visible) running apps, for the "add running app" menu.
+    func runningApps() -> [(name: String, bundleID: String)] {
+        NSWorkspace.shared.runningApplications
+            .filter { $0.activationPolicy == .regular }
+            .compactMap { app in
+                guard let id = app.bundleIdentifier else { return nil }
+                return (app.localizedName ?? id, id)
+            }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+}

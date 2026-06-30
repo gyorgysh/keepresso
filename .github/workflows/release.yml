@@ -1,0 +1,117 @@
+name: Release
+
+# Push a tag like v1.0.0 to build a signed, notarized DMG and publish it (plus a
+# signed Sparkle appcast) as a GitHub Release.
+#
+# Secrets live as encrypted GitHub Actions secrets and are only decrypted into
+# this runner at job time, masked in logs, and never exposed to pull requests.
+# The job runs in the protected `release` environment (require a reviewer there),
+# and tag pushes are restricted by a repository ruleset, so only a maintainer can
+# cut a verified release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # create releases and upload assets with the built-in token
+
+jobs:
+  release:
+    name: Build, sign, notarize, publish
+    runs-on: macos-15
+    environment: release # add a required reviewer to this environment in repo settings
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Install tools
+        run: brew install xcodegen sparkle
+
+      # Import the Developer ID Application cert into a throwaway keychain that is
+      # unlocked only for this job and deleted at the end.
+      - name: Import signing certificate
+        env:
+          CERT_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          CERT_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          CERT="$RUNNER_TEMP/devid.p12"
+          echo "$CERT_P12_BASE64" | base64 --decode > "$CERT"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$CERT" -k "$KEYCHAIN" -P "$CERT_P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm -f "$CERT"
+
+      - name: Build and export signed app
+        env:
+          DEVELOPER_ID_APP: ${{ secrets.DEVELOPER_ID_APP }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: |
+          xcodegen generate
+          xcodebuild archive \
+            -project Keepresso.xcodeproj -scheme Keepresso -configuration Release \
+            -archivePath build/Keepresso.xcarchive -destination 'generic/platform=macOS' \
+            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$DEVELOPER_ID_APP"
+          cat > build/ExportOptions.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>developer-id</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>manual</string>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath build/Keepresso.xcarchive \
+            -exportOptionsPlist build/ExportOptions.plist -exportPath build/export
+          codesign --verify --deep --strict --verbose=2 "build/export/Keepresso.app"
+
+      - name: Package and notarize DMG
+        env:
+          DEVELOPER_ID_APP: ${{ secrets.DEVELOPER_ID_APP }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          STAGE=build/dmg; mkdir -p "$STAGE" dist
+          cp -R "build/export/Keepresso.app" "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          DMG="dist/Keepresso-$VERSION.dmg"
+          hdiutil create -volname Keepresso -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+          codesign --force --sign "$DEVELOPER_ID_APP" "$DMG"
+          echo "$NOTARY_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          xcrun notarytool submit "$DMG" \
+            --key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait
+          xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
+          rm -f "$RUNNER_TEMP/notary.p8"
+
+      - name: Sign the Sparkle appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          KEYFILE="$RUNNER_TEMP/sparkle_ed_priv"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$KEYFILE"
+          GA="$(ls -t "$(brew --prefix)"/Caskroom/sparkle/*/bin/generate_appcast | head -1)"
+          "$GA" dist --ed-key-file "$KEYFILE" \
+            --download-url-prefix "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/"
+          rm -f "$KEYFILE"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/Keepresso-$VERSION.dmg" "dist/appcast.xml" \
+            --title "Keepresso $VERSION" --generate-notes
+
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true

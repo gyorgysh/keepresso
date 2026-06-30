@@ -1,0 +1,71 @@
+import Testing
+import Foundation
+@testable import KeepressoCore
+
+/// Programmable fake virtual-display backend recording start/stop.
+private final class FakeVirtualDisplay: VirtualDisplaying {
+    var supported: Bool
+    var succeed: Bool
+    private(set) var startCalls: [VirtualDisplayConfig] = []
+    private(set) var stopCalls = 0
+    private var active = false
+
+    init(supported: Bool = true, succeed: Bool = true) {
+        self.supported = supported
+        self.succeed = succeed
+    }
+
+    var isSupported: Bool { supported }
+    var isActive: Bool { active }
+    func start(_ config: VirtualDisplayConfig) -> Bool {
+        startCalls.append(config)
+        active = succeed
+        return succeed
+    }
+    func stop() { stopCalls += 1; active = false }
+}
+
+@MainActor
+@Test func settingConfigStartsTheDisplay() {
+    let backend = FakeVirtualDisplay()
+    let controller = VirtualDisplayController(backend: backend)
+    controller.config = VirtualDisplayConfig(width: 2560, height: 1440, hiDPI: true)
+    #expect(backend.startCalls.count == 1)
+    #expect(controller.isActive)
+    #expect(controller.lastError == nil)
+}
+
+@MainActor
+@Test func clearingConfigStopsTheDisplay() {
+    let backend = FakeVirtualDisplay()
+    let controller = VirtualDisplayController(backend: backend)
+    controller.config = VirtualDisplayConfig(width: 1920, height: 1080)
+    controller.config = nil
+    #expect(backend.stopCalls >= 1)
+    #expect(!controller.isActive)
+}
+
+@MainActor
+@Test func unsupportedReportsErrorAndDoesNotStart() {
+    let backend = FakeVirtualDisplay(supported: false)
+    let controller = VirtualDisplayController(backend: backend)
+    controller.config = VirtualDisplayConfig(width: 3840, height: 2160)
+    #expect(backend.startCalls.isEmpty)
+    #expect(controller.lastError != nil)
+}
+
+@MainActor
+@Test func failedStartSurfacesError() {
+    let backend = FakeVirtualDisplay(succeed: false)
+    let controller = VirtualDisplayController(backend: backend)
+    controller.config = VirtualDisplayConfig(width: 2560, height: 1440)
+    #expect(controller.lastError != nil)
+    #expect(!controller.isActive)
+}
+
+@Test func virtualDisplayConfigEncodesRoundTrip() throws {
+    let config = VirtualDisplayConfig(width: 2880, height: 1620, hiDPI: false)
+    let data = try JSONEncoder().encode(config)
+    #expect(try JSONDecoder().decode(VirtualDisplayConfig.self, from: data) == config)
+    #expect(config.label == "2880\u{00D7}1620")
+}

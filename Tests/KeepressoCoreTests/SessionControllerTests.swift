@@ -1,0 +1,163 @@
+import Testing
+import Foundation
+@testable import KeepressoCore
+
+/// In-memory power-assertion backend that records the last applied set.
+private final class FakeAssertions: PowerAsserting {
+    private(set) var held: Set<PowerAssertionKind> = []
+    func apply(_ kinds: Set<PowerAssertionKind>, reason: String) { held = kinds }
+}
+
+/// A controllable clock shared with the controller under test.
+@MainActor
+private final class Clock {
+    var now = Date(timeIntervalSince1970: 1_000_000)
+    func advance(_ seconds: TimeInterval) { now.addTimeInterval(seconds) }
+}
+
+@MainActor
+private func makeController() -> (SessionController, FakeAssertions, Clock) {
+    let fake = FakeAssertions()
+    let clock = Clock()
+    let controller = SessionController(assertions: fake, now: { clock.now })
+    return (controller, fake, clock)
+}
+
+@MainActor
+@Test func idleHoldsNoAssertions() {
+    let (controller, fake, _) = makeController()
+    #expect(controller.isActive == false)
+    #expect(fake.held.isEmpty)
+}
+
+@MainActor
+@Test func startTakesSystemAssertionByDefault() {
+    let (controller, fake, _) = makeController()
+    controller.start()
+    #expect(controller.isActive)
+    #expect(fake.held == [.system])
+}
+
+@MainActor
+@Test func displayOptionAddsDisplayAssertion() {
+    let (controller, fake, _) = makeController()
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    #expect(fake.held == [.system, .display])
+}
+
+@MainActor
+@Test func stopReleasesEverything() {
+    let (controller, fake, _) = makeController()
+    controller.start()
+    controller.stop()
+    #expect(controller.isActive == false)
+    #expect(fake.held.isEmpty)
+}
+
+@MainActor
+@Test func toggleFlipsState() {
+    let (controller, _, _) = makeController()
+    controller.toggle()
+    #expect(controller.isActive)
+    controller.toggle()
+    #expect(controller.isActive == false)
+}
+
+@MainActor
+@Test func timedSessionExpiresOnReconcile() {
+    let (controller, fake, clock) = makeController()
+    controller.start(mode: .timed(duration: 60))
+    #expect(controller.isActive)
+
+    clock.advance(59)
+    controller.reconcile()
+    #expect(controller.isActive) // before the deadline
+
+    clock.advance(2) // 61s elapsed
+    controller.reconcile()
+    #expect(controller.isActive == false) // auto-stopped
+    #expect(fake.held.isEmpty)
+}
+
+@MainActor
+@Test func elapsedAndRemaining() {
+    let (controller, _, clock) = makeController()
+    controller.start(mode: .timed(duration: 120))
+    clock.advance(30)
+    #expect(abs(controller.elapsed - 30) < 0.001)
+    #expect(abs((controller.remaining ?? -1) - 90) < 0.001)
+}
+
+/// A gate whose decision the test flips directly.
+private final class StubGate: TriggerEvaluating {
+    var satisfied: Bool
+    init(_ satisfied: Bool) { self.satisfied = satisfied }
+    func isSatisfied() -> Bool { satisfied }
+}
+
+@MainActor
+@Test func triggerGateDrivesActivationOnReconcile() {
+    let (controller, fake, _) = makeController()
+    let gate = StubGate(false)
+    controller.triggerGate = gate
+
+    controller.reconcile()
+    #expect(controller.isActive == false) // gate off → idle
+    #expect(fake.held.isEmpty)
+
+    gate.satisfied = true
+    controller.reconcile()
+    #expect(controller.isActive) // gate on → activates
+    #expect(fake.held == [.system])
+
+    gate.satisfied = false
+    controller.reconcile()
+    #expect(controller.isActive == false) // gate off → releases
+    #expect(fake.held.isEmpty)
+}
+
+@MainActor
+@Test func gatedSessionKeepsStartTimeWhileHeld() {
+    let (controller, _, clock) = makeController()
+    let gate = StubGate(true)
+    controller.triggerGate = gate
+
+    controller.reconcile()
+    let started = controller.startedAt
+    #expect(started != nil)
+
+    clock.advance(30)
+    controller.reconcile() // still satisfied
+    #expect(controller.startedAt == started) // not restarted
+    #expect(abs(controller.elapsed - 30) < 0.001)
+}
+
+@MainActor
+@Test func gatedSessionIgnoresTimedExpiry() {
+    let (controller, fake, clock) = makeController()
+    let gate = StubGate(true)
+    controller.triggerGate = gate
+    controller.start(mode: .timed(duration: 60))
+
+    clock.advance(120) // well past the timed cap
+    controller.reconcile()
+    #expect(controller.isActive) // gate still owns activation
+    #expect(fake.held == [.system])
+}
+
+@MainActor
+@Test func screenSaverYieldDropsDisplayAssertion() {
+    let (controller, fake, _) = makeController()
+    controller.start(options: SleepPreventionOptions(
+        preventSystemSleep: true,
+        preventDisplaySleep: true,
+        allowScreenSaverAfter: 300
+    ))
+    #expect(fake.held == [.system, .display])
+
+    controller.reconcile(systemIdleSeconds: 100) // below threshold
+    #expect(fake.held == [.system, .display])
+
+    controller.reconcile(systemIdleSeconds: 301) // past threshold → yield display
+    #expect(fake.held == [.system])
+}

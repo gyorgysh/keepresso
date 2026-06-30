@@ -1,0 +1,97 @@
+import Foundation
+
+/// Everything Keepresso persists across launches.
+public struct KeepressoSettings: Codable, Equatable, Sendable {
+    /// What to keep awake (system / display / screen-saver yield).
+    public var options: SleepPreventionOptions
+    /// The duration to use when a manual session starts.
+    public var defaultMode: SessionMode
+    /// Whether live triggers gate the session (vs. pure manual toggle).
+    public var triggersEnabled: Bool
+    /// The persisted trigger configuration.
+    public var ruleSet: RuleSet
+    /// Fire a "still brewing" reminder after this many seconds of an active
+    /// session, or `nil` (the default) to never remind.
+    public var reminderAfter: TimeInterval?
+    /// Whether the reminder repeats every ``reminderAfter`` (vs. firing once).
+    public var reminderRepeats: Bool
+    /// Whether the reminder also plays a sound.
+    public var reminderSound: Bool
+    /// Keep a chosen disk/volume spun up, or `nil` (the default) for off.
+    public var diskKeepAlive: DiskKeepAliveConfig?
+    /// Experimental headless virtual display, or `nil` (the default) for off.
+    public var virtualDisplay: VirtualDisplayConfig?
+
+    public init(
+        options: SleepPreventionOptions = .default,
+        defaultMode: SessionMode = .indefinite,
+        triggersEnabled: Bool = false,
+        ruleSet: RuleSet = .empty,
+        reminderAfter: TimeInterval? = nil,
+        reminderRepeats: Bool = false,
+        reminderSound: Bool = true,
+        diskKeepAlive: DiskKeepAliveConfig? = nil,
+        virtualDisplay: VirtualDisplayConfig? = nil
+    ) {
+        self.options = options
+        self.defaultMode = defaultMode
+        self.triggersEnabled = triggersEnabled
+        self.ruleSet = ruleSet
+        self.reminderAfter = reminderAfter
+        self.reminderRepeats = reminderRepeats
+        self.reminderSound = reminderSound
+        self.diskKeepAlive = diskKeepAlive
+        self.virtualDisplay = virtualDisplay
+    }
+
+    /// Forgiving decoder: every field falls back to its default when absent, so
+    /// adding settings doesn't discard a user's older saved configuration.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        options = try c.decodeIfPresent(SleepPreventionOptions.self, forKey: .options) ?? .default
+        defaultMode = try c.decodeIfPresent(SessionMode.self, forKey: .defaultMode) ?? .indefinite
+        triggersEnabled = try c.decodeIfPresent(Bool.self, forKey: .triggersEnabled) ?? false
+        ruleSet = try c.decodeIfPresent(RuleSet.self, forKey: .ruleSet) ?? .empty
+        reminderAfter = try c.decodeIfPresent(TimeInterval.self, forKey: .reminderAfter)
+        reminderRepeats = try c.decodeIfPresent(Bool.self, forKey: .reminderRepeats) ?? false
+        reminderSound = try c.decodeIfPresent(Bool.self, forKey: .reminderSound) ?? true
+        diskKeepAlive = try c.decodeIfPresent(DiskKeepAliveConfig.self, forKey: .diskKeepAlive)
+        virtualDisplay = try c.decodeIfPresent(VirtualDisplayConfig.self, forKey: .virtualDisplay)
+    }
+
+    /// First-launch defaults: keep system awake, no triggers.
+    public static let `default` = KeepressoSettings()
+}
+
+/// Persistence seam for ``KeepressoSettings`` — mirrors the other system seams
+/// so the app wires the real store and tests use an in-memory fake.
+public protocol SettingsStore: AnyObject {
+    /// Load saved settings, or ``KeepressoSettings/default`` if none/corrupt.
+    func load() -> KeepressoSettings
+    /// Persist settings; failures are swallowed (a lost write is non-fatal).
+    func save(_ settings: KeepressoSettings)
+}
+
+/// Real store backed by `UserDefaults`, encoding settings as JSON under a single
+/// versioned key.
+public final class UserDefaultsSettingsStore: SettingsStore {
+    private let defaults: UserDefaults
+    private let key: String
+
+    public init(defaults: UserDefaults = .standard, key: String = "sh.gyorgy.keepresso.settings.v1") {
+        self.defaults = defaults
+        self.key = key
+    }
+
+    public func load() -> KeepressoSettings {
+        guard let data = defaults.data(forKey: key),
+              let settings = try? JSONDecoder().decode(KeepressoSettings.self, from: data)
+        else { return .default }
+        return settings
+    }
+
+    public func save(_ settings: KeepressoSettings) {
+        guard let data = try? JSONEncoder().encode(settings) else { return }
+        defaults.set(data, forKey: key)
+    }
+}

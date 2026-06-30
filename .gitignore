@@ -1,0 +1,47 @@
+# Generated Xcode project (regenerated from project.yml via xcodegen)
+Keepresso.xcodeproj/
+
+# Swift / SwiftPM
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode
+xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+*.xcuserstate
+
+# Build / distribution artifacts
+build/
+dist/
+*.dmg
+*.app
+*.xcarchive
+*.pkg
+*.zip
+
+# Code-signing / Sparkle secrets — never commit these. The Sparkle private key
+# lives in the Keychain; these patterns catch any accidental on-disk export.
+*.p12
+*.cer
+*.provisionprofile
+sparkle_private_key*
+dsa_priv.pem
+eddsa_priv*
+ExportOptions.local.plist
+
+# macOS
+.DS_Store
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Internal progress tracker (not for the public repo)
+PROGRESS.local.md
+
+# Internal docs kept local until the public launch (release process, marketing,
+# and the detailed roadmap). The public repo ships README + docs/BUILDING.md.
+docs/ROADMAP.md
+docs/RELEASING.md
+docs/marketing.md

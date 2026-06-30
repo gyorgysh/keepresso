@@ -1,0 +1,130 @@
+import Testing
+import Foundation
+@testable import KeepressoCore
+
+private final class FakeWorkspace: WorkspaceMonitoring {
+    var current: WorkspaceSnapshot
+    init(_ s: WorkspaceSnapshot) { current = s }
+}
+
+// MARK: - App trigger (running / frontmost)
+
+@Test func appTriggerMatchesRunning() {
+    let monitor = FakeWorkspace(WorkspaceSnapshot(runningBundleIDs: ["com.apple.Music"]))
+    let trigger = AppTrigger(bundleID: "com.apple.FaceTime", match: .running, monitor: monitor)
+    #expect(trigger.isSatisfied() == false)
+
+    monitor.current = WorkspaceSnapshot(runningBundleIDs: ["com.apple.Music", "com.apple.FaceTime"])
+    #expect(trigger.isSatisfied())
+}
+
+@Test func appTriggerMatchesFrontmostOnly() {
+    let monitor = FakeWorkspace(WorkspaceSnapshot(
+        runningBundleIDs: ["com.apple.Music", "com.apple.FaceTime"],
+        frontmostBundleID: "com.apple.Music"
+    ))
+    let trigger = AppTrigger(bundleID: "com.apple.FaceTime", match: .frontmost, monitor: monitor)
+    #expect(trigger.isSatisfied() == false) // running but not frontmost
+
+    monitor.current = WorkspaceSnapshot(
+        runningBundleIDs: ["com.apple.Music", "com.apple.FaceTime"],
+        frontmostBundleID: "com.apple.FaceTime"
+    )
+    #expect(trigger.isSatisfied())
+}
+
+@Test func gracePeriodLingersAfterConditionDrops() {
+    var t = Date(timeIntervalSince1970: 1_000_000)
+    let inner = StubFlag(true)
+    let grace = GracePeriodTrigger(wrapping: inner, grace: 60, now: { t })
+
+    #expect(grace.isSatisfied())          // condition true
+    inner.value = false
+    t = t.addingTimeInterval(30)
+    #expect(grace.isSatisfied())          // within grace window
+    t = t.addingTimeInterval(31)          // 61s since last true
+    #expect(grace.isSatisfied() == false) // window expired
+
+    inner.value = true                    // re-arms
+    #expect(grace.isSatisfied())
+}
+
+private final class StubFlag: Trigger {
+    var value: Bool
+    let label = "flag"
+    init(_ v: Bool) { value = v }
+    func isSatisfied() -> Bool { value }
+}
+
+// MARK: - Rule -> live trigger factory
+
+@MainActor
+@Test func factoryBuildsEngineFromRuleSet() {
+    let battery = PowerSourceSnapshot(provider: .battery, isCharging: false, hasBattery: true)
+    let factory = TriggerFactory(
+        powerSource: ConstPower(battery),
+        displays: ConstDisplays(DisplaySnapshot(externalDisplayCount: 1, totalDisplayCount: 2)),
+        network: ConstNetwork(NetworkSnapshot(ssid: "Home")),
+        workspace: ConstWorkspace(WorkspaceSnapshot(runningBundleIDs: []))
+    )
+    // AND of "external display" (true) and "on battery" (true) → satisfied.
+    let ruleSet = RuleSet(combine: .all, rules: [.externalDisplay, .powerSource(.onBattery)])
+    #expect(factory.makeEngine(from: ruleSet).isSatisfied())
+
+    // Add a Wi-Fi rule that won't match → AND fails.
+    let strict = RuleSet(combine: .all, rules: [.externalDisplay, .wifiSSID("Office")])
+    #expect(factory.makeEngine(from: strict).isSatisfied() == false)
+}
+
+@Test func ruleLabelsAreHumanReadable() {
+    #expect(TriggerRule.powerSource(.charging).label == "Charging")
+    #expect(TriggerRule.externalDisplay.label == "External display connected")
+    #expect(TriggerRule.wifiSSID("Cafe").label.contains("Cafe"))
+    #expect(TriggerRule.app(AppRule(bundleID: "com.x.y", match: .running)).label == "App com.x.y is running")
+    #expect(TriggerRule.app(AppRule(bundleID: "com.x.y", match: .frontmost, grace: 30)).label
+            == "App com.x.y is frontmost (+30s)")
+}
+
+// MARK: - Persistence round-trip
+
+@Test func ruleSetCodableRoundTrip() throws {
+    let original = RuleSet(combine: .all, rules: [
+        .powerSource(.charging),
+        .externalDisplay,
+        .wifiSSID("Home"),
+        .app(AppRule(bundleID: "com.apple.FaceTime", match: .frontmost, grace: 120)),
+    ])
+    let data = try JSONEncoder().encode(original)
+    let decoded = try JSONDecoder().decode(RuleSet.self, from: data)
+    #expect(decoded == original)
+}
+
+@Test func settingsStoreRoundTrips() {
+    let defaults = UserDefaults(suiteName: "keepresso.tests.settings")!
+    defaults.removePersistentDomain(forName: "keepresso.tests.settings")
+    let store = UserDefaultsSettingsStore(defaults: defaults, key: "k")
+
+    #expect(store.load() == .default) // nothing saved yet
+
+    var settings = KeepressoSettings.default
+    settings.triggersEnabled = true
+    settings.defaultMode = .timed(duration: 3600)
+    settings.ruleSet = RuleSet(combine: .all, rules: [.externalDisplay])
+    store.save(settings)
+
+    #expect(store.load() == settings)
+}
+
+// Const monitors for the factory test.
+private final class ConstPower: PowerSourceMonitoring {
+    let current: PowerSourceSnapshot; init(_ s: PowerSourceSnapshot) { current = s }
+}
+private final class ConstDisplays: DisplayMonitoring {
+    let current: DisplaySnapshot; init(_ s: DisplaySnapshot) { current = s }
+}
+private final class ConstNetwork: NetworkMonitoring {
+    let current: NetworkSnapshot; init(_ s: NetworkSnapshot) { current = s }
+}
+private final class ConstWorkspace: WorkspaceMonitoring {
+    let current: WorkspaceSnapshot; init(_ s: WorkspaceSnapshot) { current = s }
+}

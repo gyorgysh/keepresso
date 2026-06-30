@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  core-tests:
+    name: Core build & tests
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      # The project format (objectVersion 77) and swift-testing both need
+      # Xcode 16+, so pin to the latest stable Xcode on the runner.
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Build & test KeepressoCore
+        run: |
+          swift build
+          swift test
+
+  app-build:
+    name: App build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        run: xcodegen generate
+      - name: Build Keepresso
+        run: |
+          xcodebuild build \
+            -project Keepresso.xcodeproj \
+            -scheme Keepresso \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO
