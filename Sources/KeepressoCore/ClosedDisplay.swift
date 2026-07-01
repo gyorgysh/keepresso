@@ -75,23 +75,19 @@ public final class ClosedDisplayController {
     /// external display, `displaysleepnow` would also blank that monitor,
     /// breaking a legitimate clamshell-with-monitor setup). macOS auto-wakes
     /// the panel when the lid reopens, so there's nothing to do on that edge.
-    /// Safe to call every second. Returns the detached task doing the actual
-    /// `sleepNow()` call, or `nil` when there's nothing to do this tick — tests
-    /// await it instead of racing a fixed delay; the app ignores it.
-    @discardableResult
-    public func tick() -> Task<Void, Never>? {
+    /// Safe to call every second.
+    public func tick() {
         guard isEnabled == true, let closed = lid.isClosed() else {
             lidWasClosed = false
-            return nil
+            return
         }
         guard !externalDisplay.current.hasExternalDisplay else {
             lidWasClosed = closed
-            return nil
+            return
         }
         defer { lidWasClosed = closed }
-        guard closed, !lidWasClosed else { return nil }
-        let sleeper = displaySleeper
-        return Task.detached { sleeper.sleepNow() } // shells out; keep off the main actor
+        guard closed, !lidWasClosed else { return }
+        displaySleeper.sleepNow()
     }
 
     /// Re-read the current system setting. The read shells out to `pmset -g`,

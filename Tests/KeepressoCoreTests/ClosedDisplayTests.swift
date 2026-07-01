@@ -113,11 +113,11 @@ private final class FakeDisplayMonitor: DisplayMonitoring, @unchecked Sendable {
     var current: DisplaySnapshot { snapshot }
 }
 
+/// `sleepNow()` is only ever called synchronously on the main actor from
+/// ``ClosedDisplayController/tick()``, so no locking is needed here.
 private final class FakeDisplaySleeper: DisplaySleepCommanding, @unchecked Sendable {
-    private let lock = NSLock()
-    private var _sleepNowCallCount = 0
-    var sleepNowCallCount: Int { lock.withLock { _sleepNowCallCount } }
-    func sleepNow() { lock.withLock { _sleepNowCallCount += 1 } }
+    private(set) var sleepNowCallCount = 0
+    func sleepNow() { sleepNowCallCount += 1 }
 }
 
 @MainActor
@@ -127,7 +127,7 @@ private final class FakeDisplaySleeper: DisplaySleepCommanding, @unchecked Senda
     let sleeper = FakeDisplaySleeper()
     let controller = ClosedDisplayController(control: sleepControl, lid: lid, displaySleeper: sleeper)
     await controller.refresh() // isEnabled becomes false
-    await controller.tick()?.value
+    controller.tick()
     #expect(sleeper.sleepNowCallCount == 0)
 }
 
@@ -139,10 +139,10 @@ private final class FakeDisplaySleeper: DisplaySleepCommanding, @unchecked Senda
     let controller = ClosedDisplayController(control: sleepControl, lid: lid, displaySleeper: sleeper)
     await controller.refresh() // isEnabled becomes true
 
-    await controller.tick()?.value // still open: no-op
+    controller.tick() // still open: no-op
     lid.closed = true
-    await controller.tick()?.value // closes: should sleep
-    await controller.tick()?.value // still closed: should not sleep again
+    controller.tick() // closes: should sleep
+    controller.tick() // still closed: should not sleep again
     #expect(sleeper.sleepNowCallCount == 1)
 }
 
@@ -156,7 +156,7 @@ private final class FakeDisplaySleeper: DisplaySleepCommanding, @unchecked Senda
         control: sleepControl, lid: lid, externalDisplay: externalDisplay, displaySleeper: sleeper
     )
     await controller.refresh()
-    await controller.tick()?.value
+    controller.tick()
     #expect(sleeper.sleepNowCallCount == 0)
 }
 
@@ -169,10 +169,10 @@ private final class FakeDisplaySleeper: DisplaySleepCommanding, @unchecked Senda
     await controller.refresh()
 
     lid.closed = true
-    await controller.tick()?.value // close #1
+    controller.tick() // close #1
     lid.closed = false
-    await controller.tick()?.value // reopen
+    controller.tick() // reopen
     lid.closed = true
-    await controller.tick()?.value // close #2
+    controller.tick() // close #2
     #expect(sleeper.sleepNowCallCount == 2)
 }

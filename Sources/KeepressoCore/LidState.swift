@@ -41,11 +41,9 @@ public final class PMSetDisplaySleeper: DisplaySleepCommanding {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
         process.arguments = ["displaysleepnow"]
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            // Best-effort: nothing to surface this failure to.
-        }
+        // Fire-and-forget: there's no result worth waiting for (unlike
+        // `disablesleep`, nothing here can meaningfully fail in a way the UI
+        // would surface), so skip `waitUntilExit()` and its main-thread block.
+        try? process.run()
     }
 }
