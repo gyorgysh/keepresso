@@ -29,11 +29,16 @@ targets:
       properties:
         CFBundleName: Keepresso
         CFBundleDisplayName: Keepresso
-        CFBundleShortVersionString: "1.0.0"
-        CFBundleVersion: "7"
+        CFBundleShortVersionString: "1.1.0"
+        CFBundleVersion: "8"
         LSUIElement: true            # menu-bar agent: no Dock icon
         LSMinimumSystemVersion: "14.0"
         NSHumanReadableCopyright: "MIT License"
+        # keepresso://start[?duration=<minutes>] / stop / toggle, so scripts and
+        # launchers (Shortcuts, Raycast, Alfred) can drive a session.
+        CFBundleURLTypes:
+          - CFBundleURLName: sh.gyorgy.keepresso
+            CFBundleURLSchemes: [keepresso]
         # Reading the joined Wi-Fi SSID (for Wi-Fi triggers) needs Location access.
         NSLocationWhenInUseUsageDescription: "Keepresso reads the name of your current Wi-Fi network so it can keep your Mac awake only on the networks you choose."
         # Sparkle auto-update. The appcast is published as an asset on the GitHub
@@ -46,8 +51,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: sh.gyorgy.keepresso
-        MARKETING_VERSION: "0.7.0"
-        CURRENT_PROJECT_VERSION: "5"
+        MARKETING_VERSION: "1.1.0"
+        CURRENT_PROJECT_VERSION: "8"
         SWIFT_VERSION: "5.9"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Bridges the Objective-C virtual-display wrapper (private CG API) to Swift.

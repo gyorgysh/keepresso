@@ -44,6 +44,13 @@ public final class SessionController {
     /// Whether the reminder also plays the system sound. Default true.
     public var reminderSound = true
 
+    /// When set, ``reconcile(now:systemIdleSeconds:batteryPercent:)`` force-stops
+    /// an active session (releasing assertions and letting the Mac sleep) once
+    /// the battery drops below this percentage, and holds off reactivating —
+    /// manual or trigger-gated — until it's fed a reading at or above it again.
+    /// `nil` (the default) never overrides on battery level.
+    public var pauseBelowBatteryPercent: Int?
+
     private let assertions: PowerAsserting
     private let reminder: ReminderNotifying?
     private let now: () -> Date
@@ -102,9 +109,11 @@ public final class SessionController {
         return max(0, now().timeIntervalSince(startedAt))
     }
 
-    /// Seconds remaining in a timed session, or `nil` for indefinite/idle.
+    /// Seconds remaining in a timed session, or `nil` for indefinite/idle or a
+    /// trigger-gated session (gating ignores the timed cap, so there's nothing
+    /// counting down — see ``reconcile(now:systemIdleSeconds:batteryPercent:)``).
     public var remaining: TimeInterval? {
-        guard isActive, let total = mode.duration, let startedAt else { return nil }
+        guard triggerGate == nil, isActive, let total = mode.duration, let startedAt else { return nil }
         return max(0, total - now().timeIntervalSince(startedAt))
     }
 
@@ -117,8 +126,16 @@ public final class SessionController {
     ///   - now: current time (defaults to the injected clock).
     ///   - systemIdleSeconds: how long the user has been idle (HID idle time).
     ///     The app supplies this; when omitted the screen-saver yield can't fire.
-    public func reconcile(now: Date? = nil, systemIdleSeconds: TimeInterval? = nil) {
+    ///   - batteryPercent: current battery charge (0–100), or `nil` when
+    ///     unavailable (e.g. on AC-only desktops). The app supplies this; when
+    ///     omitted ``pauseBelowBatteryPercent`` can't fire.
+    public func reconcile(now: Date? = nil, systemIdleSeconds: TimeInterval? = nil, batteryPercent: Int? = nil) {
         let instant = now ?? self.now()
+
+        if let threshold = pauseBelowBatteryPercent, let percent = batteryPercent, percent < threshold {
+            if isActive { stop() }
+            return
+        }
 
         if let triggerGate {
             // Triggers fully own activation; the timed cap doesn't apply.

@@ -21,6 +21,14 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     public var diskKeepAlive: DiskKeepAliveConfig?
     /// Experimental headless virtual display, or `nil` (the default) for off.
     public var virtualDisplay: VirtualDisplayConfig?
+    /// Force-stop an active session (and hold off reactivating) once battery
+    /// charge drops below this percentage, or `nil` (the default) for off.
+    public var pauseBelowBatteryPercent: Int?
+    /// Whether the menu-bar icon shows a live countdown for timed sessions.
+    public var showCountdownInMenuBar: Bool
+    /// Saved trigger-rule bundles a user can apply in one action. Seeded with
+    /// ``Preset/builtIns`` on first launch; a user may add or remove any of them.
+    public var presets: [Preset]
 
     public init(
         options: SleepPreventionOptions = .default,
@@ -31,7 +39,10 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         reminderRepeats: Bool = false,
         reminderSound: Bool = true,
         diskKeepAlive: DiskKeepAliveConfig? = nil,
-        virtualDisplay: VirtualDisplayConfig? = nil
+        virtualDisplay: VirtualDisplayConfig? = nil,
+        pauseBelowBatteryPercent: Int? = nil,
+        showCountdownInMenuBar: Bool = false,
+        presets: [Preset] = Preset.builtIns
     ) {
         self.options = options
         self.defaultMode = defaultMode
@@ -42,6 +53,9 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.reminderSound = reminderSound
         self.diskKeepAlive = diskKeepAlive
         self.virtualDisplay = virtualDisplay
+        self.pauseBelowBatteryPercent = pauseBelowBatteryPercent
+        self.showCountdownInMenuBar = showCountdownInMenuBar
+        self.presets = presets
     }
 
     /// Forgiving decoder: every field falls back to its default when absent, so
@@ -57,6 +71,9 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         reminderSound = try c.decodeIfPresent(Bool.self, forKey: .reminderSound) ?? true
         diskKeepAlive = try c.decodeIfPresent(DiskKeepAliveConfig.self, forKey: .diskKeepAlive)
         virtualDisplay = try c.decodeIfPresent(VirtualDisplayConfig.self, forKey: .virtualDisplay)
+        pauseBelowBatteryPercent = try c.decodeIfPresent(Int.self, forKey: .pauseBelowBatteryPercent)
+        showCountdownInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showCountdownInMenuBar) ?? false
+        presets = try c.decodeIfPresent([Preset].self, forKey: .presets) ?? Preset.builtIns
     }
 
     /// First-launch defaults: keep system awake, no triggers.

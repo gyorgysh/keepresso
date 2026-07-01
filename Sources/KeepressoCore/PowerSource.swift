@@ -25,10 +25,15 @@ public struct PowerSourceSnapshot: Equatable, Sendable {
     /// Whether the machine reports any battery at all (false on most desktops).
     public var hasBattery: Bool
 
-    public init(provider: Provider, isCharging: Bool, hasBattery: Bool) {
+    /// Current charge as a percentage of full capacity (0–100), or `nil` when
+    /// ``hasBattery`` is false or the reading isn't available.
+    public var percentage: Int?
+
+    public init(provider: Provider, isCharging: Bool, hasBattery: Bool, percentage: Int? = nil) {
         self.provider = provider
         self.isCharging = isCharging
         self.hasBattery = hasBattery
+        self.percentage = percentage
     }
 }
 
@@ -66,6 +71,7 @@ public final class IOKitPowerSourceMonitor: PowerSourceMonitoring {
         // Walk the individual sources to learn about the battery, if any.
         var hasBattery = false
         var isCharging = false
+        var percentage: Int?
         let sources = IOPSCopyPowerSourcesList(blob).takeRetainedValue() as [CFTypeRef]
         for source in sources {
             guard let desc = IOPSGetPowerSourceDescription(blob, source)?.takeUnretainedValue()
@@ -74,8 +80,14 @@ public final class IOKitPowerSourceMonitor: PowerSourceMonitoring {
             if let charging = desc[kIOPSIsChargingKey] as? Bool, charging {
                 isCharging = true
             }
+            if let current = desc[kIOPSCurrentCapacityKey] as? Int,
+               let max = desc[kIOPSMaxCapacityKey] as? Int, max > 0 {
+                percentage = Int((Double(current) / Double(max) * 100).rounded())
+            }
         }
 
-        return PowerSourceSnapshot(provider: provider, isCharging: isCharging, hasBattery: hasBattery)
+        return PowerSourceSnapshot(
+            provider: provider, isCharging: isCharging, hasBattery: hasBattery, percentage: percentage
+        )
     }
 }

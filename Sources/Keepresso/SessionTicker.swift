@@ -10,18 +10,27 @@ import KeepressoCore
 final class SessionTicker {
     private let session: SessionController
     private let disk: DiskKeepAliveController
+    private let powerSource: PowerSourceMonitoring
     private var timer: Timer?
 
-    init(session: SessionController, disk: DiskKeepAliveController) {
+    init(
+        session: SessionController,
+        disk: DiskKeepAliveController,
+        powerSource: PowerSourceMonitoring = IOKitPowerSourceMonitor()
+    ) {
         self.session = session
         self.disk = disk
+        self.powerSource = powerSource
     }
 
     func start() {
         guard timer == nil else { return }
-        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak session, weak disk] _ in
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak session, weak disk, weak self] _ in
             MainActor.assumeIsolated {
-                session?.reconcile(systemIdleSeconds: Self.systemIdleSeconds())
+                session?.reconcile(
+                    systemIdleSeconds: Self.systemIdleSeconds(),
+                    batteryPercent: self?.powerSource.current.percentage
+                )
                 disk?.tick(now: Date())
             }
         }

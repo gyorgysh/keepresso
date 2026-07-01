@@ -11,7 +11,7 @@ struct KeepressoApp: App {
         MenuBarExtra {
             MenuBarContent(model: appDelegate.model, updater: appDelegate.updater)
         } label: {
-            MenuBarLabel(session: appDelegate.model.session)
+            MenuBarLabel(session: appDelegate.model.session, showCountdown: appDelegate.model.showCountdownInMenuBar)
         }
         .menuBarExtraStyle(.window)
 
@@ -54,5 +54,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // relaunch from there (this instance quits if it relocates).
         AppRelocator.relocateIfNeeded()
         ticker.start()
+    }
+
+    /// Handles `keepresso://` URLs (registered via `CFBundleURLTypes` in
+    /// project.yml), e.g. from Shortcuts, Raycast, or a shell script. AppKit
+    /// calls this for a background agent even with no window open, which
+    /// `.onOpenURL` (Scene/View-scoped) can't guarantee for a `MenuBarExtra`.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            guard let command = URLCommand.parse(url) else { continue }
+            model.handle(command)
+        }
     }
 }

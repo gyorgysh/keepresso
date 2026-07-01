@@ -78,6 +78,36 @@ private struct GeneralTab: View {
                 Toggle("Prevent system sleep", isOn: optionBinding(\.preventSystemSleep))
             }
             Section {
+                Toggle("Show countdown in menu bar", isOn: Binding(
+                    get: { model.showCountdownInMenuBar },
+                    set: { model.showCountdownInMenuBar = $0 }
+                ))
+            } footer: {
+                Text("Shows the remaining time next to the menu-bar icon during a timed session.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle("Pause on low battery", isOn: Binding(
+                    get: { model.batteryAutoPauseEnabled },
+                    set: { model.batteryAutoPauseEnabled = $0 }
+                ))
+                if model.batteryAutoPauseEnabled {
+                    Picker("Below", selection: Binding(
+                        get: { model.pauseBelowBatteryPercent },
+                        set: { model.pauseBelowBatteryPercent = $0 }
+                    )) {
+                        ForEach([10, 15, 20, 30, 50], id: \.self) { percent in
+                            Text("\(percent)%").tag(percent)
+                        }
+                    }
+                }
+            } footer: {
+                Text("Lets the Mac sleep once battery charge drops below this level, even mid-session, so it doesn't run flat.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
                 Toggle("Keep awake with the lid closed", isOn: Binding(
                     get: { model.closedDisplayEnabled },
                     set: { model.setClosedDisplay($0) }
@@ -122,6 +152,7 @@ private struct GeneralTab: View {
 
 private struct TriggersTab: View {
     @Bindable var model: AppModel
+    @State private var newPresetName = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -137,10 +168,50 @@ private struct TriggersTab: View {
 
             if model.triggersEnabled {
                 Divider()
+                presets
+                Divider()
                 RulesView(model: model)
             }
             Spacer(minLength: 0)
         }
+    }
+
+    private var presets: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Presets")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Menu {
+                    ForEach(model.presets) { preset in
+                        Button(preset.name) { model.applyPreset(preset) }
+                    }
+                    if !model.presets.isEmpty { Divider() }
+                    ForEach(model.presets) { preset in
+                        Button("Remove \u{201C}\(preset.name)\u{201D}", role: .destructive) {
+                            model.removePreset(preset)
+                        }
+                    }
+                } label: {
+                    Label("Apply or remove", systemImage: "list.bullet")
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+            }
+
+            HStack(spacing: 6) {
+                TextField("Save current rules as\u{2026}", text: $newPresetName)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(savePreset)
+                Button("Save") { savePreset() }
+                    .disabled(newPresetName.trimmingCharacters(in: .whitespaces).isEmpty || model.rules.isEmpty)
+            }
+        }
+    }
+
+    private func savePreset() {
+        model.saveCurrentRulesAsPreset(named: newPresetName)
+        newPresetName = ""
     }
 }
 

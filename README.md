@@ -5,9 +5,9 @@
 <h1 align="center">Keepresso</h1>
 
 <p align="center">
-  Keep your Mac awake, on your terms, with smart triggers, timed sessions, and
-  closed-display mode in a clean, native menu-bar app, built on a modern
-  foundation for the next decade of computing.
+  Keep your Mac awake, on your terms, with smart triggers, presets, timed
+  sessions, and closed-display mode in a clean, native menu-bar app, built on a
+  modern foundation for the next decade of computing.
 </p>
 
 <p align="center">
@@ -39,8 +39,16 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 - ⚡ **Trigger engine.** Stay awake only while charging or on battery, an external
   display is connected, you're on a chosen Wi-Fi network, or a specific app is
   running. Combine conditions with **any** (OR) or **all** (AND).
+- 🎛️ **Presets.** Apply a named trigger bundle in one click, built-in (AI Agent,
+  On AC Power, External Display Connected) or your own saved rule sets.
 - 🪪 **Auto app detection.** Caffeinate while listed apps run or are frontmost,
   with an optional grace period before it lets go.
+- 🔋 **Battery-aware auto-pause.** Let the Mac sleep once charge drops below a
+  threshold you choose, even mid-session, so it never runs the battery flat.
+- ⏱️ **Menu-bar countdown.** An optional live countdown next to the cup icon for
+  timed sessions.
+- 🔗 **URL scheme.** Drive a session from Shortcuts, Raycast, Alfred, or a shell
+  script with `keepresso://start?duration=60`, `stop`, or `toggle`.
 - 💻 **Closed-display mode.** Keep running with the **lid shut** and no external
   display, on power or battery, for an always-on Mac or one you carry mid-task.
 - 🔔 **Reminders.** A "still brewing" notification (with an optional sound) after
@@ -124,8 +132,10 @@ Click the cup in the menu bar to open Keepresso.
   flips a system setting (`pmset disablesleep`), and works on power or battery.
   Turn it off when you're done; on battery in a bag it can drain and heat up.
 - **Preferences** (⌘,) holds the set-and-forget configuration, in tabs:
-  - **General**: what to keep awake, closed-display mode, launch at login.
-  - **Triggers**: turn on rule-based activation and build your rule set.
+  - **General**: what to keep awake, menu-bar countdown, battery auto-pause,
+    closed-display mode, launch at login.
+  - **Triggers**: turn on rule-based activation, apply a preset, and build your
+    rule set.
   - **Reminder**: a one-time or recurring "still brewing" alert, with a sound.
   - **Disk**: choose a volume to keep spun up and how often to touch it.
   - **Display**: create an experimental high-resolution headless virtual display.
@@ -133,6 +143,18 @@ Click the cup in the menu bar to open Keepresso.
   is configured to stay reachable, and links you straight to the right settings.
 
 Keepresso has no Dock icon by design. Everything lives in the menu bar.
+
+### Driving it from a script
+
+Keepresso registers a `keepresso://` URL scheme so Shortcuts, Raycast, Alfred,
+or a shell script can start or stop a session without opening the menu:
+
+```
+open "keepresso://start"              # indefinite session
+open "keepresso://start?duration=60"  # timed session, in minutes
+open "keepresso://stop"
+open "keepresso://toggle"
+```
 
 ## Why not the Mac App Store?
 

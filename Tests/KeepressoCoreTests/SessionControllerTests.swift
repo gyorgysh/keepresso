@@ -133,6 +133,19 @@ private final class StubGate: TriggerEvaluating {
 }
 
 @MainActor
+@Test func gatedSessionHasNoRemainingEvenWithLeftoverTimedMode() {
+    let (controller, _, clock) = makeController()
+    controller.start(mode: .timed(duration: 3600)) // a 1h manual session
+    clock.advance(10)
+    #expect(controller.remaining != nil) // counting down while manual
+
+    controller.triggerGate = StubGate(true) // triggers take over mid-session
+    controller.reconcile()
+    #expect(controller.isActive) // gate holds it on
+    #expect(controller.remaining == nil) // but no countdown: gating isn't time-boxed
+}
+
+@MainActor
 @Test func gatedSessionIgnoresTimedExpiry() {
     let (controller, fake, clock) = makeController()
     let gate = StubGate(true)
@@ -159,5 +172,44 @@ private final class StubGate: TriggerEvaluating {
     #expect(fake.held == [.system, .display])
 
     controller.reconcile(systemIdleSeconds: 301) // past threshold → yield display
+    #expect(fake.held == [.system])
+}
+
+@MainActor
+@Test func lowBatteryForceStopsActiveSession() {
+    let (controller, fake, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.start()
+    #expect(controller.isActive)
+
+    controller.reconcile(batteryPercent: 15)
+    #expect(controller.isActive == false)
+    #expect(fake.held.isEmpty)
+}
+
+@MainActor
+@Test func lowBatteryBlocksTriggerGateReactivation() {
+    let (controller, fake, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    let gate = StubGate(true)
+    controller.triggerGate = gate
+
+    controller.reconcile(batteryPercent: 10) // low: stays idle even though gate wants on
+    #expect(controller.isActive == false)
+    #expect(fake.held.isEmpty)
+
+    controller.reconcile(batteryPercent: 50) // recovered: gate resumes control
+    #expect(controller.isActive)
+    #expect(fake.held == [.system])
+}
+
+@MainActor
+@Test func batteryThresholdIgnoredWhenNoReadingSupplied() {
+    let (controller, fake, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.start()
+
+    controller.reconcile() // no batteryPercent (e.g. desktop Mac) → no override
+    #expect(controller.isActive)
     #expect(fake.held == [.system])
 }

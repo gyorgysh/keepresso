@@ -50,6 +50,7 @@ final class AppModel {
         self.session.reminderAfter = loaded.reminderAfter
         self.session.reminderRepeats = loaded.reminderRepeats
         self.session.reminderSound = loaded.reminderSound
+        self.session.pauseBelowBatteryPercent = loaded.pauseBelowBatteryPercent
         self.disk = DiskKeepAliveController()
         self.disk.config = loaded.diskKeepAlive
         self.virtualDisplay.config = loaded.virtualDisplay
@@ -246,6 +247,86 @@ final class AppModel {
             settings.reminderSound = newValue
             session.reminderSound = newValue
             persist()
+        }
+    }
+
+    // MARK: - Battery-aware auto-pause
+
+    /// The default cutoff used when the feature is first enabled.
+    static let defaultPauseBelowBatteryPercent = 20
+
+    /// Whether an active session force-stops (letting the Mac sleep) once
+    /// battery charge drops below ``pauseBelowBatteryPercent``.
+    var batteryAutoPauseEnabled: Bool {
+        get { settings.pauseBelowBatteryPercent != nil }
+        set {
+            settings.pauseBelowBatteryPercent = newValue
+                ? (settings.pauseBelowBatteryPercent ?? Self.defaultPauseBelowBatteryPercent)
+                : nil
+            session.pauseBelowBatteryPercent = settings.pauseBelowBatteryPercent
+            persist()
+        }
+    }
+
+    /// The cutoff percentage shown in the picker (the default while off).
+    var pauseBelowBatteryPercent: Int {
+        get { settings.pauseBelowBatteryPercent ?? Self.defaultPauseBelowBatteryPercent }
+        set {
+            settings.pauseBelowBatteryPercent = newValue
+            session.pauseBelowBatteryPercent = newValue
+            persist()
+        }
+    }
+
+    // MARK: - Menu-bar countdown
+
+    /// Whether the menu-bar icon shows a live countdown for timed sessions.
+    var showCountdownInMenuBar: Bool {
+        get { settings.showCountdownInMenuBar }
+        set {
+            settings.showCountdownInMenuBar = newValue
+            persist()
+        }
+    }
+
+    // MARK: - Presets
+
+    /// Saved trigger-rule bundles, in display order.
+    var presets: [Preset] { settings.presets }
+
+    /// Replace the current rule set with a preset's, turn on trigger gating,
+    /// and rebuild the live engine.
+    func applyPreset(_ preset: Preset) {
+        settings.ruleSet = preset.ruleSet
+        settings.triggersEnabled = true
+        applyTriggerGate()
+        persist()
+    }
+
+    /// Save the current rule set under a new name.
+    func saveCurrentRulesAsPreset(named name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        settings.presets.append(Preset(name: trimmed, ruleSet: settings.ruleSet))
+        persist()
+    }
+
+    /// Remove a saved preset (built-in or user-created).
+    func removePreset(_ preset: Preset) {
+        settings.presets.removeAll { $0.id == preset.id }
+        persist()
+    }
+
+    // MARK: - URL scheme commands
+
+    /// Handle a `keepresso://` command from ``URLCommand/parse(_:)``. Always
+    /// acts like the manual toggle/duration picker — it doesn't touch trigger
+    /// gating, so it's a one-off override rather than a persisted setting.
+    func handle(_ command: URLCommand) {
+        switch command {
+        case .start(let mode): session.start(mode: mode)
+        case .stop: session.stop()
+        case .toggle: session.toggle()
         }
     }
 
