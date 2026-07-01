@@ -38,7 +38,8 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   after _N_ minutes idle while the system itself stays awake.
 - ⚡ **Trigger engine.** Stay awake only while charging or on battery, an external
   display is connected, you're on a chosen Wi-Fi network, or a specific app is
-  running. Combine conditions with **any** (OR) or **all** (AND).
+  running. Combine conditions with **any** (OR) or **all** (AND). A one-click
+  "Pause Triggers" in the menu bar stops brewing without touching your rules.
 - 🎛️ **Presets.** Apply a named trigger bundle in one click, built-in (AI Agent,
   On AC Power, External Display Connected) or your own saved rule sets.
 - 🪪 **Auto app detection.** Caffeinate while listed apps run or are frontmost,
@@ -51,6 +52,8 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   script with `keepresso://start?duration=60`, `stop`, or `toggle`.
 - 💻 **Closed-display mode.** Keep running with the **lid shut** and no external
   display, on power or battery, for an always-on Mac or one you carry mid-task.
+  The screen itself turns off when the lid closes, so it's not sitting lit
+  inside a closed lid.
 - 🔔 **Reminders.** A "still brewing" notification (with an optional sound) after
   _N_ minutes, one-time or recurring, so a forgotten session can't quietly drain
   the battery.

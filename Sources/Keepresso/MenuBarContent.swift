@@ -32,18 +32,29 @@ struct MenuBarContent: View {
         VStack(alignment: .leading, spacing: 12) {
             header
 
-            if model.triggersEnabled {
+            if model.triggersEnabled && !model.triggersPaused {
                 triggerSummary
             }
 
             Divider()
 
-            if model.triggersEnabled {
-                Text("Activation is controlled by triggers. Edit them in Preferences.")
+            if model.triggersEnabled && !model.triggersPaused {
+                Text("Activation is controlled by triggers.\nEdit them in Preferences.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                Button("Pause Triggers") { model.pauseTriggers() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.keepressoBrew)
+                    .frame(maxWidth: .infinity)
             } else {
+                if model.triggersEnabled {
+                    Text("Triggers paused. Controlling manually for now.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 Toggle("Keep awake", isOn: Binding(
                     get: { session.isActive },
                     set: { _ in model.toggleManual() }
@@ -59,6 +70,13 @@ struct MenuBarContent: View {
                     }
                 }
                 .pickerStyle(.menu)
+
+                if model.triggersEnabled {
+                    Button("Resume Triggers") { model.resumeTriggers() }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color.keepressoBrew)
+                        .frame(maxWidth: .infinity)
+                }
             }
 
             Divider()
@@ -76,7 +94,7 @@ struct MenuBarContent: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if model.closedDisplayEnabled {
-                Text("Stays awake on battery too.\nTurn it off before putting it in a bag.")
+                Text("Stays awake on battery too; the display turns off when the lid closes. Turn it off before putting it in a bag.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -90,17 +108,21 @@ struct MenuBarContent: View {
 
             Divider()
 
-            Button("Preferences…") { open(KeepressoApp.preferencesWindowID) }
-                .keyboardShortcut(",")
-            Button("Headless Setup…") { open(KeepressoApp.setupWindowID) }
-            Button("About Keepresso") { open(KeepressoApp.aboutWindowID) }
-            Button("Check for Updates…") { updater.checkForUpdates() }
-                .disabled(!updater.canCheckForUpdates)
+            Group {
+                Button("Preferences…") { open(KeepressoApp.preferencesWindowID) }
+                    .keyboardShortcut(",")
+                Button("Headless Setup…") { open(KeepressoApp.setupWindowID) }
+                Button("About Keepresso") { open(KeepressoApp.aboutWindowID) }
+                Button("Check for Updates…") { updater.checkForUpdates() }
+                    .disabled(!updater.canCheckForUpdates)
+            }
+            .buttonStyle(.menuRow)
 
             Divider()
 
             Button("Quit Keepresso") { NSApplication.shared.terminate(nil) }
                 .keyboardShortcut("q")
+                .buttonStyle(.menuRow)
         }
         .padding(14)
         .frame(width: 280)
@@ -141,7 +163,7 @@ struct MenuBarContent: View {
     }
 
     private var statusDetail: String {
-        if model.triggersEnabled {
+        if model.triggersEnabled && !model.triggersPaused {
             return model.triggerSummary() ?? "No conditions yet"
         }
         guard session.isActive else { return "System can sleep" }

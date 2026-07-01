@@ -100,10 +100,35 @@ final class AppModel {
         get { settings.triggersEnabled }
         set {
             settings.triggersEnabled = newValue
+            triggersPaused = false // always starts unpaused
             if newValue { session.stop() } // hand activation to the gate
             applyTriggerGate()
             persist()
         }
+    }
+
+    /// Whether trigger gating is temporarily suspended in favor of the manual
+    /// toggle. In-memory only (not part of ``KeepressoSettings``): quitting and
+    /// relaunching Keepresso always comes back unpaused.
+    private(set) var triggersPaused = false
+
+    /// Suspend trigger gating and stop the session right away — pausing is
+    /// meant to answer "let my Mac sleep for now", not just hand the wheel to
+    /// the manual toggle while leaving it brewing. Control reverts to the
+    /// manual toggle (so it can be turned back on by hand) until
+    /// ``resumeTriggers()``. No-op if triggers aren't on or already paused.
+    func pauseTriggers() {
+        guard settings.triggersEnabled, !triggersPaused else { return }
+        triggersPaused = true
+        applyTriggerGate()
+        session.stop()
+    }
+
+    /// Hand activation back to the trigger engine. No-op if not currently paused.
+    func resumeTriggers() {
+        guard triggersPaused else { return }
+        triggersPaused = false
+        applyTriggerGate()
     }
 
     var combine: CombineMode {
@@ -145,7 +170,7 @@ final class AppModel {
             ? factory.makeEngine(from: settings.ruleSet)
             : nil
         currentEngine = engine
-        session.triggerGate = engine
+        session.triggerGate = (settings.triggersEnabled && !triggersPaused) ? engine : nil
         // The rules (or the engine) just changed; drop the cached states so the
         // next read re-evaluates against the new rule set immediately.
         cachedRuleStates = nil
@@ -299,6 +324,7 @@ final class AppModel {
     func applyPreset(_ preset: Preset) {
         settings.ruleSet = preset.ruleSet
         settings.triggersEnabled = true
+        triggersPaused = false
         applyTriggerGate()
         persist()
     }

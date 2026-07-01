@@ -24,15 +24,24 @@ closed-display mode (keep running with the lid shut, no external display) is als
 done: since `IOPMAssertion` can't override clamshell sleep, it flips the global
 `pmset disablesleep` setting via an admin prompt (Core seam
 `SleepSettingControlling`/`ClosedDisplayController` in `KeepressoCore/ClosedDisplay.swift`,
-toggle in Preferences ▸ General). Distribution is live end to end: the
-tag-triggered `.github/workflows/release.yml` builds, signs, notarizes, and
-publishes a real DMG + signed Sparkle appcast to GitHub Releases on every `v*`
-tag (v1.0.0 and v1.1.0 have both shipped this way; see `docs/RELEASING.md`).
-What remains is publishing `Casks/keepresso.rb` to the `gyorgysh/homebrew-keepresso`
-tap so `brew install --cask keepresso` works.
+toggle in Preferences ▸ General). As of v1.2 that mode also detects the lid
+actually closing (`AppleClamshellState` via IOKit, `KeepressoCore/LidState.swift`)
+and forces the display itself to sleep (`pmset displaysleepnow`, skipped when an
+external display is attached), instead of leaving the panel lit inside the
+closed lid. v1.2 also added a menu-bar "Pause Triggers" / "Resume Triggers"
+control (`AppModel.pauseTriggers()`/`resumeTriggers()`, in-memory only, resets
+to unpaused on relaunch) so triggers can be stopped without a trip to
+Preferences. Distribution is live end to end: the tag-triggered
+`.github/workflows/release.yml` builds, signs, notarizes, and publishes a real
+DMG + signed Sparkle appcast to GitHub Releases on every `v*` tag (v1.0.0,
+v1.1.0, and v1.1.1 have all shipped this way; see `docs/RELEASING.md`). The
+Homebrew Cask is published and installable at
+`brew install --cask gyorgysh/keepresso/keepresso`; each release still needs
+`Casks/keepresso.rb` bumped (`version` + `sha256`) and pushed to the
+`gyorgysh/homebrew-keepresso` tap repo.
 A headless virtual-display proof-of-concept (private `CGVirtualDisplay` API,
 behind an off-by-default flag) is also done, still needing validation on real
-headless hardware. Current version: 1.1.0 (build 8). The code is pushed to a
+headless hardware. Current version: 1.2.0 (build 10). The code is pushed to a
 **private** GitHub repo (`git@github.com:gyorgysh/keepresso.git`, branch
 `main`); history is provisional and may be squashed/rebased to a clean initial
 state before going public, so commit freely but keep messages tidy.

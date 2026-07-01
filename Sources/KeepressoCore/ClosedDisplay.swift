@@ -50,9 +50,46 @@ public final class ClosedDisplayController {
     public private(set) var isBusy = false
 
     private let control: SleepSettingControlling
+    private let lid: LidStateReading
+    private let externalDisplay: DisplayMonitoring
+    private let displaySleeper: DisplaySleepCommanding
 
-    public init(control: SleepSettingControlling = PMSetSleepControl()) {
+    /// Whether the lid was closed as of the last ``tick()``, so the sleep
+    /// command only fires once per closed transition.
+    private var lidWasClosed = false
+
+    public init(
+        control: SleepSettingControlling = PMSetSleepControl(),
+        lid: LidStateReading = IORegistryLidState(),
+        externalDisplay: DisplayMonitoring = CoreGraphicsDisplayMonitor(),
+        displaySleeper: DisplaySleepCommanding = PMSetDisplaySleeper()
+    ) {
         self.control = control
+        self.lid = lid
+        self.externalDisplay = externalDisplay
+        self.displaySleeper = displaySleeper
+    }
+
+    /// Force the display to sleep the instant the lid closes, while
+    /// lid-closed mode is on and no external display is attached (with an
+    /// external display, `displaysleepnow` would also blank that monitor,
+    /// breaking a legitimate clamshell-with-monitor setup). macOS auto-wakes
+    /// the panel when the lid reopens, so there's nothing to do on that edge.
+    /// Safe to call every second.
+    public func tick() {
+        guard isEnabled == true, let closed = lid.isClosed() else {
+            lidWasClosed = false
+            return
+        }
+        guard !externalDisplay.current.hasExternalDisplay else {
+            lidWasClosed = closed
+            return
+        }
+        if closed, !lidWasClosed {
+            let sleeper = displaySleeper
+            Task.detached { sleeper.sleepNow() } // shells out; keep off the main actor
+        }
+        lidWasClosed = closed
     }
 
     /// Re-read the current system setting. The read shells out to `pmset -g`,

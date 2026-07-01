@@ -6,6 +6,37 @@ extension Color {
     static let keepressoBrew = Color(red: 0.357, green: 0.357, blue: 0.839)
 }
 
+/// A plain, full-width menu row: no border, a subtle hover/press highlight, and
+/// left-aligned text — closer to a native menu item than the default `.bordered`
+/// pill button style, so it stays visually quiet next to prominent actions.
+struct MenuRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        MenuRow(configuration: configuration)
+    }
+
+    private struct MenuRow: View {
+        let configuration: ButtonStyleConfiguration
+        @State private var isHovering = false
+
+        var body: some View {
+            configuration.label
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 5)
+                .padding(.horizontal, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(isHovering || configuration.isPressed ? Color.primary.opacity(0.1) : .clear)
+                )
+                .contentShape(Rectangle())
+                .onHover { isHovering = $0 }
+        }
+    }
+}
+
+extension ButtonStyle where Self == MenuRowButtonStyle {
+    static var menuRow: MenuRowButtonStyle { MenuRowButtonStyle() }
+}
+
 extension View {
     /// A translucent "glass" surface behind a view. On macOS 26+ this is the real
     /// Liquid Glass material; on earlier systems it falls back to a frosted

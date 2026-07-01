@@ -96,3 +96,87 @@ private final class FakeSleepControl: SleepSettingControlling, @unchecked Sendab
 @Test func parseReturnsNilWithoutOutput() {
     #expect(PMSetSleepControl.parseSleepDisabled(from: nil) == nil)
 }
+
+// MARK: - Lid-closed display sleep
+
+private final class FakeLidState: LidStateReading, @unchecked Sendable {
+    var closed: Bool?
+    init(closed: Bool? = false) { self.closed = closed }
+    func isClosed() -> Bool? { closed }
+}
+
+private final class FakeDisplayMonitor: DisplayMonitoring, @unchecked Sendable {
+    var snapshot: DisplaySnapshot
+    init(hasExternalDisplay: Bool = false) {
+        snapshot = DisplaySnapshot(externalDisplayCount: hasExternalDisplay ? 1 : 0, totalDisplayCount: hasExternalDisplay ? 2 : 1)
+    }
+    var current: DisplaySnapshot { snapshot }
+}
+
+private final class FakeDisplaySleeper: DisplaySleepCommanding, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _sleepNowCallCount = 0
+    var sleepNowCallCount: Int { lock.withLock { _sleepNowCallCount } }
+    func sleepNow() { lock.withLock { _sleepNowCallCount += 1 } }
+}
+
+@MainActor
+@Test func lidTickDoesNothingWhenModeOff() async {
+    let sleepControl = FakeSleepControl(initial: false)
+    let lid = FakeLidState(closed: true)
+    let sleeper = FakeDisplaySleeper()
+    let controller = ClosedDisplayController(control: sleepControl, lid: lid, displaySleeper: sleeper)
+    await controller.refresh() // isEnabled becomes false
+    controller.tick()
+    try? await Task.sleep(nanoseconds: 50_000_000)
+    #expect(sleeper.sleepNowCallCount == 0)
+}
+
+@MainActor
+@Test func lidTickSleepsOnceOnCloseTransition() async {
+    let sleepControl = FakeSleepControl(initial: true)
+    let lid = FakeLidState(closed: false)
+    let sleeper = FakeDisplaySleeper()
+    let controller = ClosedDisplayController(control: sleepControl, lid: lid, displaySleeper: sleeper)
+    await controller.refresh() // isEnabled becomes true
+
+    controller.tick() // still open: no-op
+    lid.closed = true
+    controller.tick() // closes: should sleep
+    controller.tick() // still closed: should not sleep again
+    try? await Task.sleep(nanoseconds: 50_000_000)
+    #expect(sleeper.sleepNowCallCount == 1)
+}
+
+@MainActor
+@Test func lidTickIgnoresExternalDisplay() async {
+    let sleepControl = FakeSleepControl(initial: true)
+    let lid = FakeLidState(closed: true)
+    let externalDisplay = FakeDisplayMonitor(hasExternalDisplay: true)
+    let sleeper = FakeDisplaySleeper()
+    let controller = ClosedDisplayController(
+        control: sleepControl, lid: lid, externalDisplay: externalDisplay, displaySleeper: sleeper
+    )
+    await controller.refresh()
+    controller.tick()
+    try? await Task.sleep(nanoseconds: 50_000_000)
+    #expect(sleeper.sleepNowCallCount == 0)
+}
+
+@MainActor
+@Test func lidTickReArmsAfterReopening() async {
+    let sleepControl = FakeSleepControl(initial: true)
+    let lid = FakeLidState(closed: false)
+    let sleeper = FakeDisplaySleeper()
+    let controller = ClosedDisplayController(control: sleepControl, lid: lid, displaySleeper: sleeper)
+    await controller.refresh()
+
+    lid.closed = true
+    controller.tick() // close #1
+    lid.closed = false
+    controller.tick() // reopen
+    lid.closed = true
+    controller.tick() // close #2
+    try? await Task.sleep(nanoseconds: 50_000_000)
+    #expect(sleeper.sleepNowCallCount == 2)
+}

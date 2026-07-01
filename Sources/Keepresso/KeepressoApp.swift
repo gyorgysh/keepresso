@@ -47,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Sparkle-backed auto-updater, behind the ``Updating`` seam. Started here so
     /// it schedules background checks for the app's whole lifetime.
     let updater: any Updating = SparkleUpdater()
-    private lazy var ticker = SessionTicker(session: model.session, disk: model.disk)
+    private lazy var ticker = SessionTicker(session: model.session, disk: model.disk, closedDisplay: model.closedDisplay)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // If launched from the DMG / Downloads, move into /Applications and
