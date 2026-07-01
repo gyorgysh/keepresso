@@ -16,22 +16,26 @@ v0.1 through v0.6 are implemented (core engine, trigger engine, auto app
 detection, alarm/reminder, disk keep-alive, headless-readiness Setup screen),
 along with all Polish (next-trigger summary, Preferences window, launch-at-login,
 settings persistence, animated icon) and the App shell (About window, menu
-entries). The Sparkle auto-updater is now wired in too (SwiftPM dependency,
-app-side `Updating` seam in `Keepresso/Updater.swift`, Info.plist `SUFeedURL` +
-`SUPublicEDKey` + `SUEnableAutomaticChecks`); a maintainer still has to generate
-the EdDSA key pair and sign the appcast at release time (see ROADMAP). A
+entries). v1.1 (battery auto-pause, menu-bar countdown, `keepresso://` URL
+scheme, presets) is done too. The Sparkle auto-updater is fully wired in
+(SwiftPM dependency, app-side `Updating` seam in `Keepresso/Updater.swift`,
+Info.plist `SUFeedURL` + a real `SUPublicEDKey` + `SUEnableAutomaticChecks`). A
 closed-display mode (keep running with the lid shut, no external display) is also
 done: since `IOPMAssertion` can't override clamshell sleep, it flips the global
 `pmset disablesleep` setting via an admin prompt (Core seam
 `SleepSettingControlling`/`ClosedDisplayController` in `KeepressoCore/ClosedDisplay.swift`,
-toggle in Preferences ▸ General). What remains in distribution is a signed and
-notarized DMG, a Homebrew Cask, and CI.
+toggle in Preferences ▸ General). Distribution is live end to end: the
+tag-triggered `.github/workflows/release.yml` builds, signs, notarizes, and
+publishes a real DMG + signed Sparkle appcast to GitHub Releases on every `v*`
+tag (v1.0.0 and v1.1.0 have both shipped this way; see `docs/RELEASING.md`).
+What remains is publishing `Casks/keepresso.rb` to the `gyorgysh/homebrew-keepresso`
+tap so `brew install --cask keepresso` works.
 A headless virtual-display proof-of-concept (private `CGVirtualDisplay` API,
-behind an off-by-default flag) is also planned, to be validated on real headless
-hardware. Current version: 0.7.0 (build 5). The code is pushed to a **private**
-GitHub repo (`git@github.com:gyorgysh/keepresso.git`, branch `main`); history is
-provisional and may be squashed/rebased to a clean initial state before going
-public, so commit freely but keep messages tidy.
+behind an off-by-default flag) is also done, still needing validation on real
+headless hardware. Current version: 1.1.0 (build 8). The code is pushed to a
+**private** GitHub repo (`git@github.com:gyorgysh/keepresso.git`, branch
+`main`); history is provisional and may be squashed/rebased to a clean initial
+state before going public, so commit freely but keep messages tidy.
 
 ## Commands
 

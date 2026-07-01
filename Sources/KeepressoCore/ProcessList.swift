@@ -19,11 +19,20 @@ public protocol ProcessListing: AnyObject {
 /// forking `ps` each time. A process starting or stopping doesn't need
 /// sub-second reaction for a keep-awake decision, so a few seconds of staleness
 /// is fine. The clock is injectable so the cache can be unit-tested.
+///
+/// ``current`` is read synchronously from the menu's `body` on the main
+/// thread, so it must never block on `Process.waitUntilExit()` itself (see the
+/// same hazard documented on ``ShellSystemProbe`` and ``PMSetSleepControl``: a
+/// blocked main run loop can crash re-entrantly when a virtual display is
+/// active). Instead, a stale cache is returned immediately and a refresh is
+/// kicked off on a detached task when it goes stale.
 public final class PSProcessLister: ProcessListing {
     private let ttl: TimeInterval
     private let now: () -> Date
+    private let lock = NSLock()
     private var cached: [String] = []
     private var lastFetch: Date?
+    private var isRefreshing = false
 
     public init(ttl: TimeInterval = 3, now: @escaping () -> Date = Date.init) {
         self.ttl = ttl
@@ -31,12 +40,33 @@ public final class PSProcessLister: ProcessListing {
     }
 
     public var current: [String] {
-        if let lastFetch, now().timeIntervalSince(lastFetch) < ttl {
-            return cached
+        let (snapshot, shouldRefresh) = withLock { () -> ([String], Bool) in
+            let isStale = lastFetch.map { now().timeIntervalSince($0) >= ttl } ?? true
+            let shouldRefresh = isStale && !isRefreshing
+            if shouldRefresh { isRefreshing = true }
+            return (cached, shouldRefresh)
         }
-        cached = run().map { $0.split(whereSeparator: \.isNewline).map(String.init) } ?? []
-        lastFetch = now()
-        return cached
+
+        if shouldRefresh {
+            Task.detached { [weak self] in
+                guard let self else { return }
+                let fetched = self.run().map { $0.split(whereSeparator: \.isNewline).map(String.init) } ?? []
+                self.withLock {
+                    self.cached = fetched
+                    self.lastFetch = self.now()
+                    self.isRefreshing = false
+                }
+            }
+        }
+        return snapshot
+    }
+
+    /// Wraps ``lock`` in a synchronous call so the lock/unlock pair is never
+    /// invoked directly from an async context (`NSLock` is `noasync`).
+    private func withLock<T>(_ body: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body()
     }
 
     private func run() -> String? {
