@@ -127,8 +127,7 @@ private final class FakeDisplaySleeper: DisplaySleepCommanding, @unchecked Senda
     let sleeper = FakeDisplaySleeper()
     let controller = ClosedDisplayController(control: sleepControl, lid: lid, displaySleeper: sleeper)
     await controller.refresh() // isEnabled becomes false
-    controller.tick()
-    try? await Task.sleep(nanoseconds: 50_000_000)
+    await controller.tick()?.value
     #expect(sleeper.sleepNowCallCount == 0)
 }
 
@@ -140,11 +139,10 @@ private final class FakeDisplaySleeper: DisplaySleepCommanding, @unchecked Senda
     let controller = ClosedDisplayController(control: sleepControl, lid: lid, displaySleeper: sleeper)
     await controller.refresh() // isEnabled becomes true
 
-    controller.tick() // still open: no-op
+    await controller.tick()?.value // still open: no-op
     lid.closed = true
-    controller.tick() // closes: should sleep
-    controller.tick() // still closed: should not sleep again
-    try? await Task.sleep(nanoseconds: 50_000_000)
+    await controller.tick()?.value // closes: should sleep
+    await controller.tick()?.value // still closed: should not sleep again
     #expect(sleeper.sleepNowCallCount == 1)
 }
 
@@ -158,8 +156,7 @@ private final class FakeDisplaySleeper: DisplaySleepCommanding, @unchecked Senda
         control: sleepControl, lid: lid, externalDisplay: externalDisplay, displaySleeper: sleeper
     )
     await controller.refresh()
-    controller.tick()
-    try? await Task.sleep(nanoseconds: 50_000_000)
+    await controller.tick()?.value
     #expect(sleeper.sleepNowCallCount == 0)
 }
 
@@ -172,11 +169,10 @@ private final class FakeDisplaySleeper: DisplaySleepCommanding, @unchecked Senda
     await controller.refresh()
 
     lid.closed = true
-    controller.tick() // close #1
+    await controller.tick()?.value // close #1
     lid.closed = false
-    controller.tick() // reopen
+    await controller.tick()?.value // reopen
     lid.closed = true
-    controller.tick() // close #2
-    try? await Task.sleep(nanoseconds: 50_000_000)
+    await controller.tick()?.value // close #2
     #expect(sleeper.sleepNowCallCount == 2)
 }
