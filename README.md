@@ -74,12 +74,12 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 <table>
 <tr>
 <td align="center" width="50%">
-  <img src="docs/assets/menu_triggers.webp" width="320" alt="Preferences: building a trigger rule set"><br>
-  <sub>Trigger engine: combine AC power, Wi-Fi, displays, and app conditions</sub>
+  <img src="docs/assets/menu_settings.webp" width="320" alt="Preferences: General tab with closed-display mode"><br>
+  <sub>General: keep-awake toggles, menu-bar countdown, battery auto-pause, closed-display mode, launch at login</sub>
 </td>
 <td align="center" width="50%">
-  <img src="docs/assets/menu_settings.webp" width="320" alt="Preferences: General tab with closed-display mode"><br>
-  <sub>General: keep-awake toggles, closed-display mode, launch at login</sub>
+  <img src="docs/assets/menu_triggers.webp" width="320" alt="Preferences: building a trigger rule set"><br>
+  <sub>Trigger engine: combine AC power, Wi-Fi, displays, and app conditions, or apply a preset</sub>
 </td>
 </tr>
 <tr>
