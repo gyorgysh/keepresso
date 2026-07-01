@@ -116,9 +116,17 @@ foundation, and a quiet must-have for the next decade of computing.
 
 ## Install
 
-Download the latest signed, notarized DMG from
+**Homebrew:**
+
+```sh
+brew install --cask gyorgysh/keepresso/keepresso
+```
+
+**Manual:** download the latest signed, notarized DMG from
 [Releases](https://github.com/gyorgysh/keepresso/releases), drag **Keepresso** to
-Applications, and launch it. It keeps itself up to date from there.
+Applications, and launch it.
+
+Either way, Keepresso keeps itself up to date from there.
 
 ## Using Keepresso
 
