@@ -124,8 +124,11 @@ private final class FakeDisplaySleeper: DisplaySleepCommanding, @unchecked Senda
 @Test func lidTickDoesNothingWhenModeOff() async {
     let sleepControl = FakeSleepControl(initial: false)
     let lid = FakeLidState(closed: true)
+    let externalDisplay = FakeDisplayMonitor(hasExternalDisplay: false)
     let sleeper = FakeDisplaySleeper()
-    let controller = ClosedDisplayController(control: sleepControl, lid: lid, displaySleeper: sleeper)
+    let controller = ClosedDisplayController(
+        control: sleepControl, lid: lid, externalDisplay: externalDisplay, displaySleeper: sleeper
+    )
     await controller.refresh() // isEnabled becomes false
     controller.tick()
     #expect(sleeper.sleepNowCallCount == 0)
@@ -135,8 +138,11 @@ private final class FakeDisplaySleeper: DisplaySleepCommanding, @unchecked Senda
 @Test func lidTickSleepsOnceOnCloseTransition() async {
     let sleepControl = FakeSleepControl(initial: true)
     let lid = FakeLidState(closed: false)
+    let externalDisplay = FakeDisplayMonitor(hasExternalDisplay: false)
     let sleeper = FakeDisplaySleeper()
-    let controller = ClosedDisplayController(control: sleepControl, lid: lid, displaySleeper: sleeper)
+    let controller = ClosedDisplayController(
+        control: sleepControl, lid: lid, externalDisplay: externalDisplay, displaySleeper: sleeper
+    )
     await controller.refresh() // isEnabled becomes true
 
     controller.tick() // still open: no-op
@@ -164,8 +170,11 @@ private final class FakeDisplaySleeper: DisplaySleepCommanding, @unchecked Senda
 @Test func lidTickReArmsAfterReopening() async {
     let sleepControl = FakeSleepControl(initial: true)
     let lid = FakeLidState(closed: false)
+    let externalDisplay = FakeDisplayMonitor(hasExternalDisplay: false)
     let sleeper = FakeDisplaySleeper()
-    let controller = ClosedDisplayController(control: sleepControl, lid: lid, displaySleeper: sleeper)
+    let controller = ClosedDisplayController(
+        control: sleepControl, lid: lid, externalDisplay: externalDisplay, displaySleeper: sleeper
+    )
     await controller.refresh()
 
     lid.closed = true
