@@ -22,7 +22,8 @@ public struct Preset: Codable, Equatable, Identifiable, Sendable {
 extension Preset {
     /// Shipped with the app so there's something useful to pick from before a
     /// user builds their own. Stored (not computed) in ``KeepressoSettings`` so
-    /// a user can remove one and have it stay gone.
+    /// a user can remove one and have it stay gone; new built-ins reach
+    /// existing users via ``KeepressoSettings/seedNewBuiltInPresets()``.
     public static let builtIns: [Preset] = [
         Preset(
             id: "ai-agent",
@@ -39,5 +40,30 @@ extension Preset {
             name: "External Display Connected",
             ruleSet: RuleSet(combine: .any, rules: [.externalDisplay])
         ),
+        // Matches only while someone is actually connected over SSH, not the
+        // idle `/usr/sbin/sshd` listener: each connection runs as
+        // `sshd: user@ttys000` on older OpenSSH (macOS 14) and as an
+        // `sshd-session` process on OpenSSH 9.8+ (macOS 15 and later).
+        Preset(
+            id: "remote-session",
+            name: "Remote Session (SSH)",
+            ruleSet: RuleSet(combine: .any, rules: [.process("sshd:"), .process("sshd-session")])
+        ),
+        // `backupd` runs only while Time Machine is working on a backup.
+        Preset(
+            id: "backup-running",
+            name: "Backup Running",
+            ruleSet: RuleSet(combine: .any, rules: [.process("backupd")])
+        ),
+        Preset(
+            id: "media-render",
+            name: "Media Render",
+            ruleSet: RuleSet(combine: .any, rules: [.process("ffmpeg")])
+        ),
     ]
+
+    /// The built-ins that shipped before ``KeepressoSettings`` tracked seeding,
+    /// used as the assumed-seeded set when loading settings saved by 1.2.x or
+    /// earlier (so only genuinely new built-ins get appended for those users).
+    static let preSeedTrackingBuiltInIDs = ["ai-agent", "on-ac-power", "external-display"]
 }

@@ -29,6 +29,10 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     /// Saved trigger-rule bundles a user can apply in one action. Seeded with
     /// ``Preset/builtIns`` on first launch; a user may add or remove any of them.
     public var presets: [Preset]
+    /// The built-in preset ids that have already been offered to this user, so
+    /// ``seedNewBuiltInPresets()`` adds a new built-in exactly once and never
+    /// resurrects one the user deleted.
+    public var seededPresetIDs: [String]
 
     public init(
         options: SleepPreventionOptions = .default,
@@ -42,7 +46,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         virtualDisplay: VirtualDisplayConfig? = nil,
         pauseBelowBatteryPercent: Int? = nil,
         showCountdownInMenuBar: Bool = false,
-        presets: [Preset] = Preset.builtIns
+        presets: [Preset] = Preset.builtIns,
+        seededPresetIDs: [String] = Preset.builtIns.map(\.id)
     ) {
         self.options = options
         self.defaultMode = defaultMode
@@ -56,6 +61,19 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.pauseBelowBatteryPercent = pauseBelowBatteryPercent
         self.showCountdownInMenuBar = showCountdownInMenuBar
         self.presets = presets
+        self.seededPresetIDs = seededPresetIDs
+    }
+
+    /// Append any built-in preset this user has never been offered. Called once
+    /// at launch: new built-ins added in an update reach existing users, while
+    /// ones they deleted stay gone (their ids are already recorded as seeded).
+    public mutating func seedNewBuiltInPresets() {
+        for preset in Preset.builtIns where !seededPresetIDs.contains(preset.id) {
+            seededPresetIDs.append(preset.id)
+            if !presets.contains(where: { $0.id == preset.id }) {
+                presets.append(preset)
+            }
+        }
     }
 
     /// Forgiving decoder: every field falls back to its default when absent, so
@@ -74,6 +92,11 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         pauseBelowBatteryPercent = try c.decodeIfPresent(Int.self, forKey: .pauseBelowBatteryPercent)
         showCountdownInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showCountdownInMenuBar) ?? false
         presets = try c.decodeIfPresent([Preset].self, forKey: .presets) ?? Preset.builtIns
+        // Settings saved before seeding was tracked (1.2.x and earlier) had
+        // exactly the original three built-ins seeded; assuming that set means
+        // only genuinely new built-ins get appended for those users.
+        seededPresetIDs = try c.decodeIfPresent([String].self, forKey: .seededPresetIDs)
+            ?? Preset.preSeedTrackingBuiltInIDs
     }
 
     /// First-launch defaults: keep system awake, no triggers.

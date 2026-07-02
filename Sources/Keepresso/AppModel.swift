@@ -43,7 +43,8 @@ final class AppModel {
         self.factory = factory
         let notifier = UserNotificationReminder()
         self.notifier = notifier
-        let loaded = store.load()
+        var loaded = store.load()
+        loaded.seedNewBuiltInPresets() // new built-ins reach existing users once
         self.settings = loaded
         self.session = SessionController(reminder: notifier)
         self.session.options = loaded.options

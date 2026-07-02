@@ -5,6 +5,11 @@ All notable changes to Keepresso are documented here. Versions follow
 
 ## 1.3.0
 
+- **Three new built-in presets.** Remote Session (SSH) keeps the Mac awake
+  only while someone is actually connected over SSH (not while the idle
+  listener runs), Backup Running holds it through an in-flight Time Machine
+  backup, and Media Render covers ffmpeg jobs. Existing users get the new
+  presets once; deleted presets stay deleted.
 - **Coffee redesign.** The app now matches the website's coffee palette: a
   caramel accent (warm amber in dark mode) replaces the old periwinkle across
   the menu, Preferences, Setup, and About, and the app icon is redrawn as the
