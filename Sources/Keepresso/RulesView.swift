@@ -174,6 +174,16 @@ struct RulesView: View {
                     Button(name) { model.addRule(.process(name)) }
                 }
             }
+            Section("Volume is mounted") {
+                let volumes = model.mountedVolumes()
+                if volumes.isEmpty {
+                    Text("No volumes mounted").foregroundStyle(.secondary)
+                } else {
+                    ForEach(volumes, id: \.self) { name in
+                        Button(name) { model.addRule(.volumeMounted(name)) }
+                    }
+                }
+            }
             Section("Schedule") {
                 // Starting points; the row's slider button tunes times and days.
                 Button("Work hours (weekdays 9:00-18:00)") {
@@ -232,6 +242,7 @@ struct RulesView: View {
         case .app(let r):              return r.match == .frontmost ? "macwindow.on.rectangle" : "app.badge"
         case .process:                 return "terminal"
         case .timeWindow:              return "clock"
+        case .volumeMounted:           return "externaldrive"
         }
     }
 }

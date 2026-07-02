@@ -590,6 +590,14 @@ final class AppModel {
     /// The SSID currently joined, for the "add current Wi-Fi" shortcut.
     func currentSSID() -> String? { CoreWLANNetworkMonitor().current.ssid }
 
+    /// Currently mounted volumes (boot volume excluded), for the
+    /// "add mounted volume" menu.
+    func mountedVolumes() -> [String] {
+        FileManagerVolumeMonitor().current.volumeNames.sorted {
+            $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
+        }
+    }
+
     /// Regular (Dock-visible) running apps, for the "add running app" menu.
     func runningApps() -> [(name: String, bundleID: String)] {
         NSWorkspace.shared.runningApplications

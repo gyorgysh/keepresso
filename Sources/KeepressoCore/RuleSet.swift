@@ -19,6 +19,8 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
     case process(String)
     /// The current time falls inside a recurring daily window.
     case timeWindow(TimeWindowRule)
+    /// A volume with this name is mounted (external drive, SD card, NAS share).
+    case volumeMounted(String)
 
     /// A human-readable summary for the rules UI.
     public var label: String {
@@ -29,6 +31,7 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
         case .app(let rule):          return rule.label
         case .process(let query):     return "Process \u{201C}\(query)\u{201D} running"
         case .timeWindow(let rule):   return rule.label
+        case .volumeMounted(let name): return "Volume \u{201C}\(name)\u{201D} mounted"
         }
     }
 }
@@ -84,6 +87,7 @@ public struct TriggerFactory {
     private let network: NetworkMonitoring
     private let workspace: WorkspaceMonitoring
     private let processes: ProcessListing
+    private let volumes: VolumeMonitoring
     private let now: () -> Date
 
     public init(
@@ -92,6 +96,7 @@ public struct TriggerFactory {
         network: NetworkMonitoring = CoreWLANNetworkMonitor(),
         workspace: WorkspaceMonitoring = NSWorkspaceMonitor(),
         processes: ProcessListing = PSProcessLister(),
+        volumes: VolumeMonitoring = FileManagerVolumeMonitor(),
         now: @escaping () -> Date = Date.init
     ) {
         self.powerSource = powerSource
@@ -99,6 +104,7 @@ public struct TriggerFactory {
         self.network = network
         self.workspace = workspace
         self.processes = processes
+        self.volumes = volumes
         self.now = now
     }
 
@@ -120,6 +126,8 @@ public struct TriggerFactory {
             return ProcessTrigger(query: query, monitor: processes)
         case .timeWindow(let rule):
             return TimeWindowTrigger(rule: rule, now: now)
+        case .volumeMounted(let name):
+            return VolumeMountedTrigger(volumeName: name, monitor: volumes)
         }
     }
 
