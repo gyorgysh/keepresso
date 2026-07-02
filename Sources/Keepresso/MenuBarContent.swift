@@ -45,7 +45,6 @@ struct MenuBarContent: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Button("Pause Triggers") { model.pauseTriggers() }
                     .buttonStyle(.borderedProminent)
-                    .tint(Color.keepressoBrew)
                     .frame(maxWidth: .infinity)
             } else {
                 if model.triggersEnabled {
@@ -74,7 +73,6 @@ struct MenuBarContent: View {
                 if model.triggersEnabled {
                     Button("Resume Triggers") { model.resumeTriggers() }
                         .buttonStyle(.borderedProminent)
-                        .tint(Color.keepressoBrew)
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -126,6 +124,7 @@ struct MenuBarContent: View {
         }
         .padding(14)
         .frame(width: 280)
+        .tint(.keepressoBrew)
         .onAppear { model.refreshClosedDisplay() }
         .onReceive(tick) { _ in
             displayedElapsed = session.elapsed
@@ -144,9 +143,7 @@ struct MenuBarContent: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Image(systemName: session.isActive ? "cup.and.saucer.fill" : "cup.and.saucer")
-                .font(.title2)
-                .foregroundStyle(session.isActive ? Color.keepressoBrew : .secondary)
+            BrewingCupView(isActive: session.isActive)
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.isActive ? "Brewing" : "Idle")
                     .font(.headline)
@@ -157,9 +154,16 @@ struct MenuBarContent: View {
             }
             Spacer()
         }
-        .padding(10)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard()
+        // A faint warm wash behind the glass while brewing, like a lit burner.
+        .background(
+            Color.keepressoBrew.opacity(session.isActive ? 0.08 : 0),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .animation(.easeInOut(duration: 0.35), value: session.isActive)
     }
 
     private var statusDetail: String {

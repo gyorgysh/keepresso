@@ -48,6 +48,7 @@ struct PreferencesView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .frame(width: 480, height: 560)
+        .tint(.keepressoBrew)
         .glassWindowBackground()
     }
 

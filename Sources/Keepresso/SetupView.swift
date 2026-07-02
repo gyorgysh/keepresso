@@ -31,6 +31,7 @@ struct SetupView: View {
             .scrollContentBackground(.hidden)
         }
         .frame(width: 460, height: 520)
+        .tint(.keepressoBrew)
         .glassWindowBackground()
         .onAppear { model.refreshReadiness() }
     }

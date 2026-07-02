@@ -33,6 +33,7 @@ struct AboutView: View {
         }
         .padding(28)
         .frame(width: 320)
+        .tint(.keepressoBrew)
         .glassWindowBackground()
     }
 }

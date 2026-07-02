@@ -2,9 +2,9 @@
 //
 // make-icon.swift — generate Keepresso's app icon asset catalog.
 //
-// Renders a clean espresso-cup icon (warm gradient squircle + white
-// `cup.and.saucer.fill` SF Symbol) at every size macOS needs, and writes a
-// ready-to-use AppIcon.appiconset. Re-run after tweaking the look:
+// Renders the website's brand mark (espresso cup, crema stripe, handle, saucer,
+// three steam wisps) on a warm squircle: crema paper in light mode, deep roast
+// in dark mode, matching the site's coffee palette. Re-run after tweaking:
 //
 //   swift scripts/make-icon.swift
 //
@@ -20,37 +20,89 @@ let outDir = root
 
 try? FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
 
-/// A white-tinted espresso-cup symbol, rendered in its own transparent layer so
-/// the tint only paints the glyph (a `sourceAtop` fill against the opaque icon
-/// background would flood the whole rect).
-func whiteCup(pointSize: CGFloat) -> NSImage? {
-    let cfg = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .regular)
-    guard let symbol = NSImage(systemSymbolName: "cup.and.saucer.fill", accessibilityDescription: nil)?
-        .withSymbolConfiguration(cfg) else { return nil }
-    symbol.isTemplate = true
-    let s = symbol.size
-    let rep = NSBitmapImageRep(
-        bitmapDataPlanes: nil, pixelsWide: Int(ceil(s.width)), pixelsHigh: Int(ceil(s.height)),
-        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-        colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
-    )!
-    rep.size = s
-    NSGraphicsContext.saveGraphicsState()
-    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)!
-    let r = NSRect(origin: .zero, size: s)
-    symbol.draw(in: r)
-    NSColor.white.set()
-    r.fill(using: .sourceAtop) // here the only opaque pixels are the glyph itself
-    NSGraphicsContext.restoreGraphicsState()
-    let image = NSImage(size: s)
-    image.addRepresentation(rep)
-    return image
+func srgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat) -> NSColor {
+    NSColor(srgbRed: r / 255, green: g / 255, blue: b / 255, alpha: 1)
+}
+
+/// The palette for one appearance, taken from the website's tokens.
+struct IconPalette {
+    let backgroundTop: NSColor
+    let backgroundBottom: NSColor
+    let cup: NSColor    // cup body, handle, saucer
+    let crema: NSColor  // the stripe inside the cup
+    let steam: NSColor
+}
+
+let lightPalette = IconPalette(
+    backgroundTop: srgb(250, 245, 236),    // paper #FAF5EC
+    backgroundBottom: srgb(238, 223, 196), // deeper crema
+    cup: srgb(45, 32, 21),                 // dark roast ink
+    crema: srgb(180, 83, 9),               // caramel #B45309
+    steam: srgb(194, 65, 12)               // copper #C2410C
+)
+
+let darkPalette = IconPalette(
+    backgroundTop: srgb(40, 30, 19),       // warm roast
+    backgroundBottom: srgb(18, 14, 10),    // deep roast #120E0A
+    cup: srgb(247, 241, 232),              // warm white ink #F7F1E8
+    crema: srgb(232, 163, 92),             // amber #E8A35C
+    steam: srgb(232, 163, 92)
+)
+
+/// The brand-mark geometry in the website SVG's 64-point grid (y pointing down).
+/// Fills: cup body and crema stripe. Strokes: handle, saucer, steam wisps.
+enum BrandMark {
+    static func cup() -> CGPath {
+        let p = CGMutablePath()
+        p.move(to: CGPoint(x: 16, y: 28))
+        p.addLine(to: CGPoint(x: 44, y: 28))
+        p.addLine(to: CGPoint(x: 44, y: 38))
+        p.addArc(center: CGPoint(x: 35, y: 38), radius: 9,
+                 startAngle: 0, endAngle: .pi / 2, clockwise: false)
+        p.addLine(to: CGPoint(x: 25, y: 47))
+        p.addArc(center: CGPoint(x: 25, y: 38), radius: 9,
+                 startAngle: .pi / 2, endAngle: .pi, clockwise: false)
+        p.closeSubpath()
+        return p
+    }
+
+    static func crema() -> CGPath {
+        CGPath(roundedRect: CGRect(x: 20, y: 31.5, width: 20, height: 3.4),
+               cornerWidth: 1.7, cornerHeight: 1.7, transform: nil)
+    }
+
+    static func handle() -> CGPath {
+        let p = CGMutablePath()
+        p.move(to: CGPoint(x: 44, y: 31.5))
+        p.addLine(to: CGPoint(x: 46.5, y: 31.5))
+        p.addArc(center: CGPoint(x: 46.5, y: 37.5), radius: 6,
+                 startAngle: -.pi / 2, endAngle: .pi / 2, clockwise: false)
+        p.addLine(to: CGPoint(x: 43, y: 43.5))
+        return p
+    }
+
+    static func saucer() -> CGPath {
+        let p = CGMutablePath()
+        p.move(to: CGPoint(x: 15, y: 52))
+        p.addLine(to: CGPoint(x: 45, y: 52))
+        return p
+    }
+
+    /// Three staggered S-curve wisps above the cup, like the site's hero mark.
+    static func steamWisps() -> [CGPath] {
+        [(22.5, 12.0), (30.0, 9.0), (37.5, 12.0)].map { (x, y) in
+            let p = CGMutablePath()
+            p.move(to: CGPoint(x: x, y: y))
+            p.addCurve(to: CGPoint(x: x, y: y + 9.5),
+                       control1: CGPoint(x: x - 2.6, y: y + 3.2),
+                       control2: CGPoint(x: x + 2.6, y: y + 5.0))
+            return p
+        }
+    }
 }
 
 /// Draw the icon at a given pixel size straight into a bitmap (no `lockFocus`,
-/// which is unreliable when run headless) and return PNG data. `dark` selects a
-/// deeper gradient for the dark-appearance variant so macOS uses our artwork
-/// instead of auto-darkening the light icon into a near-black square.
+/// which is unreliable when run headless) and return PNG data.
 func renderIcon(pixels: CGFloat, dark: Bool = false) -> Data {
     let px = Int(pixels)
     let rep = NSBitmapImageRep(
@@ -66,38 +118,50 @@ func renderIcon(pixels: CGFloat, dark: Bool = false) -> Data {
     NSGraphicsContext.current = gc
     defer { NSGraphicsContext.restoreGraphicsState() }
 
-    let canvas = NSRect(x: 0, y: 0, width: pixels, height: pixels)
+    let palette = dark ? darkPalette : lightPalette
 
     // macOS icons leave a transparent margin around a continuous-corner squircle.
     let inset = pixels * 0.085
-    let body = canvas.insetBy(dx: inset, dy: inset)
+    let body = NSRect(x: 0, y: 0, width: pixels, height: pixels).insetBy(dx: inset, dy: inset)
     let radius = body.width * 0.2237
     let squircle = NSBezierPath(roundedRect: body, xRadius: radius, yRadius: radius)
+    NSGradient(starting: palette.backgroundTop, ending: palette.backgroundBottom)!
+        .draw(in: squircle, angle: -90)
 
-    // gyorgy.sh periwinkle (#5B5BD6), as a subtle vertical gradient. The dark
-    // variant uses a deeper indigo so it reads well on a dark icon backdrop.
-    let top: NSColor
-    let bottom: NSColor
-    if dark {
-        top = NSColor(calibratedRed: 0.27, green: 0.27, blue: 0.55, alpha: 1)    // ~#454590
-        bottom = NSColor(calibratedRed: 0.16, green: 0.16, blue: 0.36, alpha: 1) // ~#29295C
-    } else {
-        top = NSColor(calibratedRed: 0.42, green: 0.42, blue: 0.89, alpha: 1)
-        bottom = NSColor(calibratedRed: 0.31, green: 0.31, blue: 0.79, alpha: 1)
-    }
-    NSGradient(starting: top, ending: bottom)!.draw(in: squircle, angle: -90)
+    // Map the mark's 64-point grid (y down) onto the icon, centered. The mark's
+    // ink spans roughly y 7…54 in that grid, so the optical center holds.
+    let ctx = gc.cgContext
+    ctx.saveGState()
+    let scale = pixels * 0.80 / 64
+    let offset = (pixels - 64 * scale) / 2
+    ctx.translateBy(x: offset, y: pixels - offset)
+    ctx.scaleBy(x: scale, y: -scale)
+    ctx.setLineCap(.round)
 
-    // White espresso cup, centered.
-    if let glyph = whiteCup(pointSize: pixels * 0.46) {
-        let s = glyph.size
-        let rect = NSRect(
-            x: (pixels - s.width) / 2,
-            y: (pixels - s.height) / 2,
-            width: s.width,
-            height: s.height
-        )
-        glyph.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
+    ctx.setFillColor(palette.cup.cgColor)
+    ctx.addPath(BrandMark.cup())
+    ctx.fillPath()
+
+    ctx.setFillColor(palette.crema.cgColor)
+    ctx.addPath(BrandMark.crema())
+    ctx.fillPath()
+
+    ctx.setStrokeColor(palette.cup.cgColor)
+    ctx.setLineWidth(3.4)
+    ctx.addPath(BrandMark.handle())
+    ctx.strokePath()
+
+    ctx.setLineWidth(3.6)
+    ctx.addPath(BrandMark.saucer())
+    ctx.strokePath()
+
+    ctx.setStrokeColor(palette.steam.cgColor)
+    ctx.setLineWidth(3.2)
+    for wisp in BrandMark.steamWisps() {
+        ctx.addPath(wisp)
+        ctx.strokePath()
     }
+    ctx.restoreGState()
 
     gc.flushGraphics()
     return rep.representation(using: .png, properties: [:])!
