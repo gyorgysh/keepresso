@@ -53,6 +53,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // If launched from the DMG / Downloads, move into /Applications and
         // relaunch from there (this instance quits if it relocates).
         AppRelocator.relocateIfNeeded()
+        // Give the Shortcuts intents their way to the live model.
+        IntentContext.model = model
         // Read the closed-display (pmset disablesleep) state now: it persists
         // across reboots, and the ticker's lid handling stays inert until the
         // controller knows the mode is on, not just once a menu opens.

@@ -5,6 +5,11 @@ All notable changes to Keepresso are documented here. Versions follow
 
 ## 1.3.0
 
+- **Shortcuts actions.** Keepresso now shows up in the Shortcuts app (and
+  Spotlight/Siri) with Start Keeping Awake (optionally for N minutes), Stop
+  Keeping Awake, and Toggle Keep Awake, no URL scheme fiddling required.
+  They behave exactly like `keepresso://` commands, pausing triggers first
+  so the action sticks.
 - **Any duration, or until a time.** The menu's duration control now takes a
   custom duration (hours and minutes) alongside the presets, and "Until a
   Time" starts a session that ends at a wall-clock time, later today or
