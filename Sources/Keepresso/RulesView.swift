@@ -19,6 +19,9 @@ struct RulesView: View {
     /// Common processes offered as one-click presets for the process rule.
     private static let processPresets = ["claude", "codex", "node", "python", "ffmpeg"]
 
+    /// Threshold options for the CPU-load rule.
+    private static let cpuThresholds = [25, 50, 75, 90]
+
     /// Grace presets offered for app rules.
     private static let gracePresets: [(label: String, seconds: TimeInterval)] = [
         ("No grace", 0),
@@ -78,6 +81,9 @@ struct RulesView: View {
             }
             if case .timeWindow(let windowRule) = rule {
                 timeOptionsButton(index: index, windowRule: windowRule)
+            }
+            if case .cpuLoad(let threshold) = rule {
+                cpuOptionsMenu(index: index, threshold: threshold)
             }
 
             Button {
@@ -139,6 +145,25 @@ struct RulesView: View {
         .help("App match & grace period")
     }
 
+    /// In-place editor for a CPU rule's threshold.
+    private func cpuOptionsMenu(index: Int, threshold: Int) -> some View {
+        Menu {
+            Picker("Threshold", selection: Binding(
+                get: { threshold },
+                set: { model.updateRule(at: index, to: .cpuLoad(thresholdPercent: $0)) }
+            )) {
+                ForEach(Self.cpuThresholds, id: \.self) { percent in
+                    Text("Above \(percent)%").tag(percent)
+                }
+            }
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("CPU threshold")
+    }
+
     private var addConditionMenu: some View {
         Menu {
             Section("Power") {
@@ -182,6 +207,11 @@ struct RulesView: View {
                     ForEach(volumes, id: \.self) { name in
                         Button(name) { model.addRule(.volumeMounted(name)) }
                     }
+                }
+            }
+            Section("CPU load") {
+                ForEach(Self.cpuThresholds, id: \.self) { percent in
+                    Button("Above \(percent)%") { model.addRule(.cpuLoad(thresholdPercent: percent)) }
                 }
             }
             Section("Schedule") {
@@ -243,6 +273,7 @@ struct RulesView: View {
         case .process:                 return "terminal"
         case .timeWindow:              return "clock"
         case .volumeMounted:           return "externaldrive"
+        case .cpuLoad:                 return "cpu"
         }
     }
 }

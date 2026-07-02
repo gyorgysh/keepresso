@@ -21,6 +21,8 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
     case timeWindow(TimeWindowRule)
     /// A volume with this name is mounted (external drive, SD card, NAS share).
     case volumeMounted(String)
+    /// Smoothed overall CPU usage is above this percentage.
+    case cpuLoad(thresholdPercent: Int)
 
     /// A human-readable summary for the rules UI.
     public var label: String {
@@ -32,6 +34,7 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
         case .process(let query):     return "Process \u{201C}\(query)\u{201D} running"
         case .timeWindow(let rule):   return rule.label
         case .volumeMounted(let name): return "Volume \u{201C}\(name)\u{201D} mounted"
+        case .cpuLoad(let threshold): return "CPU above \(threshold)%"
         }
     }
 }
@@ -88,6 +91,7 @@ public struct TriggerFactory {
     private let workspace: WorkspaceMonitoring
     private let processes: ProcessListing
     private let volumes: VolumeMonitoring
+    private let cpu: CPULoadReading
     private let now: () -> Date
 
     public init(
@@ -97,6 +101,7 @@ public struct TriggerFactory {
         workspace: WorkspaceMonitoring = NSWorkspaceMonitor(),
         processes: ProcessListing = PSProcessLister(),
         volumes: VolumeMonitoring = FileManagerVolumeMonitor(),
+        cpu: CPULoadReading = HostCPULoadReader(),
         now: @escaping () -> Date = Date.init
     ) {
         self.powerSource = powerSource
@@ -105,6 +110,7 @@ public struct TriggerFactory {
         self.workspace = workspace
         self.processes = processes
         self.volumes = volumes
+        self.cpu = cpu
         self.now = now
     }
 
@@ -128,6 +134,8 @@ public struct TriggerFactory {
             return TimeWindowTrigger(rule: rule, now: now)
         case .volumeMounted(let name):
             return VolumeMountedTrigger(volumeName: name, monitor: volumes)
+        case .cpuLoad(let threshold):
+            return CPULoadTrigger(thresholdPercent: threshold, reader: cpu)
         }
     }
 

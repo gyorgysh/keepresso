@@ -14,6 +14,11 @@ All notable changes to Keepresso are documented here. Versions follow
   you choose, like weekdays 9:00-18:00 or an overnight 22:00-6:00 that runs
   past midnight. Add it from the condition menu (Work hours and Overnight
   starting points included) and tune the times and days in place.
+- **CPU-load trigger.** Stay awake while the machine is actually working: a
+  condition that holds while smoothed overall CPU usage sits above a chosen
+  threshold (25/50/75/90%). Long builds, renders, and training runs keep the
+  Mac up; a momentary spike doesn't, and usage hovering at the threshold
+  doesn't flap the session on and off.
 - **Volume trigger.** Stay awake while a chosen external drive, SD card, or
   network share is mounted; the condition menu lists what's mounted right
   now. Pairs naturally with disk keep-alive: one holds the Mac awake while
