@@ -5,6 +5,10 @@ All notable changes to Keepresso are documented here. Versions follow
 
 ## 1.3.0
 
+- **Schedule trigger.** A new condition type: a daily time window on the days
+  you choose, like weekdays 9:00-18:00 or an overnight 22:00-6:00 that runs
+  past midnight. Add it from the condition menu (Work hours and Overnight
+  starting points included) and tune the times and days in place.
 - **Three new built-in presets.** Remote Session (SSH) keeps the Mac awake
   only while someone is actually connected over SSH (not while the idle
   listener runs), Backup Running holds it through an in-flight Time Machine

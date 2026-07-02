@@ -13,6 +13,8 @@ struct RulesView: View {
     @State private var location = LocationAuthorizer()
     /// Free-text entry for a custom "process running" rule.
     @State private var processQuery = ""
+    /// Index of the time-window rule whose editor popover is open, if any.
+    @State private var timeEditorIndex: Int?
 
     /// Common processes offered as one-click presets for the process rule.
     private static let processPresets = ["claude", "codex", "node", "python", "ffmpeg"]
@@ -74,6 +76,9 @@ struct RulesView: View {
             if case .app(let appRule) = rule {
                 appOptionsMenu(index: index, appRule: appRule)
             }
+            if case .timeWindow(let windowRule) = rule {
+                timeOptionsButton(index: index, windowRule: windowRule)
+            }
 
             Button {
                 model.removeRule(at: index)
@@ -83,6 +88,25 @@ struct RulesView: View {
             .buttonStyle(.borderless)
             .foregroundStyle(.secondary)
             .help("Remove condition")
+        }
+    }
+
+    /// In-place editor for a schedule rule's times and days, in a popover
+    /// (menus can't host time pickers).
+    private func timeOptionsButton(index: Int, windowRule: TimeWindowRule) -> some View {
+        Button {
+            timeEditorIndex = index
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(.secondary)
+        .help("Times & days")
+        .popover(isPresented: Binding(
+            get: { timeEditorIndex == index },
+            set: { if !$0 { timeEditorIndex = nil } }
+        )) {
+            TimeWindowEditor(rule: windowRule) { model.updateRule(at: index, to: .timeWindow($0)) }
         }
     }
 
@@ -150,6 +174,16 @@ struct RulesView: View {
                     Button(name) { model.addRule(.process(name)) }
                 }
             }
+            Section("Schedule") {
+                // Starting points; the row's slider button tunes times and days.
+                Button("Work hours (weekdays 9:00-18:00)") {
+                    model.addRule(.timeWindow(TimeWindowRule(
+                        startMinutes: 9 * 60, endMinutes: 18 * 60, weekdays: [2, 3, 4, 5, 6])))
+                }
+                Button("Overnight (22:00-6:00)") {
+                    model.addRule(.timeWindow(TimeWindowRule(startMinutes: 22 * 60, endMinutes: 6 * 60)))
+                }
+            }
         } label: {
             Label("Add condition", systemImage: "plus.circle")
         }
@@ -197,6 +231,79 @@ struct RulesView: View {
         case .wifiSSID:                return "wifi"
         case .app(let r):              return r.match == .frontmost ? "macwindow.on.rectangle" : "app.badge"
         case .process:                 return "terminal"
+        case .timeWindow:              return "clock"
         }
+    }
+}
+
+/// Popover editor for a schedule rule: start/end time pickers plus one toggle
+/// per weekday. Every change writes through immediately; there's no Save.
+private struct TimeWindowEditor: View {
+    let rule: TimeWindowRule
+    let update: (TimeWindowRule) -> Void
+
+    /// Day numbers in `Calendar` order (1 = Sunday) with display initials.
+    private static let days: [(number: Int, initial: String)] =
+        [(1, "S"), (2, "M"), (3, "T"), (4, "W"), (5, "T"), (6, "F"), (7, "S")]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            LabeledContent("From") {
+                DatePicker("", selection: timeBinding(\.startMinutes), displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+            }
+            LabeledContent("To") {
+                DatePicker("", selection: timeBinding(\.endMinutes), displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+            }
+            if rule.startMinutes >= rule.endMinutes {
+                Text("Runs past midnight into the next day.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 4) {
+                ForEach(Self.days, id: \.number) { day in
+                    Toggle(day.initial, isOn: dayBinding(day.number))
+                        .toggleStyle(.button)
+                        .font(.caption)
+                }
+            }
+            Text("No days selected means every day.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .frame(width: 240)
+    }
+
+    /// Bridges minutes-from-midnight to the `DatePicker`'s `Date` (on an
+    /// arbitrary reference day; only the time of day is kept).
+    private func timeBinding(_ keyPath: WritableKeyPath<TimeWindowRule, Int>) -> Binding<Date> {
+        Binding(
+            get: {
+                let minutes = rule[keyPath: keyPath]
+                return Calendar.current.date(
+                    bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: Date()
+                ) ?? Date()
+            },
+            set: { newDate in
+                let parts = Calendar.current.dateComponents([.hour, .minute], from: newDate)
+                var updated = rule
+                updated[keyPath: keyPath] = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+                update(updated)
+            }
+        )
+    }
+
+    private func dayBinding(_ day: Int) -> Binding<Bool> {
+        Binding(
+            get: { rule.weekdays.contains(day) },
+            set: { on in
+                var updated = rule
+                if on { updated.weekdays.insert(day) } else { updated.weekdays.remove(day) }
+                update(updated)
+            }
+        )
     }
 }

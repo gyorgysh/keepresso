@@ -17,6 +17,8 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
     /// Any process whose command line contains this string is running
     /// (matches command-line tools and background jobs, not just GUI apps).
     case process(String)
+    /// The current time falls inside a recurring daily window.
+    case timeWindow(TimeWindowRule)
 
     /// A human-readable summary for the rules UI.
     public var label: String {
@@ -26,6 +28,7 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
         case .wifiSSID(let ssid):     return "On Wi-Fi \u{201C}\(ssid)\u{201D}"
         case .app(let rule):          return rule.label
         case .process(let query):     return "Process \u{201C}\(query)\u{201D} running"
+        case .timeWindow(let rule):   return rule.label
         }
     }
 }
@@ -115,6 +118,8 @@ public struct TriggerFactory {
                 : trigger
         case .process(let query):
             return ProcessTrigger(query: query, monitor: processes)
+        case .timeWindow(let rule):
+            return TimeWindowTrigger(rule: rule, now: now)
         }
     }
 
