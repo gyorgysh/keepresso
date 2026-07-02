@@ -33,23 +33,30 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 ## Features
 
 - ☕ **Keep awake, your way.** Prevent system sleep and/or display sleep as
-  independent toggles, indefinitely or for a timed session (15 min / 1 hr / 4 hr).
+  independent toggles, indefinitely, for a timed session (presets or any custom
+  duration), or **until a wall-clock time** ("until 18:00", today or tomorrow).
 - 🌙 **Yield the screen saver.** Let the screen saver or display sleep kick in
   after _N_ minutes idle while the system itself stays awake.
 - ⚡ **Trigger engine.** Stay awake only while charging or on battery, an external
-  display is connected, you're on a chosen Wi-Fi network, or a specific app is
-  running. Combine conditions with **any** (OR) or **all** (AND). A one-click
-  "Pause Triggers" in the menu bar stops brewing without touching your rules.
+  display is connected, you're on a chosen Wi-Fi network, a specific app or
+  process is running, a chosen **volume is mounted**, **CPU usage** sits above a
+  threshold (builds, renders, training runs), or during a **scheduled time
+  window** (weekdays 9:00-18:00, overnight hours). Combine conditions with
+  **any** (OR) or **all** (AND). A one-click "Pause Triggers" in the menu bar
+  stops brewing without touching your rules.
 - 🎛️ **Presets.** Apply a named trigger bundle in one click, built-in (AI Agent,
-  On AC Power, External Display Connected) or your own saved rule sets.
+  On AC Power, External Display Connected, Remote Session (SSH), Backup
+  Running, Media Render) or your own saved rule sets.
 - 🪪 **Auto app detection.** Caffeinate while listed apps run or are frontmost,
   with an optional grace period before it lets go.
 - 🔋 **Battery-aware auto-pause.** Let the Mac sleep once charge drops below a
   threshold you choose, even mid-session, so it never runs the battery flat.
 - ⏱️ **Menu-bar countdown.** An optional live countdown next to the cup icon for
   timed sessions.
-- 🔗 **URL scheme.** Drive a session from Shortcuts, Raycast, Alfred, or a shell
-  script with `keepresso://start?duration=60`, `stop`, or `toggle`.
+- 🔗 **Shortcuts and URL scheme.** Native Shortcuts actions (Start, Stop,
+  Toggle) for Shortcuts, Spotlight, and Siri, plus a URL scheme for Raycast,
+  Alfred, or a shell script: `keepresso://start?duration=60`,
+  `keepresso://start?until=18:00`, `stop`, or `toggle`.
 - 💻 **Closed-display mode.** Keep running with the **lid shut** and no external
   display, on power or battery, for an always-on Mac or one you carry mid-task.
   The screen itself turns off when the lid closes, so it's not sitting lit
@@ -135,9 +142,9 @@ Either way, Keepresso keeps itself up to date from there.
 
 Click the cup in the menu bar to open Keepresso.
 
-- **Quick toggle.** Flip **Keep awake** on or off and pick a duration
-  (indefinitely, 15 minutes, 1 hour, 4 hours). The cup fills and animates while
-  brewing.
+- **Quick toggle.** Flip **Keep awake** on or off and pick a duration:
+  indefinitely, a preset (15 minutes, 1 hour, 4 hours), any custom duration, or
+  until a time of day. The cup fills and animates while brewing.
 - **Keep awake with lid closed.** Toggle it right from the menu before you shut
   the lid or unplug. It asks for your administrator password once, because it
   flips a system setting (`pmset disablesleep`), and works on power or battery.
@@ -155,17 +162,25 @@ Click the cup in the menu bar to open Keepresso.
 
 Keepresso has no Dock icon by design. Everything lives in the menu bar.
 
-### Driving it from a script
+### Driving it from Shortcuts or a script
 
-Keepresso registers a `keepresso://` URL scheme so Shortcuts, Raycast, Alfred,
-or a shell script can start or stop a session without opening the menu:
+Keepresso ships native **Shortcuts actions**: Start Keeping Awake (optionally
+for _N_ minutes), Stop Keeping Awake, and Toggle Keep Awake, usable from the
+Shortcuts app, Spotlight, and Siri.
+
+It also registers a `keepresso://` URL scheme so Raycast, Alfred, or a shell
+script can start or stop a session without opening the menu:
 
 ```
 open "keepresso://start"              # indefinite session
 open "keepresso://start?duration=60"  # timed session, in minutes
+open "keepresso://start?until=18:00"  # until a wall-clock time (24h HH:MM)
 open "keepresso://stop"
 open "keepresso://toggle"
 ```
+
+Either way, if triggers are on they pause first (same as the menu's Pause
+Triggers), so the command actually takes effect.
 
 ## Why not the Mac App Store?
 
