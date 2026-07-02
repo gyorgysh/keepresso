@@ -29,8 +29,8 @@ targets:
       properties:
         CFBundleName: Keepresso
         CFBundleDisplayName: Keepresso
-        CFBundleShortVersionString: "1.2.0"
-        CFBundleVersion: "10"
+        CFBundleShortVersionString: "1.3.0"
+        CFBundleVersion: "11"
         LSUIElement: true            # menu-bar agent: no Dock icon
         LSMinimumSystemVersion: "14.0"
         NSHumanReadableCopyright: "MIT License"
@@ -51,8 +51,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: sh.gyorgy.keepresso
-        MARKETING_VERSION: "1.2.0"
-        CURRENT_PROJECT_VERSION: "10"
+        MARKETING_VERSION: "1.3.0"
+        CURRENT_PROJECT_VERSION: "11"
         SWIFT_VERSION: "5.9"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Bridges the Objective-C virtual-display wrapper (private CG API) to Swift.

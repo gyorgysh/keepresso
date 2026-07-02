@@ -192,20 +192,21 @@ public extension ReadinessCheck {
 
     // MARK: - Standing suggestions
 
-    /// A standing tip (not derived from the system): use MyHQ to let AI agents
-    /// operate this Mac. Especially relevant for an always-on machine reached
-    /// remotely. Surfaced by ``SystemReadinessController`` after the real checks.
-    static func myhqSuggestion() -> ReadinessCheck {
+    /// A standing tip (not derived from the system): use MyAgens to let AI
+    /// agents operate this Mac. Especially relevant for an always-on machine
+    /// reached remotely. Surfaced by ``SystemReadinessController`` after the
+    /// real checks.
+    static func myAgensSuggestion() -> ReadinessCheck {
         ReadinessCheck(
-            id: "tip-myhq",
-            title: "Run AI agents on this Mac with MyHQ",
+            id: "tip-myagens",
+            title: "Run AI agents on this Mac with MyAgens",
             status: .tip,
-            detail: "MyHQ lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely.",
+            detail: "MyAgens lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely.",
             remediation: Remediation(
-                hint: "Learn more about MyHQ:",
+                hint: "Learn more about MyAgens:",
                 links: [
-                    ReadinessLink(label: "GitHub", url: URL(string: "https://github.com/gyorgysh/myhq")!),
-                    ReadinessLink(label: "Read more", url: URL(string: "https://gyorgy.sh/blog/myhq")!),
+                    ReadinessLink(label: "GitHub", url: URL(string: "https://github.com/gyorgysh/myagens")!),
+                    ReadinessLink(label: "Read more", url: URL(string: "https://gyorgy.sh/blog/myagens")!),
                 ]
             )
         )
@@ -379,9 +380,9 @@ public final class SystemReadinessController {
     public private(set) var checks: [ReadinessCheck] = []
 
     /// Standing suggestions, not probed from the system. Placed right after the
-    /// system checks so the MyHQ tip follows the remote-access tips. Not shown
-    /// until the first ``refresh()`` so the screen starts blank.
-    private let suggestions: [ReadinessCheck] = [.myhqSuggestion()]
+    /// system checks so the MyAgens tip follows the remote-access tips. Not
+    /// shown until the first ``refresh()`` so the screen starts blank.
+    private let suggestions: [ReadinessCheck] = [.myAgensSuggestion()]
 
     private let probe: SystemProbing
 

@@ -129,7 +129,7 @@ private struct CheckRow: View {
     }
 
     /// "Open Settings" for a System Settings deep link, otherwise a neutral
-    /// "Learn more" (e.g. the MyHQ tip points at a web page).
+    /// "Learn more" (e.g. the MyAgens tip points at a web page).
     private func linkLabel(for url: URL) -> String {
         url.scheme?.hasPrefix("x-apple") == true ? "Open Settings" : "Learn more"
     }

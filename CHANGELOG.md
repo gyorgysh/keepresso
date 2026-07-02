@@ -3,7 +3,7 @@
 All notable changes to Keepresso are documented here. Versions follow
 [Semantic Versioning](https://semver.org).
 
-## Unreleased
+## 1.3.0
 
 - **Coffee redesign.** The app now matches the website's coffee palette: a
   caramel accent (warm amber in dark mode) replaces the old periwinkle across
@@ -38,6 +38,7 @@ All notable changes to Keepresso are documented here. Versions follow
   rule (or pausing and resuming) cut short an app rule's in-flight grace
   period, dropping the session instantly. Unchanged rules now keep their
   live state across edits.
+- The Headless Setup tip now points at MyAgens.
 
 ## 1.2.0
 

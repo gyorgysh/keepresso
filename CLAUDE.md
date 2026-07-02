@@ -41,7 +41,7 @@ Homebrew Cask is published and installable at
 `gyorgysh/homebrew-keepresso` tap repo.
 A headless virtual-display proof-of-concept (private `CGVirtualDisplay` API,
 behind an off-by-default flag) is also done, still needing validation on real
-headless hardware. Current version: 1.2.0 (build 10). The code is pushed to a
+headless hardware. Current version: 1.3.0 (build 11). The code is pushed to a
 **private** GitHub repo (`git@github.com:gyorgysh/keepresso.git`, branch
 `main`); history is provisional and may be squashed/rebased to a clean initial
 state before going public, so commit freely but keep messages tidy.
