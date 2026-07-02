@@ -101,7 +101,10 @@ final class AppModel {
         set {
             settings.triggersEnabled = newValue
             triggersPaused = false // always starts unpaused
-            if newValue { session.stop() } // hand activation to the gate
+            // Stop on both transitions: turning gating on hands activation to
+            // the gate; turning it off would otherwise leave a gate-held
+            // session running as a "manual" one with a stale duration.
+            session.stop()
             applyTriggerGate()
             persist()
         }
@@ -345,14 +348,29 @@ final class AppModel {
 
     // MARK: - URL scheme commands
 
-    /// Handle a `keepresso://` command from ``URLCommand/parse(_:)``. Always
-    /// acts like the manual toggle/duration picker — it doesn't touch trigger
-    /// gating, so it's a one-off override rather than a persisted setting.
+    /// Handle a `keepresso://` command from ``URLCommand/parse(_:)``. Acts like
+    /// the manual toggle/duration picker. When trigger gating is on it pauses
+    /// triggers first (the same in-memory pause as the menu's Pause Triggers,
+    /// nothing persisted): otherwise the gate would silently override the
+    /// command on the next once-a-second reconcile, turning it into a no-op
+    /// with no feedback to the script that fired it.
     func handle(_ command: URLCommand) {
+        // Capture before pausing: pauseTriggers() stops the session.
+        let wasActive = session.isActive
+        pauseTriggers()
         switch command {
-        case .start(let mode): session.start(mode: mode)
-        case .stop: session.stop()
-        case .toggle: session.toggle()
+        case .start(let mode):
+            session.start(mode: mode)
+        case .stop:
+            session.stop()
+        case .toggle:
+            // Mirror toggleManual(), using the saved default duration rather
+            // than the controller's in-memory mode (never seeded after launch).
+            if wasActive {
+                session.stop()
+            } else {
+                session.start(mode: settings.defaultMode)
+            }
         }
     }
 

@@ -3,6 +3,29 @@
 All notable changes to Keepresso are documented here. Versions follow
 [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+- **Coffee redesign.** The app now matches the website's coffee palette: a
+  caramel accent (warm amber in dark mode) replaces the old periwinkle across
+  the menu, Preferences, Setup, and About, and the app icon is redrawn as the
+  brand mark, an espresso cup with a crema stripe and steam, on a crema
+  squircle (deep roast in dark mode). The menu header shows the cup with
+  gently rising animated steam while brewing, plus a faint warm glow behind
+  the glass; the steam holds still with Reduce Motion on. The liquid-glass
+  surfaces are unchanged.
+- **Closed-display mode works right after launch.** The lid-close display
+  sleep used to stay inert until the menu was opened once, because the mode's
+  on/off state was only read when UI appeared. It's now read at launch, so a
+  Mac that reboots with the mode on sleeps the panel when the lid closes.
+- **Turning triggers off now stops the session**, matching Pause Triggers,
+  instead of silently converting a trigger-held session into a manual one
+  with a leftover duration.
+- **`keepresso://` commands now stick when triggers are on.** They pause
+  triggers first (the same temporary pause as the menu button); before, the
+  trigger engine would override the command within a second, making scripts
+  silently do nothing. `keepresso://toggle` also starts with your saved
+  default duration now, instead of always indefinite after a relaunch.
+
 ## 1.2.0
 
 - **Pause Triggers.** A one-click "Pause Triggers" / "Resume Triggers" button
