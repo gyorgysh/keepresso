@@ -5,6 +5,11 @@ All notable changes to Keepresso are documented here. Versions follow
 
 ## 1.3.0
 
+- **Any duration, or until a time.** The menu's duration control now takes a
+  custom duration (hours and minutes) alongside the presets, and "Until a
+  Time" starts a session that ends at a wall-clock time, later today or
+  tomorrow if it already passed. Scripts get the same power with
+  `keepresso://start?until=18:00`.
 - **Schedule trigger.** A new condition type: a daily time window on the days
   you choose, like weekdays 9:00-18:00 or an overnight 22:00-6:00 that runs
   past midnight. Add it from the condition menu (Work hours and Overnight

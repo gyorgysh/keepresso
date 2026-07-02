@@ -20,6 +20,8 @@ struct MenuBarContent: View {
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     @State private var displayedElapsed: TimeInterval = 0
     @State private var liveRefresh = 0
+    @State private var showCustomDuration = false
+    @State private var showUntilTime = false
 
     private static let durationOptions: [(label: String, mode: SessionMode)] = [
         ("Indefinitely", .indefinite),
@@ -27,6 +29,18 @@ struct MenuBarContent: View {
         ("1 hour", .timed(duration: 60 * 60)),
         ("4 hours", .timed(duration: 4 * 60 * 60)),
     ]
+
+    /// The menu label for the current mode: a preset's name when it matches,
+    /// otherwise the custom duration spelled out ("2 h 30 min").
+    static func modeLabel(_ mode: SessionMode) -> String {
+        if let preset = durationOptions.first(where: { $0.mode == mode }) { return preset.label }
+        guard let duration = mode.duration else { return "Indefinitely" }
+        let totalMinutes = Int((duration / 60).rounded())
+        let hours = totalMinutes / 60, minutes = totalMinutes % 60
+        if hours > 0 && minutes > 0 { return "\(hours) h \(minutes) min" }
+        if hours > 0 { return "\(hours) hour\(hours == 1 ? "" : "s")" }
+        return "\(max(1, minutes)) min"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -60,15 +74,27 @@ struct MenuBarContent: View {
                 ))
                 .toggleStyle(.switch)
 
-                Picker("For", selection: Binding(
-                    get: { model.mode },
-                    set: { model.mode = $0 }
-                )) {
-                    ForEach(Array(Self.durationOptions.enumerated()), id: \.offset) { _, option in
-                        Text(option.label).tag(option.mode)
+                LabeledContent("For") {
+                    Menu(Self.modeLabel(model.mode)) {
+                        ForEach(Array(Self.durationOptions.enumerated()), id: \.offset) { _, option in
+                            Button(option.label) { model.mode = option.mode }
+                        }
+                        Divider()
+                        Button("Custom Duration\u{2026}") { showCustomDuration = true }
+                        Button("Until a Time\u{2026}") { showUntilTime = true }
+                    }
+                    .fixedSize()
+                }
+                .popover(isPresented: $showCustomDuration) {
+                    CustomDurationEditor(initial: model.mode.duration ?? 60 * 60) {
+                        model.mode = .timed(duration: $0)
                     }
                 }
-                .pickerStyle(.menu)
+                .popover(isPresented: $showUntilTime) {
+                    UntilTimeEditor(isActive: session.isActive) { hour, minute in
+                        model.startUntil(hour: hour, minute: minute)
+                    }
+                }
 
                 if model.triggersEnabled {
                     Button("Resume Triggers") { model.resumeTriggers() }
@@ -164,6 +190,69 @@ struct MenuBarContent: View {
             in: RoundedRectangle(cornerRadius: 12, style: .continuous)
         )
         .animation(.easeInOut(duration: 0.35), value: session.isActive)
+    }
+
+    // MARK: - Duration editors
+
+    /// Popover behind "Custom Duration…": hour/minute steppers that set the
+    /// session duration (used the next time it starts, or restarting a running
+    /// session, exactly like picking a preset duration).
+    private struct CustomDurationEditor: View {
+        @State private var hours: Int
+        @State private var minutes: Int
+        let apply: (TimeInterval) -> Void
+        @Environment(\.dismiss) private var dismiss
+
+        init(initial: TimeInterval, apply: @escaping (TimeInterval) -> Void) {
+            let totalMinutes = max(1, Int((initial / 60).rounded()))
+            _hours = State(initialValue: totalMinutes / 60)
+            _minutes = State(initialValue: totalMinutes % 60)
+            self.apply = apply
+        }
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 10) {
+                Stepper("\(hours) h", value: $hours, in: 0...48)
+                Stepper("\(minutes) min", value: $minutes, in: 0...55, step: 5)
+                Button("Set Duration") {
+                    apply(TimeInterval(hours * 3600 + minutes * 60))
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity)
+                .disabled(hours == 0 && minutes == 0)
+            }
+            .padding(14)
+            .frame(width: 180)
+        }
+    }
+
+    /// Popover behind "Until a Time…": picks a wall-clock time and starts (or
+    /// restarts) the session to end there, today or tomorrow.
+    private struct UntilTimeEditor: View {
+        let isActive: Bool
+        let start: (Int, Int) -> Void
+        @State private var time = Date().addingTimeInterval(60 * 60)
+        @Environment(\.dismiss) private var dismiss
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 10) {
+                DatePicker("Until", selection: $time, displayedComponents: .hourAndMinute)
+                Text("If that time already passed today, it means tomorrow.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(isActive ? "Update Session" : "Start") {
+                    let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
+                    start(parts.hour ?? 0, parts.minute ?? 0)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity)
+            }
+            .padding(14)
+            .frame(width: 220)
+        }
     }
 
     private var statusDetail: String {

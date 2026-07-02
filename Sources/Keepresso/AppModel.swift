@@ -71,6 +71,15 @@ final class AppModel {
         }
     }
 
+    /// Start (or restart) a session running until the next occurrence of a
+    /// wall-clock time. The duration is computed here, at start, so it always
+    /// lands on the chosen time; the choice is deliberately not persisted as
+    /// the default mode (a saved "until 18:00" would go stale by tomorrow).
+    func startUntil(hour: Int, minute: Int) {
+        guard let mode = SessionMode.until(hour: hour, minute: minute) else { return }
+        session.start(mode: mode)
+    }
+
     // MARK: - Keep-awake options
 
     /// Mutate the keep-awake options, mirror into settings, and persist.
