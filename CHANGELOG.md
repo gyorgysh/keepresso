@@ -25,6 +25,19 @@ All notable changes to Keepresso are documented here. Versions follow
   trigger engine would override the command within a second, making scripts
   silently do nothing. `keepresso://toggle` also starts with your saved
   default duration now, instead of always indefinite after a relaunch.
+- **The panel sleeps when the external display is unplugged with the lid
+  closed.** Closed-display mode only reacted to the lid closing; unplugging
+  the monitor from a closed clamshell left the internal panel lit inside the
+  lid. Both edges now put the display to sleep.
+- **Smarter first-launch install.** Launching from a DMG now replaces an
+  older installed copy instead of silently launching it (so you actually get
+  the version you downloaded), and if the installed copy is already running
+  it's brought forward instead of starting a duplicate second instance.
+- **Editing one trigger no longer resets the others.** Rebuilding the trigger
+  engine used to discard every condition's state, so editing an unrelated
+  rule (or pausing and resuming) cut short an app rule's in-flight grace
+  period, dropping the session instantly. Unchanged rules now keep their
+  live state across edits.
 
 ## 1.2.0
 

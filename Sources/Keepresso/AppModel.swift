@@ -167,13 +167,45 @@ final class AppModel {
     /// trigger gating is off.
     private(set) var currentEngine: TriggerEngine?
 
+    /// The rules ``currentEngine``'s triggers were built from, index-aligned
+    /// with `currentEngine.triggers`, so a rebuild can carry live triggers over
+    /// for rules that didn't change.
+    @ObservationIgnored private var engineRules: [TriggerRule] = []
+
     /// Rebuild (or tear down) the controller's gate to match current settings.
+    ///
+    /// Live triggers are stateful (a ``GracePeriodTrigger`` remembers when it
+    /// was last satisfied), so this avoids discarding them: with the rules
+    /// unchanged (pause/resume, an OR/AND flip) the engine is kept as is, and
+    /// on a rule edit every unchanged rule keeps its existing trigger, so an
+    /// in-flight grace window survives edits to other rules.
     private func applyTriggerGate() {
-        let engine = settings.triggersEnabled
-            ? factory.makeEngine(from: settings.ruleSet)
-            : nil
-        currentEngine = engine
-        session.triggerGate = (settings.triggersEnabled && !triggersPaused) ? engine : nil
+        if settings.triggersEnabled {
+            if let engine = currentEngine, engineRules == settings.ruleSet.rules {
+                engine.combine = settings.ruleSet.combine
+            } else {
+                var reusable: [TriggerRule: [Trigger]] = [:]
+                if let engine = currentEngine {
+                    for (rule, trigger) in zip(engineRules, engine.triggers) {
+                        reusable[rule, default: []].append(trigger)
+                    }
+                }
+                let triggers = settings.ruleSet.rules.map { rule -> Trigger in
+                    if var pool = reusable[rule], !pool.isEmpty {
+                        let trigger = pool.removeFirst()
+                        reusable[rule] = pool
+                        return trigger
+                    }
+                    return factory.makeTrigger(for: rule)
+                }
+                currentEngine = TriggerEngine(combine: settings.ruleSet.combine, triggers: triggers)
+                engineRules = settings.ruleSet.rules
+            }
+        } else {
+            currentEngine = nil
+            engineRules = []
+        }
+        session.triggerGate = (settings.triggersEnabled && !triggersPaused) ? currentEngine : nil
         // The rules (or the engine) just changed; drop the cached states so the
         // next read re-evaluates against the new rule set immediately.
         cachedRuleStates = nil

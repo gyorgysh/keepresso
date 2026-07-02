@@ -172,9 +172,9 @@ struct MenuBarContent: View {
         }
         guard session.isActive else { return "System can sleep" }
         if let remaining = session.remaining {
-            return "Stops in \(format(remaining))"
+            return "Stops in \(MenuBarLabel.format(remaining))"
         }
-        return "Awake for \(format(displayedElapsed))"
+        return "Awake for \(MenuBarLabel.format(displayedElapsed))"
     }
 
     // MARK: - Live trigger summary
@@ -206,10 +206,4 @@ struct MenuBarContent: View {
         }
     }
 
-    private func format(_ interval: TimeInterval) -> String {
-        let total = Int(interval.rounded())
-        let h = total / 3600, m = (total % 3600) / 60, s = total % 60
-        return h > 0 ? String(format: "%d:%02d:%02d", h, m, s)
-                     : String(format: "%d:%02d", m, s)
-    }
 }

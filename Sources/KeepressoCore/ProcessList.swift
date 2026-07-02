@@ -29,14 +29,22 @@ public protocol ProcessListing: AnyObject {
 public final class PSProcessLister: ProcessListing {
     private let ttl: TimeInterval
     private let now: () -> Date
+    /// Produces the raw `ps` output (`nil` on failure). Injectable so the
+    /// cache/refresh logic can be unit-tested without spawning processes.
+    private let fetch: @Sendable () -> String?
     private let lock = NSLock()
     private var cached: [String] = []
     private var lastFetch: Date?
     private var isRefreshing = false
 
-    public init(ttl: TimeInterval = 3, now: @escaping () -> Date = Date.init) {
+    public init(
+        ttl: TimeInterval = 3,
+        now: @escaping () -> Date = Date.init,
+        fetch: @escaping @Sendable () -> String? = PSProcessLister.runPS
+    ) {
         self.ttl = ttl
         self.now = now
+        self.fetch = fetch
     }
 
     public var current: [String] {
@@ -50,7 +58,7 @@ public final class PSProcessLister: ProcessListing {
         if shouldRefresh {
             Task.detached { [weak self] in
                 guard let self else { return }
-                let fetched = self.run().map { $0.split(whereSeparator: \.isNewline).map(String.init) } ?? []
+                let fetched = self.fetch().map { $0.split(whereSeparator: \.isNewline).map(String.init) } ?? []
                 self.withLock {
                     self.cached = fetched
                     self.lastFetch = self.now()
@@ -69,7 +77,9 @@ public final class PSProcessLister: ProcessListing {
         return body()
     }
 
-    private func run() -> String? {
+    /// The real fetch: spawn `ps` and return its raw output. The default for
+    /// ``init(ttl:now:fetch:)``'s `fetch`.
+    @Sendable public static func runPS() -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/ps")
         // -a all users, -x include processes without a controlling terminal,

@@ -167,6 +167,27 @@ private final class FakeDisplaySleeper: DisplaySleepCommanding, @unchecked Senda
 }
 
 @MainActor
+@Test func lidTickSleepsWhenExternalDisplayDetachesWithLidClosed() async {
+    let sleepControl = FakeSleepControl(initial: true)
+    let lid = FakeLidState(closed: true)
+    let externalDisplay = FakeDisplayMonitor(hasExternalDisplay: true)
+    let sleeper = FakeDisplaySleeper()
+    let controller = ClosedDisplayController(
+        control: sleepControl, lid: lid, externalDisplay: externalDisplay, displaySleeper: sleeper
+    )
+    await controller.refresh()
+
+    controller.tick() // clamshell with monitor: no-op
+    #expect(sleeper.sleepNowCallCount == 0)
+    // Unplugging the monitor leaves the internal panel as the active display
+    // inside the closed lid; that edge must sleep it too.
+    externalDisplay.snapshot = DisplaySnapshot(externalDisplayCount: 0, totalDisplayCount: 1)
+    controller.tick()
+    controller.tick() // still closed and unplugged: not again
+    #expect(sleeper.sleepNowCallCount == 1)
+}
+
+@MainActor
 @Test func lidTickReArmsAfterReopening() async {
     let sleepControl = FakeSleepControl(initial: true)
     let lid = FakeLidState(closed: false)

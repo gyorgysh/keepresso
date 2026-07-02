@@ -30,9 +30,28 @@ enum AppRelocator {
         let dest = URL(fileURLWithPath: "/Applications")
             .appendingPathComponent(bundleURL.lastPathComponent)
 
-        // If a copy is already installed, just launch it and quit this one
-        // (don't clobber a possibly-running install). Otherwise copy ourselves in.
-        if !fm.fileExists(atPath: dest.path) {
+        // If the installed copy is already running, hand over to it instead of
+        // spawning a second instance (two cups, both holding assertions). If
+        // it's an older version, Sparkle will offer the update from there.
+        if let running = runningInstance(at: dest) {
+            running.activate()
+            NSApp.terminate(nil)
+            return
+        }
+
+        if fm.fileExists(atPath: dest.path) {
+            // Replace an older installed copy rather than launching it: someone
+            // double-clicking a newer DMG expects to end up on the new version,
+            // not silently back on the old one. Keep an equal-or-newer install.
+            if (buildNumber(of: dest) ?? 0) < (buildNumber(of: bundleURL) ?? 0) {
+                do {
+                    try fm.removeItem(at: dest)
+                    try fm.copyItem(at: bundleURL, to: dest)
+                } catch {
+                    // Best-effort: fall through and launch whatever is installed.
+                }
+            }
+        } else {
             do {
                 try fm.copyItem(at: bundleURL, to: dest)
             } catch {
@@ -40,11 +59,26 @@ enum AppRelocator {
             }
         }
 
-        // Launch the /Applications copy as a fresh instance, then terminate.
-        let config = NSWorkspace.OpenConfiguration()
-        config.createsNewApplicationInstance = true
-        NSWorkspace.shared.openApplication(at: dest, configuration: config) { _, _ in
+        // Launch the /Applications copy, then terminate. No running instance
+        // exists (checked above), so this starts it rather than duplicating it.
+        NSWorkspace.shared.openApplication(at: dest, configuration: NSWorkspace.OpenConfiguration()) { _, _ in
             DispatchQueue.main.async { NSApp.terminate(nil) }
         }
+    }
+
+    /// Another live instance of this app running from `bundleURL`, if any.
+    private static func runningInstance(at bundleURL: URL) -> NSRunningApplication? {
+        guard let bundleID = Bundle.main.bundleIdentifier else { return nil }
+        return NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {
+            $0 != .current && $0.bundleURL?.standardizedFileURL == bundleURL.standardizedFileURL
+        }
+    }
+
+    /// `CFBundleVersion` (the monotonically bumped build number) of the bundle
+    /// at a URL, or `nil` when unreadable.
+    private static func buildNumber(of bundleURL: URL) -> Int? {
+        guard let raw = Bundle(url: bundleURL)?
+            .object(forInfoDictionaryKey: "CFBundleVersion") as? String else { return nil }
+        return Int(raw)
     }
 }

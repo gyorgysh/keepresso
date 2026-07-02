@@ -1,7 +1,8 @@
 import SwiftUI
 import KeepressoCore
 
-/// The trigger rules editor shown in the menu when "Activate by triggers" is on.
+/// The trigger rules editor, shown in Preferences ▸ Triggers when "Activate by
+/// triggers" is on.
 ///
 /// Conditions are added from a menu rather than typed: power/display rules are
 /// fixed, and Wi-Fi / app rules are seeded from current system state (the joined

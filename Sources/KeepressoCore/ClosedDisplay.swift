@@ -54,9 +54,10 @@ public final class ClosedDisplayController {
     private let externalDisplay: DisplayMonitoring
     private let displaySleeper: DisplaySleepCommanding
 
-    /// Whether the lid was closed as of the last ``tick()``, so the sleep
-    /// command only fires once per closed transition.
-    private var lidWasClosed = false
+    /// Whether the last ``tick()`` already wanted the panel asleep (lid closed
+    /// with no external display), so the sleep command fires once per
+    /// transition into that state.
+    private var wantedPanelAsleep = false
 
     public init(
         control: SleepSettingControlling = PMSetSleepControl(),
@@ -70,23 +71,23 @@ public final class ClosedDisplayController {
         self.displaySleeper = displaySleeper
     }
 
-    /// Force the display to sleep the instant the lid closes, while
-    /// lid-closed mode is on and no external display is attached (with an
-    /// external display, `displaysleepnow` would also blank that monitor,
-    /// breaking a legitimate clamshell-with-monitor setup). macOS auto-wakes
-    /// the panel when the lid reopens, so there's nothing to do on that edge.
-    /// Safe to call every second.
+    /// Force the display to sleep the instant the lid is closed with no
+    /// external display attached, while lid-closed mode is on. That covers
+    /// both edges into that state: the lid closing, and the external display
+    /// being unplugged with the lid already shut (which otherwise leaves the
+    /// internal panel lit inside the closed lid). With an external display
+    /// attached nothing fires: `displaysleepnow` would also blank that
+    /// monitor, breaking a legitimate clamshell-with-monitor setup. macOS
+    /// auto-wakes the panel when the lid reopens, so there's nothing to do on
+    /// that edge. Safe to call every second.
     public func tick() {
         guard isEnabled == true, let closed = lid.isClosed() else {
-            lidWasClosed = false
+            wantedPanelAsleep = false
             return
         }
-        guard !externalDisplay.current.hasExternalDisplay else {
-            lidWasClosed = closed
-            return
-        }
-        defer { lidWasClosed = closed }
-        guard closed, !lidWasClosed else { return }
+        let wantsPanelAsleep = closed && !externalDisplay.current.hasExternalDisplay
+        defer { wantedPanelAsleep = wantsPanelAsleep }
+        guard wantsPanelAsleep, !wantedPanelAsleep else { return }
         displaySleeper.sleepNow()
     }
 
