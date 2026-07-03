@@ -60,6 +60,13 @@ extension Preset {
             name: "Media Render",
             ruleSet: RuleSet(combine: .any, rules: [.process("ffmpeg")])
         ),
+        // Camera or microphone in use covers every meeting app at once,
+        // including calls running in a browser tab.
+        Preset(
+            id: "meetings",
+            name: "Meetings",
+            ruleSet: RuleSet(combine: .any, rules: [.mediaInUse(.camera), .mediaInUse(.microphone)])
+        ),
     ]
 
     /// The built-ins that shipped before ``KeepressoSettings`` tracked seeding,

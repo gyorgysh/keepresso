@@ -23,6 +23,8 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
     case volumeMounted(String)
     /// Smoothed overall CPU usage is above this percentage.
     case cpuLoad(thresholdPercent: Int)
+    /// Any process is using the camera or the microphone (a call, a recording).
+    case mediaInUse(MediaInUseTrigger.Device)
 
     /// A human-readable summary for the rules UI.
     public var label: String {
@@ -35,6 +37,7 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
         case .timeWindow(let rule):   return rule.label
         case .volumeMounted(let name): return "Volume \u{201C}\(name)\u{201D} mounted"
         case .cpuLoad(let threshold): return "CPU above \(threshold)%"
+        case .mediaInUse(let device): return device.label
         }
     }
 }
@@ -92,6 +95,7 @@ public struct TriggerFactory {
     private let processes: ProcessListing
     private let volumes: VolumeMonitoring
     private let cpu: CPULoadReading
+    private let media: MediaActivityMonitoring
     private let now: () -> Date
 
     public init(
@@ -102,6 +106,7 @@ public struct TriggerFactory {
         processes: ProcessListing = PSProcessLister(),
         volumes: VolumeMonitoring = FileManagerVolumeMonitor(),
         cpu: CPULoadReading = HostCPULoadReader(),
+        media: MediaActivityMonitoring = CoreMediaActivityMonitor(),
         now: @escaping () -> Date = Date.init
     ) {
         self.powerSource = powerSource
@@ -111,6 +116,7 @@ public struct TriggerFactory {
         self.processes = processes
         self.volumes = volumes
         self.cpu = cpu
+        self.media = media
         self.now = now
     }
 
@@ -136,6 +142,8 @@ public struct TriggerFactory {
             return VolumeMountedTrigger(volumeName: name, monitor: volumes)
         case .cpuLoad(let threshold):
             return CPULoadTrigger(thresholdPercent: threshold, reader: cpu)
+        case .mediaInUse(let device):
+            return MediaInUseTrigger(device: device, monitor: media)
         }
     }
 

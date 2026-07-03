@@ -194,6 +194,10 @@ struct RulesView: View {
             Section("App is frontmost") {
                 appButtons { .app(AppRule(bundleID: $0, match: .frontmost)) }
             }
+            Section("Camera & microphone") {
+                Button("Camera in use") { model.addRule(.mediaInUse(.camera)) }
+                Button("Microphone in use") { model.addRule(.mediaInUse(.microphone)) }
+            }
             Section("Process is running") {
                 ForEach(Self.processPresets, id: \.self) { name in
                     Button(name) { model.addRule(.process(name)) }
@@ -274,6 +278,8 @@ struct RulesView: View {
         case .timeWindow:              return "clock"
         case .volumeMounted:           return "externaldrive"
         case .cpuLoad:                 return "cpu"
+        case .mediaInUse(.camera):     return "video"
+        case .mediaInUse(.microphone): return "mic"
         }
     }
 }
