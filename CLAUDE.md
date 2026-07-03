@@ -41,11 +41,12 @@ Homebrew Cask is published and installable at
 `gyorgysh/homebrew-keepresso` tap repo.
 A headless virtual-display feature (private `CGVirtualDisplay` API, behind an
 off-by-default flag) is also done and validated on real headless hardware.
-Current version: 1.3.0 (build 11). The repo is **public** on GitHub
-(`git@github.com:gyorgysh/keepresso.git`, branch `main`) and the website is
-live, so history is permanent: keep commit messages tidy and release-worthy.
-v1.4 is planned (camera/mic and audio-playing triggers, VPN trigger,
-awake-explainer diagnostics); see `docs/ROADMAP.md`.
+Current version: 1.4.0 (build 12), released 2026-07-03 with the camera/mic,
+audio-playing, and VPN triggers plus the awake-explainer Activity tab. The
+repo is **public** on GitHub (`git@github.com:gyorgysh/keepresso.git`, branch
+`main`) and the website is live, so history is permanent: keep commit messages
+tidy and release-worthy. Next up is the Control Center widget, as its own
+release; see `docs/ROADMAP.md`.
 
 ## Commands
 
