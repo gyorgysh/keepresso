@@ -3,6 +3,19 @@
 All notable changes to Keepresso are documented here. Versions follow
 [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+- **Brand cup in the menu bar.** The menu bar icon is now the actual brand
+  mark (espresso cup with the crema stripe, handle, saucer, and steam), drawn
+  as a crisp template image: filled with steam while brewing, an outline while
+  idle. The dropdown header uses the same cup, so the mark matches from the
+  bar to the app icon. The stock SF Symbol cup (and its shimmer, the one
+  animation the snapshotted label allowed) is gone.
+- **Readable glass on any wallpaper.** The menu panel and the glass windows
+  (Preferences, Setup, About) now layer a subtle blur-and-tint plate under
+  their content, so text stays sharp over very dark or busy desktops while
+  the surfaces still read as Liquid Glass.
+
 ## 1.3.0
 
 - **Shortcuts actions.** Keepresso now shows up in the Shortcuts app (and

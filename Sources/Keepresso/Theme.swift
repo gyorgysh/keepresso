@@ -54,29 +54,58 @@ extension ButtonStyle where Self == MenuRowButtonStyle {
     static var menuRow: MenuRowButtonStyle { MenuRowButtonStyle() }
 }
 
+/// The backing that keeps text readable over glass on any wallpaper: a material
+/// for blur, plus a faint wash of the window background color so a very dark or
+/// busy desktop can't pull the surface's luminance away from what the text
+/// color expects. The wash is translucent, so the surface still reads as glass.
+private struct GlassReadabilityPlate: View {
+    var body: some View {
+        ZStack {
+            Rectangle().fill(.thinMaterial)
+            Color(nsColor: .windowBackgroundColor).opacity(0.28)
+        }
+    }
+}
+
 extension View {
     /// A translucent "glass" surface behind a view. On macOS 26+ this is the real
-    /// Liquid Glass material; on earlier systems it falls back to a frosted
-    /// `ultraThinMaterial`, which reads as glass too.
+    /// Liquid Glass material, tinted faintly toward the window background color
+    /// so its content keeps contrast over dark desktops; on earlier systems it
+    /// falls back to a frosted `ultraThinMaterial`, which reads as glass too.
     @ViewBuilder
     func glassCard(cornerRadius: CGFloat = 12) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         if #available(macOS 26.0, *) {
-            self.glassEffect(.regular, in: shape)
+            self.glassEffect(
+                .regular.tint(Color(nsColor: .windowBackgroundColor).opacity(0.25)),
+                in: shape
+            )
         } else {
             self.background(.ultraThinMaterial, in: shape)
         }
     }
 
+    /// A readability plate for the menu bar panel, layered over the system's
+    /// glass chrome. The panel window itself owns the Liquid Glass; this adds
+    /// blur and a faint neutral wash so the content stays sharp when the
+    /// wallpaper behind the panel is very dark or high-contrast.
+    func glassPanelBackground() -> some View {
+        background(GlassReadabilityPlate().ignoresSafeArea())
+    }
+
     /// A translucent, vibrant glass background for a whole window, matching the
-    /// menu's Liquid Glass look. Uses the window-placement container background
-    /// on macOS 15+ (a no-op on older systems, which keep the standard window
-    /// chrome). Pair with `.scrollContentBackground(.hidden)` on any Form/List so
-    /// the glass shows through instead of the form's opaque backing.
+    /// menu's look while staying readable on any desktop (same plate as
+    /// ``glassPanelBackground()``). Uses the window-placement container
+    /// background on macOS 15+ (a no-op on older systems, which keep the
+    /// standard window chrome). Pair with `.scrollContentBackground(.hidden)` on
+    /// any Form/List so the glass shows through instead of the form's opaque
+    /// backing.
     @ViewBuilder
     func glassWindowBackground() -> some View {
         if #available(macOS 15.0, *) {
-            self.containerBackground(.ultraThinMaterial, for: .window)
+            self.containerBackground(for: .window) {
+                GlassReadabilityPlate()
+            }
         } else {
             self
         }

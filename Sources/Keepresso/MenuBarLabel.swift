@@ -1,15 +1,16 @@
 import SwiftUI
 import KeepressoCore
 
-/// The icon shown in the system menu bar: a filled cup while brewing, an outline
-/// cup while idle.
+/// The icon shown in the system menu bar: the brand cup as a template image,
+/// filled with steam while brewing, an outline while idle (``MenuBarIcon``),
+/// so the bar matches the app icon and the website mark instead of the stock
+/// `cup.and.saucer` SF Symbol.
 ///
-/// While brewing it animates with a `.symbolEffect` "brewing" shimmer. We use an
-/// SF Symbol rather than a custom `Canvas`/`TimelineView`: a `MenuBarExtra` label
-/// is snapshotted to a template image, so a Canvas renders blank, `TimelineView`
-/// freezes the app, and arbitrary SwiftUI animations don't run — `.symbolEffect`
-/// is the one animation the menu bar honours. The optional countdown text next
-/// to it updates via a plain `Timer.publish` tick for the same reason.
+/// The label stays static by design: a `MenuBarExtra` label is snapshotted to
+/// a template image, so a Canvas renders blank, `TimelineView` freezes the
+/// app, and SwiftUI animations don't run there. State reads through the fill
+/// and the steam, not motion. The optional countdown text next to the icon
+/// updates via a plain `Timer.publish` tick for the same reason.
 struct MenuBarLabel: View {
     @Bindable var session: SessionController
     /// Whether to show remaining time next to the icon for a timed session
@@ -26,12 +27,7 @@ struct MenuBarLabel: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(systemName: session.isActive ? "cup.and.saucer.fill" : "cup.and.saucer")
-                .symbolEffect(
-                    .variableColor.iterative.reversing,
-                    options: .repeating,
-                    isActive: session.isActive
-                )
+            Image(nsImage: session.isActive ? MenuBarIcon.brewing : MenuBarIcon.idle)
             if showCountdown, session.isActive, session.remaining != nil {
                 Text(remainingText)
                     .font(.caption.monospacedDigit())

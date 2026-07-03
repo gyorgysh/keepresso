@@ -150,6 +150,7 @@ struct MenuBarContent: View {
         }
         .padding(14)
         .frame(width: 280)
+        .glassPanelBackground()
         .tint(.keepressoBrew)
         .onAppear { model.refreshClosedDisplay() }
         .onReceive(tick) { _ in

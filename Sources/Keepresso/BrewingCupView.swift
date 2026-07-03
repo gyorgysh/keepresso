@@ -4,9 +4,9 @@ import SwiftUI
 /// three wisps that fade in low, drift up, and dissolve, on a staggered loop.
 ///
 /// This lives in the menu dropdown and other real windows, where SwiftUI
-/// animation runs normally. The menu bar *label* stays a plain SF Symbol with
-/// `.symbolEffect`: a `MenuBarExtra` label is snapshotted to a template image,
-/// so nothing else animates there (see `MenuBarLabel`).
+/// animation runs normally. The menu bar *label* stays a static template image
+/// of the same mark: a `MenuBarExtra` label is snapshotted, so nothing
+/// animates there (see `MenuBarLabel`).
 struct BrewingCupView: View {
     /// Whether a session is running: steam rises and the cup fills with the
     /// brew accent. Idle shows a quiet outline cup and reserves the steam space
@@ -23,9 +23,8 @@ struct BrewingCupView: View {
         VStack(spacing: 1) {
             steam
                 .frame(width: 22, height: 9)
-            Image(systemName: isActive ? "cup.and.saucer.fill" : "cup.and.saucer")
-                .font(.title2)
-                .foregroundStyle(isActive ? Color.keepressoBrew : .secondary)
+            BrandCupGlyph(filled: isActive)
+                .frame(width: 22, height: 16.6)
         }
         .accessibilityHidden(true) // the header text next to it carries the status
     }
