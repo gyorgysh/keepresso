@@ -175,6 +175,7 @@ struct RulesView: View {
                 Button("External display connected") { model.addRule(.externalDisplay) }
             }
             Section("Network") {
+                Button("VPN connected") { model.addRule(.vpnConnected) }
                 if location.isAuthorized {
                     if let ssid = model.currentSSID() {
                         Button("On current Wi-Fi (\(ssid))") { model.addRule(.wifiSSID(ssid)) }
@@ -282,6 +283,7 @@ struct RulesView: View {
         case .mediaInUse(.camera):     return "video"
         case .mediaInUse(.microphone): return "mic"
         case .audioPlaying:            return "speaker.wave.2"
+        case .vpnConnected:            return "lock.shield"
         }
     }
 }

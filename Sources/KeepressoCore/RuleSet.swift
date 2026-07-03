@@ -27,6 +27,8 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
     case mediaInUse(MediaInUseTrigger.Device)
     /// Sound is playing through any output device (with a release grace).
     case audioPlaying
+    /// Any VPN configuration is connected.
+    case vpnConnected
 
     /// A human-readable summary for the rules UI.
     public var label: String {
@@ -41,6 +43,7 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
         case .cpuLoad(let threshold): return "CPU above \(threshold)%"
         case .mediaInUse(let device): return device.label
         case .audioPlaying:           return "Audio playing"
+        case .vpnConnected:           return "VPN connected"
         }
     }
 }
@@ -99,6 +102,7 @@ public struct TriggerFactory {
     private let volumes: VolumeMonitoring
     private let cpu: CPULoadReading
     private let media: MediaActivityMonitoring
+    private let vpn: VPNMonitoring
     private let now: () -> Date
 
     public init(
@@ -110,6 +114,7 @@ public struct TriggerFactory {
         volumes: VolumeMonitoring = FileManagerVolumeMonitor(),
         cpu: CPULoadReading = HostCPULoadReader(),
         media: MediaActivityMonitoring = CoreMediaActivityMonitor(),
+        vpn: VPNMonitoring = SCUtilVPNMonitor(),
         now: @escaping () -> Date = Date.init
     ) {
         self.powerSource = powerSource
@@ -120,6 +125,7 @@ public struct TriggerFactory {
         self.volumes = volumes
         self.cpu = cpu
         self.media = media
+        self.vpn = vpn
         self.now = now
     }
 
@@ -153,6 +159,8 @@ public struct TriggerFactory {
                 grace: AudioPlayingTrigger.releaseGrace,
                 now: now
             )
+        case .vpnConnected:
+            return VPNConnectedTrigger(monitor: vpn)
         }
     }
 
