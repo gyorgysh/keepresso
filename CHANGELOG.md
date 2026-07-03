@@ -5,6 +5,24 @@ All notable changes to Keepresso are documented here. Versions follow
 
 ## Unreleased
 
+- **Camera and microphone triggers, with a Meetings preset.** Stay awake
+  while anything is using the camera or the mic: the same device state that
+  drives the menu bar's green dot, read without ever touching the stream, so
+  there is no permission prompt. One rule covers every meeting app at once,
+  including calls running in a browser tab that app rules can't see. A new
+  built-in Meetings preset (camera or mic) sets it up in one click.
+- **Audio-playing trigger.** Stay awake while sound is playing: music, a
+  video, a podcast. A 30 second release grace rides out track gaps and brief
+  pauses so the session doesn't flap.
+- **VPN trigger.** Stay awake while a VPN is connected, covering profile
+  VPNs (IKEv2, L2TP) and Network Extension tunnels (WireGuard, Tailscale,
+  OpenVPN Connect, corporate clients).
+- **Activity pane: why is my Mac awake?** Preferences ▸ Activity shows every
+  app's live power assertions (the readable version of
+  `pmset -g assertions`), so you can see exactly what's preventing sleep,
+  whoever's doing it, plus a decision log of why each Keepresso session
+  started or stopped: which trigger, a timer expiring, the battery pause, or
+  a manual or scripted command.
 - **Brand cup in the menu bar.** The menu bar icon is now the actual brand
   mark (espresso cup with the crema stripe, handle, saucer, and steam), drawn
   as a crisp template image: filled with steam while brewing, an outline while
