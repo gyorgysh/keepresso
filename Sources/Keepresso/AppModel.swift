@@ -58,6 +58,24 @@ final class AppModel {
         // Launch idle: a manual session waits for the user's toggle, a gated
         // one waits for its conditions (the ticker's reconcile activates it).
         applyTriggerGate()
+        // Give the decision log the satisfied rule labels when the gate flips
+        // the session on ("Triggers: Camera in use").
+        session.triggerDescriber = { [weak self] in
+            guard let states = self?.ruleStates() else { return nil }
+            let held = states.filter(\.satisfied).map(\.rule.label)
+            return held.isEmpty ? nil : held.joined(separator: ", ")
+        }
+    }
+
+    // MARK: - Awake explainer
+
+    /// Reads the system-wide power assertion list for the Activity pane.
+    @ObservationIgnored private let assertionLister: AssertionListing = IOPMAssertionLister()
+
+    /// Every power assertion currently held by any process (why the Mac is
+    /// awake right now, whoever's doing it). Read on demand by the UI.
+    func currentAssertions() -> [PowerAssertionInfo] {
+        assertionLister.current()
     }
 
     // MARK: - Manual activation
@@ -402,16 +420,16 @@ final class AppModel {
         pauseTriggers()
         switch command {
         case .start(let mode):
-            session.start(mode: mode)
+            session.start(mode: mode, cause: .command)
         case .stop:
-            session.stop()
+            session.stop(cause: .command)
         case .toggle:
             // Mirror toggleManual(), using the saved default duration rather
             // than the controller's in-memory mode (never seeded after launch).
             if wasActive {
-                session.stop()
+                session.stop(cause: .command)
             } else {
-                session.start(mode: settings.defaultMode)
+                session.start(mode: settings.defaultMode, cause: .command)
             }
         }
     }

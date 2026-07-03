@@ -51,6 +51,16 @@ public final class SessionController {
     /// `nil` (the default) never overrides on battery level.
     public var pauseBelowBatteryPercent: Int?
 
+    /// Every session transition, with when and why (the awake-explainer's
+    /// "why did Keepresso act?" half). In-memory only.
+    public let log = DecisionLog()
+
+    /// Supplies a description of the currently satisfied trigger conditions
+    /// for the ``log`` when the gate flips the session on. The app wires this
+    /// to the live rule labels; `nil` (or a `nil` return) falls back to a
+    /// generic message.
+    public var triggerDescriber: (() -> String?)?
+
     private let assertions: PowerAsserting
     private let reminder: ReminderNotifying?
     private let now: () -> Date
@@ -78,22 +88,44 @@ public final class SessionController {
     // MARK: - Lifecycle
 
     /// Begin (or restart) a session with the given policy.
-    public func start(mode: SessionMode = .indefinite, options: SleepPreventionOptions? = nil) {
+    public func start(
+        mode: SessionMode = .indefinite,
+        options: SleepPreventionOptions? = nil,
+        cause: SessionCause = .manual
+    ) {
+        let restarted = isActive
         if let options { self.options = options }
         self.mode = mode
         self.startedAt = now()
         self.isActive = true
         remindersFired = 0
+        log.record(began: true, reason: Self.startReason(cause: cause, restarted: restarted), at: now())
         reconcile(now: now())
     }
 
     /// End the current session and release all assertions.
-    public func stop() {
+    public func stop(cause: SessionCause = .manual) {
+        stop(reason: cause == .manual ? "Stopped manually" : "Stopped by a command")
+    }
+
+    /// The shared teardown: logs `reason` when a session was actually running
+    /// (idempotent stops don't spam the log), then releases everything.
+    private func stop(reason: String) {
+        if isActive {
+            log.record(began: false, reason: reason, at: now())
+        }
         isActive = false
         startedAt = nil
         remindersFired = 0
         assertions.releaseAll()
         reminder?.cancelPending()
+    }
+
+    static func startReason(cause: SessionCause, restarted: Bool) -> String {
+        switch cause {
+        case .manual:  return restarted ? "Restarted manually" : "Started manually"
+        case .command: return restarted ? "Restarted by a command" : "Started by a command"
+        }
     }
 
     /// Convenience for the menu bar quick-toggle.
@@ -133,7 +165,7 @@ public final class SessionController {
         let instant = now ?? self.now()
 
         if let threshold = pauseBelowBatteryPercent, let percent = batteryPercent, percent < threshold {
-            if isActive { stop() }
+            if isActive { stop(reason: "Paused, battery below \(threshold)%") }
             return
         }
 
@@ -142,7 +174,7 @@ public final class SessionController {
             setActive(triggerGate.isSatisfied(), at: instant)
         } else if isActive, let total = mode.duration, let startedAt,
                   instant.timeIntervalSince(startedAt) >= total {
-            stop()
+            stop(reason: "Timed session ended")
             return
         }
 
@@ -192,11 +224,14 @@ public final class SessionController {
             isActive = true
             startedAt = instant
             remindersFired = 0
+            let detail = triggerDescriber?().map { "Triggers: \($0)" }
+            log.record(began: true, reason: detail ?? "Trigger conditions met", at: instant)
         } else if !want, isActive {
             isActive = false
             startedAt = nil
             remindersFired = 0
             reminder?.cancelPending()
+            log.record(began: false, reason: "Trigger conditions ended", at: instant)
         }
     }
 

@@ -16,6 +16,7 @@ struct PreferencesView: View {
         case reminder = "Reminder"
         case disk = "Disk"
         case display = "Display"
+        case activity = "Activity"
 
         var id: String { rawValue }
         var symbol: String {
@@ -25,6 +26,7 @@ struct PreferencesView: View {
             case .reminder: "bell"
             case .disk: "externaldrive"
             case .display: "display"
+            case .activity: "list.bullet.rectangle"
             }
         }
     }
@@ -47,7 +49,8 @@ struct PreferencesView: View {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .frame(width: 480, height: 560)
+        // 520 fits six labeled segments; 480 truncated them once Activity joined.
+        .frame(width: 520, height: 560)
         .tint(.keepressoBrew)
         .glassWindowBackground()
     }
@@ -60,7 +63,102 @@ struct PreferencesView: View {
         case .reminder: ReminderTab(model: model)
         case .disk: DiskTab(model: model)
         case .display: DisplayTab(model: model)
+        case .activity: ActivityTab(model: model)
         }
+    }
+}
+
+// MARK: - Activity (awake explainer)
+
+/// Answers "why is my Mac awake?" (every process's live power assertions) and
+/// "why did Keepresso act?" (the session decision log). Read-only.
+private struct ActivityTab: View {
+    @Bindable var model: AppModel
+
+    /// Live assertions, refreshed while the pane is visible.
+    @State private var assertions: [PowerAssertionInfo] = []
+    private let tick = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        Form {
+            Section {
+                let relevant = assertions.filter { $0.effect != nil }
+                if relevant.isEmpty {
+                    Text("Nothing is holding the Mac awake right now.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(relevant) { assertion in
+                        assertionRow(assertion)
+                    }
+                }
+            } header: {
+                Text("Keeping the Mac awake now")
+            } footer: {
+                Text("Every app's live power assertions, not just Keepresso's, the same data pmset -g assertions prints.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                let events = model.session.log.events
+                if events.isEmpty {
+                    Text("No session activity yet.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(events.reversed()) { event in
+                        eventRow(event)
+                    }
+                }
+            } header: {
+                Text("Keepresso decisions")
+            } footer: {
+                Text("Why each session started or stopped, newest first. Kept in memory; clears on relaunch.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .onAppear { assertions = model.currentAssertions() }
+        .onReceive(tick) { _ in assertions = model.currentAssertions() }
+    }
+
+    private func assertionRow(_ assertion: PowerAssertionInfo) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Text(assertion.processName)
+                    .font(.callout.weight(.medium))
+                Spacer()
+                Text(assertion.effect ?? assertion.type)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if !assertion.name.isEmpty {
+                Text(assertion.name)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        }
+        .padding(.vertical, 1)
+    }
+
+    private func eventRow(_ event: SessionEvent) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: event.began ? "play.circle.fill" : "stop.circle")
+                .foregroundStyle(event.began ? Color.keepressoBrew : Color.secondary)
+                .font(.caption)
+            Text(event.reason)
+                .font(.callout)
+                .lineLimit(2)
+                .truncationMode(.tail)
+            Spacer()
+            Text(event.date, format: .dateTime.hour().minute().second())
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 1)
     }
 }
 
