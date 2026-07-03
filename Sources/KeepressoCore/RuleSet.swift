@@ -25,6 +25,8 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
     case cpuLoad(thresholdPercent: Int)
     /// Any process is using the camera or the microphone (a call, a recording).
     case mediaInUse(MediaInUseTrigger.Device)
+    /// Sound is playing through any output device (with a release grace).
+    case audioPlaying
 
     /// A human-readable summary for the rules UI.
     public var label: String {
@@ -38,6 +40,7 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
         case .volumeMounted(let name): return "Volume \u{201C}\(name)\u{201D} mounted"
         case .cpuLoad(let threshold): return "CPU above \(threshold)%"
         case .mediaInUse(let device): return device.label
+        case .audioPlaying:           return "Audio playing"
         }
     }
 }
@@ -144,6 +147,12 @@ public struct TriggerFactory {
             return CPULoadTrigger(thresholdPercent: threshold, reader: cpu)
         case .mediaInUse(let device):
             return MediaInUseTrigger(device: device, monitor: media)
+        case .audioPlaying:
+            return GracePeriodTrigger(
+                wrapping: AudioPlayingTrigger(monitor: media),
+                grace: AudioPlayingTrigger.releaseGrace,
+                now: now
+            )
         }
     }
 

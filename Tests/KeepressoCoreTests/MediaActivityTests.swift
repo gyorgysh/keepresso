@@ -65,6 +65,39 @@ private final class FakeMediaMonitor: MediaActivityMonitoring {
     #expect(probeCount == 2) // stale snapshot re-probes
 }
 
+@Test func audioTriggerFollowsPlaybackState() {
+    let monitor = FakeMediaMonitor(audio: true)
+    let trigger = AudioPlayingTrigger(monitor: monitor)
+    #expect(trigger.isSatisfied())
+
+    monitor.snapshot = MediaActivitySnapshot(audioPlaying: false)
+    #expect(!trigger.isSatisfied())
+}
+
+@Test func audioPlayingRuleLabelAndCodableRoundTrip() throws {
+    let rule = TriggerRule.audioPlaying
+    #expect(rule.label == "Audio playing")
+    let data = try JSONEncoder().encode([rule])
+    #expect(try JSONDecoder().decode([TriggerRule].self, from: data) == [rule])
+}
+
+@Test func factoryWrapsAudioPlayingInAReleaseGrace() {
+    let monitor = FakeMediaMonitor(audio: true)
+    var clock = Date(timeIntervalSinceReferenceDate: 0)
+    let factory = TriggerFactory(media: monitor, now: { clock })
+    let engine = factory.makeEngine(from: RuleSet(rules: [.audioPlaying]))
+    #expect(engine.isSatisfied())
+
+    // Playback stops: the rule keeps holding through a brief silence...
+    monitor.snapshot = MediaActivitySnapshot(audioPlaying: false)
+    clock = clock.addingTimeInterval(AudioPlayingTrigger.releaseGrace - 1)
+    #expect(engine.isSatisfied())
+
+    // ...and releases once the grace runs out.
+    clock = clock.addingTimeInterval(2)
+    #expect(!engine.isSatisfied())
+}
+
 @Test func meetingsPresetWatchesCameraAndMicrophone() {
     let meetings = Preset.builtIns.first { $0.id == "meetings" }
     #expect(meetings != nil)

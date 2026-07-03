@@ -207,3 +207,26 @@ public final class MediaInUseTrigger: Trigger {
         }
     }
 }
+
+/// Fires while sound is playing through any output device: music, a video, a
+/// podcast. The factory wraps it in a ``GracePeriodTrigger`` with
+/// ``releaseGrace`` so the gap between tracks, or a moment of buffering,
+/// doesn't drop the session and immediately restart it.
+public final class AudioPlayingTrigger: Trigger {
+    /// How long the rule keeps holding after playback stops. Long enough to
+    /// ride out track gaps and brief pauses, short enough that the Mac isn't
+    /// pinned awake for long once the sound has really ended.
+    public static let releaseGrace: TimeInterval = 30
+
+    private let monitor: MediaActivityMonitoring
+
+    public init(monitor: MediaActivityMonitoring = CoreMediaActivityMonitor()) {
+        self.monitor = monitor
+    }
+
+    public var label: String { "Audio playing" }
+
+    public func isSatisfied() -> Bool {
+        monitor.current.audioPlaying
+    }
+}
