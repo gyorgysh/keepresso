@@ -55,14 +55,22 @@ extension ButtonStyle where Self == MenuRowButtonStyle {
 }
 
 /// The backing that keeps text readable over glass on any wallpaper: a material
-/// for blur, plus a faint wash of the window background color so a very dark or
-/// busy desktop can't pull the surface's luminance away from what the text
-/// color expects. The wash is translucent, so the surface still reads as glass.
+/// for blur, plus a wash of the window background color so a very dark or busy
+/// desktop can't pull the surface's luminance away from what the text color
+/// expects (in light mode that wash is the "white lighting" layer). The wash is
+/// translucent, so the surface still reads as glass.
+///
+/// Two strengths: the menu panel sits on the system's own panel chrome and
+/// needs only a light touch; full windows show far more wallpaper, so they get
+/// a stronger material and a heavier wash to stay readable in any environment.
 private struct GlassReadabilityPlate: View {
+    var material: Material = .thinMaterial
+    var washOpacity: Double = 0.28
+
     var body: some View {
         ZStack {
-            Rectangle().fill(.thinMaterial)
-            Color(nsColor: .windowBackgroundColor).opacity(0.28)
+            Rectangle().fill(material)
+            Color(nsColor: .windowBackgroundColor).opacity(washOpacity)
         }
     }
 }
@@ -93,18 +101,23 @@ extension View {
         background(GlassReadabilityPlate().ignoresSafeArea())
     }
 
-    /// A translucent, vibrant glass background for a whole window, matching the
-    /// menu's look while staying readable on any desktop (same plate as
-    /// ``glassPanelBackground()``). Uses the window-placement container
-    /// background on macOS 15+ (a no-op on older systems, which keep the
-    /// standard window chrome). Pair with `.scrollContentBackground(.hidden)` on
-    /// any Form/List so the glass shows through instead of the form's opaque
-    /// backing.
+    /// A translucent glass background for a whole window that stays readable on
+    /// any desktop: the readability plate at window strength (stronger material
+    /// and a heavier window-background wash than the menu panel, which sits on
+    /// the system's own chrome and showed far less wallpaper). Uses the
+    /// window-placement container background on macOS 15+ (a no-op on older
+    /// systems, which keep the standard window chrome). Pair with
+    /// `.scrollContentBackground(.hidden)` on any Form/List so the glass shows
+    /// through instead of the form's opaque backing.
     @ViewBuilder
     func glassWindowBackground() -> some View {
         if #available(macOS 15.0, *) {
             self.containerBackground(for: .window) {
-                GlassReadabilityPlate()
+                // Thick + a strong wash: the menu panel composites its plate on
+                // top of the system's own frosted chrome, but a window's plate
+                // is all there is between the content and the wallpaper, so it
+                // must supply that brightness itself to match the menu's look.
+                GlassReadabilityPlate(material: .thickMaterial, washOpacity: 0.6)
             }
         } else {
             self
