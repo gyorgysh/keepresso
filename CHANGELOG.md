@@ -3,7 +3,7 @@
 All notable changes to Keepresso are documented here. Versions follow
 [Semantic Versioning](https://semver.org).
 
-## Unreleased
+## 1.4.0
 
 - **Camera and microphone triggers, with a Meetings preset.** Stay awake
   while anything is using the camera or the mic: the same device state that
