@@ -25,9 +25,11 @@ condition-based **triggers** so your Mac only stays awake when it actually shoul
 It lives quietly in the menu bar, no Dock icon, no clutter.
 
 <p align="center">
-  <img src="docs/assets/default.webp" width="300" alt="Keepresso menu while keeping the Mac awake">
-  &nbsp;&nbsp;
-  <img src="docs/assets/trigger.webp" width="300" alt="Keepresso menu showing live trigger conditions">
+  <img src="docs/assets/menu_idle.webp" width="250" alt="Keepresso menu while idle, with the keep-awake toggle and duration picker">
+  &nbsp;
+  <img src="docs/assets/menu_countdown.webp" width="250" alt="Keepresso brewing a timed session, with a live countdown in the menu bar">
+  &nbsp;
+  <img src="docs/assets/menu_trigger.webp" width="250" alt="Keepresso brewing because a trigger condition is met, with the live condition list">
 </p>
 
 ## Features
@@ -38,15 +40,25 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 - 🌙 **Yield the screen saver.** Let the screen saver or display sleep kick in
   after _N_ minutes idle while the system itself stays awake.
 - ⚡ **Trigger engine.** Stay awake only while charging or on battery, an external
-  display is connected, you're on a chosen Wi-Fi network, a specific app or
-  process is running, a chosen **volume is mounted**, **CPU usage** sits above a
-  threshold (builds, renders, training runs), or during a **scheduled time
-  window** (weekdays 9:00-18:00, overnight hours). Combine conditions with
-  **any** (OR) or **all** (AND). A one-click "Pause Triggers" in the menu bar
-  stops brewing without touching your rules.
+  display is connected, you're on a chosen Wi-Fi network, **a VPN is
+  connected**, the **camera or microphone is in use**, **audio is playing**, a
+  specific app or process is running, a chosen **volume is mounted**, **CPU
+  usage** sits above a threshold (builds, renders, training runs), or during a
+  **scheduled time window** (weekdays 9:00-18:00, overnight hours). Combine
+  conditions with **any** (OR) or **all** (AND). A one-click "Pause Triggers"
+  in the menu bar stops brewing without touching your rules.
+- 🎥 **Never sleeps mid-meeting.** The camera/microphone conditions catch every
+  meeting app at once, including calls running in a browser tab, and read only
+  the device's in-use state (the green-dot signal), never the stream, so no
+  camera or microphone permission is ever requested.
 - 🎛️ **Presets.** Apply a named trigger bundle in one click, built-in (AI Agent,
-  On AC Power, External Display Connected, Remote Session (SSH), Backup
-  Running, Media Render) or your own saved rule sets.
+  Meetings, On AC Power, External Display Connected, Remote Session (SSH),
+  Backup Running, Media Render) or your own saved rule sets.
+- 🔍 **Awake explainer.** The Activity pane shows every app's live power
+  assertions, a readable `pmset -g assertions`, so you can see exactly what's
+  preventing sleep (whoever's doing it), plus a decision log of why each
+  Keepresso session started or stopped: which trigger, a timer, the battery
+  pause, or a command.
 - 🪪 **Auto app detection.** Caffeinate while listed apps run or are frontmost,
   with an optional grace period before it lets go.
 - 🔋 **Battery-aware auto-pause.** Let the Mac sleep once charge drops below a
@@ -84,22 +96,28 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 <table>
 <tr>
 <td align="center" width="50%">
-  <img src="docs/assets/menu_settings.webp" width="320" alt="Preferences: General tab with closed-display mode"><br>
-  <sub>General: keep-awake toggles, menu-bar countdown, battery auto-pause, closed-display mode, launch at login</sub>
+  <img src="docs/assets/prefs_general.webp" width="320" alt="Preferences: General tab with keep-awake toggles and closed-display mode"><br>
+  <sub>General: keep-awake toggles, menu-bar countdown, battery auto-pause, closed-display mode</sub>
 </td>
 <td align="center" width="50%">
-  <img src="docs/assets/menu_triggers.webp" width="320" alt="Preferences: building a trigger rule set"><br>
-  <sub>Trigger engine: combine AC power, Wi-Fi, displays, and app conditions, or apply a preset</sub>
+  <img src="docs/assets/prefs_triggers.webp" width="320" alt="Preferences: a trigger rule set combining processes and AC power"><br>
+  <sub>Trigger engine: combine conditions with any or all, or apply a preset</sub>
 </td>
 </tr>
 <tr>
 <td align="center" width="50%">
-  <img src="docs/assets/menu_reminder.webp" width="320" alt="Preferences: still-brewing reminder settings"><br>
-  <sub>Reminders: a "still brewing" alert so a forgotten session can't drain the battery</sub>
+  <img src="docs/assets/prefs_activity.webp" width="320" alt="Preferences: Activity tab listing live power assertions and session decisions"><br>
+  <sub>Awake explainer: every app's live power assertions, plus why each session started or stopped</sub>
 </td>
 <td align="center" width="50%">
-  <img src="docs/assets/menu_display.webp" width="320" alt="Preferences: experimental headless virtual display"><br>
+  <img src="docs/assets/prefs_display.webp" width="320" alt="Preferences: experimental headless virtual display"><br>
   <sub>Headless virtual display: crisp Screen Sharing on a Mac with no monitor</sub>
+</td>
+</tr>
+<tr>
+<td align="center" colspan="2">
+  <img src="docs/assets/prefs_conditions.webp" width="320" alt="Preferences: the Add condition menu with power, display, network, and app conditions"><br>
+  <sub>Adding a condition: power, display, network, camera and microphone, audio, apps, and more</sub>
 </td>
 </tr>
 </table>
@@ -157,6 +175,8 @@ Click the cup in the menu bar to open Keepresso.
   - **Reminder**: a one-time or recurring "still brewing" alert, with a sound.
   - **Disk**: choose a volume to keep spun up and how often to touch it.
   - **Display**: create an experimental high-resolution headless virtual display.
+  - **Activity**: what's keeping the Mac awake right now (every app's power
+    assertions) and why each session started or stopped.
 - **Headless Setup** checks that an always-on Mac (say a Mac mini with no display)
   is configured to stay reachable, and links you straight to the right settings.
 
