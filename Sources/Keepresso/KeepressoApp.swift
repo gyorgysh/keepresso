@@ -47,7 +47,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Sparkle-backed auto-updater, behind the ``Updating`` seam. Started here so
     /// it schedules background checks for the app's whole lifetime.
     let updater: any Updating = SparkleUpdater()
-    private lazy var ticker = SessionTicker(session: model.session, disk: model.disk, closedDisplay: model.closedDisplay)
+    private lazy var ticker = SessionTicker(
+        session: model.session,
+        disk: model.disk,
+        closedDisplay: model.closedDisplay,
+        onTick: { [weak self] in self?.model.syncWidgetState() }
+    )
+    /// Listens for the Control Center toggle's Darwin doorbell.
+    private var widgetObserver: WidgetCommandObserver?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // If launched from the DMG / Downloads, move into /Applications and
@@ -60,6 +67,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // controller knows the mode is on, not just once a menu opens.
         model.refreshClosedDisplay()
         ticker.start()
+        // The Control Center toggle: consume a command that may have launched
+        // us, then keep listening while running.
+        widgetObserver = WidgetCommandObserver { [weak model] in model?.applyPendingWidgetCommand() }
+        model.applyPendingWidgetCommand()
+        model.syncWidgetState()
     }
 
     /// Handles `keepresso://` URLs (registered via `CFBundleURLTypes` in

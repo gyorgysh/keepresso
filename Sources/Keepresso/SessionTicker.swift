@@ -12,18 +12,22 @@ final class SessionTicker {
     private let disk: DiskKeepAliveController
     private let closedDisplay: ClosedDisplayController
     private let powerSource: PowerSourceMonitoring
+    /// Runs after each reconcile, e.g. to mirror session state to the widget.
+    private let onTick: (() -> Void)?
     private var timer: Timer?
 
     init(
         session: SessionController,
         disk: DiskKeepAliveController,
         closedDisplay: ClosedDisplayController,
-        powerSource: PowerSourceMonitoring = IOKitPowerSourceMonitor()
+        powerSource: PowerSourceMonitoring = IOKitPowerSourceMonitor(),
+        onTick: (() -> Void)? = nil
     ) {
         self.session = session
         self.disk = disk
         self.closedDisplay = closedDisplay
         self.powerSource = powerSource
+        self.onTick = onTick
     }
 
     func start() {
@@ -36,6 +40,7 @@ final class SessionTicker {
                 )
                 disk?.tick(now: Date())
                 closedDisplay?.tick()
+                self?.onTick?()
             }
         }
         RunLoop.main.add(timer, forMode: .common)

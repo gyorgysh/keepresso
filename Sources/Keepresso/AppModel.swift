@@ -4,6 +4,7 @@ import CoreLocation
 import EventKit
 import Observation
 import UserNotifications
+import WidgetKit
 import KeepressoCore
 
 /// App-level glue around ``SessionController``: owns persisted settings, builds
@@ -417,6 +418,42 @@ final class AppModel {
     func restoreDefaultPresets() {
         settings.restoreMissingBuiltInPresets()
         persist()
+    }
+
+    // MARK: - Control Center widget bridge
+
+    /// The App Group defaults shared with the widget extension, or `nil` when
+    /// the group entitlement isn't available (unsigned dev builds).
+    @ObservationIgnored private let widgetDefaults = WidgetBridge.groupDefaults()
+    /// The last state written, so the per-second tick only writes on change.
+    @ObservationIgnored private var lastWidgetState: SharedSessionState?
+
+    /// Mirror the session state into the App Group and refresh the control.
+    /// Called from the ticker every second; cheap because it no-ops until the
+    /// state actually changes.
+    func syncWidgetState() {
+        guard let widgetDefaults else { return }
+        let state = SharedSessionState(isActive: session.isActive)
+        guard state != lastWidgetState else { return }
+        lastWidgetState = state
+        WidgetBridge.writeState(state, to: widgetDefaults)
+        if #available(macOS 26.0, *) {
+            ControlCenter.shared.reloadControls(ofKind: WidgetBridge.controlKind)
+        }
+    }
+
+    /// Consume a pending widget toggle command, if any, and drive the session
+    /// through the same seam as `keepresso://` URLs. Called when the widget's
+    /// Darwin notification arrives and once at launch (the intent opens the
+    /// app, so a not-yet-running app lands here with the command waiting).
+    func applyPendingWidgetCommand() {
+        guard let widgetDefaults,
+              let desired = WidgetBridge.consumeCommand(from: widgetDefaults)
+        else { return }
+        if desired != session.isActive {
+            handle(desired ? .start(mode: settings.defaultMode) : .stop)
+        }
+        syncWidgetState()
     }
 
     // MARK: - URL scheme commands

@@ -1,6 +1,7 @@
 import AppIntents
 import SwiftUI
 import WidgetKit
+import KeepressoCore
 
 /// The widget extension's entry point. Holds only the Control Center toggle
 /// for now; menu-bar/desktop widgets would join this bundle.
@@ -13,41 +14,53 @@ struct KeepressoWidgetBundle: WidgetBundle {
 
 /// A Control Center toggle for the keep-awake session.
 ///
-/// Spike scaffolding: the toggle renders and the intent runs in the extension
-/// process, but the shared session state (App Group) and the bridge that
-/// drives the app aren't wired yet, so flipping it doesn't reach the app.
+/// This process can't touch the app's memory, so everything rides the
+/// ``WidgetBridge`` App Group channel: the value provider reads the state the
+/// app mirrors on every change, and the toggle's intent writes a command back
+/// and rings the Darwin doorbell.
 struct KeepAwakeControl: ControlWidget {
-    static let kind = "sh.gyorgy.keepresso.keep-awake"
-
     var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind: Self.kind) {
+        StaticControlConfiguration(kind: WidgetBridge.controlKind, provider: Provider()) { isOn in
             ControlWidgetToggle(
                 "Keep Awake",
-                isOn: false,
+                isOn: isOn,
                 action: SetKeepAwakeControlIntent()
-            ) { isOn in
+            ) { on in
                 Label(
-                    isOn ? "Brewing" : "Off",
-                    systemImage: isOn ? "cup.and.saucer.fill" : "cup.and.saucer"
+                    on ? "Brewing" : "Off",
+                    systemImage: on ? "cup.and.saucer.fill" : "cup.and.saucer"
                 )
             }
         }
         .displayName("Keep Awake")
         .description("Start or stop keeping the Mac awake.")
     }
+
+    struct Provider: ControlValueProvider {
+        var previewValue: Bool { true }
+
+        func currentValue() async throws -> Bool {
+            guard let defaults = WidgetBridge.groupDefaults() else { return false }
+            return WidgetBridge.readState(from: defaults)?.isActive ?? false
+        }
+    }
 }
 
-/// The toggle's intent, run inside the extension process. It cannot touch the
-/// app's memory; the real implementation will write the desired state to the
-/// App Group and nudge the app.
+/// The toggle's intent, run inside the extension process: park the desired
+/// state in the App Group, ring the doorbell for a running app, and open the
+/// app so a stopped one launches and consumes the command instead.
 struct SetKeepAwakeControlIntent: SetValueIntent {
     static let title: LocalizedStringResource = "Set Keep Awake"
+    static var openAppWhenRun: Bool { true }
 
     @Parameter(title: "Keep Awake")
     var value: Bool
 
     func perform() async throws -> some IntentResult {
-        // Spike: no-op until the App Group bridge lands.
-        .result()
+        if let defaults = WidgetBridge.groupDefaults() {
+            WidgetBridge.writeCommand(desiredActive: value, to: defaults)
+        }
+        WidgetBridge.postCommandNotification()
+        return .result()
     }
 }

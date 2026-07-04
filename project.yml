@@ -54,6 +54,16 @@ targets:
         SUFeedURL: "https://github.com/gyorgysh/keepresso/releases/latest/download/appcast.xml"
         SUPublicEDKey: "n3mCQxtsVXbnaHZEzhv5Yfzr94+Y6CzwBk4jHtrCmm4="
         SUEnableAutomaticChecks: true
+    entitlements:
+      path: Sources/Keepresso/Keepresso.entitlements
+      properties:
+        # Shared session state with the widget extension. Expanded at signing
+        # so the Team ID stays out of the repo; both processes read the
+        # expanded value back from their own signature at runtime
+        # (WidgetBridge.appGroupID). Team-ID-prefixed groups also avoid the
+        # macOS 15+ group-container prompt.
+        com.apple.security.application-groups:
+          - $(TeamIdentifierPrefix)sh.gyorgy.keepresso
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: sh.gyorgy.keepresso
@@ -96,13 +106,15 @@ targets:
         # Widget extensions must be sandboxed (only the appex; the app itself
         # stays unsandboxed for IOPMAssertion).
         com.apple.security.app-sandbox: true
-        # Shared session state with the app; Team-ID-prefixed so macOS 15+
-        # doesn't prompt for group-container access.
+        # Shared session state with the app; same signing-time expansion as
+        # the app target (see WidgetBridge.appGroupID).
         com.apple.security.application-groups:
           - $(TeamIdentifierPrefix)sh.gyorgy.keepresso
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: sh.gyorgy.keepresso.widget
+        # Keep in lockstep with the app target's versions on every release
+        # bump (the release scripts read the app's, the first in this file).
         MARKETING_VERSION: "1.4.0"
         CURRENT_PROJECT_VERSION: "12"
         SWIFT_VERSION: "5.9"
