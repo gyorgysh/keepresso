@@ -67,6 +67,44 @@ import Foundation
     #expect(settings == once)
 }
 
+// MARK: - Restoring deleted built-ins
+
+@Test func restoreBringsBackOnlyDeletedBuiltIns() {
+    var settings = KeepressoSettings.default
+    settings.presets.removeAll { $0.id == "meetings" || $0.id == "media-render" }
+    #expect(settings.missingBuiltInPresets.map(\.id) == ["media-render", "meetings"])
+
+    let restored = settings.restoreMissingBuiltInPresets()
+    #expect(restored.map(\.id) == ["media-render", "meetings"])
+    // Every built-in is present again, none duplicated.
+    let ids = settings.presets.map(\.id)
+    for built in Preset.builtIns { #expect(ids.filter { $0 == built.id }.count == 1) }
+}
+
+@Test func restoreLeavesUserAndRenamedPresetsUntouched() {
+    var settings = KeepressoSettings.default
+    // Rename a built-in (keeps its id) and add a user preset.
+    let renamedIndex = settings.presets.firstIndex { $0.id == "meetings" }!
+    settings.presets[renamedIndex].name = "Calls"
+    settings.presets.append(Preset(id: "mine", name: "My Rule", ruleSet: .empty))
+    settings.presets.removeAll { $0.id == "backup-running" }
+
+    settings.restoreMissingBuiltInPresets()
+    #expect(settings.presets.contains { $0.id == "meetings" && $0.name == "Calls" })
+    #expect(settings.presets.contains { $0.id == "mine" })
+    #expect(settings.presets.contains { $0.id == "backup-running" })
+    // The renamed built-in isn't resurrected as a duplicate.
+    #expect(settings.presets.filter { $0.id == "meetings" }.count == 1)
+}
+
+@Test func restoreIsANoOpWhenNothingIsMissing() {
+    var settings = KeepressoSettings.default
+    #expect(settings.missingBuiltInPresets.isEmpty)
+    let restored = settings.restoreMissingBuiltInPresets()
+    #expect(restored.isEmpty)
+    #expect(settings == KeepressoSettings.default)
+}
+
 @Test func remoteSessionPresetMatchesConnectionsNotTheListener() {
     // The idle sshd listener must not hold the Mac awake; a live connection
     // (either OpenSSH process naming) must.

@@ -76,6 +76,30 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         }
     }
 
+    /// Built-in presets not currently in ``presets`` — the ones a user has
+    /// deleted and could bring back with ``restoreMissingBuiltInPresets()``.
+    /// Matched by id, so a built-in the user only renamed or edited still
+    /// counts as present. Empty when every built-in is there.
+    public var missingBuiltInPresets: [Preset] {
+        Preset.builtIns.filter { built in !presets.contains { $0.id == built.id } }
+    }
+
+    /// Re-add every built-in preset the user has deleted, in built-in order,
+    /// and mark them seeded so later seeding stays consistent. Unlike
+    /// ``seedNewBuiltInPresets()`` this deliberately resurrects deleted
+    /// built-ins: it's the manual "restore defaults" action, not the one-time
+    /// launch seed. User-created presets and renamed built-ins are untouched.
+    /// Returns the presets restored (empty if none were missing).
+    @discardableResult
+    public mutating func restoreMissingBuiltInPresets() -> [Preset] {
+        let missing = missingBuiltInPresets
+        for preset in missing {
+            presets.append(preset)
+            if !seededPresetIDs.contains(preset.id) { seededPresetIDs.append(preset.id) }
+        }
+        return missing
+    }
+
     /// Forgiving decoder: every field falls back to its default when absent, so
     /// adding settings doesn't discard a user's older saved configuration.
     public init(from decoder: Decoder) throws {

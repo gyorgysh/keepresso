@@ -301,6 +301,10 @@ private struct TriggersTab: View {
                             model.removePreset(preset)
                         }
                     }
+                    if !model.missingBuiltInPresets.isEmpty {
+                        Divider()
+                        Button("Restore default presets") { model.restoreDefaultPresets() }
+                    }
                 } label: {
                     Label("Apply or remove", systemImage: "list.bullet")
                 }

@@ -406,6 +406,17 @@ final class AppModel {
         persist()
     }
 
+    /// Built-in presets the user has deleted, which ``restoreDefaultPresets()``
+    /// can bring back. Empty when every built-in is present.
+    var missingBuiltInPresets: [Preset] { settings.missingBuiltInPresets }
+
+    /// Re-add any deleted built-in presets, leaving user-created and renamed
+    /// presets untouched.
+    func restoreDefaultPresets() {
+        settings.restoreMissingBuiltInPresets()
+        persist()
+    }
+
     // MARK: - URL scheme commands
 
     /// Handle a `keepresso://` command from ``URLCommand/parse(_:)``. Acts like
