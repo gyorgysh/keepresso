@@ -205,6 +205,10 @@ struct KeepAwakeWidgetView: View {
                             state.triggersPaused ? "Resume Triggers" : "Pause Triggers",
                             systemImage: state.triggersPaused ? "play.fill" : "pause.fill"
                         )
+                        // Explicit brand color: the bordered style's label
+                        // ignored .tint in widget rendering and came out
+                        // system blue.
+                        .foregroundStyle(WidgetPalette.brew)
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
@@ -297,12 +301,15 @@ struct KeepAwakeControl: ControlWidget {
     }
 }
 
-/// The Control Center toggle's intent: same bridge as the widget buttons, but
-/// it also opens the app so a stopped one launches and consumes the command.
+/// The Control Center toggle's intent: the exact same bridge as the desktop
+/// widget buttons. Deliberately NOT `openAppWhenRun`: that flag makes the
+/// system run the intent in the app process, where this appex-only type
+/// doesn't exist, so `perform()` silently never ran and the toggle was a
+/// no-op. Like the widgets, it drives the running menu-bar app; launch at
+/// login covers the rest.
 @available(macOS 26.0, *)
 struct SetKeepAwakeControlIntent: SetValueIntent {
     static let title: LocalizedStringResource = "Set Keep Awake"
-    static var openAppWhenRun: Bool { true }
 
     @Parameter(title: "Keep Awake")
     var value: Bool

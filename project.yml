@@ -116,6 +116,9 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: sh.gyorgy.keepresso.widget
+        # Brand caramel as the widget accent, else interactive widget buttons
+        # fall back to system blue.
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         # Keep in lockstep with the app target's versions on every release
         # bump (the release scripts read the app's, the first in this file).
         MARKETING_VERSION: "1.5.0"
