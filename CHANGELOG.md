@@ -3,6 +3,45 @@
 All notable changes to Keepresso are documented here. Versions follow
 [Semantic Versioning](https://semver.org).
 
+## 1.6.0
+
+- **Gaming trigger.** A "Playing a game" condition: stay awake while a game
+  is in front. Detects apps that declare a games category, anything running
+  from a Steam library (many Steam games skip the declaration), and the
+  cloud and game-streaming clients: GeForce NOW, Boosteroid, Parsec,
+  Moonlight, Shadow. A five-minute grace means alt-tabbing to Discord or a
+  walkthrough doesn't drop the session.
+- **Gaming & Streaming Setup.** A new window from the menu, answering "why
+  does my stream or cloud game stutter every second". macOS hops the Wi-Fi
+  radio off-channel for AWDL (AirDrop, Handoff, Sidecar) about once a
+  second, which shows up as 50 to 100 ms ping spikes; the window has a
+  built-in jitter test that pings for ten seconds and says in plain words
+  whether your connection is clean, congested, or showing exactly that
+  once-a-second AWDL signature.
+- **AWDL pause.** The fix, session-scoped and no daemon: a toggle keeps AWDL
+  off while Keepresso runs, restoring everything (AirDrop, Handoff, Sidecar,
+  Continuity Camera) the moment you turn it off or quit, even after a crash.
+  Your password is needed once per launch; after that the switch is instant.
+  An optional automatic mode pauses AWDL while a game is keeping the Mac
+  awake and resumes it when you stop playing.
+- **Radio hygiene checks.** The same window checks your setup: wired network
+  available (the most reliable fix), Wi-Fi channel alignment with AWDL's
+  social channels (149 in the US, 44 most elsewhere, at 80 MHz) with a
+  warning on 2.4 GHz, Bluetooth sharing the radio, plus plain-language notes
+  on Game Mode (it turns on by itself when a game runs full screen) and
+  cloud gaming in the browser (Xbox Cloud Gaming has no app to detect; the
+  Audio playing condition covers it). No permission prompts anywhere on this
+  screen.
+- **Cloud Gaming and Remote Control presets.** Cloud Gaming pairs the gaming
+  condition with the GeForce NOW and Boosteroid apps so queueing and
+  downloads keep the session alive. Remote Control stays awake while you're
+  actively driving another machine over TeamViewer, AnyDesk, or Parsec,
+  deliberately only while the app is in front, so a host idling in the
+  background never pins your Mac awake.
+- **Tidier condition menu.** Adding a trigger condition is now three grouped
+  menus (Power & Display, Network & Devices, Apps & Activity) instead of one
+  long scrolling list.
+
 ## 1.5.0
 
 - **Desktop widgets.** Keepresso on the desktop (and in Notification Center),

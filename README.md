@@ -45,7 +45,7 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   chosen **Bluetooth device is connected** (headphones, a controller), a
   **calendar event is in progress**, a specific app or process is running, a
   chosen **volume is mounted**, **CPU usage** sits above a threshold (builds,
-  renders, training runs), or during a
+  renders, training runs), **a game is in front**, or during a
   **scheduled time window** (weekdays 9:00-18:00, overnight hours). Combine
   conditions with **any** (OR) or **all** (AND). A one-click "Pause Triggers"
   in the menu bar stops brewing without touching your rules.
@@ -53,10 +53,23 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   meeting app at once, including calls running in a browser tab, and read only
   the device's in-use state (the green-dot signal), never the stream, so no
   camera or microphone permission is ever requested.
+- 🎮 **Game-aware.** The "Playing a game" condition spots apps that declare a
+  games category, anything running from a **Steam** library (many Steam games
+  skip the declaration), and the cloud and game-streaming clients: **GeForce
+  NOW, Boosteroid, Parsec, Moonlight, Shadow**. A five-minute grace means
+  alt-tabbing to Discord doesn't drop the session.
+- 📶 **Gaming & Streaming Setup.** macOS hops the Wi-Fi radio off-channel for
+  AWDL (AirDrop, Handoff, Sidecar) about once a second, which shows up as
+  50-100 ms ping spikes mid-game or mid-stream. A dedicated window diagnoses
+  it with a built-in **jitter test**, and fixes it with a session-scoped
+  **AWDL pause**: password once per launch, instant toggling after, optional
+  auto mode while gaming, and everything restores itself the moment you stop
+  (even after a crash). Plus radio-hygiene checks: wired network, Wi-Fi
+  channel alignment with AWDL's social channels, Bluetooth, Game Mode.
 - 🎛️ **Presets.** Apply a named trigger bundle in one click, built-in (AI Agent,
-  Meetings, On AC Power, External Display Connected, Remote Session (SSH),
-  Backup Running, Media Render) or your own saved rule sets. Deleted a
-  built-in? "Restore default presets" brings it back.
+  Meetings, Cloud Gaming, Remote Control, On AC Power, External Display
+  Connected, Remote Session (SSH), Backup Running, Media Render) or your own
+  saved rule sets. Deleted a built-in? "Restore default presets" brings it back.
 - 🧩 **Desktop widgets and a Control Center toggle.** A small widget that's a
   one-tap toggle (the brand cup fills and steams while brewing, with a live
   countdown), a medium widget with Start/Stop and Pause/Resume Triggers
@@ -124,7 +137,7 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 <tr>
 <td align="center" colspan="2">
   <img src="docs/assets/prefs_conditions.webp" width="320" alt="Preferences: the Add condition menu with power, display, network, and app conditions"><br>
-  <sub>Adding a condition: power, display, network, camera and microphone, audio, apps, and more</sub>
+  <sub>Adding a condition: grouped menus for power and display, network and devices, apps and activity</sub>
 </td>
 </tr>
 </table>
@@ -145,6 +158,9 @@ Keepresso fits the way Macs are used now, and where they're headed:
   powering local LLMs, agent fleets, CI, or a render farm stay up without a
   license fee.
 - 🎬 **Studios.** Long renders and exports run to completion, untended.
+- 🎮 **Gamers and streamers.** Sessions stay awake while you play (native,
+  Steam, or cloud), and the AWDL pause smooths out the once-a-second ping
+  spikes that stutter cloud gaming and live streams.
 
 The use cases are effectively limitless. Modern UI, a solid and well-tested
 foundation, and a quiet must-have for the next decade of computing.
@@ -186,6 +202,10 @@ Click the cup in the menu bar to open Keepresso.
     assertions) and why each session started or stopped.
 - **Headless Setup** checks that an always-on Mac (say a Mac mini with no display)
   is configured to stay reachable, and links you straight to the right settings.
+- **Gaming & Streaming** diagnoses the once-a-second Wi-Fi lag spikes AWDL
+  causes (jitter test), pauses AWDL for the session with one toggle, and
+  checks the radio hygiene around it: wired network, Wi-Fi channel, Bluetooth,
+  Game Mode.
 
 Keepresso has no Dock icon by design. Everything lives in the menu bar.
 

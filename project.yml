@@ -31,8 +31,8 @@ targets:
       properties:
         CFBundleName: Keepresso
         CFBundleDisplayName: Keepresso
-        CFBundleShortVersionString: "1.5.0"
-        CFBundleVersion: "13"
+        CFBundleShortVersionString: "1.6.0"
+        CFBundleVersion: "14"
         LSUIElement: true            # menu-bar agent: no Dock icon
         LSMinimumSystemVersion: "14.0"
         NSHumanReadableCopyright: "MIT License"
@@ -99,8 +99,8 @@ targets:
       properties:
         CFBundleName: KeepressoWidget
         CFBundleDisplayName: Keepresso
-        CFBundleShortVersionString: "1.5.0"
-        CFBundleVersion: "13"
+        CFBundleShortVersionString: "1.6.0"
+        CFBundleVersion: "14"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
