@@ -38,6 +38,24 @@ private final class FakeGamingMonitor: GamingMonitoring {
     }
 }
 
+@Test func gamingTriggerMatchesSteamGamesByLibraryPath() {
+    // Steam games often skip the category declaration (ports, Wine
+    // wrappers), but they all run from a steamapps library folder.
+    #expect(GamingTrigger.isGame(GamingSnapshot(
+        frontmostBundleID: "com.example.port",
+        frontmostBundlePath: "/Users/g/Library/Application Support/Steam/steamapps/common/Hades/Hades.app"
+    )))
+    // Custom library volumes count too.
+    #expect(GamingTrigger.isGame(GamingSnapshot(
+        frontmostBundlePath: "/Volumes/Games/SteamLibrary/steamapps/common/Factorio/factorio.app"
+    )))
+    // Steam itself (the launcher, storefront) is not a game.
+    #expect(!GamingTrigger.isGame(GamingSnapshot(
+        frontmostBundleID: "com.valvesoftware.steam",
+        frontmostBundlePath: "/Applications/Steam.app"
+    )))
+}
+
 @Test func gamingTriggerFollowsFrontmostState() {
     let monitor = FakeGamingMonitor(bundleID: "com.example.game", category: "public.app-category.games")
     let trigger = GamingTrigger(monitor: monitor)

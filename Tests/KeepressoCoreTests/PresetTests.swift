@@ -107,13 +107,31 @@ import Foundation
 }
 
 @Test func cloudGamingPresetPairsTheGamingTriggerWithClientAppRules() {
-    // The gaming trigger already matches a frontmost cloud client; the app
-    // rules add background coverage (queueing, downloading), so both known
-    // clients must appear in both forms.
+    // The gaming trigger already matches any frontmost cloud client; the app
+    // rules add background coverage (queueing, downloading) for the
+    // session-scoped clients only. Autostarting hosts (Parsec and friends)
+    // must NOT get a while-running rule, or the preset pins the Mac awake
+    // around the clock.
     let rules = Preset.builtIns.first { $0.id == "cloud-gaming" }!.ruleSet.rules
     #expect(rules.contains(.gaming))
     let appIDs: [String] = rules.compactMap { if case .app(let r) = $0 { return r.bundleID } else { return nil } }
-    #expect(Set(appIDs) == GamingTrigger.cloudGamingBundleIDs)
+    #expect(Set(appIDs) == ["com.nvidia.gfnpc.mall", "com.boosteroid.macclient"])
+    #expect(Set(appIDs).isSubset(of: GamingTrigger.cloudGamingBundleIDs))
+}
+
+@Test func remoteControlPresetMatchesOnlyActiveDriving() {
+    // Frontmost with a grace, never while-running: these apps autostart in
+    // the background as hosts, and the host side stays awake on its own.
+    let rules = Preset.builtIns.first { $0.id == "remote-control" }!.ruleSet.rules
+    #expect(!rules.isEmpty)
+    for rule in rules {
+        guard case .app(let appRule) = rule else {
+            Issue.record("unexpected non-app rule \(rule)")
+            continue
+        }
+        #expect(appRule.match == .frontmost)
+        #expect(appRule.grace > 0)
+    }
 }
 
 @Test func remoteSessionPresetMatchesConnectionsNotTheListener() {

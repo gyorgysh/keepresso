@@ -234,6 +234,42 @@ public extension ReadinessCheck {
 
     // MARK: - Standing notes
 
+    /// Game Mode explainer. There is no supported way for an app to turn
+    /// Game Mode on (the only switch, `gamepolicyctl`, ships inside Xcode),
+    /// but macOS enables it by itself when a game runs full screen, so the
+    /// actionable advice is simply "go full screen".
+    static func gameModeTip() -> ReadinessCheck {
+        ReadinessCheck(
+            id: "stream-game-mode",
+            title: "Game Mode",
+            status: .tip,
+            detail: "macOS turns on Game Mode by itself when a game runs full screen: the game gets CPU and GPU priority, and Bluetooth controllers and audio get faster sampling. If the game-controller icon doesn't appear in the menu bar while playing, put the game into full screen.",
+            remediation: Remediation(
+                hint: "How Game Mode works:",
+                links: [
+                    ReadinessLink(
+                        label: "Learn more",
+                        url: URL(string: "https://support.apple.com/105118")!
+                    ),
+                ]
+            )
+        )
+    }
+
+    /// Browser cloud gaming can't be matched by an app rule; the
+    /// audio-playing condition is the reliable stand-in.
+    static func browserCloudGamingTip() -> ReadinessCheck {
+        ReadinessCheck(
+            id: "stream-browser-gaming",
+            title: "Cloud gaming in the browser",
+            status: .tip,
+            detail: "Xbox Cloud Gaming and the web versions of GeForce NOW run in a browser tab, so there's no app for the gaming condition to spot. The \u{201C}Audio playing\u{201D} condition covers them: game sound keeps the session brewing.",
+            remediation: Remediation(
+                hint: "Add it under Preferences \u{25B8} Triggers \u{25B8} Add \u{25B8} Apps & Activity \u{25B8} Media."
+            )
+        )
+    }
+
     /// Location Services runs its own periodic Wi-Fi scans. Deliberately a
     /// note, not advice to turn it off: Keepresso itself needs Location for
     /// Wi-Fi name rules.
@@ -292,7 +328,7 @@ public final class StreamingReadinessController {
         let probe = self.probe
         let snapshot = await Task.detached { probe.snapshot() }.value
         checks = ReadinessCheck.evaluateStreaming(snapshot)
-            + [.locationScansNote(), .awdlReadMore()]
+            + [.gameModeTip(), .browserCloudGamingTip(), .locationScansNote(), .awdlReadMore()]
     }
 }
 

@@ -7,10 +7,19 @@ public struct GamingSnapshot: Equatable, Sendable {
     public var frontmostBundleID: String?
     /// The frontmost app's declared `LSApplicationCategoryType`, if any.
     public var frontmostCategoryType: String?
+    /// Filesystem path of the frontmost app's bundle, if any. Steam games
+    /// often skip the category declaration (ports, Wine wrappers), but they
+    /// all live under a `steamapps` library folder.
+    public var frontmostBundlePath: String?
 
-    public init(frontmostBundleID: String? = nil, frontmostCategoryType: String? = nil) {
+    public init(
+        frontmostBundleID: String? = nil,
+        frontmostCategoryType: String? = nil,
+        frontmostBundlePath: String? = nil
+    ) {
         self.frontmostBundleID = frontmostBundleID
         self.frontmostCategoryType = frontmostCategoryType
+        self.frontmostBundlePath = frontmostBundlePath
     }
 }
 
@@ -69,7 +78,8 @@ public final class WorkspaceGamingMonitor: GamingMonitoring {
             .object(forInfoDictionaryKey: "LSApplicationCategoryType") as? String
         return GamingSnapshot(
             frontmostBundleID: app.bundleIdentifier,
-            frontmostCategoryType: category
+            frontmostCategoryType: category,
+            frontmostBundlePath: app.bundleURL?.path
         )
     }
 }
@@ -84,11 +94,17 @@ public final class GamingTrigger: Trigger {
     /// more generous than ``BluetoothDeviceTrigger/releaseGrace``.
     public static let releaseGrace: TimeInterval = 300
 
-    /// Cloud-gaming clients that stream games without declaring a games
-    /// category. Verified from the shipping apps: GeForce NOW and Boosteroid.
+    /// Cloud-gaming and game-streaming clients that show games without
+    /// declaring a games category. Ids verified from the shipping apps or
+    /// their Homebrew casks. Browser-based services (Xbox Cloud Gaming,
+    /// GeForce NOW web) have no app to match; the Setup screen points those
+    /// users at the audio-playing condition instead.
     public static let cloudGamingBundleIDs: Set<String> = [
-        "com.nvidia.gfnpc.mall",
-        "com.boosteroid.macclient",
+        "com.nvidia.gfnpc.mall",          // GeForce NOW
+        "com.boosteroid.macclient",       // Boosteroid
+        "tv.parsec.www",                  // Parsec
+        "com.moonlight-stream.Moonlight", // Moonlight
+        "com.electron.shadow",            // Shadow PC
     ]
 
     private let monitor: GamingMonitoring
@@ -108,9 +124,14 @@ public final class GamingTrigger: Trigger {
     /// Games declare `public.app-category.games` or a subcategory like
     /// `public.app-category.action-games`; every subcategory ends in `-games`,
     /// so both shapes are matched (and nothing outside the app-category
-    /// namespace is).
+    /// namespace is). Steam games frequently declare nothing, so an app
+    /// running from a Steam `steamapps` library folder counts too.
     static func isGame(_ snapshot: GamingSnapshot) -> Bool {
         if let id = snapshot.frontmostBundleID, cloudGamingBundleIDs.contains(id) {
+            return true
+        }
+        if let path = snapshot.frontmostBundlePath,
+           path.lowercased().contains("/steamapps/") {
             return true
         }
         guard let category = snapshot.frontmostCategoryType,

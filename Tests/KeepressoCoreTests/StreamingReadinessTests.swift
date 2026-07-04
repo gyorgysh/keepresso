@@ -174,6 +174,7 @@ private final class FakeStreamingProbe: StreamingProbing, @unchecked Sendable {
     let ids = controller.checks.map(\.id)
     #expect(ids == [
         "stream-ethernet", "stream-wifi-channel", "stream-bluetooth",
+        "stream-game-mode", "stream-browser-gaming",
         "stream-location-note", "stream-read-more",
     ])
     // The read-more note links the blog post the screen is built around.

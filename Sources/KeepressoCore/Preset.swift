@@ -69,7 +69,10 @@ extension Preset {
         ),
         // The gaming trigger covers a frontmost game or streaming client; the
         // app rules keep the session alive while a cloud client runs in the
-        // background (queueing for a rig, downloading) without being frontmost.
+        // background (queueing for a rig, downloading) without being
+        // frontmost. Deliberately only the session-scoped clients: Parsec and
+        // friends often autostart for hosting, so a while-running rule for
+        // them would pin the Mac awake around the clock.
         Preset(
             id: "cloud-gaming",
             name: "Cloud Gaming",
@@ -77,6 +80,19 @@ extension Preset {
                 .gaming,
                 .app(AppRule(bundleID: "com.nvidia.gfnpc.mall")),
                 .app(AppRule(bundleID: "com.boosteroid.macclient")),
+            ])
+        ),
+        // While actively driving another machine from this Mac. Frontmost,
+        // not running: these apps commonly autostart in the background as
+        // hosts, and the host side stays awake on its own (the remote user's
+        // input resets HID idle). The grace survives a quick alt-tab away.
+        Preset(
+            id: "remote-control",
+            name: "Remote Control",
+            ruleSet: RuleSet(combine: .any, rules: [
+                .app(AppRule(bundleID: "com.teamviewer.TeamViewer", match: .frontmost, grace: 120)),
+                .app(AppRule(bundleID: "com.philandro.anydesk", match: .frontmost, grace: 120)),
+                .app(AppRule(bundleID: "tv.parsec.www", match: .frontmost, grace: 120)),
             ])
         ),
     ]
