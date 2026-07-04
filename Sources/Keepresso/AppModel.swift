@@ -1,4 +1,5 @@
 import AppKit
+import CoreBluetooth
 import CoreLocation
 import Observation
 import UserNotifications
@@ -553,6 +554,7 @@ final class AppModel {
     private func rebuildPermissionChecks() {
         var base = [loginItemCheck()]
         if usesWiFiRule { base.append(locationCheck()) }
+        if usesBluetoothRule { base.append(bluetoothCheck()) }
         readiness.permissionChecks = base
         Task { @MainActor in
             let settings = await UNUserNotificationCenter.current().notificationSettings()
@@ -563,6 +565,12 @@ final class AppModel {
     /// Whether any saved rule needs the Wi-Fi SSID (and thus Location access).
     private var usesWiFiRule: Bool {
         settings.ruleSet.rules.contains { if case .wifiSSID = $0 { return true } else { return false } }
+    }
+
+    /// Whether any saved rule needs the paired-device list (and thus Bluetooth
+    /// access).
+    private var usesBluetoothRule: Bool {
+        settings.ruleSet.rules.contains { if case .bluetoothDevice = $0 { return true } else { return false } }
     }
 
     private func loginItemCheck() -> ReadinessCheck {
@@ -598,6 +606,22 @@ final class AppModel {
         )
     }
 
+    private func bluetoothCheck() -> ReadinessCheck {
+        let authorized = CBManager.authorization == .allowedAlways
+        return ReadinessCheck(
+            id: "perm-bluetooth",
+            title: "Bluetooth access (device rules)",
+            status: authorized ? .ok : .warning,
+            detail: authorized
+                ? "Keepresso can see which paired devices are connected for your Bluetooth triggers."
+                : "Without Bluetooth access Keepresso can't see paired devices, so Bluetooth triggers won't match.",
+            remediation: authorized ? nil : Remediation(
+                hint: "Allow Bluetooth access for Keepresso.",
+                settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth")
+            )
+        )
+    }
+
     private func notificationCheck(_ status: UNAuthorizationStatus) -> ReadinessCheck {
         let on = status == .authorized || status == .provisional
         return ReadinessCheck(
@@ -623,6 +647,13 @@ final class AppModel {
     /// "add mounted volume" menu.
     func mountedVolumes() -> [String] {
         FileManagerVolumeMonitor().current.volumeNames.sorted {
+            $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
+        }
+    }
+
+    /// Paired Bluetooth device names, for the "add Bluetooth device" menu.
+    func pairedBluetoothDevices() -> [String] {
+        IOBluetoothDeviceMonitor().current.pairedDeviceNames.sorted {
             $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
         }
     }

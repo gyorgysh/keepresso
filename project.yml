@@ -41,6 +41,8 @@ targets:
             CFBundleURLSchemes: [keepresso]
         # Reading the joined Wi-Fi SSID (for Wi-Fi triggers) needs Location access.
         NSLocationWhenInUseUsageDescription: "Keepresso reads the name of your current Wi-Fi network so it can keep your Mac awake only on the networks you choose."
+        # Listing paired Bluetooth devices (for Bluetooth triggers) is TCC-gated.
+        NSBluetoothAlwaysUsageDescription: "Keepresso checks which of your paired Bluetooth devices are connected so it can keep your Mac awake while a chosen device (like headphones) is in use."
         # Sparkle auto-update. The appcast is published as an asset on the GitHub
         # Releases page; SUPublicEDKey is the EdDSA key that verifies each update.
         # Generate the key pair once with Sparkle's `generate_keys` tool and paste

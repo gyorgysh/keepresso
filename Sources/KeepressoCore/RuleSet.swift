@@ -29,6 +29,9 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
     case audioPlaying
     /// Any VPN configuration is connected.
     case vpnConnected
+    /// A paired Bluetooth device with this name is connected (with a release
+    /// grace, so a brief drop while switching hosts doesn't flap the session).
+    case bluetoothDevice(String)
 
     /// A human-readable summary for the rules UI.
     public var label: String {
@@ -44,6 +47,8 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
         case .mediaInUse(let device): return device.label
         case .audioPlaying:           return "Audio playing"
         case .vpnConnected:           return "VPN connected"
+        case .bluetoothDevice(let name):
+            return "Bluetooth \u{201C}\(name)\u{201D} connected"
         }
     }
 }
@@ -103,6 +108,7 @@ public struct TriggerFactory {
     private let cpu: CPULoadReading
     private let media: MediaActivityMonitoring
     private let vpn: VPNMonitoring
+    private let bluetooth: BluetoothMonitoring
     private let now: () -> Date
 
     public init(
@@ -115,6 +121,7 @@ public struct TriggerFactory {
         cpu: CPULoadReading = HostCPULoadReader(),
         media: MediaActivityMonitoring = CoreMediaActivityMonitor(),
         vpn: VPNMonitoring = SCUtilVPNMonitor(),
+        bluetooth: BluetoothMonitoring = IOBluetoothDeviceMonitor(),
         now: @escaping () -> Date = Date.init
     ) {
         self.powerSource = powerSource
@@ -126,6 +133,7 @@ public struct TriggerFactory {
         self.cpu = cpu
         self.media = media
         self.vpn = vpn
+        self.bluetooth = bluetooth
         self.now = now
     }
 
@@ -161,6 +169,12 @@ public struct TriggerFactory {
             )
         case .vpnConnected:
             return VPNConnectedTrigger(monitor: vpn)
+        case .bluetoothDevice(let name):
+            return GracePeriodTrigger(
+                wrapping: BluetoothDeviceTrigger(deviceName: name, monitor: bluetooth),
+                grace: BluetoothDeviceTrigger.releaseGrace,
+                now: now
+            )
         }
     }
 

@@ -11,6 +11,7 @@ import KeepressoCore
 struct RulesView: View {
     @Bindable var model: AppModel
     @State private var location = LocationAuthorizer()
+    @State private var bluetooth = BluetoothAuthorizer()
     /// Free-text entry for a custom "process running" rule.
     @State private var processQuery = ""
     /// Index of the time-window rule whose editor popover is open, if any.
@@ -200,6 +201,23 @@ struct RulesView: View {
                 Button("Microphone in use") { model.addRule(.mediaInUse(.microphone)) }
                 Button("Audio playing") { model.addRule(.audioPlaying) }
             }
+            Section("Bluetooth device connected") {
+                if bluetooth.isAuthorized {
+                    let devices = model.pairedBluetoothDevices()
+                    if devices.isEmpty {
+                        Text("No paired devices").foregroundStyle(.secondary)
+                    } else {
+                        ForEach(devices, id: \.self) { name in
+                            Button(name) { model.addRule(.bluetoothDevice(name)) }
+                        }
+                    }
+                } else if bluetooth.canRequest {
+                    Button("Allow Bluetooth access\u{2026}") { bluetooth.request() }
+                } else {
+                    Text("Bluetooth rules need Bluetooth access (System Settings ▸ Privacy)")
+                        .foregroundStyle(.secondary)
+                }
+            }
             Section("Process is running") {
                 ForEach(Self.processPresets, id: \.self) { name in
                     Button(name) { model.addRule(.process(name)) }
@@ -284,6 +302,7 @@ struct RulesView: View {
         case .mediaInUse(.microphone): return "mic"
         case .audioPlaying:            return "speaker.wave.2"
         case .vpnConnected:            return "lock.shield"
+        case .bluetoothDevice:         return "antenna.radiowaves.left.and.right"
         }
     }
 }
