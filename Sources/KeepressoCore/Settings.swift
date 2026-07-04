@@ -26,6 +26,9 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     public var pauseBelowBatteryPercent: Int?
     /// Whether the menu-bar icon shows a live countdown for timed sessions.
     public var showCountdownInMenuBar: Bool
+    /// Whether the AWDL watchdog starts and stops with a gaming trigger
+    /// (see ``AWDLWatchdogController/autoWithGaming``).
+    public var awdlAutoWithGaming: Bool
     /// Saved trigger-rule bundles a user can apply in one action. Seeded with
     /// ``Preset/builtIns`` on first launch; a user may add or remove any of them.
     public var presets: [Preset]
@@ -46,6 +49,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         virtualDisplay: VirtualDisplayConfig? = nil,
         pauseBelowBatteryPercent: Int? = nil,
         showCountdownInMenuBar: Bool = false,
+        awdlAutoWithGaming: Bool = false,
         presets: [Preset] = Preset.builtIns,
         seededPresetIDs: [String] = Preset.builtIns.map(\.id)
     ) {
@@ -60,6 +64,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.virtualDisplay = virtualDisplay
         self.pauseBelowBatteryPercent = pauseBelowBatteryPercent
         self.showCountdownInMenuBar = showCountdownInMenuBar
+        self.awdlAutoWithGaming = awdlAutoWithGaming
         self.presets = presets
         self.seededPresetIDs = seededPresetIDs
     }
@@ -115,6 +120,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         virtualDisplay = try c.decodeIfPresent(VirtualDisplayConfig.self, forKey: .virtualDisplay)
         pauseBelowBatteryPercent = try c.decodeIfPresent(Int.self, forKey: .pauseBelowBatteryPercent)
         showCountdownInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showCountdownInMenuBar) ?? false
+        awdlAutoWithGaming = try c.decodeIfPresent(Bool.self, forKey: .awdlAutoWithGaming) ?? false
         presets = try c.decodeIfPresent([Preset].self, forKey: .presets) ?? Preset.builtIns
         // Settings saved before seeding was tracked (1.2.x and earlier) had
         // exactly the original three built-ins seeded; assuming that set means
