@@ -67,6 +67,18 @@ extension Preset {
             name: "Meetings",
             ruleSet: RuleSet(combine: .any, rules: [.mediaInUse(.camera), .mediaInUse(.microphone)])
         ),
+        // The gaming trigger covers a frontmost game or streaming client; the
+        // app rules keep the session alive while a cloud client runs in the
+        // background (queueing for a rig, downloading) without being frontmost.
+        Preset(
+            id: "cloud-gaming",
+            name: "Cloud Gaming",
+            ruleSet: RuleSet(combine: .any, rules: [
+                .gaming,
+                .app(AppRule(bundleID: "com.nvidia.gfnpc.mall")),
+                .app(AppRule(bundleID: "com.boosteroid.macclient")),
+            ])
+        ),
     ]
 
     /// The built-ins that shipped before ``KeepressoSettings`` tracked seeding,

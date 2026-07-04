@@ -47,6 +47,7 @@ import Foundation
     #expect(ids.contains("remote-session"))
     #expect(ids.contains("backup-running"))
     #expect(ids.contains("media-render"))
+    #expect(ids.contains("cloud-gaming"))
     // The originals aren't duplicated.
     #expect(ids.filter { old.contains($0) }.count == old.count)
     #expect(settings.seededPresetIDs.count == Preset.builtIns.count)
@@ -103,6 +104,16 @@ import Foundation
     let restored = settings.restoreMissingBuiltInPresets()
     #expect(restored.isEmpty)
     #expect(settings == KeepressoSettings.default)
+}
+
+@Test func cloudGamingPresetPairsTheGamingTriggerWithClientAppRules() {
+    // The gaming trigger already matches a frontmost cloud client; the app
+    // rules add background coverage (queueing, downloading), so both known
+    // clients must appear in both forms.
+    let rules = Preset.builtIns.first { $0.id == "cloud-gaming" }!.ruleSet.rules
+    #expect(rules.contains(.gaming))
+    let appIDs: [String] = rules.compactMap { if case .app(let r) = $0 { return r.bundleID } else { return nil } }
+    #expect(Set(appIDs) == GamingTrigger.cloudGamingBundleIDs)
 }
 
 @Test func remoteSessionPresetMatchesConnectionsNotTheListener() {
