@@ -42,8 +42,10 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 - ⚡ **Trigger engine.** Stay awake only while charging or on battery, an external
   display is connected, you're on a chosen Wi-Fi network, **a VPN is
   connected**, the **camera or microphone is in use**, **audio is playing**, a
-  specific app or process is running, a chosen **volume is mounted**, **CPU
-  usage** sits above a threshold (builds, renders, training runs), or during a
+  chosen **Bluetooth device is connected** (headphones, a controller), a
+  **calendar event is in progress**, a specific app or process is running, a
+  chosen **volume is mounted**, **CPU usage** sits above a threshold (builds,
+  renders, training runs), or during a
   **scheduled time window** (weekdays 9:00-18:00, overnight hours). Combine
   conditions with **any** (OR) or **all** (AND). A one-click "Pause Triggers"
   in the menu bar stops brewing without touching your rules.
@@ -53,7 +55,12 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   camera or microphone permission is ever requested.
 - 🎛️ **Presets.** Apply a named trigger bundle in one click, built-in (AI Agent,
   Meetings, On AC Power, External Display Connected, Remote Session (SSH),
-  Backup Running, Media Render) or your own saved rule sets.
+  Backup Running, Media Render) or your own saved rule sets. Deleted a
+  built-in? "Restore default presets" brings it back.
+- 🧩 **Desktop widgets and a Control Center toggle.** A small widget that's a
+  one-tap toggle (the brand cup fills and steams while brewing, with a live
+  countdown), a medium widget with Start/Stop and Pause/Resume Triggers
+  buttons, and on macOS 26 a Keep Awake control for Control Center.
 - 🔍 **Awake explainer.** The Activity pane shows every app's live power
   assertions, a readable `pmset -g assertions`, so you can see exactly what's
   preventing sleep (whoever's doing it), plus a decision log of why each

@@ -3,6 +3,31 @@
 All notable changes to Keepresso are documented here. Versions follow
 [Semantic Versioning](https://semver.org).
 
+## 1.5.0
+
+- **Desktop widgets.** Keepresso on the desktop (and in Notification Center),
+  in the brand's caramel-on-roast look with the real cup mark. The small
+  widget is a one-tap toggle: the cup fills and steams while brewing, with a
+  live countdown for timed sessions. The medium widget adds Start/Stop and
+  Pause/Resume Triggers buttons next to the status. Widgets work on macOS 14
+  and later; the buttons drive the running menu-bar app.
+- **Control Center toggle (macOS 26).** A Keep Awake control for Control
+  Center, wearing the brand cup as a custom symbol. Flipping it starts or
+  stops the session, launching Keepresso first if it isn't running.
+- **Bluetooth device trigger.** Stay awake while a chosen paired device
+  (headphones, a keyboard, a controller) is connected; the condition menu
+  lists your paired devices. A 30 second release grace rides out the brief
+  drop when a device hops between hosts. Uses the system Bluetooth
+  permission; the Setup screen warns if a saved rule lacks it.
+- **Calendar trigger.** Stay awake while a calendar event is in progress,
+  covering scheduled sessions the camera/mic conditions can't see. All-day
+  events never count (a birthday shouldn't keep the Mac up for 24 hours).
+  Needs full calendar access, requested with one click from the condition
+  menu.
+- **Restore default presets.** Deleted a built-in preset? The preset menu's
+  new "Restore default presets" brings back the missing ones, leaving your
+  own and renamed presets untouched.
+
 ## 1.4.0
 
 - **Camera and microphone triggers, with a Meetings preset.** Stay awake
