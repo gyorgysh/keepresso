@@ -1,6 +1,7 @@
 import AppKit
 import CoreBluetooth
 import CoreLocation
+import EventKit
 import Observation
 import UserNotifications
 import KeepressoCore
@@ -555,6 +556,7 @@ final class AppModel {
         var base = [loginItemCheck()]
         if usesWiFiRule { base.append(locationCheck()) }
         if usesBluetoothRule { base.append(bluetoothCheck()) }
+        if usesCalendarRule { base.append(calendarCheck()) }
         readiness.permissionChecks = base
         Task { @MainActor in
             let settings = await UNUserNotificationCenter.current().notificationSettings()
@@ -571,6 +573,12 @@ final class AppModel {
     /// access).
     private var usesBluetoothRule: Bool {
         settings.ruleSet.rules.contains { if case .bluetoothDevice = $0 { return true } else { return false } }
+    }
+
+    /// Whether any saved rule reads calendar events (and thus needs full
+    /// calendar access).
+    private var usesCalendarRule: Bool {
+        settings.ruleSet.rules.contains { if case .calendarEvent = $0 { return true } else { return false } }
     }
 
     private func loginItemCheck() -> ReadinessCheck {
@@ -618,6 +626,22 @@ final class AppModel {
             remediation: authorized ? nil : Remediation(
                 hint: "Allow Bluetooth access for Keepresso.",
                 settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth")
+            )
+        )
+    }
+
+    private func calendarCheck() -> ReadinessCheck {
+        let authorized = EKEventStore.authorizationStatus(for: .event) == .fullAccess
+        return ReadinessCheck(
+            id: "perm-calendar",
+            title: "Calendar access (event rule)",
+            status: authorized ? .ok : .warning,
+            detail: authorized
+                ? "Keepresso can see when a calendar event is in progress for your calendar trigger."
+                : "Without full calendar access Keepresso can't see events, so the calendar trigger won't match.",
+            remediation: authorized ? nil : Remediation(
+                hint: "Allow full calendar access for Keepresso.",
+                settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")
             )
         )
     }

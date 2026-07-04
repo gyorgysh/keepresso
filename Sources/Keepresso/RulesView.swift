@@ -12,6 +12,7 @@ struct RulesView: View {
     @Bindable var model: AppModel
     @State private var location = LocationAuthorizer()
     @State private var bluetooth = BluetoothAuthorizer()
+    @State private var calendar = CalendarAuthorizer()
     /// Free-text entry for a custom "process running" rule.
     @State private var processQuery = ""
     /// Index of the time-window rule whose editor popover is open, if any.
@@ -247,6 +248,14 @@ struct RulesView: View {
                 Button("Overnight (22:00-6:00)") {
                     model.addRule(.timeWindow(TimeWindowRule(startMinutes: 22 * 60, endMinutes: 6 * 60)))
                 }
+                if calendar.isAuthorized {
+                    Button("During calendar events") { model.addRule(.calendarEvent) }
+                } else if calendar.canRequest {
+                    Button("Allow calendar access\u{2026}") { calendar.request() }
+                } else {
+                    Text("The calendar rule needs Calendar access (System Settings ▸ Privacy)")
+                        .foregroundStyle(.secondary)
+                }
             }
         } label: {
             Label("Add condition", systemImage: "plus.circle")
@@ -303,6 +312,7 @@ struct RulesView: View {
         case .audioPlaying:            return "speaker.wave.2"
         case .vpnConnected:            return "lock.shield"
         case .bluetoothDevice:         return "antenna.radiowaves.left.and.right"
+        case .calendarEvent:           return "calendar"
         }
     }
 }

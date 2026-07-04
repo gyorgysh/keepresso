@@ -32,6 +32,8 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
     /// A paired Bluetooth device with this name is connected (with a release
     /// grace, so a brief drop while switching hosts doesn't flap the session).
     case bluetoothDevice(String)
+    /// A timed (non-all-day) calendar event is in progress.
+    case calendarEvent
 
     /// A human-readable summary for the rules UI.
     public var label: String {
@@ -49,6 +51,7 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
         case .vpnConnected:           return "VPN connected"
         case .bluetoothDevice(let name):
             return "Bluetooth \u{201C}\(name)\u{201D} connected"
+        case .calendarEvent:          return "Calendar event in progress"
         }
     }
 }
@@ -109,6 +112,7 @@ public struct TriggerFactory {
     private let media: MediaActivityMonitoring
     private let vpn: VPNMonitoring
     private let bluetooth: BluetoothMonitoring
+    private let calendar: CalendarMonitoring
     private let now: () -> Date
 
     public init(
@@ -122,6 +126,7 @@ public struct TriggerFactory {
         media: MediaActivityMonitoring = CoreMediaActivityMonitor(),
         vpn: VPNMonitoring = SCUtilVPNMonitor(),
         bluetooth: BluetoothMonitoring = IOBluetoothDeviceMonitor(),
+        calendar: CalendarMonitoring = EventKitCalendarMonitor(),
         now: @escaping () -> Date = Date.init
     ) {
         self.powerSource = powerSource
@@ -134,6 +139,7 @@ public struct TriggerFactory {
         self.media = media
         self.vpn = vpn
         self.bluetooth = bluetooth
+        self.calendar = calendar
         self.now = now
     }
 
@@ -175,6 +181,8 @@ public struct TriggerFactory {
                 grace: BluetoothDeviceTrigger.releaseGrace,
                 now: now
             )
+        case .calendarEvent:
+            return CalendarEventTrigger(monitor: calendar)
         }
     }
 

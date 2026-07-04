@@ -43,6 +43,8 @@ targets:
         NSLocationWhenInUseUsageDescription: "Keepresso reads the name of your current Wi-Fi network so it can keep your Mac awake only on the networks you choose."
         # Listing paired Bluetooth devices (for Bluetooth triggers) is TCC-gated.
         NSBluetoothAlwaysUsageDescription: "Keepresso checks which of your paired Bluetooth devices are connected so it can keep your Mac awake while a chosen device (like headphones) is in use."
+        # Reading calendar events (for the calendar trigger) needs full access.
+        NSCalendarsFullAccessUsageDescription: "Keepresso checks whether a calendar event is in progress so it can keep your Mac awake during your scheduled sessions."
         # Sparkle auto-update. The appcast is published as an asset on the GitHub
         # Releases page; SUPublicEDKey is the EdDSA key that verifies each update.
         # Generate the key pair once with Sparkle's `generate_keys` tool and paste
