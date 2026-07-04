@@ -1,0 +1,361 @@
+import Foundation
+import Observation
+import CoreWLAN
+import IOBluetooth
+
+/// Which Wi-Fi band the current association uses.
+public enum WiFiBand: Equatable, Sendable {
+    case ghz2, ghz5, ghz6
+}
+
+/// Raw inputs of the Gaming & Streaming checks, before interpretation. Same
+/// split as ``SystemSnapshot``: the impure probe gathers, a pure evaluator
+/// judges, tests feed literals.
+public struct StreamingSnapshot: Equatable, Sendable {
+    /// Current Wi-Fi channel number, or `nil` when not associated (or Wi-Fi
+    /// is off). Channel details don't need Location access; the SSID does.
+    public var wifiChannel: Int?
+    public var wifiBand: WiFiBand?
+    public var wifiWidthMHz: Int?
+    /// The regulatory country code (e.g. "US"), `nil` when unreadable
+    /// (it's Location-gated on modern macOS).
+    public var wifiCountryCode: String?
+    /// stdout of `networksetup -listallhardwareports`.
+    public var hardwarePorts: String?
+    /// stdout of `ifconfig -a`.
+    public var ifconfig: String?
+    /// Whether the Bluetooth radio is powered on.
+    public var bluetoothOn: Bool?
+
+    public init(
+        wifiChannel: Int? = nil,
+        wifiBand: WiFiBand? = nil,
+        wifiWidthMHz: Int? = nil,
+        wifiCountryCode: String? = nil,
+        hardwarePorts: String? = nil,
+        ifconfig: String? = nil,
+        bluetoothOn: Bool? = nil
+    ) {
+        self.wifiChannel = wifiChannel
+        self.wifiBand = wifiBand
+        self.wifiWidthMHz = wifiWidthMHz
+        self.wifiCountryCode = wifiCountryCode
+        self.hardwarePorts = hardwarePorts
+        self.ifconfig = ifconfig
+        self.bluetoothOn = bluetoothOn
+    }
+}
+
+/// System-touching seam: gathers a ``StreamingSnapshot``. Mirrors
+/// ``SystemProbing``.
+public protocol StreamingProbing: AnyObject, Sendable {
+    func snapshot() -> StreamingSnapshot
+}
+
+public extension ReadinessCheck {
+    /// Interpret a ``StreamingSnapshot`` into the check rows of the Gaming &
+    /// Streaming Setup screen. Pure: the unit under test.
+    static func evaluateStreaming(_ snapshot: StreamingSnapshot) -> [ReadinessCheck] {
+        [
+            ethernet(snapshot),
+            wifiChannel(snapshot),
+            bluetoothRadio(snapshot),
+        ]
+    }
+
+    // MARK: - Ethernet (the reliable fix)
+
+    static func ethernet(_ snapshot: StreamingSnapshot) -> ReadinessCheck {
+        let id = "stream-ethernet"
+        let title = "Wired network"
+        guard let ports = snapshot.hardwarePorts, let ifconfig = snapshot.ifconfig else {
+            return ReadinessCheck(
+                id: id, title: title, status: .unknown,
+                detail: "Couldn't read the network interfaces."
+            )
+        }
+        let wired = wiredPortDevices(fromHardwarePorts: ports)
+        if let active = wired.first(where: { isActive(device: $0, inIfconfig: ifconfig) }) {
+            return ReadinessCheck(
+                id: id, title: title, status: .ok,
+                detail: "Ethernet is connected (\(active)). A wired link sidesteps Wi-Fi jitter entirely, the most reliable fix."
+            )
+        }
+        if !wired.isEmpty {
+            return ReadinessCheck(
+                id: id, title: title, status: .tip,
+                detail: "An Ethernet adapter is available but no cable is connected.",
+                remediation: Remediation(
+                    hint: "For gaming or streaming, a wired connection beats any Wi-Fi tuning."
+                )
+            )
+        }
+        return ReadinessCheck(
+            id: id, title: title, status: .tip,
+            detail: "No wired network adapter found.",
+            remediation: Remediation(
+                hint: "A USB-C or Thunderbolt Ethernet adapter sidesteps Wi-Fi jitter entirely."
+            )
+        )
+    }
+
+    /// Devices of hardware ports that are wired network ports: named like
+    /// Ethernet/LAN, excluding Wi-Fi, Bluetooth PAN, bridges, and tethered
+    /// devices. ("Thunderbolt Ethernet" adapters stay in; bare "Thunderbolt N"
+    /// ports carry neither keyword and fall out on their own.)
+    static func wiredPortDevices(fromHardwarePorts output: String) -> [String] {
+        var devices: [String] = []
+        var currentPortIsWired = false
+        for rawLine in output.split(whereSeparator: \.isNewline) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("Hardware Port: ") {
+                currentPortIsWired = isWiredPortName(String(line.dropFirst("Hardware Port: ".count)))
+            } else if line.hasPrefix("Device: "), currentPortIsWired {
+                devices.append(String(line.dropFirst("Device: ".count)))
+            }
+        }
+        return devices
+    }
+
+    private static func isWiredPortName(_ name: String) -> Bool {
+        let lower = name.lowercased()
+        let excluded = ["wi-fi", "airport", "bluetooth", "bridge", "iphone", "ipad", "vlan"]
+        guard !excluded.contains(where: lower.contains) else { return false }
+        return lower.contains("ethernet") || lower.contains("lan")
+    }
+
+    /// Whether a device's `ifconfig -a` block reports `status: active`
+    /// (a cable with link, not just a known adapter).
+    static func isActive(device: String, inIfconfig output: String) -> Bool {
+        var inBlock = false
+        for line in output.split(whereSeparator: \.isNewline) {
+            if line.hasPrefix("\(device): ") {
+                inBlock = true
+                continue
+            }
+            guard inBlock else { continue }
+            // The next interface starts at column zero; the block is over.
+            if !line.hasPrefix("\t"), !line.hasPrefix(" ") { break }
+            if line.trimmingCharacters(in: .whitespaces) == "status: active" { return true }
+        }
+        return false
+    }
+
+    // MARK: - Wi-Fi channel vs AWDL's social channels
+
+    /// AWDL parks its off-channel hops on fixed "social channels": 6 on
+    /// 2.4 GHz, and 44 (most regions) or 149 (US) on 5 GHz. A router aligned
+    /// with the right one keeps the hop on-channel, so it stops costing a
+    /// retune.
+    static func wifiChannel(_ snapshot: StreamingSnapshot) -> ReadinessCheck {
+        let id = "stream-wifi-channel"
+        let title = "Wi-Fi channel"
+        guard let channel = snapshot.wifiChannel, let band = snapshot.wifiBand else {
+            return ReadinessCheck(
+                id: id, title: title, status: .unknown,
+                detail: "Not connected to Wi-Fi, or its details are unreadable.",
+                remediation: Remediation(
+                    hint: "If you game or stream over Wi-Fi, re-check while connected."
+                )
+            )
+        }
+        let width = snapshot.wifiWidthMHz.map { " at \($0) MHz" } ?? ""
+
+        switch band {
+        case .ghz2:
+            return ReadinessCheck(
+                id: id, title: title, status: .warning,
+                detail: "On 2.4 GHz (channel \(channel)\(width)), the slowest band, where every AWDL hop costs the most.",
+                remediation: Remediation(
+                    hint: "Prefer a 5 GHz network; if 2.4 GHz is unavoidable, set the router to channel 6 (AWDL's 2.4 GHz social channel)."
+                )
+            )
+        case .ghz6:
+            return ReadinessCheck(
+                id: id, title: title, status: .ok,
+                detail: "On 6 GHz (channel \(channel)\(width)). AWDL's social channels live on 2.4 and 5 GHz, so there's nothing to align here."
+            )
+        case .ghz5:
+            let social = socialChannelDescription(countryCode: snapshot.wifiCountryCode)
+            if channel == social.channel {
+                let widthNote = (snapshot.wifiWidthMHz ?? 80) >= 80
+                    ? "" : " Raising the router to 80 MHz width completes the alignment."
+                return ReadinessCheck(
+                    id: id, title: title, status: .ok,
+                    detail: "On channel \(channel)\(width), aligned with AWDL's 5 GHz social channel, so its hops stay on-channel.\(widthNote)"
+                )
+            }
+            return ReadinessCheck(
+                id: id, title: title, status: .tip,
+                detail: "On channel \(channel)\(width). AWDL's off-channel hops leave this channel roughly every second.",
+                remediation: Remediation(
+                    hint: "Set the router to channel \(social.label) at 80 MHz so AWDL's hops stay on-channel."
+                )
+            )
+        }
+    }
+
+    /// The 5 GHz social channel for a regulatory region: 149 in the US, 44
+    /// most elsewhere; both offered when the country is unreadable (reading
+    /// it is Location-gated).
+    static func socialChannelDescription(countryCode: String?) -> (channel: Int?, label: String) {
+        switch countryCode {
+        case "US": return (149, "149")
+        case .some: return (44, "44")
+        case nil: return (nil, "44 (most regions) or 149 (US)")
+        }
+    }
+
+    // MARK: - Bluetooth (shares the radio chip)
+
+    static func bluetoothRadio(_ snapshot: StreamingSnapshot) -> ReadinessCheck {
+        let id = "stream-bluetooth"
+        let title = "Bluetooth during play"
+        switch snapshot.bluetoothOn {
+        case true:
+            return ReadinessCheck(
+                id: id, title: title, status: .tip,
+                detail: "Bluetooth is on. It shares the radio chip with Wi-Fi, so heavy Bluetooth traffic (audio, controllers) can add its own blips.",
+                remediation: Remediation(
+                    hint: "Nothing to fix: just a variable to know about if stutter persists on a clean channel."
+                )
+            )
+        case false:
+            return ReadinessCheck(
+                id: id, title: title, status: .ok,
+                detail: "Bluetooth is off, so it isn't competing with Wi-Fi for the radio."
+            )
+        case nil:
+            return ReadinessCheck(
+                id: id, title: title, status: .unknown,
+                detail: "Couldn't read the Bluetooth radio state."
+            )
+        }
+    }
+
+    // MARK: - Standing notes
+
+    /// Location Services runs its own periodic Wi-Fi scans. Deliberately a
+    /// note, not advice to turn it off: Keepresso itself needs Location for
+    /// Wi-Fi name rules.
+    static func locationScansNote() -> ReadinessCheck {
+        ReadinessCheck(
+            id: "stream-location-note",
+            title: "Location Services and Wi-Fi scans",
+            status: .tip,
+            detail: "Location Services triggers independent Wi-Fi scans, another source of occasional blips. Keepresso itself uses Location to read Wi-Fi network names for triggers, so weigh that before turning anything off.",
+            remediation: Remediation(
+                hint: "Review which apps use Location:",
+                settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices")
+            )
+        )
+    }
+
+    /// Pointer to the blog post the whole screen is built around.
+    static func awdlReadMore() -> ReadinessCheck {
+        ReadinessCheck(
+            id: "stream-read-more",
+            title: "Why streams stutter once a second",
+            status: .tip,
+            detail: "The Wi-Fi radio hops off-channel for AWDL (AirDrop, Handoff, Sidecar, Continuity) roughly every second, which shows up as 50-100 ms ping spikes. The jitter test reproduces the diagnosis; the AWDL watchdog is the session-scoped fix.",
+            remediation: Remediation(
+                hint: "The full story:",
+                links: [
+                    ReadinessLink(
+                        label: "Read more",
+                        url: URL(string: "https://gyorgy.sh/blog/macos-awdl-network-jitter")!
+                    ),
+                ]
+            )
+        )
+    }
+}
+
+/// Drives the check list of the Gaming & Streaming Setup screen. Owns no
+/// timer; the host calls ``refresh()`` on appear and from a Re-check button
+/// (mirrors ``SystemReadinessController``).
+@MainActor
+@Observable
+public final class StreamingReadinessController {
+    /// The ordered rows: probed checks, then the standing notes. Empty until
+    /// the first ``refresh()``.
+    public private(set) var checks: [ReadinessCheck] = []
+
+    private let probe: StreamingProbing
+
+    public init(probe: StreamingProbing = SystemStreamingProbe()) {
+        self.probe = probe
+    }
+
+    /// Re-probe and recompute. The probe shells out and reads CoreWLAN, so it
+    /// runs on a detached task and the result lands back on the main actor.
+    public func refresh() async {
+        let probe = self.probe
+        let snapshot = await Task.detached { probe.snapshot() }.value
+        checks = ReadinessCheck.evaluateStreaming(snapshot)
+            + [.locationScansNote(), .awdlReadMore()]
+    }
+}
+
+/// Real ``StreamingProbing``: CoreWLAN for the channel, IOBluetooth for the
+/// radio power state (not TCC-gated; device enumeration is), and shell-outs
+/// for the interface inventory. Not `@MainActor`; the controller hops off
+/// main before calling ``snapshot()``.
+public final class SystemStreamingProbe: StreamingProbing {
+    public init() {}
+
+    public func snapshot() -> StreamingSnapshot {
+        let channel = CWWiFiClient.shared().interface()?.wlanChannel()
+        return StreamingSnapshot(
+            wifiChannel: channel.map(\.channelNumber),
+            wifiBand: channel.flatMap { Self.band($0.channelBand) },
+            wifiWidthMHz: channel.flatMap { Self.widthMHz($0.channelWidth) },
+            wifiCountryCode: CWWiFiClient.shared().interface()?.countryCode(),
+            hardwarePorts: run("/usr/sbin/networksetup", ["-listallhardwareports"]),
+            ifconfig: run("/sbin/ifconfig", ["-a"]),
+            bluetoothOn: IOBluetoothHostController.default().map {
+                $0.powerState == kBluetoothHCIPowerStateON
+            }
+        )
+    }
+
+    static func band(_ band: CWChannelBand) -> WiFiBand? {
+        switch band {
+        case .band2GHz: return .ghz2
+        case .band5GHz: return .ghz5
+        case .band6GHz: return .ghz6
+        case .bandUnknown: return nil
+        @unknown default: return nil
+        }
+    }
+
+    static func widthMHz(_ width: CWChannelWidth) -> Int? {
+        switch width {
+        case .width20MHz: return 20
+        case .width40MHz: return 40
+        case .width80MHz: return 80
+        case .width160MHz: return 160
+        case .widthUnknown: return nil
+        @unknown default: return nil
+        }
+    }
+
+    private func run(_ path: String, _ arguments: [String]) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: path)
+        process.arguments = arguments
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else { return nil }
+            let output = String(decoding: data, as: UTF8.self)
+            return output.isEmpty ? nil : output
+        } catch {
+            return nil
+        }
+    }
+}
