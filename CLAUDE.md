@@ -41,12 +41,16 @@ Homebrew Cask is published and installable at
 `gyorgysh/homebrew-keepresso` tap repo.
 A headless virtual-display feature (private `CGVirtualDisplay` API, behind an
 off-by-default flag) is also done and validated on real headless hardware.
-Current version: 1.4.0 (build 12), released 2026-07-03 with the camera/mic,
-audio-playing, and VPN triggers plus the awake-explainer Activity tab. The
-repo is **public** on GitHub (`git@github.com:gyorgysh/keepresso.git`, branch
-`main`) and the website is live, so history is permanent: keep commit messages
-tidy and release-worthy. Next up is the Control Center widget, as its own
-release; see `docs/ROADMAP.md`.
+Current version: 1.5.0 (build 13), released 2026-07-04 with desktop widgets
+(small toggle tile + medium with Start/Stop and trigger pause, macOS 14+), the
+Control Center Keep Awake toggle (macOS 26, availability-gated in the shared
+`KeepressoWidget` appex), Bluetooth and calendar triggers, and restorable
+default presets. The widget appex talks to the app through an App Group
+(`WidgetBridge` in Core); the group id is resolved at runtime from the
+process's own signature, never hardcoded. The repo is **public** on GitHub
+(`git@github.com:gyorgysh/keepresso.git`, branch `main`) and the website is
+live, so history is permanent: keep commit messages tidy and release-worthy.
+See `docs/ROADMAP.md` for what's next.
 
 ## Commands
 
