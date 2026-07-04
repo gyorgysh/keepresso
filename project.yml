@@ -88,6 +88,9 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - path: Sources/KeepressoWidget
+      # The shared brand-mark geometry (CoreGraphics only), so the widgets
+      # draw the real cup instead of an SF Symbols lookalike.
+      - path: Sources/Keepresso/BrandCupMark.swift
     dependencies:
       - package: KeepressoCore
         product: KeepressoCore
