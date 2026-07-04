@@ -45,7 +45,15 @@ Current version: 1.5.0 (build 13), released 2026-07-04 with desktop widgets
 (small toggle tile + medium with Start/Stop and trigger pause, macOS 14+), the
 Control Center Keep Awake toggle (macOS 26, availability-gated in the shared
 `KeepressoWidget` appex), Bluetooth and calendar triggers, and restorable
-default presets. The widget appex talks to the app through an App Group
+default presets. v1.6 (gaming and streaming) is implemented on main and bumped
+to 1.6.0 (build 14), awaiting release: a gaming trigger
+(`KeepressoCore/Gaming.swift`, frontmost games app category or a cloud-gaming
+client, 5 min release grace), a Cloud Gaming preset, and a Gaming & Streaming
+Setup window (menu ▸ "Gaming & Streaming…") with a ping jitter test
+(`Jitter.swift`), radio-hygiene checks (`StreamingReadiness.swift`, Bluetooth
+state deliberately via `system_profiler`: IOBluetooth would TCC-prompt), and a
+session-scoped AWDL watchdog (`AWDL.swift`: one root helper per app run behind
+a single admin prompt, flag-file toggled, restores `awdl0` on quit or crash). The widget appex talks to the app through an App Group
 (`WidgetBridge` in Core); the group id is resolved at runtime from the
 process's own signature, never hardcoded. The repo is **public** on GitHub
 (`git@github.com:gyorgysh/keepresso.git`, branch `main`) and the website is
