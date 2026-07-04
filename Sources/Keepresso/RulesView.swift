@@ -61,7 +61,7 @@ struct RulesView: View {
                 }
             }
 
-            addConditionMenu
+            addConditionMenus
             processField
         }
     }
@@ -166,105 +166,126 @@ struct RulesView: View {
         .help("CPU threshold")
     }
 
-    private var addConditionMenu: some View {
-        Menu {
-            Section("Power") {
-                Button("On AC power") { model.addRule(.powerSource(.onACPower)) }
-                Button("On battery") { model.addRule(.powerSource(.onBattery)) }
-                Button("Charging") { model.addRule(.powerSource(.charging)) }
+    /// Conditions are added from three menus grouped by what the user is
+    /// thinking about, not by API. One flat menu held eleven scrolling
+    /// sections by v1.6, which had become a chore to navigate.
+    private var addConditionMenus: some View {
+        HStack(spacing: 4) {
+            Label("Add:", systemImage: "plus.circle")
+                .foregroundStyle(.secondary)
+            HStack(spacing: 14) {
+                Menu { powerDisplayItems } label: { Text("Power & Display") }
+                Menu { networkDevicesItems } label: { Text("Network & Devices") }
+                Menu { appsActivityItems } label: { Text("Apps & Activity") }
             }
-            Section("Display") {
-                Button("External display connected") { model.addRule(.externalDisplay) }
-            }
-            Section("Network") {
-                Button("VPN connected") { model.addRule(.vpnConnected) }
-                if location.isAuthorized {
-                    if let ssid = model.currentSSID() {
-                        Button("On current Wi-Fi (\(ssid))") { model.addRule(.wifiSSID(ssid)) }
-                    } else {
-                        Text("No Wi-Fi network joined").foregroundStyle(.secondary)
-                    }
-                } else if location.canRequest {
-                    Button("Allow Wi-Fi access\u{2026}") { location.request() }
-                } else {
-                    Text("Wi-Fi rules need Location access (System Settings ▸ Privacy)")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Section("App is running") {
-                appButtons { .app(AppRule(bundleID: $0, match: .running)) }
-            }
-            Section("App is frontmost") {
-                appButtons { .app(AppRule(bundleID: $0, match: .frontmost)) }
-            }
-            Section("Media") {
-                Button("Camera in use") { model.addRule(.mediaInUse(.camera)) }
-                Button("Microphone in use") { model.addRule(.mediaInUse(.microphone)) }
-                Button("Audio playing") { model.addRule(.audioPlaying) }
-            }
-            Section("Gaming") {
-                Button("Playing a game") { model.addRule(.gaming) }
-            }
-            Section("Bluetooth device connected") {
-                if bluetooth.isAuthorized {
-                    let devices = model.pairedBluetoothDevices()
-                    if devices.isEmpty {
-                        Text("No paired devices").foregroundStyle(.secondary)
-                    } else {
-                        ForEach(devices, id: \.self) { name in
-                            Button(name) { model.addRule(.bluetoothDevice(name)) }
-                        }
-                    }
-                } else if bluetooth.canRequest {
-                    Button("Allow Bluetooth access\u{2026}") { bluetooth.request() }
-                } else {
-                    Text("Bluetooth rules need Bluetooth access (System Settings ▸ Privacy)")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Section("Process is running") {
-                ForEach(Self.processPresets, id: \.self) { name in
-                    Button(name) { model.addRule(.process(name)) }
-                }
-            }
-            Section("Volume is mounted") {
-                let volumes = model.mountedVolumes()
-                if volumes.isEmpty {
-                    Text("No volumes mounted").foregroundStyle(.secondary)
-                } else {
-                    ForEach(volumes, id: \.self) { name in
-                        Button(name) { model.addRule(.volumeMounted(name)) }
-                    }
-                }
-            }
-            Section("CPU load") {
-                ForEach(Self.cpuThresholds, id: \.self) { percent in
-                    Button("Above \(percent)%") { model.addRule(.cpuLoad(thresholdPercent: percent)) }
-                }
-            }
-            Section("Schedule") {
-                // Starting points; the row's slider button tunes times and days.
-                Button("Work hours (weekdays 9:00-18:00)") {
-                    model.addRule(.timeWindow(TimeWindowRule(
-                        startMinutes: 9 * 60, endMinutes: 18 * 60, weekdays: [2, 3, 4, 5, 6])))
-                }
-                Button("Overnight (22:00-6:00)") {
-                    model.addRule(.timeWindow(TimeWindowRule(startMinutes: 22 * 60, endMinutes: 6 * 60)))
-                }
-                if calendar.isAuthorized {
-                    Button("During calendar events") { model.addRule(.calendarEvent) }
-                } else if calendar.canRequest {
-                    Button("Allow calendar access\u{2026}") { calendar.request() }
-                } else {
-                    Text("The calendar rule needs Calendar access (System Settings ▸ Privacy)")
-                        .foregroundStyle(.secondary)
-                }
-            }
-        } label: {
-            Label("Add condition", systemImage: "plus.circle")
+            .menuStyle(.borderlessButton)
+            .fixedSize()
         }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
+        .font(.callout)
+    }
+
+    @ViewBuilder
+    private var powerDisplayItems: some View {
+        Section("Power") {
+            Button("On AC power") { model.addRule(.powerSource(.onACPower)) }
+            Button("On battery") { model.addRule(.powerSource(.onBattery)) }
+            Button("Charging") { model.addRule(.powerSource(.charging)) }
+        }
+        Section("Display") {
+            Button("External display connected") { model.addRule(.externalDisplay) }
+        }
+    }
+
+    @ViewBuilder
+    private var networkDevicesItems: some View {
+        Section("Network") {
+            Button("VPN connected") { model.addRule(.vpnConnected) }
+            if location.isAuthorized {
+                if let ssid = model.currentSSID() {
+                    Button("On current Wi-Fi (\(ssid))") { model.addRule(.wifiSSID(ssid)) }
+                } else {
+                    Text("No Wi-Fi network joined").foregroundStyle(.secondary)
+                }
+            } else if location.canRequest {
+                Button("Allow Wi-Fi access\u{2026}") { location.request() }
+            } else {
+                Text("Wi-Fi rules need Location access (System Settings ▸ Privacy)")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        Section("Bluetooth device connected") {
+            if bluetooth.isAuthorized {
+                let devices = model.pairedBluetoothDevices()
+                if devices.isEmpty {
+                    Text("No paired devices").foregroundStyle(.secondary)
+                } else {
+                    ForEach(devices, id: \.self) { name in
+                        Button(name) { model.addRule(.bluetoothDevice(name)) }
+                    }
+                }
+            } else if bluetooth.canRequest {
+                Button("Allow Bluetooth access\u{2026}") { bluetooth.request() }
+            } else {
+                Text("Bluetooth rules need Bluetooth access (System Settings ▸ Privacy)")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        Section("Volume is mounted") {
+            let volumes = model.mountedVolumes()
+            if volumes.isEmpty {
+                Text("No volumes mounted").foregroundStyle(.secondary)
+            } else {
+                ForEach(volumes, id: \.self) { name in
+                    Button(name) { model.addRule(.volumeMounted(name)) }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var appsActivityItems: some View {
+        Section("App is running") {
+            appButtons { .app(AppRule(bundleID: $0, match: .running)) }
+        }
+        Section("App is frontmost") {
+            appButtons { .app(AppRule(bundleID: $0, match: .frontmost)) }
+        }
+        Section("Media") {
+            Button("Camera in use") { model.addRule(.mediaInUse(.camera)) }
+            Button("Microphone in use") { model.addRule(.mediaInUse(.microphone)) }
+            Button("Audio playing") { model.addRule(.audioPlaying) }
+        }
+        Section("Gaming") {
+            Button("Playing a game") { model.addRule(.gaming) }
+        }
+        Section("Process is running") {
+            ForEach(Self.processPresets, id: \.self) { name in
+                Button(name) { model.addRule(.process(name)) }
+            }
+        }
+        Section("CPU load") {
+            ForEach(Self.cpuThresholds, id: \.self) { percent in
+                Button("Above \(percent)%") { model.addRule(.cpuLoad(thresholdPercent: percent)) }
+            }
+        }
+        Section("Schedule") {
+            // Starting points; the row's slider button tunes times and days.
+            Button("Work hours (weekdays 9:00-18:00)") {
+                model.addRule(.timeWindow(TimeWindowRule(
+                    startMinutes: 9 * 60, endMinutes: 18 * 60, weekdays: [2, 3, 4, 5, 6])))
+            }
+            Button("Overnight (22:00-6:00)") {
+                model.addRule(.timeWindow(TimeWindowRule(startMinutes: 22 * 60, endMinutes: 6 * 60)))
+            }
+            if calendar.isAuthorized {
+                Button("During calendar events") { model.addRule(.calendarEvent) }
+            } else if calendar.canRequest {
+                Button("Allow calendar access\u{2026}") { calendar.request() }
+            } else {
+                Text("The calendar rule needs Calendar access (System Settings ▸ Privacy)")
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     /// Free-text entry for any other process name (matched against the full
