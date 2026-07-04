@@ -26,14 +26,19 @@ struct MakeSymbol {
         let canvasHeight: CGFloat = 1000
 
         let ink = BrandCupMark.fullInk
-        let glyphScale = bandHeight / ink.height
+        // Overshoot the cap-to-baseline band like real SF Symbols do: fitting
+        // the band exactly renders noticeably smaller than neighboring system
+        // glyphs (Control Center made the cup look tiny at 1.0).
+        let glyphScale = bandHeight * 1.3 / ink.height
         let margin = ink.width * glyphScale * 0.08
         let left = canvas / 2 - ink.width * glyphScale / 2 - margin
         let right = canvas / 2 + ink.width * glyphScale / 2 + margin
 
         func fills(baseline: CGFloat) -> [(d: String, rule: String)] {
             let tx = canvas / 2 - ink.midX * glyphScale
-            let ty = baseline - ink.maxY * glyphScale
+            // Centered on the band's midline (not sitting on the baseline),
+            // so the overshoot spreads evenly above and below.
+            let ty = (baseline - bandHeight / 2) - ink.midY * glyphScale
             var transform = CGAffineTransform(translationX: tx, y: ty)
                 .scaledBy(x: glyphScale, y: glyphScale)
 
