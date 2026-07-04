@@ -428,30 +428,67 @@ final class AppModel {
     /// The last state written, so the per-second tick only writes on change.
     @ObservationIgnored private var lastWidgetState: SharedSessionState?
 
-    /// Mirror the session state into the App Group and refresh the control.
+    /// Mirror the session state into the App Group and refresh the widgets.
     /// Called from the ticker every second; cheap because it no-ops until the
-    /// state actually changes.
+    /// state actually changes. `endsAt` is rounded to a whole second so the
+    /// per-tick recomputation lands on the same instant and doesn't defeat the
+    /// change check.
     func syncWidgetState() {
         guard let widgetDefaults else { return }
-        let state = SharedSessionState(isActive: session.isActive)
+        let endsAt = session.remaining.map {
+            Date(timeIntervalSinceReferenceDate: (Date().timeIntervalSinceReferenceDate + $0).rounded())
+        }
+        let state = SharedSessionState(
+            isActive: session.isActive,
+            endsAt: endsAt,
+            triggersEnabled: settings.triggersEnabled,
+            triggersPaused: triggersPaused
+        )
         guard state != lastWidgetState else { return }
         lastWidgetState = state
         WidgetBridge.writeState(state, to: widgetDefaults)
+        WidgetCenter.shared.reloadTimelines(ofKind: WidgetBridge.statusWidgetKind)
         if #available(macOS 26.0, *) {
             ControlCenter.shared.reloadControls(ofKind: WidgetBridge.controlKind)
         }
     }
 
-    /// Consume a pending widget toggle command, if any, and drive the session
-    /// through the same seam as `keepresso://` URLs. Called when the widget's
-    /// Darwin notification arrives and once at launch (the intent opens the
-    /// app, so a not-yet-running app lands here with the command waiting).
+    /// On quit, leave the widgets showing "off": the session's assertions die
+    /// with this process, and a stale "Brewing" tile would lie until the next
+    /// launch.
+    func writeWidgetStateStopped() {
+        guard let widgetDefaults else { return }
+        let state = SharedSessionState(
+            isActive: false,
+            triggersEnabled: settings.triggersEnabled,
+            triggersPaused: triggersPaused
+        )
+        lastWidgetState = state
+        WidgetBridge.writeState(state, to: widgetDefaults)
+        WidgetCenter.shared.reloadTimelines(ofKind: WidgetBridge.statusWidgetKind)
+        if #available(macOS 26.0, *) {
+            ControlCenter.shared.reloadControls(ofKind: WidgetBridge.controlKind)
+        }
+    }
+
+    /// Consume a pending widget command, if any, and drive the app through the
+    /// same seams the menu bar uses. Called when a widget's Darwin
+    /// notification arrives and once at launch (the Control Center intent
+    /// opens the app, so a not-yet-running app lands here with the command
+    /// waiting).
     func applyPendingWidgetCommand() {
         guard let widgetDefaults,
-              let desired = WidgetBridge.consumeCommand(from: widgetDefaults)
+              let command = WidgetBridge.consumeCommand(from: widgetDefaults)
         else { return }
-        if desired != session.isActive {
-            handle(desired ? .start(mode: settings.defaultMode) : .stop)
+        switch command {
+        case .start:
+            if !session.isActive { handle(.start(mode: settings.defaultMode)) }
+        case .stop:
+            if session.isActive { handle(.stop) }
+        case .pauseTriggers:
+            pauseTriggers()
+        case .resumeTriggers:
+            resumeTriggers()
         }
         syncWidgetState()
     }

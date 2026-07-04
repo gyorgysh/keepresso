@@ -74,6 +74,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.syncWidgetState()
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        // The session dies with this process; don't leave the widgets lying.
+        model.writeWidgetStateStopped()
+    }
+
     /// Handles `keepresso://` URLs (registered via `CFBundleURLTypes` in
     /// project.yml), e.g. from Shortcuts, Raycast, or a shell script. AppKit
     /// calls this for a background agent even with no window open, which

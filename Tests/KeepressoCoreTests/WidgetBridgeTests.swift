@@ -15,8 +15,14 @@ private func scratchDefaults(_ name: String) -> UserDefaults {
     let defaults = scratchDefaults("state")
     #expect(WidgetBridge.readState(from: defaults) == nil)
 
-    WidgetBridge.writeState(SharedSessionState(isActive: true), to: defaults)
-    #expect(WidgetBridge.readState(from: defaults) == SharedSessionState(isActive: true))
+    let running = SharedSessionState(
+        isActive: true,
+        endsAt: Date(timeIntervalSinceReferenceDate: 900),
+        triggersEnabled: true,
+        triggersPaused: false
+    )
+    WidgetBridge.writeState(running, to: defaults)
+    #expect(WidgetBridge.readState(from: defaults) == running)
 
     WidgetBridge.writeState(SharedSessionState(isActive: false), to: defaults)
     #expect(WidgetBridge.readState(from: defaults)?.isActive == false)
@@ -25,9 +31,9 @@ private func scratchDefaults(_ name: String) -> UserDefaults {
 @Test func commandFiresAtMostOnce() {
     let defaults = scratchDefaults("consume-once")
     let now = Date(timeIntervalSinceReferenceDate: 1000)
-    WidgetBridge.writeCommand(desiredActive: true, at: now, to: defaults)
+    WidgetBridge.writeCommand(.start, at: now, to: defaults)
 
-    #expect(WidgetBridge.consumeCommand(from: defaults, now: now) == true)
+    #expect(WidgetBridge.consumeCommand(from: defaults, now: now) == .start)
     // Consumed: a second read (say, Darwin delivery plus the launch path both
     // arriving) must not fire again.
     #expect(WidgetBridge.consumeCommand(from: defaults, now: now) == nil)
@@ -36,7 +42,7 @@ private func scratchDefaults(_ name: String) -> UserDefaults {
 @Test func staleCommandIsDroppedAndCleared() {
     let defaults = scratchDefaults("stale")
     let written = Date(timeIntervalSinceReferenceDate: 0)
-    WidgetBridge.writeCommand(desiredActive: true, at: written, to: defaults)
+    WidgetBridge.writeCommand(.start, at: written, to: defaults)
 
     let late = written.addingTimeInterval(WidgetBridge.commandFreshness + 1)
     #expect(WidgetBridge.consumeCommand(from: defaults, now: late) == nil)
@@ -44,11 +50,13 @@ private func scratchDefaults(_ name: String) -> UserDefaults {
     #expect(defaults.object(forKey: "widget.desiredActive") == nil)
 }
 
-@Test func freshCommandCarriesItsValue() {
-    let defaults = scratchDefaults("value")
+@Test func everyCommandKindRoundTrips() {
+    let defaults = scratchDefaults("kinds")
     let now = Date(timeIntervalSinceReferenceDate: 500)
-    WidgetBridge.writeCommand(desiredActive: false, at: now, to: defaults)
-    #expect(WidgetBridge.consumeCommand(from: defaults, now: now.addingTimeInterval(5)) == false)
+    for command in [WidgetCommand.start, .stop, .pauseTriggers, .resumeTriggers] {
+        WidgetBridge.writeCommand(command, at: now, to: defaults)
+        #expect(WidgetBridge.consumeCommand(from: defaults, now: now.addingTimeInterval(5)) == command)
+    }
 }
 
 @Test func emptyDefaultsHaveNoCommand() {

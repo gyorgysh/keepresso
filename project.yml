@@ -79,13 +79,13 @@ targets:
         # Keepresso ships via GitHub/Homebrew, not the Mac App Store.
         ENABLE_APP_SANDBOX: false
 
-  # Control Center widget (macOS 26+). The appex needs the newer SDK and its
-  # own sandbox; the app keeps its 14.0 floor, and older systems simply never
-  # load the extension.
+  # Widget extension: desktop widgets on macOS 14+, plus the Control Center
+  # toggle where it exists (macOS 26+, availability-gated in code). Sandboxed
+  # as widgets must be; only the appex, the app stays unsandboxed.
   KeepressoWidget:
     type: app-extension
     platform: macOS
-    deploymentTarget: "26.0"
+    deploymentTarget: "14.0"
     sources:
       - path: Sources/KeepressoWidget
     dependencies:

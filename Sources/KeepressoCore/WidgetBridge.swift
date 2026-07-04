@@ -1,15 +1,39 @@
 import Foundation
 import Security
 
-/// The session state the app shares with the widget extension. Deliberately
-/// tiny: the control needs on/off today; richer state (say, a countdown) can
-/// extend this Codable struct without breaking older readers.
+/// The session state the app shares with the widget extension: enough for the
+/// desktop widgets to show on/off, a live countdown, and the trigger-pause
+/// button, without ever touching the app's memory.
 public struct SharedSessionState: Codable, Equatable, Sendable {
     public var isActive: Bool
+    /// When a timed session ends (for the widget countdown), or `nil` for
+    /// indefinite/idle/trigger-gated sessions.
+    public var endsAt: Date?
+    /// Whether trigger gating is on (the pause/resume button only makes sense
+    /// then) and whether it's currently paused.
+    public var triggersEnabled: Bool
+    public var triggersPaused: Bool
 
-    public init(isActive: Bool) {
+    public init(
+        isActive: Bool,
+        endsAt: Date? = nil,
+        triggersEnabled: Bool = false,
+        triggersPaused: Bool = false
+    ) {
         self.isActive = isActive
+        self.endsAt = endsAt
+        self.triggersEnabled = triggersEnabled
+        self.triggersPaused = triggersPaused
     }
+}
+
+/// What a widget asks the app to do. Mirrors the actions the widgets expose;
+/// the app maps them onto the same seams the menu bar uses.
+public enum WidgetCommand: String, Codable, Sendable {
+    case start
+    case stop
+    case pauseTriggers
+    case resumeTriggers
 }
 
 /// The App Group channel between the app and the widget extension.
@@ -53,6 +77,8 @@ public enum WidgetBridge {
     }
     /// The Control Center control's kind, for targeted reloads.
     public static let controlKind = "sh.gyorgy.keepresso.keep-awake"
+    /// The desktop status widget's kind, for targeted timeline reloads.
+    public static let statusWidgetKind = "sh.gyorgy.keepresso.status"
     /// The Darwin notification the appex posts after writing a command.
     public static let commandNotificationName = "sh.gyorgy.keepresso.widget-command"
 
@@ -80,11 +106,11 @@ public enum WidgetBridge {
     // MARK: - Widget → app (toggle command)
 
     public static func writeCommand(
-        desiredActive: Bool,
+        _ command: WidgetCommand,
         at date: Date = Date(),
         to defaults: UserDefaults
     ) {
-        defaults.set(desiredActive, forKey: commandKey)
+        defaults.set(command.rawValue, forKey: commandKey)
         defaults.set(date.timeIntervalSinceReferenceDate, forKey: commandStampKey)
     }
 
@@ -93,15 +119,15 @@ public enum WidgetBridge {
     public static func consumeCommand(
         from defaults: UserDefaults,
         now: Date = Date()
-    ) -> Bool? {
+    ) -> WidgetCommand? {
         defer {
             defaults.removeObject(forKey: commandKey)
             defaults.removeObject(forKey: commandStampKey)
         }
-        guard defaults.object(forKey: commandKey) != nil else { return nil }
+        guard let raw = defaults.string(forKey: commandKey) else { return nil }
         let stamp = Date(timeIntervalSinceReferenceDate: defaults.double(forKey: commandStampKey))
         guard now.timeIntervalSince(stamp) < commandFreshness else { return nil }
-        return defaults.bool(forKey: commandKey)
+        return WidgetCommand(rawValue: raw)
     }
 
     /// Ring the doorbell: tell a running app a command is waiting. Darwin
