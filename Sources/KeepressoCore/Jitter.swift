@@ -230,9 +230,10 @@ public final class JitterTestController {
 
     /// The post's diagnosis recipe: ~10 s of echoes at 0.2 s intervals, wide
     /// enough to catch ten AWDL hops while staying under the boredom limit.
-    public static let host = "1.1.1.1"
-    public static let count = 50
-    public static let interval: TimeInterval = 0.2
+    /// `nonisolated` so the detached ping task can read them.
+    public nonisolated static let host = "1.1.1.1"
+    public nonisolated static let count = 50
+    public nonisolated static let interval: TimeInterval = 0.2
 
     private let runner: PingRunning
 

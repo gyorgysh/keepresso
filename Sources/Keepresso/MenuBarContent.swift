@@ -136,6 +136,7 @@ struct MenuBarContent: View {
                 Button("Preferences…") { open(KeepressoApp.preferencesWindowID) }
                     .keyboardShortcut(",")
                 Button("Headless Setup…") { open(KeepressoApp.setupWindowID) }
+                Button("Gaming & Streaming…") { open(KeepressoApp.streamingWindowID) }
                 Button("About Keepresso") { open(KeepressoApp.aboutWindowID) }
                 Button("Check for Updates…") { updater.checkForUpdates() }
                     .disabled(!updater.canCheckForUpdates)

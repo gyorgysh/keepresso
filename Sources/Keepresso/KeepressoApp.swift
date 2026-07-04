@@ -22,6 +22,11 @@ struct KeepressoApp: App {
         }
         .windowResizability(.contentSize)
 
+        Window("Gaming & Streaming", id: Self.streamingWindowID) {
+            StreamingSetupView(model: appDelegate.model)
+        }
+        .windowResizability(.contentSize)
+
         Window("Preferences", id: Self.preferencesWindowID) {
             PreferencesView(model: appDelegate.model)
         }
@@ -35,6 +40,7 @@ struct KeepressoApp: App {
 
     /// Scene ids shared with the menu's window-opening buttons.
     static let setupWindowID = "setup"
+    static let streamingWindowID = "streaming"
     static let preferencesWindowID = "preferences"
     static let aboutWindowID = "about"
 }
@@ -51,7 +57,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         session: model.session,
         disk: model.disk,
         closedDisplay: model.closedDisplay,
-        onTick: { [weak self] in self?.model.syncWidgetState() }
+        onTick: { [weak self] in
+            self?.model.syncWidgetState()
+            self?.model.awdlAutoTick()
+        }
     )
     /// Listens for the Control Center toggle's Darwin doorbell.
     private var widgetObserver: WidgetCommandObserver?
@@ -66,6 +75,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // across reboots, and the ticker's lid handling stays inert until the
         // controller knows the mode is on, not just once a menu opens.
         model.refreshClosedDisplay()
+        // Any AWDL watchdog flag surviving from a previous process is stale
+        // (the loop it kept alive has already exited via its pid check).
+        Task { await model.awdl.cleanupAtLaunch() }
         ticker.start()
         // The Control Center toggle: consume a command that may have launched
         // us, then keep listening while running.

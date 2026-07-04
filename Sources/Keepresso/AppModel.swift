@@ -29,6 +29,13 @@ final class AppModel {
     /// Experimental headless virtual display (private CoreGraphics API), off by
     /// default. Uses the real backend; `nil` config means no virtual display.
     let virtualDisplay = VirtualDisplayController(backend: CGVirtualDisplayBackend())
+    /// Backs the Gaming & Streaming Setup screen's check list. Populated on
+    /// demand via ``refreshStreaming()``, like ``readiness``.
+    let streaming = StreamingReadinessController()
+    /// The built-in AWDL jitter diagnosis (ping burst + analysis).
+    let jitter = JitterTestController()
+    /// The session-scoped AWDL watchdog (root loop behind one admin prompt).
+    let awdl = AWDLWatchdogController()
 
     private let store: SettingsStore
     private let factory: TriggerFactory
@@ -58,6 +65,7 @@ final class AppModel {
         self.disk = DiskKeepAliveController()
         self.disk.config = loaded.diskKeepAlive
         self.virtualDisplay.config = loaded.virtualDisplay
+        self.awdl.autoWithGaming = loaded.awdlAutoWithGaming
         // Launch idle: a manual session waits for the user's toggle, a gated
         // one waits for its conditions (the ticker's reconcile activates it).
         applyTriggerGate()
@@ -609,6 +617,52 @@ final class AppModel {
         settings.virtualDisplay = config
         virtualDisplay.config = config
         persist()
+    }
+
+    // MARK: - Gaming & Streaming
+
+    /// Re-probe the streaming checks and the AWDL watchdog state for the
+    /// Gaming & Streaming Setup window (on appear and its Re-check button).
+    func refreshStreaming() {
+        Task { await streaming.refresh() }
+        Task { await awdl.refresh() }
+    }
+
+    /// Start or stop the AWDL watchdog. Starting prompts for administrator
+    /// rights, so the app becomes active first (same reason as
+    /// ``setClosedDisplay(_:)``: an unfocused password dialog looks stuck).
+    func setAWDLWatchdog(_ on: Bool) {
+        if on { NSApp.activate(ignoringOtherApps: true) }
+        Task {
+            if on {
+                await awdl.start()
+            } else {
+                await awdl.stop()
+            }
+        }
+    }
+
+    /// Whether the watchdog follows a gaming trigger (see
+    /// ``AWDLWatchdogController/autoWithGaming``). Persisted.
+    var awdlAutoWithGaming: Bool {
+        get { settings.awdlAutoWithGaming }
+        set {
+            settings.awdlAutoWithGaming = newValue
+            awdl.autoWithGaming = newValue
+            persist()
+        }
+    }
+
+    /// Once-a-second pulse for the watchdog's auto mode: "gaming is on" means
+    /// the session is active and a gaming rule is among the satisfied
+    /// conditions. Cheap: `ruleStates()` is cached, and the guard keeps the
+    /// per-tick task from spawning while the feature is off.
+    func awdlAutoTick() {
+        guard settings.awdlAutoWithGaming else { return }
+        let gamingActive = session.isActive && (ruleStates()?.contains {
+            $0.rule == .gaming && $0.satisfied
+        } ?? false)
+        Task { await awdl.autoTick(gamingActive: gamingActive) }
     }
 
     // MARK: - Setup / headless readiness
