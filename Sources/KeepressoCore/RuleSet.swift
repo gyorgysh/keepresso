@@ -34,6 +34,9 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
     case bluetoothDevice(String)
     /// A timed (non-all-day) calendar event is in progress.
     case calendarEvent
+    /// A game (by declared app category) or a cloud-gaming client is frontmost
+    /// (with a generous release grace, so alt-tabbing doesn't drop the session).
+    case gaming
 
     /// A human-readable summary for the rules UI.
     public var label: String {
@@ -52,6 +55,7 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
         case .bluetoothDevice(let name):
             return "Bluetooth \u{201C}\(name)\u{201D} connected"
         case .calendarEvent:          return "Calendar event in progress"
+        case .gaming:                 return "Playing a game"
         }
     }
 }
@@ -113,6 +117,7 @@ public struct TriggerFactory {
     private let vpn: VPNMonitoring
     private let bluetooth: BluetoothMonitoring
     private let calendar: CalendarMonitoring
+    private let gaming: GamingMonitoring
     private let now: () -> Date
 
     public init(
@@ -127,6 +132,7 @@ public struct TriggerFactory {
         vpn: VPNMonitoring = SCUtilVPNMonitor(),
         bluetooth: BluetoothMonitoring = IOBluetoothDeviceMonitor(),
         calendar: CalendarMonitoring = EventKitCalendarMonitor(),
+        gaming: GamingMonitoring = WorkspaceGamingMonitor(),
         now: @escaping () -> Date = Date.init
     ) {
         self.powerSource = powerSource
@@ -140,6 +146,7 @@ public struct TriggerFactory {
         self.vpn = vpn
         self.bluetooth = bluetooth
         self.calendar = calendar
+        self.gaming = gaming
         self.now = now
     }
 
@@ -183,6 +190,12 @@ public struct TriggerFactory {
             )
         case .calendarEvent:
             return CalendarEventTrigger(monitor: calendar)
+        case .gaming:
+            return GracePeriodTrigger(
+                wrapping: GamingTrigger(monitor: gaming),
+                grace: GamingTrigger.releaseGrace,
+                now: now
+            )
         }
     }
 

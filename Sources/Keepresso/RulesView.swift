@@ -202,6 +202,9 @@ struct RulesView: View {
                 Button("Microphone in use") { model.addRule(.mediaInUse(.microphone)) }
                 Button("Audio playing") { model.addRule(.audioPlaying) }
             }
+            Section("Gaming") {
+                Button("Playing a game") { model.addRule(.gaming) }
+            }
             Section("Bluetooth device connected") {
                 if bluetooth.isAuthorized {
                     let devices = model.pairedBluetoothDevices()
@@ -313,6 +316,7 @@ struct RulesView: View {
         case .vpnConnected:            return "lock.shield"
         case .bluetoothDevice:         return "antenna.radiowaves.left.and.right"
         case .calendarEvent:           return "calendar"
+        case .gaming:                  return "gamecontroller"
         }
     }
 }
