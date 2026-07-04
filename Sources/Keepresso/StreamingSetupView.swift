@@ -10,6 +10,10 @@ import KeepressoCore
 struct StreamingSetupView: View {
     @Bindable var model: AppModel
 
+    /// Keeps the AWDL on/off readout honest while the window is open: the
+    /// helper flips the interface up to a few seconds after a toggle.
+    private let awdlTick = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -32,6 +36,7 @@ struct StreamingSetupView: View {
         .tint(.keepressoBrew)
         .glassWindowBackground()
         .onAppear { model.refreshStreaming() }
+        .onReceive(awdlTick) { _ in model.refreshAWDLState() }
     }
 
     private var header: some View {
@@ -162,7 +167,7 @@ struct StreamingSetupView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Toggle("Keep AWDL off for this session", isOn: Binding(
+            Toggle("Pause AWDL while Keepresso runs", isOn: Binding(
                 get: { model.awdl.isRunning },
                 set: { model.setAWDLWatchdog($0) }
             ))
@@ -181,19 +186,19 @@ struct StreamingSetupView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Text("Asks for your password once, then keeps the AWDL interface down until you turn it off or quit Keepresso (a crash restores it too). AirDrop, Handoff, Sidecar, and Continuity Camera are unavailable while it runs; everything comes back when it stops.")
+            Text("While this is on, AirDrop, Handoff, Sidecar, and Continuity Camera take a break, and the once-a-second lag spikes stop. Everything comes back the moment you turn it off or quit Keepresso; even if the app crashes, macOS is restored automatically. Your password is needed only the first time after each launch; after that the switch is instant.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Divider()
 
-            Toggle("Start automatically with a gaming trigger", isOn: Binding(
+            Toggle("Pause AWDL automatically while gaming", isOn: Binding(
                 get: { model.awdlAutoWithGaming },
                 set: { model.awdlAutoWithGaming = $0 }
             ))
             .toggleStyle(.switch)
-            Text("Runs the watchdog while a \u{201C}Playing a game\u{201D} condition holds the session and stops it after. Asks for your password once per gaming session.")
+            Text("Turns the pause on when a game is keeping your Mac awake and back off when you stop playing. Needs a \u{201C}Playing a game\u{201D} condition in Preferences \u{25B8} Triggers.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -205,8 +210,8 @@ struct StreamingSetupView: View {
 
     private var interfaceStateLabel: String {
         switch model.awdl.isInterfaceUp {
-        case true: "AWDL is up"
-        case false: "AWDL is down"
+        case true: "AWDL is on right now"
+        case false: "AWDL is off right now"
         case nil: "AWDL state unknown"
         }
     }

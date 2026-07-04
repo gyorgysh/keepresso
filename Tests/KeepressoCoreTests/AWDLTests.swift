@@ -23,21 +23,22 @@ import Foundation
 
 // MARK: - Watchdog command shape
 
-@Test func watchdogCommandIsFlagScopedPidScopedAndSelfRestoring() {
+@Test func watchdogCommandIsFlagFollowingPidScopedAndSelfRestoring() {
     let command = OsascriptAWDLWatchdog.watchdogCommand(
         flagPath: "/Users/g/Library/Application Support/Keepresso/awdl-watchdog.flag",
         appPID: 4242
     )
-    // The loop must be gated on BOTH the flag file and the app staying alive,
-    // keep re-downing the interface (macOS re-raises it), background itself so
-    // the admin prompt returns, and always restore the interface on exit.
-    #expect(command.contains("[ -f \"/Users/g/Library/Application Support/Keepresso/awdl-watchdog.flag\" ]"))
+    // The helper must live with the app's pid (so a crash tears it down),
+    // follow the flag file (down while present, restore once when gone, then
+    // idle so re-enabling needs no new prompt), keep re-downing the interface
+    // (macOS re-raises it), and background itself so the admin prompt returns.
     #expect(command.contains("kill -0 4242"))
+    #expect(command.contains("if [ -f \"/Users/g/Library/Application Support/Keepresso/awdl-watchdog.flag\" ]"))
     #expect(command.contains("/sbin/ifconfig awdl0 down"))
-    #expect(command.contains("sleep 5"))
+    #expect(command.contains("elif [ -n \"$DOWNED\" ]; then /sbin/ifconfig awdl0 up"))
+    #expect(command.contains("sleep 3"))
     #expect(command.hasSuffix("&"))
     #expect(command.contains("rm -f"))
-    #expect(command.contains("/sbin/ifconfig awdl0 up"))
 }
 
 @Test func appleScriptEscapingSurvivesQuotedPaths() {
@@ -50,15 +51,19 @@ import Foundation
 private final class FakeWatchdogLauncher: AWDLWatchdogLaunching, @unchecked Sendable {
     var flagPresent = false
     var result: AWDLWatchdogStartResult = .started
+    /// Helper spawns, i.e. how often the user was asked for a password.
     var startCalls = 0
 
     func isFlagPresent() -> Bool { flagPresent }
-    func start(appPID: Int32) -> AWDLWatchdogStartResult {
-        startCalls += 1
-        if case .started = result { flagPresent = true }
-        return result
+    func createFlag() -> Bool {
+        flagPresent = true
+        return true
     }
     func removeFlag() { flagPresent = false }
+    func startHelper(appPID: Int32) -> AWDLWatchdogStartResult {
+        startCalls += 1
+        return result
+    }
 }
 
 private final class FakeAWDLReader: AWDLStateReading, @unchecked Sendable {
@@ -81,6 +86,41 @@ private final class FakeAWDLReader: AWDLStateReading, @unchecked Sendable {
     await controller.stop()
     #expect(!controller.isRunning)
     #expect(!launcher.flagPresent)
+}
+
+@MainActor
+@Test func watchdogPromptsOnlyOncePerAppRun() async {
+    // The first activation spawns the helper (the password prompt); every
+    // later toggle is flag-file-only.
+    let launcher = FakeWatchdogLauncher()
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+
+    _ = await controller.start()
+    await controller.stop()
+    let again = await controller.start()
+    #expect(again == .started)
+    #expect(controller.isRunning)
+    #expect(launcher.flagPresent)
+    #expect(launcher.startCalls == 1)
+}
+
+@MainActor
+@Test func aCancelledPromptLeavesNoFlagBehind() async {
+    // The flag is written before the prompt (the helper reads it on its first
+    // cycle); a cancel or failure must clean it up so the next helper start
+    // doesn't instantly re-engage.
+    let launcher = FakeWatchdogLauncher()
+    launcher.result = .cancelled
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+    _ = await controller.start()
+    #expect(!launcher.flagPresent)
+    #expect(!controller.isRunning)
+
+    // The helper never started, so the next attempt prompts again.
+    launcher.result = .started
+    _ = await controller.start()
+    #expect(launcher.startCalls == 2)
+    #expect(controller.isRunning)
 }
 
 @MainActor

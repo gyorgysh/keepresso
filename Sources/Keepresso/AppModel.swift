@@ -625,6 +625,12 @@ final class AppModel {
     /// Gaming & Streaming Setup window (on appear and its Re-check button).
     func refreshStreaming() {
         Task { await streaming.refresh() }
+        refreshAWDLState()
+    }
+
+    /// Re-read just the AWDL flag and interface state; cheap enough for the
+    /// streaming window's periodic pulse (one `ifconfig` per call).
+    func refreshAWDLState() {
         Task { await awdl.refresh() }
     }
 

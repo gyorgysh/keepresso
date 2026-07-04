@@ -134,6 +134,22 @@ private func ifconfigBlock(_ device: String, status: String?) -> String {
 
 // MARK: - Bluetooth check
 
+@Test func bluetoothStateIsParsedFromSystemProfilerJSON() {
+    // system_profiler is deliberately the source (IOBluetooth/CoreBluetooth
+    // would throw the Bluetooth privacy prompt just for the power state).
+    let on = """
+    {"SPBluetoothDataType": [{"controller_properties": {"controller_state": "attrib_on"}}]}
+    """
+    let off = """
+    {"SPBluetoothDataType": [{"controller_properties": {"controller_state": "attrib_off"}}]}
+    """
+    #expect(SystemStreamingProbe.parseBluetoothOn(fromProfilerJSON: on) == true)
+    #expect(SystemStreamingProbe.parseBluetoothOn(fromProfilerJSON: off) == false)
+    #expect(SystemStreamingProbe.parseBluetoothOn(fromProfilerJSON: nil) == nil)
+    #expect(SystemStreamingProbe.parseBluetoothOn(fromProfilerJSON: "{}") == nil)
+    #expect(SystemStreamingProbe.parseBluetoothOn(fromProfilerJSON: "not json") == nil)
+}
+
 @Test func bluetoothStatesMapToTipOKUnknown() {
     #expect(ReadinessCheck.bluetoothRadio(StreamingSnapshot(bluetoothOn: true)).status == .tip)
     #expect(ReadinessCheck.bluetoothRadio(StreamingSnapshot(bluetoothOn: false)).status == .ok)

@@ -61,22 +61,28 @@ public enum AWDLWatchdogStartResult: Equatable, Sendable {
     case failed(String)
 }
 
-/// System-touching seam for the watchdog loop itself: a root process that
-/// keeps forcing `awdl0` down while a user-owned flag file exists.
+/// System-touching seam for the watchdog helper: a root loop that lives as
+/// long as the app does and holds `awdl0` down whenever a user-owned flag
+/// file exists.
 ///
-/// The privilege design keeps macOS happy without a permanent daemon: starting
-/// needs ONE administrator prompt (which spawns the loop as root), stopping
-/// just deletes the flag file (no prompt), and the loop also watches the app's
-/// pid, so an app crash or quit tears it down and restores `awdl0` on its own.
+/// The privilege design keeps macOS happy without a permanent daemon, and
+/// asks for the password exactly once per app run: the first activation
+/// spawns the helper (ONE administrator prompt); after that, toggling on and
+/// off is just creating and deleting the flag file, no prompts. The helper
+/// watches the app's pid, so an app crash or quit tears it down and restores
+/// `awdl0` on its own.
 public protocol AWDLWatchdogLaunching: AnyObject, Sendable {
-    /// Whether the flag file that keeps the loop alive is present.
+    /// Whether the flag file that keeps `awdl0` down is present.
     func isFlagPresent() -> Bool
-    /// Create the flag and spawn the root loop. Blocking: it waits for the
-    /// user to answer the administrator prompt.
-    func start(appPID: Int32) -> AWDLWatchdogStartResult
-    /// Delete the flag; the loop notices within a cycle, restores `awdl0 up`,
-    /// and exits.
+    /// Create the flag (telling a running helper to hold `awdl0` down).
+    /// Returns false when it couldn't be written.
+    func createFlag() -> Bool
+    /// Delete the flag; the helper notices within a cycle, restores
+    /// `awdl0 up`, and goes back to idling.
     func removeFlag()
+    /// Spawn the root helper loop. Blocking: it waits for the user to answer
+    /// the administrator prompt. Called once per app run, on first activation.
+    func startHelper(appPID: Int32) -> AWDLWatchdogStartResult
 }
 
 /// Real backend: the flag lives in Application Support, and the loop is
@@ -101,28 +107,30 @@ public final class OsascriptAWDLWatchdog: AWDLWatchdogLaunching {
         FileManager.default.fileExists(atPath: flagURL.path)
     }
 
-    public func removeFlag() {
-        try? FileManager.default.removeItem(at: flagURL)
-    }
-
-    public func start(appPID: Int32) -> AWDLWatchdogStartResult {
+    public func createFlag() -> Bool {
         do {
             try FileManager.default.createDirectory(
                 at: flagURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
             try Data().write(to: flagURL)
+            return true
         } catch {
-            return .failed("Couldn't create the watchdog flag file.")
+            return false
         }
+    }
+
+    public func removeFlag() {
+        try? FileManager.default.removeItem(at: flagURL)
+    }
+
+    public func startHelper(appPID: Int32) -> AWDLWatchdogStartResult {
         let command = Self.watchdogCommand(flagPath: flagURL.path, appPID: appPID)
         let script = "do shell script \"\(Self.appleScriptEscaped(command))\" with administrator privileges"
         guard let result = runForResult("/usr/bin/osascript", ["-e", script]) else {
-            removeFlag()
             return .failed("Couldn't run the watchdog command.")
         }
         if result.status == 0 { return .started }
-        removeFlag()
         // osascript reports a user-cancelled auth prompt as error -128.
         if result.stderr.contains("-128") || result.stderr.localizedCaseInsensitiveContains("cancel") {
             return .cancelled
@@ -131,16 +139,21 @@ public final class OsascriptAWDLWatchdog: AWDLWatchdogLaunching {
         return .failed(message.isEmpty ? "The watchdog couldn't be started." : message)
     }
 
-    /// The root loop, backgrounded so `do shell script` returns immediately.
-    /// macOS re-raises `awdl0` after sleep/wake, Wi-Fi toggles, or any app
-    /// requesting AWDL, hence the re-down every ~5 s rather than a single
-    /// `down`. The loop exits (and restores the interface) when the flag
-    /// disappears OR the app's pid dies, so a crash fails safe; it removes the
-    /// flag itself on the pid path so no stale flag survives.
+    /// The root helper, backgrounded so `do shell script` returns immediately.
+    /// It lives as long as the app's pid does and follows the flag: while the
+    /// flag exists it forces `awdl0` down every cycle (macOS re-raises the
+    /// interface after sleep/wake, Wi-Fi toggles, or any app requesting AWDL),
+    /// and on the flag disappearing it restores `awdl0 up` once and idles, so
+    /// re-enabling needs no new prompt. On app death it restores the interface
+    /// (only if it was the one holding it down) and removes any leftover flag,
+    /// so a crash fails safe.
     static func watchdogCommand(flagPath: String, appPID: Int32) -> String {
-        "( while [ -f \"\(flagPath)\" ] && kill -0 \(appPID) 2>/dev/null; "
-            + "do /sbin/ifconfig awdl0 down; sleep 5; done; "
-            + "rm -f \"\(flagPath)\"; /sbin/ifconfig awdl0 up ) </dev/null >/dev/null 2>&1 &"
+        "( DOWNED=; while kill -0 \(appPID) 2>/dev/null; do "
+            + "if [ -f \"\(flagPath)\" ]; then /sbin/ifconfig awdl0 down; DOWNED=1; "
+            + "elif [ -n \"$DOWNED\" ]; then /sbin/ifconfig awdl0 up; DOWNED=; fi; "
+            + "sleep 3; done; "
+            + "rm -f \"\(flagPath)\"; "
+            + "if [ -n \"$DOWNED\" ]; then /sbin/ifconfig awdl0 up; fi ) </dev/null >/dev/null 2>&1 &"
     }
 
     /// Escape a shell command for embedding in an AppleScript string literal.
@@ -205,6 +218,10 @@ public final class AWDLWatchdogController {
     /// prompt doesn't re-appear every tick; cleared when the gaming bout ends.
     private var autoHeldOff = false
 
+    /// Whether the root helper was already spawned this app run. Once it's up,
+    /// activating and deactivating is flag-file-only: no more prompts.
+    private var helperStarted = false
+
     private let launcher: AWDLWatchdogLaunching
     private let reader: AWDLStateReading
     private let appPID: Int32
@@ -238,30 +255,47 @@ public final class AWDLWatchdogController {
         await Task.detached { launcher.removeFlag() }.value
     }
 
-    /// Start the watchdog, prompting for administrator rights once. Ignores a
-    /// second call while the prompt is already up.
+    /// Activate the watchdog. The first activation of this app run spawns the
+    /// root helper (one administrator prompt); later ones just recreate the
+    /// flag, instantly and prompt-free. Ignores a second call while the
+    /// prompt is already up.
     @discardableResult
     public func start() async -> AWDLWatchdogStartResult {
         guard !isBusy else { return .cancelled }
         isBusy = true
         defer { isBusy = false }
         let launcher = self.launcher
+        let flagCreated = await Task.detached { launcher.createFlag() }.value
+        guard flagCreated else {
+            let message = "Couldn't create the watchdog flag file."
+            lastError = message
+            return .failed(message)
+        }
+        if helperStarted {
+            lastError = nil
+            isRunning = true
+            return .started
+        }
         let pid = self.appPID
-        let result = await Task.detached { launcher.start(appPID: pid) }.value
+        let result = await Task.detached { launcher.startHelper(appPID: pid) }.value
         switch result {
         case .started:
             lastError = nil
             isRunning = true
+            helperStarted = true
         case .cancelled:
             lastError = nil
+            await Task.detached { launcher.removeFlag() }.value
         case .failed(let message):
             lastError = message
+            await Task.detached { launcher.removeFlag() }.value
         }
         return result
     }
 
-    /// Stop the watchdog: just delete the flag (no prompt); the root loop
-    /// notices within a cycle, restores `awdl0 up`, and exits.
+    /// Deactivate the watchdog: just delete the flag (no prompt); the helper
+    /// notices within a cycle, restores `awdl0 up`, and idles for the next
+    /// activation.
     public func stop() async {
         let launcher = self.launcher
         await Task.detached { launcher.removeFlag() }.value

@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 import CoreWLAN
-import IOBluetooth
 
 /// Which Wi-Fi band the current association uses.
 public enum WiFiBand: Equatable, Sendable {
@@ -297,10 +296,12 @@ public final class StreamingReadinessController {
     }
 }
 
-/// Real ``StreamingProbing``: CoreWLAN for the channel, IOBluetooth for the
-/// radio power state (not TCC-gated; device enumeration is), and shell-outs
-/// for the interface inventory. Not `@MainActor`; the controller hops off
-/// main before calling ``snapshot()``.
+/// Real ``StreamingProbing``: CoreWLAN for the channel, and shell-outs for
+/// the interface inventory and the Bluetooth radio state. Bluetooth
+/// deliberately comes from `system_profiler`, not IOBluetooth/CoreBluetooth:
+/// those frameworks throw the Bluetooth privacy prompt just for the power
+/// state, and this screen must open without asking for anything. Not
+/// `@MainActor`; the controller hops off main before calling ``snapshot()``.
 public final class SystemStreamingProbe: StreamingProbing {
     public init() {}
 
@@ -313,10 +314,28 @@ public final class SystemStreamingProbe: StreamingProbing {
             wifiCountryCode: CWWiFiClient.shared().interface()?.countryCode(),
             hardwarePorts: run("/usr/sbin/networksetup", ["-listallhardwareports"]),
             ifconfig: run("/sbin/ifconfig", ["-a"]),
-            bluetoothOn: IOBluetoothHostController.default().map {
-                $0.powerState == kBluetoothHCIPowerStateON
-            }
+            bluetoothOn: Self.parseBluetoothOn(fromProfilerJSON: run(
+                "/usr/sbin/system_profiler",
+                ["SPBluetoothDataType", "-json", "-detailLevel", "basic"]
+            ))
         )
+    }
+
+    /// Pure parse of `system_profiler SPBluetoothDataType -json`: the
+    /// controller state reads `attrib_on` / `attrib_off`. `nil` when the
+    /// shape is unexpected (no Bluetooth hardware, a future format change).
+    static func parseBluetoothOn(fromProfilerJSON json: String?) -> Bool? {
+        guard let data = json?.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let entries = root["SPBluetoothDataType"] as? [[String: Any]],
+              let properties = entries.first?["controller_properties"] as? [String: Any],
+              let state = properties["controller_state"] as? String
+        else { return nil }
+        switch state {
+        case "attrib_on": return true
+        case "attrib_off": return false
+        default: return nil
+        }
     }
 
     static func band(_ band: CWChannelBand) -> WiFiBand? {
