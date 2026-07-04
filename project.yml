@@ -24,6 +24,8 @@ targets:
         product: KeepressoCore
       - package: Sparkle
         product: Sparkle
+      - target: KeepressoWidget
+        embed: true
     info:
       path: Sources/Keepresso/Info.plist
       properties:
@@ -66,6 +68,46 @@ targets:
         # Not sandboxed by design: App Sandbox blocks IOPMAssertion. This is why
         # Keepresso ships via GitHub/Homebrew, not the Mac App Store.
         ENABLE_APP_SANDBOX: false
+
+  # Control Center widget (macOS 26+). The appex needs the newer SDK and its
+  # own sandbox; the app keeps its 14.0 floor, and older systems simply never
+  # load the extension.
+  KeepressoWidget:
+    type: app-extension
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources/KeepressoWidget
+    dependencies:
+      - package: KeepressoCore
+        product: KeepressoCore
+    info:
+      path: Sources/KeepressoWidget/Info.plist
+      properties:
+        CFBundleName: KeepressoWidget
+        CFBundleDisplayName: Keepresso
+        CFBundleShortVersionString: "1.4.0"
+        CFBundleVersion: "12"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Sources/KeepressoWidget/KeepressoWidget.entitlements
+      properties:
+        # Widget extensions must be sandboxed (only the appex; the app itself
+        # stays unsandboxed for IOPMAssertion).
+        com.apple.security.app-sandbox: true
+        # Shared session state with the app; Team-ID-prefixed so macOS 15+
+        # doesn't prompt for group-container access.
+        com.apple.security.application-groups:
+          - $(TeamIdentifierPrefix)sh.gyorgy.keepresso
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: sh.gyorgy.keepresso.widget
+        MARKETING_VERSION: "1.4.0"
+        CURRENT_PROJECT_VERSION: "12"
+        SWIFT_VERSION: "5.9"
+        ENABLE_HARDENED_RUNTIME: true
+        CODE_SIGN_STYLE: Automatic
 
 schemes:
   Keepresso:

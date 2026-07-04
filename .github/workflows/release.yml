@@ -18,7 +18,7 @@ permissions:
 jobs:
   release:
     name: Build, sign, notarize, publish
-    runs-on: macos-15
+    runs-on: macos-26
     environment: release # add a required reviewer to this environment in repo settings
     steps:
       - uses: actions/checkout@v4

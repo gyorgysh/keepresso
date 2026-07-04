@@ -35,6 +35,10 @@
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Keepresso checks which of your paired Bluetooth devices are connected so it can keep your Mac awake while a chosen device (like headphones) is in use.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Keepresso checks whether a calendar event is in progress so it can keep your Mac awake during your scheduled sessions.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>MIT License</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

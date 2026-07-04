@@ -8,7 +8,7 @@ on:
 jobs:
   core-tests:
     name: Core build & tests
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       # The project format (objectVersion 77) and swift-testing both need
@@ -23,7 +23,7 @@ jobs:
 
   app-build:
     name: App build
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - uses: maxim-lobanov/setup-xcode@v1
