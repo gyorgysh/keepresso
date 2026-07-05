@@ -1,10 +1,5 @@
 import AppKit
-import CoreBluetooth
-import CoreLocation
-import EventKit
 import Observation
-import UserNotifications
-import WidgetKit
 import KeepressoCore
 
 /// App-level glue around ``SessionController``: owns persisted settings, builds
@@ -435,11 +430,8 @@ final class AppModel {
 
     // MARK: - Control Center widget bridge
 
-    /// The App Group defaults shared with the widget extension, or `nil` when
-    /// the group entitlement isn't available (unsigned dev builds).
-    @ObservationIgnored private let widgetDefaults = WidgetBridge.groupDefaults()
-    /// The last state written, so the per-second tick only writes on change.
-    @ObservationIgnored private var lastWidgetState: SharedSessionState?
+    /// Writes session state to the App Group and reloads the widgets.
+    @ObservationIgnored private let widgetSync = WidgetStateSync()
 
     /// Mirror the session state into the App Group and refresh the widgets.
     /// Called from the ticker every second; cheap because it no-ops until the
@@ -447,41 +439,26 @@ final class AppModel {
     /// per-tick recomputation lands on the same instant and doesn't defeat the
     /// change check.
     func syncWidgetState() {
-        guard let widgetDefaults else { return }
         let endsAt = session.remaining.map {
             Date(timeIntervalSinceReferenceDate: (Date().timeIntervalSinceReferenceDate + $0).rounded())
         }
-        let state = SharedSessionState(
+        widgetSync.write(SharedSessionState(
             isActive: session.isActive,
             endsAt: endsAt,
             triggersEnabled: settings.triggersEnabled,
             triggersPaused: triggersPaused
-        )
-        guard state != lastWidgetState else { return }
-        lastWidgetState = state
-        WidgetBridge.writeState(state, to: widgetDefaults)
-        WidgetCenter.shared.reloadTimelines(ofKind: WidgetBridge.statusWidgetKind)
-        if #available(macOS 26.0, *) {
-            ControlCenter.shared.reloadControls(ofKind: WidgetBridge.controlKind)
-        }
+        ))
     }
 
     /// On quit, leave the widgets showing "off": the session's assertions die
     /// with this process, and a stale "Brewing" tile would lie until the next
     /// launch.
     func writeWidgetStateStopped() {
-        guard let widgetDefaults else { return }
-        let state = SharedSessionState(
+        widgetSync.write(SharedSessionState(
             isActive: false,
             triggersEnabled: settings.triggersEnabled,
             triggersPaused: triggersPaused
-        )
-        lastWidgetState = state
-        WidgetBridge.writeState(state, to: widgetDefaults)
-        WidgetCenter.shared.reloadTimelines(ofKind: WidgetBridge.statusWidgetKind)
-        if #available(macOS 26.0, *) {
-            ControlCenter.shared.reloadControls(ofKind: WidgetBridge.controlKind)
-        }
+        ))
     }
 
     /// Consume a pending widget command, if any, and drive the app through the
@@ -490,9 +467,7 @@ final class AppModel {
     /// opens the app, so a not-yet-running app lands here with the command
     /// waiting).
     func applyPendingWidgetCommand() {
-        guard let widgetDefaults,
-              let command = WidgetBridge.consumeCommand(from: widgetDefaults)
-        else { return }
+        guard let command = widgetSync.consumeCommand() else { return }
         switch command {
         case .start:
             if !session.isActive { handle(.start(mode: settings.defaultMode)) }
@@ -686,133 +661,11 @@ final class AppModel {
     /// frameworks, not the shell) are rebuilt alongside.
     func refreshReadiness() {
         Task { await readiness.refresh() }
-        rebuildPermissionChecks()
+        permissionChecks.rebuild(for: settings.ruleSet.rules)
     }
 
-    /// Build the app-permission checks and hand them to the readiness controller,
-    /// which appends them after the system checks. The login-item and Location
-    /// statuses read synchronously; the notification status is async, so it lands
-    /// a moment later.
-    private func rebuildPermissionChecks() {
-        var base = [loginItemCheck()]
-        if usesWiFiRule { base.append(locationCheck()) }
-        if usesBluetoothRule { base.append(bluetoothCheck()) }
-        if usesCalendarRule { base.append(calendarCheck()) }
-        readiness.permissionChecks = base
-        // Stamp this rebuild so a slower notification fetch from an earlier call
-        // can't overwrite a newer list: refreshReadiness() fires from both the
-        // Setup window's onAppear and its Re-check button, so two rebuilds can
-        // overlap and resolve out of order.
-        permissionChecksGeneration &+= 1
-        let generation = permissionChecksGeneration
-        Task { @MainActor in
-            let settings = await UNUserNotificationCenter.current().notificationSettings()
-            guard generation == self.permissionChecksGeneration else { return }
-            readiness.permissionChecks = base + [notificationCheck(settings.authorizationStatus)]
-        }
-    }
-
-    /// Monotonic token for ``rebuildPermissionChecks()``; only the newest rebuild's
-    /// async notification result is applied.
-    @ObservationIgnored private var permissionChecksGeneration = 0
-
-    /// Whether any saved rule needs the Wi-Fi SSID (and thus Location access).
-    private var usesWiFiRule: Bool {
-        settings.ruleSet.rules.contains { if case .wifiSSID = $0 { return true } else { return false } }
-    }
-
-    /// Whether any saved rule needs the paired-device list (and thus Bluetooth
-    /// access).
-    private var usesBluetoothRule: Bool {
-        settings.ruleSet.rules.contains { if case .bluetoothDevice = $0 { return true } else { return false } }
-    }
-
-    /// Whether any saved rule reads calendar events (and thus needs full
-    /// calendar access).
-    private var usesCalendarRule: Bool {
-        settings.ruleSet.rules.contains { if case .calendarEvent = $0 { return true } else { return false } }
-    }
-
-    private func loginItemCheck() -> ReadinessCheck {
-        let on = LoginItem.isEnabled
-        return ReadinessCheck(
-            id: "perm-login-item",
-            title: "Launch at login",
-            status: on ? .ok : .warning,
-            detail: on
-                ? "Keepresso launches at login, so it returns after a reboot."
-                : "Keepresso isn't set to launch at login, so it won't run after an unattended reboot.",
-            remediation: on ? nil : Remediation(
-                hint: "Turn on “Launch at login” in Keepresso's settings.",
-                settingsURL: URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")
-            )
-        )
-    }
-
-    private func locationCheck() -> ReadinessCheck {
-        let status = CLLocationManager().authorizationStatus
-        let authorized = status == .authorizedAlways || status == .authorized
-        return ReadinessCheck(
-            id: "perm-location",
-            title: "Location access (Wi-Fi rules)",
-            status: authorized ? .ok : .warning,
-            detail: authorized
-                ? "Keepresso can read the current Wi-Fi network name for your Wi-Fi triggers."
-                : "Without Location access Keepresso can't read the Wi-Fi network name, so Wi-Fi triggers won't match.",
-            remediation: authorized ? nil : Remediation(
-                hint: "Allow Location access for Keepresso.",
-                settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices")
-            )
-        )
-    }
-
-    private func bluetoothCheck() -> ReadinessCheck {
-        let authorized = CBManager.authorization == .allowedAlways
-        return ReadinessCheck(
-            id: "perm-bluetooth",
-            title: "Bluetooth access (device rules)",
-            status: authorized ? .ok : .warning,
-            detail: authorized
-                ? "Keepresso can see which paired devices are connected for your Bluetooth triggers."
-                : "Without Bluetooth access Keepresso can't see paired devices, so Bluetooth triggers won't match.",
-            remediation: authorized ? nil : Remediation(
-                hint: "Allow Bluetooth access for Keepresso.",
-                settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth")
-            )
-        )
-    }
-
-    private func calendarCheck() -> ReadinessCheck {
-        let authorized = EKEventStore.authorizationStatus(for: .event) == .fullAccess
-        return ReadinessCheck(
-            id: "perm-calendar",
-            title: "Calendar access (event rule)",
-            status: authorized ? .ok : .warning,
-            detail: authorized
-                ? "Keepresso can see when a calendar event is in progress for your calendar trigger."
-                : "Without full calendar access Keepresso can't see events, so the calendar trigger won't match.",
-            remediation: authorized ? nil : Remediation(
-                hint: "Allow full calendar access for Keepresso.",
-                settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")
-            )
-        )
-    }
-
-    private func notificationCheck(_ status: UNAuthorizationStatus) -> ReadinessCheck {
-        let on = status == .authorized || status == .provisional
-        return ReadinessCheck(
-            id: "perm-notifications",
-            title: "Notifications",
-            status: on ? .ok : .warning,
-            detail: on
-                ? "Keepresso can post the “still brewing” reminder."
-                : "Notifications are off, so the “still brewing” reminder can't appear.",
-            remediation: on ? nil : Remediation(
-                hint: "Allow notifications for Keepresso.",
-                settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.notifications")
-            )
-        )
-    }
+    /// Builds the app-permission rows and appends them after the system checks.
+    @ObservationIgnored private lazy var permissionChecks = PermissionChecksBuilder(readiness: readiness)
 
     // MARK: - Live system info for the "add condition" menu
 
