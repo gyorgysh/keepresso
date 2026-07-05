@@ -17,6 +17,10 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     public var reminderRepeats: Bool
     /// Whether the reminder also plays a sound.
     public var reminderSound: Bool
+    /// Post a notification when a session ends on its own. Off by default.
+    public var notifyOnEnd: Bool
+    /// What to do to the Mac when a session ends on its own. None by default.
+    public var endAction: SessionEndAction
     /// Keep a chosen disk/volume spun up, or `nil` (the default) for off.
     public var diskKeepAlive: DiskKeepAliveConfig?
     /// Experimental headless virtual display, or `nil` (the default) for off.
@@ -51,6 +55,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         reminderAfter: TimeInterval? = nil,
         reminderRepeats: Bool = false,
         reminderSound: Bool = true,
+        notifyOnEnd: Bool = false,
+        endAction: SessionEndAction = .none,
         diskKeepAlive: DiskKeepAliveConfig? = nil,
         virtualDisplay: VirtualDisplayConfig? = nil,
         pauseBelowBatteryPercent: Int? = nil,
@@ -68,6 +74,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.reminderAfter = reminderAfter
         self.reminderRepeats = reminderRepeats
         self.reminderSound = reminderSound
+        self.notifyOnEnd = notifyOnEnd
+        self.endAction = endAction
         self.diskKeepAlive = diskKeepAlive
         self.virtualDisplay = virtualDisplay
         self.pauseBelowBatteryPercent = pauseBelowBatteryPercent
@@ -126,6 +134,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         reminderAfter = try c.decodeIfPresent(TimeInterval.self, forKey: .reminderAfter)
         reminderRepeats = try c.decodeIfPresent(Bool.self, forKey: .reminderRepeats) ?? false
         reminderSound = try c.decodeIfPresent(Bool.self, forKey: .reminderSound) ?? true
+        notifyOnEnd = try c.decodeIfPresent(Bool.self, forKey: .notifyOnEnd) ?? false
+        endAction = try c.decodeIfPresent(SessionEndAction.self, forKey: .endAction) ?? .none
         diskKeepAlive = try c.decodeIfPresent(DiskKeepAliveConfig.self, forKey: .diskKeepAlive)
         virtualDisplay = try c.decodeIfPresent(VirtualDisplayConfig.self, forKey: .virtualDisplay)
         pauseBelowBatteryPercent = try c.decodeIfPresent(Int.self, forKey: .pauseBelowBatteryPercent)

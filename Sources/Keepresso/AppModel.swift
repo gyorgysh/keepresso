@@ -55,6 +55,8 @@ final class AppModel {
         self.session.reminderAfter = loaded.reminderAfter
         self.session.reminderRepeats = loaded.reminderRepeats
         self.session.reminderSound = loaded.reminderSound
+        self.session.notifyOnEnd = loaded.notifyOnEnd
+        self.session.endAction = loaded.endAction
         self.session.pauseBelowBatteryPercent = loaded.pauseBelowBatteryPercent
         self.disk = DiskKeepAliveController()
         self.disk.config = loaded.diskKeepAlive
@@ -81,6 +83,15 @@ final class AppModel {
     /// awake right now, whoever's doing it). Read on demand by the UI.
     func currentAssertions() -> [PowerAssertionInfo] {
         assertionLister.current()
+    }
+
+    /// The most relevant power assertion held by some *other* process, for the
+    /// dropdown's "who else is keeping the Mac awake" line. `nil` when only
+    /// Keepresso (or nothing) is holding one. Lets the menu explain a Mac that
+    /// won't sleep even while Keepresso is idle.
+    func topExternalAssertion() -> PowerAssertionInfo? {
+        let myPID = ProcessInfo.processInfo.processIdentifier
+        return currentAssertions().first { $0.effect != nil && $0.pid != myPID }
     }
 
     // MARK: - Manual activation
@@ -293,6 +304,28 @@ final class AppModel {
         set {
             settings.reminderSound = newValue
             session.reminderSound = newValue
+            persist()
+        }
+    }
+
+    /// Whether a notification fires when a session ends on its own. Enabling it
+    /// requests notification permission (same as the reminder).
+    var notifyOnEnd: Bool {
+        get { settings.notifyOnEnd }
+        set {
+            settings.notifyOnEnd = newValue
+            session.notifyOnEnd = newValue
+            if newValue { notifier.requestAuthorization() }
+            persist()
+        }
+    }
+
+    /// What Keepresso does to the Mac when a session ends on its own.
+    var endAction: SessionEndAction {
+        get { settings.endAction }
+        set {
+            settings.endAction = newValue
+            session.endAction = newValue
             persist()
         }
     }

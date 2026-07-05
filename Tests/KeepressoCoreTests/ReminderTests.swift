@@ -155,3 +155,79 @@ private final class StubReminderGate: TriggerEvaluating {
     init(_ satisfied: Bool) { self.satisfied = satisfied }
     func isSatisfied() -> Bool { satisfied }
 }
+
+// MARK: - Session-end notification and action
+
+/// Records the actions performed when a session ends.
+private final class FakeEndActor: SessionEndActing {
+    private(set) var performed: [SessionEndAction] = []
+    func perform(_ action: SessionEndAction) { performed.append(action) }
+}
+
+@MainActor
+private func makeEndController() -> (SessionController, FakeReminder, FakeEndActor, Clock) {
+    let reminder = FakeReminder()
+    let endActor = FakeEndActor()
+    let clock = Clock()
+    let controller = SessionController(
+        assertions: FakeAssertions(),
+        reminder: reminder,
+        endActor: endActor,
+        now: { clock.now }
+    )
+    return (controller, reminder, endActor, clock)
+}
+
+@MainActor
+@Test func endEffectsFireWhenATimedSessionExpires() {
+    let (controller, reminder, endActor, clock) = makeEndController()
+    controller.notifyOnEnd = true
+    controller.endAction = .sleepDisplay
+    controller.start(mode: .timed(duration: 60))
+
+    clock.advance(61)
+    controller.reconcile()
+    #expect(controller.isActive == false)
+    #expect(reminder.notices.contains { $0.title == "Keepresso stopped" })
+    #expect(endActor.performed == [.sleepDisplay])
+}
+
+@MainActor
+@Test func aManualStopDoesNotFireEndEffects() {
+    let (controller, reminder, endActor, _) = makeEndController()
+    controller.notifyOnEnd = true
+    controller.endAction = .sleepDisplay
+    controller.start()
+    controller.stop() // user-initiated: no surprise notification or action
+    #expect(reminder.notices.isEmpty)
+    #expect(endActor.performed.isEmpty)
+}
+
+@MainActor
+@Test func endEffectsFireWhenTriggerConditionsDrop() {
+    let (controller, reminder, endActor, _) = makeEndController()
+    controller.notifyOnEnd = true
+    controller.endAction = .startScreensaver
+    let gate = StubReminderGate(true)
+    controller.triggerGate = gate
+
+    controller.reconcile() // conditions met: activates
+    #expect(controller.isActive)
+    gate.satisfied = false
+    controller.reconcile() // conditions drop: ends on its own
+    #expect(controller.isActive == false)
+    #expect(reminder.notices.contains { $0.title == "Keepresso stopped" })
+    #expect(endActor.performed == [.startScreensaver])
+}
+
+@MainActor
+@Test func endEffectsStayQuietWhenTheOptionsAreOff() {
+    let (controller, reminder, endActor, clock) = makeEndController()
+    // notifyOnEnd false, endAction .none (defaults)
+    controller.start(mode: .timed(duration: 30))
+    clock.advance(31)
+    controller.reconcile()
+    #expect(controller.isActive == false)
+    #expect(reminder.notices.isEmpty)
+    #expect(endActor.performed.isEmpty)
+}

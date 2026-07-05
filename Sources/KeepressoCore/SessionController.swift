@@ -44,6 +44,13 @@ public final class SessionController {
     /// Whether the reminder also plays the system sound. Default true.
     public var reminderSound = true
 
+    /// Post a notification when a session ends on its own (timed expiry, trigger
+    /// drop, low-battery pause), not on a manual stop. Default false.
+    public var notifyOnEnd = false
+
+    /// What to do to the Mac when a session ends on its own. Default none.
+    public var endAction: SessionEndAction = .none
+
     /// When set, ``reconcile(now:systemIdleSeconds:batteryPercent:)`` force-stops
     /// an active session (releasing assertions and letting the Mac sleep) once
     /// the battery drops below this percentage, and holds off reactivating,
@@ -64,6 +71,7 @@ public final class SessionController {
     private let assertions: PowerAsserting
     private let reminder: ReminderNotifying?
     private let activity: ActivitySimulating
+    private let endActor: SessionEndActing
     private let now: () -> Date
 
     /// When the keep-active poke last fired this session, so it runs on a slow
@@ -99,11 +107,13 @@ public final class SessionController {
         assertions: PowerAsserting = IOKitPowerAssertionManager(),
         reminder: ReminderNotifying? = nil,
         activity: ActivitySimulating = IOKitActivitySimulator(),
+        endActor: SessionEndActing = SystemEndActionPerformer(),
         now: @escaping () -> Date = Date.init
     ) {
         self.assertions = assertions
         self.reminder = reminder
         self.activity = activity
+        self.endActor = endActor
         self.now = now
     }
 
@@ -132,8 +142,11 @@ public final class SessionController {
     }
 
     /// The shared teardown: logs `reason` when a session was actually running
-    /// (idempotent stops don't spam the log), then releases everything.
-    private func stop(reason: String) {
+    /// (idempotent stops don't spam the log), then releases everything. When the
+    /// session ended on its own (`endedNaturally`), fire the end notification and
+    /// action; a manual stop passes `false` so it never surprise-sleeps the Mac.
+    private func stop(reason: String, endedNaturally: Bool = false) {
+        let wasActive = isActive
         if isActive {
             log.record(began: false, reason: reason, at: now())
         }
@@ -143,6 +156,20 @@ public final class SessionController {
         lastActivityPokeAt = nil
         assertions.releaseAll()
         reminder?.cancelPending()
+        if wasActive, endedNaturally { performEndEffects() }
+    }
+
+    /// Notify (and optionally act) when a session ends on its own. The cancelled
+    /// reminder above is the mid-session nudge; this is a separate one-shot.
+    private func performEndEffects() {
+        if notifyOnEnd {
+            reminder?.notify(
+                title: "Keepresso stopped",
+                body: "Your keep-awake session has ended.",
+                sound: reminderSound
+            )
+        }
+        if endAction != .none { endActor.perform(endAction) }
     }
 
     static func startReason(cause: SessionCause, restarted: Bool) -> String {
@@ -211,7 +238,7 @@ public final class SessionController {
                 pausedByBattery = false
             } else if percent < threshold {
                 pausedByBattery = true
-                if isActive { stop(reason: "Paused, battery below \(threshold)%") }
+                if isActive { stop(reason: "Paused, battery below \(threshold)%", endedNaturally: true) }
                 return
             }
         } else {
@@ -225,7 +252,7 @@ public final class SessionController {
             setActive(triggerGate.isSatisfied(), at: instant)
         } else if isActive, let total = mode.duration, let startedAt,
                   instant.timeIntervalSince(startedAt) >= total {
-            stop(reason: "Timed session ended")
+            stop(reason: "Timed session ended", endedNaturally: true)
             return
         }
 
@@ -292,12 +319,7 @@ public final class SessionController {
             let detail = triggerDescriber?().map { "Triggers: \($0)" }
             log.record(began: true, reason: detail ?? "Trigger conditions met", at: instant)
         } else if !want, isActive {
-            isActive = false
-            startedAt = nil
-            remindersFired = 0
-            lastActivityPokeAt = nil
-            reminder?.cancelPending()
-            log.record(began: false, reason: "Trigger conditions ended", at: instant)
+            stop(reason: "Trigger conditions ended", endedNaturally: true)
         }
     }
 

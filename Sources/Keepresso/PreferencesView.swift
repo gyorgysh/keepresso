@@ -408,6 +408,26 @@ private struct ReminderTab: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section {
+                Toggle("Notify when a session ends", isOn: Binding(
+                    get: { model.notifyOnEnd },
+                    set: { model.notifyOnEnd = $0 }
+                ))
+                Picker("On session end", selection: Binding(
+                    get: { model.endAction },
+                    set: { model.endAction = $0 }
+                )) {
+                    ForEach(SessionEndAction.allCases, id: \.self) { action in
+                        Text(action.label).tag(action)
+                    }
+                }
+            } header: {
+                Text("Session end")
+            } footer: {
+                Text("Fires when a timed session expires, trigger conditions drop, or a low-battery pause kicks in, not when you stop it yourself. The action is off by default so a timed session never surprises you.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)

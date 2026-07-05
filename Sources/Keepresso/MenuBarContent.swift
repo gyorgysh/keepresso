@@ -46,6 +46,8 @@ struct MenuBarContent: View {
         VStack(alignment: .leading, spacing: 12) {
             header
 
+            heldByLine
+
             if model.triggersEnabled && !model.triggersPaused {
                 triggerSummary
             }
@@ -274,6 +276,28 @@ struct MenuBarContent: View {
             return "Stops in \(MenuBarLabel.format(remaining))"
         }
         return "Awake for \(MenuBarLabel.format(displayedElapsed))"
+    }
+
+    /// A compact line naming another process that's holding the Mac awake, so an
+    /// idle Keepresso still explains a Mac that won't sleep. Refreshes on the 1s
+    /// tick (the whole body re-renders then).
+    @ViewBuilder
+    private var heldByLine: some View {
+        let _ = liveRefresh // re-read the live assertion list each tick
+        if let assertion = model.topExternalAssertion(), let effect = assertion.effect {
+            HStack(spacing: 6) {
+                Image(systemName: "bolt.horizontal.circle")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+                    .accessibilityHidden(true)
+                Text("\(assertion.processName): \(effect.lowercased())")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+        }
     }
 
     // MARK: - Live trigger summary
