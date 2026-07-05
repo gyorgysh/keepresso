@@ -119,7 +119,7 @@ public final class GamingTrigger: Trigger {
         Self.isGame(monitor.current)
     }
 
-    /// Pure decision function — exposed for direct unit testing.
+    /// Pure decision function, exposed for direct unit testing.
     ///
     /// Games declare `public.app-category.games` or a subcategory like
     /// `public.app-category.action-games`; every subcategory ends in `-games`,

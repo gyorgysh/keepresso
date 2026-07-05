@@ -11,18 +11,41 @@ public protocol Trigger: AnyObject {
     /// A stable, human-readable description (for the rules UI and diagnostics).
     var label: String { get }
 
-    /// Whether the condition currently holds. Cheap and side-effect-free;
-    /// the engine may call it every tick.
+    /// Advance any internal state by one tick. The host calls this exactly once
+    /// per reconcile on every registered trigger, unconditionally, so a stateful
+    /// trigger (grace window, smoothing average) steps at a fixed cadence
+    /// regardless of how the engine combines the results. Stateless triggers
+    /// leave this as the default no-op. See ``TriggerEngine`` for why decoupling
+    /// the state advance from the gating read matters.
+    func tick()
+
+    /// Whether the condition currently holds. A pure, side-effect-free read of
+    /// already-advanced state, so the engine and the menu's live rule list can
+    /// both call it any number of times per tick without disturbing a stateful
+    /// trigger. Call ``tick()`` once per reconcile to move state forward.
     func isSatisfied() -> Bool
 }
 
-/// Something that produces a single live on/off signal — the abstraction the
+public extension Trigger {
+    /// Stateless triggers have nothing to advance.
+    func tick() {}
+}
+
+/// Something that produces a single live on/off signal: the abstraction the
 /// ``SessionController`` gates on. A lone ``Trigger`` is one; a ``TriggerEngine``
 /// combining several is another. Kept separate from ``Trigger`` so the
 /// controller need not know how the decision is composed.
 public protocol TriggerEvaluating: AnyObject {
+    /// Advance internal state by one tick, once per reconcile. Default no-op for
+    /// stateless evaluators.
+    func tick()
+
     /// Whether the combined condition currently wants the session ON.
     func isSatisfied() -> Bool
+}
+
+public extension TriggerEvaluating {
+    func tick() {}
 }
 
 /// Fires based on how the Mac is being powered (`IOPowerSources`).
@@ -61,7 +84,7 @@ public final class PowerSourceTrigger: Trigger {
         Self.evaluate(match, against: monitor.current)
     }
 
-    /// Pure decision function — exposed for direct unit testing.
+    /// Pure decision function, exposed for direct unit testing.
     static func evaluate(_ match: Match, against snapshot: PowerSourceSnapshot) -> Bool {
         switch match {
         case .onACPower: return snapshot.provider == .ac
@@ -170,7 +193,7 @@ public final class ProcessTrigger: Trigger {
         Self.matches(query, in: monitor.current)
     }
 
-    /// Pure decision function — exposed for direct unit testing. An empty query
+    /// Pure decision function, exposed for direct unit testing. An empty query
     /// never matches (so a half-typed rule doesn't pin the Mac awake).
     static func matches(_ query: String, in processes: [String]) -> Bool {
         let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
@@ -180,12 +203,14 @@ public final class ProcessTrigger: Trigger {
 }
 
 /// Wraps another trigger and keeps reporting satisfied for `grace` seconds after
-/// the wrapped condition goes false — the "linger before deactivating" of v0.3.
+/// the wrapped condition goes false: the "linger before deactivating" of v0.3.
 ///
-/// Time-aware by necessity: unlike the stateless conditions, ``isSatisfied()``
-/// records when it last saw the wrapped trigger true (the engine polls it every
-/// reconcile, which is the tick that advances the window). A non-positive grace
-/// makes it a transparent pass-through.
+/// Time-aware by necessity, so the grace window is advanced in ``tick()`` (the
+/// once-per-reconcile step) rather than in the gating read. This matters because
+/// the engine short-circuits its combine: if the read advanced the window, an
+/// OR-sibling firing first would starve this trigger's ``tick()`` and silently
+/// lose the grace. ``isSatisfied()`` stays a pure read of the recorded window. A
+/// non-positive grace makes it a transparent pass-through.
 public final class GracePeriodTrigger: Trigger {
     private let wrapped: Trigger
     private let grace: TimeInterval
@@ -200,11 +225,13 @@ public final class GracePeriodTrigger: Trigger {
 
     public var label: String { wrapped.label }
 
+    public func tick() {
+        wrapped.tick()
+        if wrapped.isSatisfied() { lastSatisfiedAt = now() }
+    }
+
     public func isSatisfied() -> Bool {
-        if wrapped.isSatisfied() {
-            lastSatisfiedAt = now()
-            return true
-        }
+        if wrapped.isSatisfied() { return true }
         guard grace > 0, let last = lastSatisfiedAt else { return false }
         return now().timeIntervalSince(last) < grace
     }
@@ -212,13 +239,13 @@ public final class GracePeriodTrigger: Trigger {
 
 /// How a rule set combines its triggers into a single on/off decision.
 public enum CombineMode: String, Codable, Sendable, CaseIterable {
-    /// OR — satisfied when *any* trigger fires. The default.
+    /// OR: satisfied when *any* trigger fires. The default.
     case any
-    /// AND — satisfied only when *every* trigger fires.
+    /// AND: satisfied only when *every* trigger fires.
     case all
 }
 
-/// Combines a set of triggers into one live on/off signal — the seam the
+/// Combines a set of triggers into one live on/off signal, the seam the
 /// ``SessionController`` gates on when running in trigger-driven mode.
 ///
 /// An empty engine is never satisfied, so enabling trigger gating with no
@@ -239,6 +266,15 @@ public final class TriggerEngine: TriggerEvaluating {
 
     public func removeAll() { triggers.removeAll() }
 
+    /// Advance every trigger once, unconditionally. Called once per reconcile
+    /// before ``isSatisfied()`` so a stateful trigger steps at a fixed cadence
+    /// even when the short-circuiting combine below wouldn't have read it.
+    public func tick() {
+        for trigger in triggers { trigger.tick() }
+    }
+
+    /// The combined decision, a pure read of the state ``tick()`` advanced. Safe
+    /// to short-circuit: every trigger already stepped in ``tick()``.
     public func isSatisfied() -> Bool {
         guard !triggers.isEmpty else { return false }
         switch combine {

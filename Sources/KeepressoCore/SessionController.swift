@@ -7,7 +7,7 @@ import Observation
 /// The controller is intentionally UI-free and side-effect-light so it can be
 /// driven from SwiftUI *and* exercised in tests. It does not run its own timer;
 /// the host (the app, or a test) calls ``reconcile(now:systemIdleSeconds:)``
-/// periodically — typically once a second — which is where timed sessions
+/// periodically, typically once a second, which is where timed sessions
 /// expire and the screen-saver-yield is applied.
 @MainActor
 @Observable
@@ -28,7 +28,7 @@ public final class SessionController {
     /// When set, live triggers own activation: every ``reconcile(now:systemIdleSeconds:)``
     /// turns the session on or off to match the gate, and manual ``toggle()`` /
     /// ``start(mode:options:)`` only hold until the next tick. While gated the
-    /// timed-``mode`` cap is ignored — a condition-gated session isn't time-boxed.
+    /// timed-``mode`` cap is ignored, a condition-gated session isn't time-boxed.
     /// Leave `nil` for the classic manual toggle.
     public var triggerGate: TriggerEvaluating?
 
@@ -46,8 +46,8 @@ public final class SessionController {
 
     /// When set, ``reconcile(now:systemIdleSeconds:batteryPercent:)`` force-stops
     /// an active session (releasing assertions and letting the Mac sleep) once
-    /// the battery drops below this percentage, and holds off reactivating —
-    /// manual or trigger-gated — until it's fed a reading at or above it again.
+    /// the battery drops below this percentage, and holds off reactivating,
+    /// manual or trigger-gated, until it's fed a reading at or above it again.
     /// `nil` (the default) never overrides on battery level.
     public var pauseBelowBatteryPercent: Int?
 
@@ -69,6 +69,17 @@ public final class SessionController {
     /// the per-second ``reconcile(now:systemIdleSeconds:)`` fires each at most
     /// once (and a recurring reminder advances one nudge per interval crossed).
     private var remindersFired = 0
+
+    /// True once ``pauseBelowBatteryPercent`` has force-stopped the session, so
+    /// reactivation waits for a clear recovery instead of the exact cutoff. See
+    /// ``batteryResumeMargin``.
+    private var pausedByBattery = false
+
+    /// Extra charge (percentage points) above the cutoff required before a
+    /// battery-paused session may reactivate. A dead-band: without it a reading
+    /// bouncing 19/20/19/20 around a threshold of 20 would force-stop and
+    /// immediately restart every second.
+    static let batteryResumeMargin = 3
 
     /// - Parameters:
     ///   - assertions: power-assertion backend; inject a fake in tests.
@@ -143,7 +154,7 @@ public final class SessionController {
 
     /// Seconds remaining in a timed session, or `nil` for indefinite/idle or a
     /// trigger-gated session (gating ignores the timed cap, so there's nothing
-    /// counting down — see ``reconcile(now:systemIdleSeconds:batteryPercent:)``).
+    /// counting down, see ``reconcile(now:systemIdleSeconds:batteryPercent:)``).
     public var remaining: TimeInterval? {
         guard triggerGate == nil, isActive, let total = mode.duration, let startedAt else { return nil }
         return max(0, total - now().timeIntervalSince(startedAt))
@@ -164,13 +175,25 @@ public final class SessionController {
     public func reconcile(now: Date? = nil, systemIdleSeconds: TimeInterval? = nil, batteryPercent: Int? = nil) {
         let instant = now ?? self.now()
 
-        if let threshold = pauseBelowBatteryPercent, let percent = batteryPercent, percent < threshold {
-            if isActive { stop(reason: "Paused, battery below \(threshold)%") }
-            return
+        if let threshold = pauseBelowBatteryPercent, let percent = batteryPercent {
+            if pausedByBattery {
+                // Stay paused until charge clears the cutoff by the resume margin,
+                // so a reading hovering at the threshold doesn't restart every tick.
+                guard percent >= threshold + Self.batteryResumeMargin else { return }
+                pausedByBattery = false
+            } else if percent < threshold {
+                pausedByBattery = true
+                if isActive { stop(reason: "Paused, battery below \(threshold)%") }
+                return
+            }
+        } else {
+            // Feature off or no reading: never leave a stale pause latched.
+            pausedByBattery = false
         }
 
         if let triggerGate {
             // Triggers fully own activation; the timed cap doesn't apply.
+            triggerGate.tick()
             setActive(triggerGate.isSatisfied(), at: instant)
         } else if isActive, let total = mode.duration, let startedAt,
                   instant.timeIntervalSince(startedAt) >= total {

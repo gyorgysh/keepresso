@@ -26,7 +26,7 @@ public protocol DisplayMonitoring: AnyObject {
 /// Real backend over CoreGraphics' active-display list.
 ///
 /// Uses `CGDisplayIsBuiltin` to tell the laptop panel apart from external
-/// monitors — no AppKit needed, keeping `KeepressoCore` UI-free.
+/// monitors, no AppKit needed, keeping `KeepressoCore` UI-free.
 public final class CoreGraphicsDisplayMonitor: DisplayMonitoring {
     public init() {}
 

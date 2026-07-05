@@ -42,13 +42,16 @@ private final class FakeBluetoothMonitor: BluetoothMonitoring {
     var now = Date(timeIntervalSinceReferenceDate: 0)
     let factory = TriggerFactory(bluetooth: monitor, now: { now })
     let engine = factory.makeEngine(from: RuleSet(rules: [.bluetoothDevice("AirPods Pro")]))
+    engine.tick()
     #expect(engine.isSatisfied())
 
     monitor.snapshot = BluetoothSnapshot()
     now.addTimeInterval(BluetoothDeviceTrigger.releaseGrace - 1)
+    engine.tick()
     #expect(engine.isSatisfied())
 
     now.addTimeInterval(2)
+    engine.tick()
     #expect(!engine.isSatisfied())
 }
 

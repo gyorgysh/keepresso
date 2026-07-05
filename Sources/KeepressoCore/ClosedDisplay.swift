@@ -81,10 +81,16 @@ public final class ClosedDisplayController {
     /// auto-wakes the panel when the lid reopens, so there's nothing to do on
     /// that edge. Safe to call every second.
     public func tick() {
-        guard isEnabled == true, let closed = lid.isClosed() else {
+        // Only reset the edge flag when the mode is actually off. A transient
+        // nil lid read (AppleClamshellState occasionally returns nil) must not
+        // clear it: doing so would re-fire `displaysleepnow` on the next good
+        // read even though the panel is already asleep, spawning spurious pmset
+        // processes during a nil-read flutter.
+        guard isEnabled == true else {
             wantedPanelAsleep = false
             return
         }
+        guard let closed = lid.isClosed() else { return }
         let wantsPanelAsleep = closed && !externalDisplay.current.hasExternalDisplay
         defer { wantedPanelAsleep = wantsPanelAsleep }
         guard wantsPanelAsleep, !wantedPanelAsleep else { return }
@@ -97,8 +103,15 @@ public final class ClosedDisplayController {
     /// display-driver callback can crash (EXC_BAD_ACCESS). So the read hops to a
     /// detached task and the result lands back on the main actor.
     public func refresh() async {
+        // Defer to an in-flight ``set(_:)``: it writes the authoritative state
+        // after its prompt. A refresh landing its (pre-write) read last would
+        // otherwise briefly show the stale toggle. Checked on both sides of the
+        // await, since a write can start mid-read.
+        guard !isBusy else { return }
         let control = self.control
-        isEnabled = await Task.detached { control.isSleepDisabled() }.value
+        let value = await Task.detached { control.isSleepDisabled() }.value
+        guard !isBusy else { return }
+        isEnabled = value
     }
 
     /// Request the new state. Shows the administrator prompt off the main actor

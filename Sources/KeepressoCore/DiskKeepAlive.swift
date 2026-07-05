@@ -5,7 +5,7 @@ import Observation
 /// ``KeepressoSettings``; `nil` there means the feature is off.
 public struct DiskKeepAliveConfig: Codable, Equatable, Sendable {
     /// Directory whose volume to keep awake. A small marker file is rewritten
-    /// inside it each interval — choosing a folder on the target disk (an
+    /// inside it each interval, choosing a folder on the target disk (an
     /// external drive or NAS mount) is what keeps that volume from spinning down.
     public var directory: URL
 
@@ -40,7 +40,7 @@ public protocol DiskTouching: AnyObject {
 }
 
 /// Drives the periodic disk touch. Like ``SessionController`` it runs no timer
-/// of its own — the host calls ``tick(now:)`` once a second and this throttles
+/// of its own, the host calls ``tick(now:)`` once a second and this throttles
 /// down to ``DiskKeepAliveConfig/interval``.
 @MainActor
 @Observable

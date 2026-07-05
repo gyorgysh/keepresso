@@ -115,10 +115,15 @@ public final class CPULoadTrigger: Trigger {
 
     public var label: String { "CPU above \(thresholdPercent)%" }
 
-    public func isSatisfied() -> Bool {
+    /// Advance the smoothing average by one reading. Done here (not in
+    /// ``isSatisfied()``) so the EMA steps exactly once per reconcile: the menu's
+    /// live rule list also reads this trigger, and stepping on every read would
+    /// double the effective smoothing rate whenever the menu is open.
+    public func tick() {
         state = Self.step(state, sample: reader.currentLoad(), thresholdPercent: thresholdPercent)
-        return state.isSatisfied
     }
+
+    public func isSatisfied() -> Bool { state.isSatisfied }
 
     /// Pure decision step, exposed for direct unit testing. A `nil` sample
     /// (failed read) keeps the previous average and verdict rather than
@@ -134,7 +139,12 @@ public final class CPULoadTrigger: Trigger {
             return next
         }
         let on = Double(thresholdPercent) / 100
-        next.isSatisfied = state.isSatisfied ? average >= on - hysteresis : average >= on
+        // Keep the release band strictly below `on` but always positive: a flat
+        // `on - hysteresis` goes <= 0 for thresholds <= 5%, which (with the
+        // average clamped to 0...1) would make the release test always true and
+        // latch the trigger on forever.
+        let off = max(on - hysteresis, on * 0.5)
+        next.isSatisfied = state.isSatisfied ? average >= off : average >= on
         return next
     }
 }

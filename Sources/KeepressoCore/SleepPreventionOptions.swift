@@ -10,7 +10,7 @@ import Foundation
 /// allowed to sleep (e.g. long downloads, NAS jobs), or keep the screen lit.
 public struct SleepPreventionOptions: Equatable, Codable, Sendable {
     /// Keep the system awake even when otherwise idle. With this on, the Mac
-    /// will not enter idle sleep — including, on most hardware running on AC
+    /// will not enter idle sleep, including, on most hardware running on AC
     /// power, when the lid is closed (clamshell).
     public var preventSystemSleep: Bool
 

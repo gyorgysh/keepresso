@@ -3,7 +3,7 @@ import ServiceManagement
 
 /// Thin wrapper over `SMAppService.mainApp` for the "Launch at login" toggle.
 ///
-/// No helper bundle or `launchd` plist needed — the modern `SMAppService` API
+/// No helper bundle or `launchd` plist needed, the modern `SMAppService` API
 /// registers the main app itself (macOS 13+).
 @MainActor
 enum LoginItem {

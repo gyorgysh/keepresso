@@ -45,12 +45,32 @@ private func run(_ samples: [Double?], threshold: Int, from state: CPULoadTrigge
 }
 
 @MainActor
-@Test func triggerConsumesItsReader() {
+@Test func triggerAdvancesOnlyOnTick() {
     let reader = FakeCPUReader(Array(repeating: 0.9, count: 12))
     let trigger = CPULoadTrigger(thresholdPercent: 50, reader: reader)
-    var last = false
-    for _ in 0 ..< 12 { last = trigger.isSatisfied() }
-    #expect(last)
+    for _ in 0 ..< 12 { trigger.tick() }
+    #expect(trigger.isSatisfied())
+}
+
+@MainActor
+@Test func isSatisfiedIsAPureReadThatDoesNotStepTheAverage() {
+    // The menu's live rule list calls isSatisfied() every render; it must not
+    // advance the EMA (that would double the smoothing rate with the menu open,
+    // the E6 double-step). Only tick() consumes a reading.
+    let reader = FakeCPUReader(Array(repeating: 0.9, count: 5))
+    let trigger = CPULoadTrigger(thresholdPercent: 50, reader: reader)
+    for _ in 0 ..< 100 { _ = trigger.isSatisfied() } // no ticks: nothing read
+    #expect(!trigger.isSatisfied())     // never armed
+    #expect(reader.readings.count == 5) // reader untouched
+}
+
+@Test func lowThresholdCanStillRelease() {
+    // With a flat `on - hysteresis` the off-band goes <= 0 for thresholds <= 5%,
+    // latching the trigger on forever. The floored band must still release.
+    var state = run(Array(repeating: 0.9, count: 12), threshold: 5)
+    #expect(state.isSatisfied)
+    state = run(Array(repeating: 0.0, count: 40), threshold: 5, from: state)
+    #expect(!state.isSatisfied) // idle CPU releases even at a 5% threshold
 }
 
 @Test func hostReaderComputesTheDeltaBetweenSamples() {

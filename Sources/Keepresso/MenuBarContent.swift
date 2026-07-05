@@ -160,11 +160,19 @@ struct MenuBarContent: View {
         }
     }
 
-    /// Opens a window scene and brings the app forward (an `LSUIElement` agent
-    /// has no Dock icon, so the new window can otherwise appear behind others).
+    /// Opens a window scene and brings the app forward, then dismisses the
+    /// dropdown. Keepresso is an `LSUIElement` agent, so opening a sibling
+    /// `Window` scene doesn't deactivate it: the `.window`-style panel keeps key
+    /// status and the new window orders behind it (the user-reported "menu stays
+    /// open behind Preferences" bug). Capture the panel (it's the key window
+    /// while a menu Button is being tapped) and close it after opening.
+    /// `@Environment(\.dismiss)` isn't reliable for this panel across macOS
+    /// versions, so target the `NSWindow` directly.
     private func open(_ id: String) {
-        openWindow(id: id)
+        let panel = NSApp.keyWindow
         NSApp.activate(ignoringOtherApps: true)
+        openWindow(id: id)
+        panel?.close()
     }
 
     // MARK: - Header
@@ -280,6 +288,7 @@ struct MenuBarContent: View {
                         Image(systemName: state.satisfied ? "checkmark.circle.fill" : "circle")
                             .foregroundStyle(state.satisfied ? Color.green : Color.secondary)
                             .font(.caption)
+                            .accessibilityLabel(state.satisfied ? "Met" : "Not met")
                         Text(state.rule.label)
                             .font(.caption)
                             .foregroundStyle(state.satisfied ? .primary : .secondary)

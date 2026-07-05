@@ -7,9 +7,9 @@ import Foundation
 /// without AppKit.
 ///
 /// Recognised forms:
-/// - `keepresso://start` — start an indefinite session
-/// - `keepresso://start?duration=60` — start a timed session (minutes)
-/// - `keepresso://start?until=18:00` — start a session ending at a wall-clock
+/// - `keepresso://start`: start an indefinite session
+/// - `keepresso://start?duration=60`: start a timed session (minutes)
+/// - `keepresso://start?until=18:00`: start a session ending at a wall-clock
 ///   time (later today, or tomorrow if it already passed; 24-hour HH:MM)
 /// - `keepresso://stop`
 /// - `keepresso://toggle`

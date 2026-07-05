@@ -82,7 +82,7 @@ public struct AppRule: Codable, Equatable, Hashable, Sendable {
     }
 }
 
-/// A named set of trigger rules plus how they combine — the persisted shape of
+/// A named set of trigger rules plus how they combine, the persisted shape of
 /// a trigger configuration.
 public struct RuleSet: Codable, Equatable, Sendable {
     /// OR (any) or AND (all). Defaults to OR.

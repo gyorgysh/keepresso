@@ -24,7 +24,7 @@ final class AppModel {
     /// system, so nothing about it is persisted in ``KeepressoSettings``.
     let closedDisplay = ClosedDisplayController()
     /// Backs the headless-readiness Setup screen. Populated on demand via
-    /// ``refreshReadiness()`` — empty until the Setup window first appears.
+    /// ``refreshReadiness()``, empty until the Setup window first appears.
     let readiness = SystemReadinessController()
     /// Experimental headless virtual display (private CoreGraphics API), off by
     /// default. Uses the real backend; `nil` config means no virtual display.
@@ -154,16 +154,21 @@ final class AppModel {
     /// relaunching Keepresso always comes back unpaused.
     private(set) var triggersPaused = false
 
-    /// Suspend trigger gating and stop the session right away — pausing is
+    /// Suspend trigger gating and stop the session right away: pausing is
     /// meant to answer "let my Mac sleep for now", not just hand the wheel to
     /// the manual toggle while leaving it brewing. Control reverts to the
     /// manual toggle (so it can be turned back on by hand) until
     /// ``resumeTriggers()``. No-op if triggers aren't on or already paused.
-    func pauseTriggers() {
+    ///
+    /// `cause` labels the stop in the decision log. It defaults to `.manual`
+    /// (the menu's Pause Triggers button); ``handle(_:)`` passes `.command` so a
+    /// URL / Shortcuts / widget stop that has to pause a trigger-held session
+    /// first isn't misattributed as a manual stop.
+    func pauseTriggers(cause: SessionCause = .manual) {
         guard settings.triggersEnabled, !triggersPaused else { return }
         triggersPaused = true
         applyTriggerGate()
-        session.stop()
+        session.stop(cause: cause)
     }
 
     /// Hand activation back to the trigger engine. No-op if not currently paused.
@@ -510,9 +515,11 @@ final class AppModel {
     /// command on the next once-a-second reconcile, turning it into a no-op
     /// with no feedback to the script that fired it.
     func handle(_ command: URLCommand) {
-        // Capture before pausing: pauseTriggers() stops the session.
+        // Capture before pausing: pauseTriggers() stops the session. Pass
+        // .command so pausing a trigger-held session logs the stop as the
+        // command that caused it, not "Stopped manually".
         let wasActive = session.isActive
-        pauseTriggers()
+        pauseTriggers(cause: .command)
         switch command {
         case .start(let mode):
             session.start(mode: mode, cause: .command)
@@ -692,11 +699,22 @@ final class AppModel {
         if usesBluetoothRule { base.append(bluetoothCheck()) }
         if usesCalendarRule { base.append(calendarCheck()) }
         readiness.permissionChecks = base
+        // Stamp this rebuild so a slower notification fetch from an earlier call
+        // can't overwrite a newer list: refreshReadiness() fires from both the
+        // Setup window's onAppear and its Re-check button, so two rebuilds can
+        // overlap and resolve out of order.
+        permissionChecksGeneration &+= 1
+        let generation = permissionChecksGeneration
         Task { @MainActor in
             let settings = await UNUserNotificationCenter.current().notificationSettings()
+            guard generation == self.permissionChecksGeneration else { return }
             readiness.permissionChecks = base + [notificationCheck(settings.authorizationStatus)]
         }
     }
+
+    /// Monotonic token for ``rebuildPermissionChecks()``; only the newest rebuild's
+    /// async notification result is applied.
+    @ObservationIgnored private var permissionChecksGeneration = 0
 
     /// Whether any saved rule needs the Wi-Fi SSID (and thus Location access).
     private var usesWiFiRule: Bool {

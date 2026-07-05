@@ -26,9 +26,9 @@ public extension PowerAsserting {
 
 /// The distinct power assertions Keepresso can hold.
 public enum PowerAssertionKind: String, CaseIterable, Sendable {
-    /// `kIOPMAssertPreventUserIdleSystemSleep` — system stays awake.
+    /// `kIOPMAssertPreventUserIdleSystemSleep`, system stays awake.
     case system
-    /// `kIOPMAssertPreventUserIdleDisplaySleep` — display stays awake.
+    /// `kIOPMAssertPreventUserIdleDisplaySleep`, display stays awake.
     case display
 
     var ioKitAssertionType: String {
@@ -41,7 +41,7 @@ public enum PowerAssertionKind: String, CaseIterable, Sendable {
 
 /// Real implementation backed by `IOPMAssertionCreateWithName`.
 ///
-/// Not thread-safe by design — drive it from the main actor alongside the
+/// Not thread-safe by design, drive it from the main actor alongside the
 /// owning ``SessionController``.
 public final class IOKitPowerAssertionManager: PowerAsserting {
     private var ids: [PowerAssertionKind: IOPMAssertionID] = [:]

@@ -1,7 +1,7 @@
 import Foundation
 
 /// A named, saved trigger configuration a user can apply in one action instead
-/// of rebuilding a ``RuleSet`` by hand — e.g. "AI Agent" (a bundle of process
+/// of rebuilding a ``RuleSet`` by hand, e.g. "AI Agent" (a bundle of process
 /// rules) or "On AC Power" (a single power-source rule).
 ///
 /// Value-typed and `Codable` like ``RuleSet`` itself, so presets round-trip

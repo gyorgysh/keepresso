@@ -49,7 +49,7 @@ public protocol PowerSourceMonitoring: AnyObject {
 
 /// Real implementation backed by `IOPSCopyPowerSourcesInfo` & friends.
 ///
-/// Not thread-safe by design — read it from the main actor alongside the
+/// Not thread-safe by design, read it from the main actor alongside the
 /// owning controller, the same way ``IOKitPowerAssertionManager`` is used.
 public final class IOKitPowerSourceMonitor: PowerSourceMonitoring {
     public init() {}

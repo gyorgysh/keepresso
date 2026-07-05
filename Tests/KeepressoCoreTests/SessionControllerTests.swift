@@ -204,6 +204,27 @@ private final class StubGate: TriggerEvaluating {
 }
 
 @MainActor
+@Test func batteryPauseHasResumeHysteresis() {
+    let (controller, fake, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.triggerGate = StubGate(true)
+
+    controller.reconcile(batteryPercent: 19) // below cutoff: pause
+    #expect(controller.isActive == false)
+
+    // A reading back at (or just above) the cutoff must NOT reactivate: without
+    // a dead-band a value bouncing 19/20/19/20 would flap on and off each tick.
+    controller.reconcile(batteryPercent: 20)
+    #expect(controller.isActive == false)
+    controller.reconcile(batteryPercent: 22) // still inside the resume margin
+    #expect(controller.isActive == false)
+
+    controller.reconcile(batteryPercent: 23) // clears cutoff + margin: resume
+    #expect(controller.isActive)
+    #expect(fake.held == [.system])
+}
+
+@MainActor
 @Test func batteryThresholdIgnoredWhenNoReadingSupplied() {
     let (controller, fake, _) = makeController()
     controller.pauseBelowBatteryPercent = 20

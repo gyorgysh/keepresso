@@ -81,7 +81,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         }
     }
 
-    /// Built-in presets not currently in ``presets`` — the ones a user has
+    /// Built-in presets not currently in ``presets``, the ones a user has
     /// deleted and could bring back with ``restoreMissingBuiltInPresets()``.
     /// Matched by id, so a built-in the user only renamed or edited still
     /// counts as present. Empty when every built-in is there.
@@ -133,7 +133,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     public static let `default` = KeepressoSettings()
 }
 
-/// Persistence seam for ``KeepressoSettings`` — mirrors the other system seams
+/// Persistence seam for ``KeepressoSettings``, mirrors the other system seams
 /// so the app wires the real store and tests use an in-memory fake.
 public protocol SettingsStore: AnyObject {
     /// Load saved settings, or ``KeepressoSettings/default`` if none/corrupt.

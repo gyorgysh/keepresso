@@ -19,7 +19,7 @@ struct MenuBarLabel: View {
 
     /// Drives the countdown text once a second. `remaining` is a computed
     /// property (reads the live clock) that Observation doesn't track, so
-    /// something has to force a periodic redraw — `TimelineView` was tried
+    /// something has to force a periodic redraw, `TimelineView` was tried
     /// first (matching the doc comment's warning below) and froze the app, so
     /// this mirrors `MenuBarContent`'s already-working `Timer.publish` tick.
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()

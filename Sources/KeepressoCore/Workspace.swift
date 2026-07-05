@@ -22,7 +22,7 @@ public protocol WorkspaceMonitoring: AnyObject {
 
 /// Real backend over `NSWorkspace.runningApplications`.
 ///
-/// AppKit (not SwiftUI) — `KeepressoCore` stays UI-free; this is just process
+/// AppKit (not SwiftUI), `KeepressoCore` stays UI-free; this is just process
 /// introspection.
 public final class NSWorkspaceMonitor: WorkspaceMonitoring {
     public init() {}

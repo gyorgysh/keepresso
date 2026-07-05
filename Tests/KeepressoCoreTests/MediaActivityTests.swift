@@ -86,15 +86,18 @@ private final class FakeMediaMonitor: MediaActivityMonitoring {
     var clock = Date(timeIntervalSinceReferenceDate: 0)
     let factory = TriggerFactory(media: monitor, now: { clock })
     let engine = factory.makeEngine(from: RuleSet(rules: [.audioPlaying]))
+    engine.tick()
     #expect(engine.isSatisfied())
 
     // Playback stops: the rule keeps holding through a brief silence...
     monitor.snapshot = MediaActivitySnapshot(audioPlaying: false)
     clock = clock.addingTimeInterval(AudioPlayingTrigger.releaseGrace - 1)
+    engine.tick()
     #expect(engine.isSatisfied())
 
     // ...and releases once the grace runs out.
     clock = clock.addingTimeInterval(2)
+    engine.tick()
     #expect(!engine.isSatisfied())
 }
 

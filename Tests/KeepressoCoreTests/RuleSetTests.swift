@@ -38,14 +38,18 @@ private final class FakeWorkspace: WorkspaceMonitoring {
     let inner = StubFlag(true)
     let grace = GracePeriodTrigger(wrapping: inner, grace: 60, now: { t })
 
+    grace.tick()                          // the once-per-reconcile step
     #expect(grace.isSatisfied())          // condition true
     inner.value = false
     t = t.addingTimeInterval(30)
+    grace.tick()
     #expect(grace.isSatisfied())          // within grace window
     t = t.addingTimeInterval(31)          // 61s since last true
+    grace.tick()
     #expect(grace.isSatisfied() == false) // window expired
 
     inner.value = true                    // re-arms
+    grace.tick()
     #expect(grace.isSatisfied())
 }
 

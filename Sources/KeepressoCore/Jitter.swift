@@ -77,7 +77,7 @@ public struct JitterReport: Equatable, Sendable {
     }
 }
 
-/// Pure parsing and analysis of a ping run — the heart of the jitter test and
+/// Pure parsing and analysis of a ping run, the heart of the jitter test and
 /// the unit under test. The impure spawn lives behind ``PingRunning``.
 public enum JitterAnalyzer {
     /// How many successful echoes a run needs before the verdict means anything.

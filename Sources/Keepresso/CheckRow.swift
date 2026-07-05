@@ -14,6 +14,7 @@ struct CheckRow: View {
                 .foregroundStyle(tint)
                 .font(.title3)
                 .frame(width: 22)
+                .accessibilityLabel(statusLabel)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(check.title)
@@ -69,6 +70,17 @@ struct CheckRow: View {
         case .warning: .orange
         case .tip: .blue
         case .unknown: .secondary
+        }
+    }
+
+    /// Spoken status for VoiceOver, since the glyph's meaning is otherwise
+    /// carried only by shape and color.
+    private var statusLabel: String {
+        switch check.status {
+        case .ok: "OK"
+        case .warning: "Needs attention"
+        case .tip: "Tip"
+        case .unknown: "Unknown"
         }
     }
 

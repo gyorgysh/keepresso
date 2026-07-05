@@ -468,7 +468,7 @@ private struct DiskTab: View {
                 if model.diskKeepAliveEnabled {
                     LabeledContent("Folder") {
                         HStack(spacing: 6) {
-                            Text(model.diskKeepAliveDirectory?.lastPathComponent ?? "—")
+                            Text(model.diskKeepAliveDirectory?.lastPathComponent ?? "None")
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                             Button("Change…") { model.chooseDiskFolder() }

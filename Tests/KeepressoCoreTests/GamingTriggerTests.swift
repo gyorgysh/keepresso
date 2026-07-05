@@ -79,13 +79,16 @@ private final class FakeGamingMonitor: GamingMonitoring {
     var now = Date(timeIntervalSinceReferenceDate: 0)
     let factory = TriggerFactory(gaming: monitor, now: { now })
     let engine = factory.makeEngine(from: RuleSet(rules: [.gaming]))
+    engine.tick()
     #expect(engine.isSatisfied())
 
     monitor.snapshot = GamingSnapshot(frontmostBundleID: "com.hnc.Discord")
     now.addTimeInterval(GamingTrigger.releaseGrace - 1)
+    engine.tick()
     #expect(engine.isSatisfied())
 
     now.addTimeInterval(2)
+    engine.tick()
     #expect(!engine.isSatisfied())
 }
 

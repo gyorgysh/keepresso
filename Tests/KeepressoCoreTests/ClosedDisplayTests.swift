@@ -188,6 +188,30 @@ private final class FakeDisplaySleeper: DisplaySleepCommanding, @unchecked Senda
 }
 
 @MainActor
+@Test func lidTickIgnoresTransientNilRead() async {
+    // AppleClamshellState can momentarily return nil. A nil read must not clear
+    // the once-per-transition edge flag, or the next good read would re-issue
+    // `displaysleepnow` on an already-sleeping panel.
+    let sleepControl = FakeSleepControl(initial: true)
+    let lid = FakeLidState(closed: false)
+    let externalDisplay = FakeDisplayMonitor(hasExternalDisplay: false)
+    let sleeper = FakeDisplaySleeper()
+    let controller = ClosedDisplayController(
+        control: sleepControl, lid: lid, externalDisplay: externalDisplay, displaySleeper: sleeper
+    )
+    await controller.refresh()
+
+    lid.closed = true
+    controller.tick() // closes: sleeps once
+    #expect(sleeper.sleepNowCallCount == 1)
+    lid.closed = nil   // transient unreadable state mid-flutter
+    controller.tick()
+    lid.closed = true
+    controller.tick() // still closed after the nil blip: must not re-sleep
+    #expect(sleeper.sleepNowCallCount == 1)
+}
+
+@MainActor
 @Test func lidTickReArmsAfterReopening() async {
     let sleepControl = FakeSleepControl(initial: true)
     let lid = FakeLidState(closed: false)

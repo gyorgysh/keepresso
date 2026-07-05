@@ -24,7 +24,7 @@ private extension NSAppearance {
 }
 
 /// A plain, full-width menu row: no border, a subtle hover/press highlight, and
-/// left-aligned text — closer to a native menu item than the default `.bordered`
+/// left-aligned text, closer to a native menu item than the default `.bordered`
 /// pill button style, so it stays visually quiet next to prominent actions.
 struct MenuRowButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
