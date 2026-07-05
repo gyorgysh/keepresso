@@ -167,7 +167,7 @@ struct StreamingSetupView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Toggle("Pause AWDL while Keepresso runs", isOn: Binding(
+            Toggle("Pause AWDL now", isOn: Binding(
                 get: { model.awdl.isRunning },
                 set: { model.setAWDLWatchdog($0) }
             ))
@@ -186,7 +186,7 @@ struct StreamingSetupView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Text("While this is on, AirDrop, Handoff, Sidecar, and Continuity Camera take a break, and the once-a-second lag spikes stop. Everything comes back the moment you turn it off or quit Keepresso; even if the app crashes, macOS is restored automatically. Your password is needed only the first time after each launch; after that the switch is instant.")
+            Text("Turns the pause on right now and keeps it on until you turn it off or quit Keepresso (it isn't tied to whether a keep-awake session is brewing). While it's on, AirDrop, Handoff, Sidecar, and Continuity Camera take a break, and the once-a-second lag spikes stop. Everything comes back the moment you turn it off or quit Keepresso; even if the app crashes, macOS is restored automatically. Your password is needed only the first time after each launch; after that the switch is instant.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -198,7 +198,7 @@ struct StreamingSetupView: View {
                 set: { model.awdlAutoWithGaming = $0 }
             ))
             .toggleStyle(.switch)
-            Text("Turns the pause on when a game is keeping your Mac awake and back off when you stop playing. Needs a \u{201C}Playing a game\u{201D} condition in Preferences \u{25B8} Triggers.")
+            Text("Watches for a game (or a cloud-gaming app like GeForce NOW) coming to the front and pauses AWDL on its own, then lifts the pause about a minute after you stop. No trigger setup needed: leave this on and forget it.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

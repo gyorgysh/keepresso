@@ -661,15 +661,22 @@ final class AppModel {
         }
     }
 
-    /// Once-a-second pulse for the watchdog's auto mode: "gaming is on" means
-    /// the session is active and a gaming rule is among the satisfied
-    /// conditions. Cheap: `ruleStates()` is cached, and the guard keeps the
-    /// per-tick task from spawning while the feature is off.
+    /// Watches for a frontmost game on its own, independent of the trigger
+    /// config, so AWDL auto-pause just works without the user first enabling
+    /// triggers and adding a "Playing a game" rule. Wrapped in a short grace so
+    /// alt-tabbing out of a game doesn't immediately drop the pause.
+    @ObservationIgnored private let gamingWatcher: Trigger = GracePeriodTrigger(
+        wrapping: GamingTrigger(),
+        grace: 60
+    )
+
+    /// Once-a-second pulse for the watchdog's auto mode. Detects a game directly
+    /// via ``gamingWatcher`` (no trigger or active session required). The guard
+    /// keeps the per-tick task from spawning while the feature is off.
     func awdlAutoTick() {
         guard settings.awdlAutoWithGaming else { return }
-        let gamingActive = session.isActive && (ruleStates()?.contains {
-            $0.rule == .gaming && $0.satisfied
-        } ?? false)
+        gamingWatcher.tick() // advance the grace window once per pulse
+        let gamingActive = gamingWatcher.isSatisfied()
         Task { await awdl.autoTick(gamingActive: gamingActive) }
     }
 

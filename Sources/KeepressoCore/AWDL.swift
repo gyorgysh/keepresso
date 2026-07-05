@@ -303,10 +303,10 @@ public final class AWDLWatchdogController {
         autoStarted = false
     }
 
-    /// Auto mode's once-a-second pulse. Starts the watchdog when a gaming
-    /// trigger is holding the session (one prompt; a cancel holds off until
-    /// the bout ends) and stops it again when the bout is over. Only ever
-    /// stops a run it started, so a manual run survives gaming ending.
+    /// Auto mode's once-a-second pulse. Starts the watchdog while a game is
+    /// running (`gamingActive`, decided by the host, one prompt; a cancel holds
+    /// off until the bout ends) and stops it again when the bout is over. Only
+    /// ever stops a run it started, so a manual run survives gaming ending.
     public func autoTick(gamingActive: Bool) async {
         guard autoWithGaming else { return }
         if gamingActive {
