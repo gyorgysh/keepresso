@@ -40,7 +40,7 @@
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Keepresso checks whether a calendar event is in progress so it can keep your Mac awake during your scheduled sessions.</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>MIT License</string>
+	<string>© 2026 Keepresso contributors. GNU GPL v3.0.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Keepresso reads the name of your current Wi-Fi network so it can keep your Mac awake only on the networks you choose.</string>
 	<key>SUEnableAutomaticChecks</key>

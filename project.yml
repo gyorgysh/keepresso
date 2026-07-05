@@ -35,7 +35,7 @@ targets:
         CFBundleVersion: "15"
         LSUIElement: true            # menu-bar agent: no Dock icon
         LSMinimumSystemVersion: "14.0"
-        NSHumanReadableCopyright: "MIT License"
+        NSHumanReadableCopyright: "© 2026 Keepresso contributors. GNU GPL v3.0."
         # keepresso://start[?duration=<minutes>] / stop / toggle, so scripts and
         # launchers (Shortcuts, Raycast, Alfred) can drive a session.
         CFBundleURLTypes:

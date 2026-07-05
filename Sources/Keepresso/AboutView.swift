@@ -27,7 +27,7 @@ struct AboutView: View {
             Link("View on GitHub", destination: AppInfo.repository)
                 .font(.callout)
 
-            Text("MIT License")
+            Text("GNU GPL v3.0")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }

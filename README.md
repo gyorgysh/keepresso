@@ -14,7 +14,7 @@
   <a href="https://github.com/gyorgysh/keepresso/actions/workflows/ci.yml"><img src="https://github.com/gyorgysh/keepresso/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-blue" alt="macOS 14+">
   <img src="https://img.shields.io/badge/Swift-SwiftUI-orange" alt="Swift + SwiftUI">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPLv3-green" alt="GPL-3.0 License"></a>
 </p>
 
 ---
@@ -309,6 +309,11 @@ a protocol seam with tests, then a thin SwiftUI layer in the app.
 
 ## License
 
-[MIT](LICENSE) © 2026 Keepresso contributors.
+[GNU GPL v3.0](LICENSE) © 2026 Keepresso contributors.
+
+Keepresso is free software: use it, study it, fork it, and contribute back. The
+copyleft terms mean any distributed version (including forks and modifications)
+must stay open-source under the same license, so nobody can take it closed and
+ship a proprietary product from it.
 
 If Keepresso is useful to you, you can [support its development](https://gyorgy.sh/donate).
