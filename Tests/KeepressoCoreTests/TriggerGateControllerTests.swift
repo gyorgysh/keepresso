@@ -102,6 +102,7 @@ private final class GateFakeDisplays: DisplayMonitoring {
     gate.engine?.tick()
     #expect(gate.ruleStates()?.first?.satisfied == true)
     #expect(gate.ruleStates()?.first?.inGrace == true)  // lingering in grace: amber
+    #expect(gate.ruleStates()?.first?.graceRemaining == 40) // 60 - 20 left, for the countdown
 
     now = now.addingTimeInterval(50) // past the 60s grace
     gate.engine?.tick()

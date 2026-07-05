@@ -42,6 +42,13 @@ struct MenuBarContent: View {
         return "\(max(1, minutes)) min"
     }
 
+    /// A compact "M:SS" (or "Ns" under a minute) countdown for a grace window.
+    static func graceCountdown(_ seconds: TimeInterval) -> String {
+        let s = Int(seconds.rounded(.up))
+        if s >= 60 { return String(format: "%d:%02d", s / 60, s % 60) }
+        return "\(s)s"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
@@ -346,7 +353,12 @@ struct MenuBarContent: View {
                             .foregroundStyle(state.satisfied ? .primary : .secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
-                        Spacer(minLength: 0)
+                        Spacer(minLength: 4)
+                        if let remaining = state.graceRemaining {
+                            Text(Self.graceCountdown(remaining))
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.orange)
+                        }
                     }
                 }
             }

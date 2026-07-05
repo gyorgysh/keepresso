@@ -86,13 +86,15 @@ public final class TriggerGateController {
         }
         let triggers = engine.triggers
         let states = engineRules.enumerated().map { index, rule -> RuleState in
-            guard index < triggers.count else { return RuleState(rule: rule, satisfied: false, inGrace: false) }
+            guard index < triggers.count else { return RuleState(rule: rule, satisfied: false, inGrace: false, graceRemaining: nil) }
             let trigger = triggers[index]
             let satisfied = trigger.isSatisfied()
             // Amber "lingering" state: satisfied only because a GracePeriodTrigger
-            // is holding after its wrapped condition (e.g. a game) went away.
-            let inGrace = satisfied && (trigger as? GracePeriodTrigger)?.wrappedIsSatisfied == false
-            return RuleState(rule: rule, satisfied: satisfied, inGrace: inGrace)
+            // is holding after its wrapped condition (e.g. a game) went away, plus
+            // how long is left so the UI can count it down and then go grey.
+            let grace = trigger as? GracePeriodTrigger
+            let inGrace = satisfied && grace?.wrappedIsSatisfied == false
+            return RuleState(rule: rule, satisfied: satisfied, inGrace: inGrace, graceRemaining: grace?.graceRemaining)
         }
         cachedStates = states
         cachedAt = now()
@@ -109,10 +111,14 @@ public struct RuleState: Equatable {
     /// Satisfied only because of a grace/linger window, not the live condition
     /// (e.g. a game just closed). Lets the UI show it amber rather than green.
     public let inGrace: Bool
+    /// Seconds left in the grace window, when the rule has one and it's running,
+    /// so the UI can show a countdown that resolves to grey at zero.
+    public let graceRemaining: TimeInterval?
 
-    public init(rule: TriggerRule, satisfied: Bool, inGrace: Bool) {
+    public init(rule: TriggerRule, satisfied: Bool, inGrace: Bool, graceRemaining: TimeInterval? = nil) {
         self.rule = rule
         self.satisfied = satisfied
         self.inGrace = inGrace
+        self.graceRemaining = graceRemaining
     }
 }
