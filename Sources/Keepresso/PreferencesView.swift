@@ -222,6 +222,9 @@ private struct GeneralTab: View {
                     set: { model.setClosedDisplay($0) }
                 ))
                 .disabled(model.closedDisplayBusy)
+                if model.closedDisplayBusy {
+                    AdminAuthNote(purpose: "keep the Mac awake with the lid closed")
+                }
                 if let error = model.closedDisplayError {
                     Label(error, systemImage: "exclamationmark.triangle")
                         .font(.caption)

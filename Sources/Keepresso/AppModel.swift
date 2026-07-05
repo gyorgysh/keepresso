@@ -664,6 +664,18 @@ final class AppModel {
             settings.awdlAutoWithGaming = newValue
             awdl.autoWithGaming = newValue
             persist()
+            // Pre-authorize the root helper now, in this window, so the first
+            // game later doesn't pop a password dialog mid-play. One prompt here,
+            // prompt-free auto pausing afterward. No-op if already authorized.
+            if newValue && !awdl.isAuthorized {
+                NSApp.activate(ignoringOtherApps: true)
+                let window = NSApp.keyWindow
+                Task {
+                    await awdl.prime()
+                    NSApp.activate(ignoringOtherApps: true)
+                    window?.makeKeyAndOrderFront(nil)
+                }
+            }
         }
     }
 

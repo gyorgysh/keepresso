@@ -182,9 +182,7 @@ struct StreamingSetupView: View {
             .disabled(model.awdl.isBusy)
 
             if model.awdl.isBusy {
-                Text("Waiting for your password…")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                AdminAuthNote(purpose: "pause AWDL (turn off the Wi-Fi AirDrop/Handoff radio hops)")
             }
             if let error = model.awdl.lastError {
                 Text(error)
@@ -193,7 +191,7 @@ struct StreamingSetupView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Text("Turns the pause on right now and keeps it on until you turn it off or quit Keepresso (it isn't tied to whether a keep-awake session is brewing). While it's on, AirDrop, Handoff, Sidecar, and Continuity Camera take a break, and the once-a-second lag spikes stop. Everything comes back the moment you turn it off or quit Keepresso; even if the app crashes, macOS is restored automatically. Your password is needed only the first time after each launch; after that the switch is instant.")
+            Text("Turns the pause on right now and keeps it on until you turn it off or quit Keepresso (it isn't tied to whether a keep-awake session is brewing). While it's on, AirDrop, Handoff, Sidecar, and Continuity Camera take a break, and the once-a-second lag spikes stop. Everything comes back the moment you turn it off or quit Keepresso; even if the app crashes, macOS is restored automatically. It needs your administrator password once per launch (the system dialog may show “osascript”, which is Keepresso running the command); after that the switch is instant.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -205,7 +203,7 @@ struct StreamingSetupView: View {
                 set: { model.awdlAutoWithGaming = $0 }
             ))
             .toggleStyle(.switch)
-            Text("Watches for a game (or a cloud-gaming app like GeForce NOW) as the active window and pauses AWDL on its own, then lifts the pause about a minute after you switch away. It only counts while the game is in front and in use, not just running in the background. No trigger setup needed: leave this on and forget it.")
+            Text("Watches for a game (or a cloud-gaming app like GeForce NOW) as the active window and pauses AWDL on its own, then lifts the pause about a minute after you switch away. It only counts while the game is in front and in use, not just running in the background. Turning this on asks for your administrator password once, right now, so it can then pause silently during games and never interrupt a running game with a prompt. No trigger setup needed: leave this on and forget it.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

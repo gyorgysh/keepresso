@@ -105,6 +105,32 @@ private final class FakeAWDLReader: AWDLStateReading, @unchecked Sendable {
 }
 
 @MainActor
+@Test func primeAuthorizesWithoutPausingThenAutoStartIsPromptFree() async {
+    // Priming spawns the helper (one prompt) but leaves AWDL up, so a later
+    // automatic start during a game needs no prompt and never interrupts play.
+    let launcher = FakeWatchdogLauncher()
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+    controller.autoWithGaming = true
+    #expect(!controller.isAuthorized)
+
+    let result = await controller.prime()
+    #expect(result == .started)
+    #expect(controller.isAuthorized)
+    #expect(controller.isRunning == false)   // AWDL left untouched by priming
+    #expect(launcher.flagPresent == false)
+    #expect(launcher.startCalls == 1)         // one prompt
+
+    // A game comes forward: auto activation is now a flag write, no new prompt.
+    await controller.autoTick(gamingActive: true)
+    #expect(controller.isRunning)
+    #expect(launcher.startCalls == 1)
+
+    // Priming again is a no-op (already authorized): still no extra prompt.
+    _ = await controller.prime()
+    #expect(launcher.startCalls == 1)
+}
+
+@MainActor
 @Test func aCancelledPromptLeavesNoFlagBehind() async {
     // The flag is written before the prompt (the helper reads it on its first
     // cycle); a cancel or failure must clean it up so the next helper start

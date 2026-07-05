@@ -114,10 +114,7 @@ struct MenuBarContent: View {
             .toggleStyle(.switch)
             .disabled(model.closedDisplayBusy)
             if model.closedDisplayBusy {
-                Text("Waiting for your password…")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                AdminAuthNote(purpose: "keep the Mac awake with the lid closed")
             }
             if model.closedDisplayEnabled {
                 Text("Stays awake on battery too; the display turns off when the lid closes. Turn it off before putting it in a bag.")

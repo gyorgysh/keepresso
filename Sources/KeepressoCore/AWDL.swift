@@ -293,6 +293,23 @@ public final class AWDLWatchdogController {
         return result
     }
 
+    /// Whether the root helper is already authorized and running this app run,
+    /// so activating (manual or automatic) needs no further password prompt.
+    public var isAuthorized: Bool { helperStarted }
+
+    /// Pre-authorize the helper without pausing AWDL: spawn it (one prompt now,
+    /// in whatever context the caller chose) then immediately drop the flag so
+    /// `awdl0` stays up. After this, an automatic activation when a game comes
+    /// to the front is a prompt-free flag write and never pops a password dialog
+    /// over a running game. No-op (and no prompt) once already authorized.
+    @discardableResult
+    public func prime() async -> AWDLWatchdogStartResult {
+        guard !helperStarted, !isBusy else { return .started }
+        let result = await start()
+        if case .started = result { await stop() }
+        return result
+    }
+
     /// Deactivate the watchdog: just delete the flag (no prompt); the helper
     /// notices within a cycle, restores `awdl0 up`, and idles for the next
     /// activation.
