@@ -49,6 +49,26 @@ private final class FakeActivity: ActivitySimulating {
 }
 
 @MainActor
+@Test func keepActiveSkipsThePokeWhileTheUserIsActive() {
+    let clock = Clock()
+    let activity = FakeActivity()
+    let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true))
+    #expect(activity.pokeCount == 1) // initial poke (no idle info at start)
+
+    // The user is actively providing input (low idle, e.g. gaming): no nudge,
+    // even across the poke interval.
+    clock.advance(60)
+    controller.reconcile(systemIdleSeconds: 2)
+    controller.reconcile(systemIdleSeconds: 1)
+    #expect(activity.pokeCount == 1)
+
+    // Once they step away past the threshold, it pokes promptly.
+    controller.reconcile(systemIdleSeconds: 30)
+    #expect(activity.pokeCount == 2)
+}
+
+@MainActor
 @Test func keepActivePokesAgainImmediatelyOnANewSession() {
     let clock = Clock()
     let activity = FakeActivity()

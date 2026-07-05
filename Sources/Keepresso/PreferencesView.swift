@@ -182,7 +182,7 @@ private struct GeneralTab: View {
                     set: { model.simulateUserActivity = $0 }
                 ))
             } footer: {
-                Text("Also tells macOS you're active while a session runs, so remote-desktop sessions, meeting presence (Teams, Slack), and corporate idle-logout don't mark you away. A plain keep-awake doesn't reach those. Off by default; some managed Macs flag simulated activity.")
+                Text("Also tells macOS you're active while a session runs, so remote-desktop sessions, meeting presence (Teams, Slack), and corporate idle-logout don't mark you away. A plain keep-awake doesn't reach those. It only steps in once you've been idle a few seconds, so it never nudges the pointer while you're using the Mac or gaming. Off by default; some managed Macs flag simulated activity.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

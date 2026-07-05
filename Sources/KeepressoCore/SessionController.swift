@@ -82,6 +82,12 @@ public final class SessionController {
     /// Comfortably under the shortest common idle timeout (a minute or two).
     static let activityPokeInterval: TimeInterval = 30
 
+    /// Only report synthetic activity once the user has been genuinely idle this
+    /// long. While they're providing real input (typing, or gaming with constant
+    /// mouse movement) they already read as active, so there's nothing to fake
+    /// and a cursor nudge would just be the "weird mouse movement" to avoid.
+    static let activityIdleThreshold: TimeInterval = 10
+
     /// How many reminder intervals have already been surfaced this session, so
     /// the per-second ``reconcile(now:systemIdleSeconds:)`` fires each at most
     /// once (and a recurring reminder advances one nudge per interval crossed).
@@ -203,11 +209,13 @@ public final class SessionController {
     }
 
     /// Whether ``reconcile(now:systemIdleSeconds:batteryPercent:)`` can currently
-    /// use a HID idle reading: the screen-saver yield is configured (display
-    /// sleep prevented and a yield threshold set). The host skips the per-second
-    /// IOKit idle read when this is false, which is the default.
+    /// use a HID idle reading. True when the screen-saver yield is configured, or
+    /// when keep-active is on (it needs idle time to avoid nudging a user who is
+    /// actively at the keyboard/mouse). The host skips the per-second IOKit idle
+    /// read when this is false, which is the default.
     public var consumesIdleReading: Bool {
-        options.preventDisplaySleep && options.allowScreenSaverAfter != nil
+        (options.preventDisplaySleep && options.allowScreenSaverAfter != nil)
+            || options.simulateUserActivity
     }
 
     /// Whether ``reconcile(now:systemIdleSeconds:batteryPercent:)`` can currently
@@ -266,15 +274,23 @@ public final class SessionController {
         )
 
         maybeRemind(at: instant)
-        maybePokeActivity(at: instant)
+        maybePokeActivity(at: instant, systemIdleSeconds: systemIdleSeconds)
     }
 
     /// Report user activity to the OS on a slow cadence while a keep-active
     /// session runs, so app-level and enterprise idle detectors don't mark the
-    /// user away. Fires once on activation, then every ``activityPokeInterval``.
-    /// No-op unless the session is active and the option is on.
-    private func maybePokeActivity(at instant: Date) {
+    /// user away. Skipped while the user is actively providing input (real input
+    /// already keeps them present, and nudging then is the mouse jitter to
+    /// avoid); once idle past ``activityIdleThreshold`` it pokes, then repeats
+    /// every ``activityPokeInterval``. No-op unless active and the option is on.
+    private func maybePokeActivity(at instant: Date, systemIdleSeconds: TimeInterval?) {
         guard isActive, options.simulateUserActivity else { return }
+        if let idle = systemIdleSeconds, idle < Self.activityIdleThreshold {
+            // Actively in use: nothing to fake. Arm the next poke to fire
+            // promptly once they step away rather than a full interval later.
+            lastActivityPokeAt = nil
+            return
+        }
         if let last = lastActivityPokeAt,
            instant.timeIntervalSince(last) < Self.activityPokeInterval { return }
         lastActivityPokeAt = instant
