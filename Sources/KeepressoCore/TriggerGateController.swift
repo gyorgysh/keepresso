@@ -26,7 +26,7 @@ public final class TriggerGateController {
     /// rule can shell out (a process trigger spawns `ps`), and the menu asks
     /// several times per render and every second, so the result is cached
     /// briefly. Cleared on every ``rebuild(rules:combine:enabled:)``.
-    private var cachedStates: [(rule: TriggerRule, satisfied: Bool)]?
+    private var cachedStates: [RuleState]?
     private var cachedAt: Date?
     private static let ttl: TimeInterval = 0.9
 
@@ -76,7 +76,7 @@ public final class TriggerGateController {
 
     /// Live satisfaction of each rule, aligned with the rules the engine was
     /// built from, or `nil` when gating is off. Cached for ``ttl`` seconds.
-    public func ruleStates() -> [(rule: TriggerRule, satisfied: Bool)]? {
+    public func ruleStates() -> [RuleState]? {
         guard let engine else {
             cachedStates = nil
             return nil
@@ -85,11 +85,34 @@ public final class TriggerGateController {
             return cachedStates
         }
         let triggers = engine.triggers
-        let states = engineRules.enumerated().map { index, rule in
-            (rule, index < triggers.count && triggers[index].isSatisfied())
+        let states = engineRules.enumerated().map { index, rule -> RuleState in
+            guard index < triggers.count else { return RuleState(rule: rule, satisfied: false, inGrace: false) }
+            let trigger = triggers[index]
+            let satisfied = trigger.isSatisfied()
+            // Amber "lingering" state: satisfied only because a GracePeriodTrigger
+            // is holding after its wrapped condition (e.g. a game) went away.
+            let inGrace = satisfied && (trigger as? GracePeriodTrigger)?.wrappedIsSatisfied == false
+            return RuleState(rule: rule, satisfied: satisfied, inGrace: inGrace)
         }
         cachedStates = states
         cachedAt = now()
         return states
+    }
+}
+
+/// The live state of one saved rule, for the menu's condition list.
+public struct RuleState: Equatable {
+    public let rule: TriggerRule
+    /// Whether the rule is currently holding the session on (directly or via a
+    /// grace window).
+    public let satisfied: Bool
+    /// Satisfied only because of a grace/linger window, not the live condition
+    /// (e.g. a game just closed). Lets the UI show it amber rather than green.
+    public let inGrace: Bool
+
+    public init(rule: TriggerRule, satisfied: Bool, inGrace: Bool) {
+        self.rule = rule
+        self.satisfied = satisfied
+        self.inGrace = inGrace
     }
 }

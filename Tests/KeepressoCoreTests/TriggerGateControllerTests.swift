@@ -75,3 +75,36 @@ private final class GateFakeDisplays: DisplayMonitoring {
     gate.engine?.tick()
     #expect(gate.ruleStates()?.first?.satisfied == false)
 }
+
+@MainActor
+@Test func ruleStatesFlagTheGraceWindowAsInGrace() {
+    var now = Date(timeIntervalSinceReferenceDate: 0)
+    let workspace = GateFakeWorkspace(WorkspaceSnapshot(
+        runningBundleIDs: ["com.test"], frontmostBundleID: "com.test"
+    ))
+    let factory = TriggerFactory(
+        displays: GateFakeDisplays(DisplaySnapshot(externalDisplayCount: 0, totalDisplayCount: 1)),
+        workspace: workspace,
+        now: { now }
+    )
+    let gate = TriggerGateController(factory: factory, now: { now })
+    gate.rebuild(
+        rules: [.app(AppRule(bundleID: "com.test", match: .frontmost, grace: 60))],
+        combine: .any, enabled: true
+    )
+
+    gate.engine?.tick()
+    #expect(gate.ruleStates()?.first?.satisfied == true)
+    #expect(gate.ruleStates()?.first?.inGrace == false) // app in front: green, not amber
+
+    workspace.current = WorkspaceSnapshot(runningBundleIDs: [], frontmostBundleID: nil)
+    now = now.addingTimeInterval(20)
+    gate.engine?.tick()
+    #expect(gate.ruleStates()?.first?.satisfied == true)
+    #expect(gate.ruleStates()?.first?.inGrace == true)  // lingering in grace: amber
+
+    now = now.addingTimeInterval(50) // past the 60s grace
+    gate.engine?.tick()
+    #expect(gate.ruleStates()?.first?.satisfied == false)
+    #expect(gate.ruleStates()?.first?.inGrace == false)
+}

@@ -237,7 +237,7 @@ final class AppModel {
 
     /// Live satisfaction of each saved rule, aligned with ``rules`` order, or
     /// `nil` when trigger gating is off. Drives the menu's next-trigger summary.
-    func ruleStates() -> [(rule: TriggerRule, satisfied: Bool)]? {
+    func ruleStates() -> [RuleState]? {
         gate.ruleStates()
     }
 

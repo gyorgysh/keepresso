@@ -341,9 +341,9 @@ struct MenuBarContent: View {
                 ForEach(Array(states.enumerated()), id: \.offset) { _, state in
                     HStack(spacing: 6) {
                         Image(systemName: state.satisfied ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(state.satisfied ? Color.green : Color.secondary)
+                            .foregroundStyle(state.inGrace ? Color.orange : (state.satisfied ? Color.green : Color.secondary))
                             .font(.caption)
-                            .accessibilityLabel(state.satisfied ? "Met" : "Not met")
+                            .accessibilityLabel(state.inGrace ? "Met, in grace period" : (state.satisfied ? "Met" : "Not met"))
                         Text(state.rule.label)
                             .font(.caption)
                             .foregroundStyle(state.satisfied ? .primary : .secondary)
