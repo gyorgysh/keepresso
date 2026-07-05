@@ -325,6 +325,28 @@ final class AppModel {
         }
     }
 
+    // MARK: - Global hotkey
+
+    /// Registers the system-wide keep-awake toggle shortcut.
+    @ObservationIgnored private let hotKeyManager = GlobalHotKeyManager()
+
+    /// The system-wide shortcut that toggles keep-awake, or `nil` for none.
+    /// Setting it re-registers the live hotkey and persists.
+    var hotKey: HotKeyShortcut? {
+        get { settings.hotKey }
+        set {
+            settings.hotKey = newValue
+            persist()
+            registerHotKey()
+        }
+    }
+
+    /// (Re)register the global hotkey from the saved shortcut. Called at launch
+    /// and whenever the shortcut changes.
+    func registerHotKey() {
+        hotKeyManager.update(to: settings.hotKey) { [weak self] in self?.toggleManual() }
+    }
+
     // MARK: - Menu-bar countdown
 
     /// Whether the menu-bar icon shows a live countdown for timed sessions.

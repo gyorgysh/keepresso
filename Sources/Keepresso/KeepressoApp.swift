@@ -79,6 +79,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // (the loop it kept alive has already exited via its pid check).
         Task { await model.awdl.cleanupAtLaunch() }
         ticker.start()
+        // Register the global keep-awake toggle shortcut, if the user set one.
+        model.registerHotKey()
         // The Control Center toggle: consume a command that may have launched
         // us, then keep listening while running.
         widgetObserver = WidgetCommandObserver { [weak model] in model?.applyPendingWidgetCommand() }

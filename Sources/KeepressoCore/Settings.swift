@@ -29,6 +29,9 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     /// Whether the AWDL watchdog starts and stops with a gaming trigger
     /// (see ``AWDLWatchdogController/autoWithGaming``).
     public var awdlAutoWithGaming: Bool
+    /// A system-wide keyboard shortcut that toggles keep-awake, or `nil` (the
+    /// default) for none.
+    public var hotKey: HotKeyShortcut?
     /// Saved trigger-rule bundles a user can apply in one action. Seeded with
     /// ``Preset/builtIns`` on first launch; a user may add or remove any of them.
     public var presets: [Preset]
@@ -50,6 +53,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         pauseBelowBatteryPercent: Int? = nil,
         showCountdownInMenuBar: Bool = false,
         awdlAutoWithGaming: Bool = false,
+        hotKey: HotKeyShortcut? = nil,
         presets: [Preset] = Preset.builtIns,
         seededPresetIDs: [String] = Preset.builtIns.map(\.id)
     ) {
@@ -65,6 +69,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.pauseBelowBatteryPercent = pauseBelowBatteryPercent
         self.showCountdownInMenuBar = showCountdownInMenuBar
         self.awdlAutoWithGaming = awdlAutoWithGaming
+        self.hotKey = hotKey
         self.presets = presets
         self.seededPresetIDs = seededPresetIDs
     }
@@ -121,6 +126,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         pauseBelowBatteryPercent = try c.decodeIfPresent(Int.self, forKey: .pauseBelowBatteryPercent)
         showCountdownInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showCountdownInMenuBar) ?? false
         awdlAutoWithGaming = try c.decodeIfPresent(Bool.self, forKey: .awdlAutoWithGaming) ?? false
+        hotKey = try c.decodeIfPresent(HotKeyShortcut.self, forKey: .hotKey)
         presets = try c.decodeIfPresent([Preset].self, forKey: .presets) ?? Preset.builtIns
         // Settings saved before seeding was tracked (1.2.x and earlier) had
         // exactly the original three built-ins seeded; assuming that set means
@@ -131,6 +137,25 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
 
     /// First-launch defaults: keep system awake, no triggers.
     public static let `default` = KeepressoSettings()
+}
+
+/// A persisted keyboard shortcut: a virtual key code plus modifier flags.
+///
+/// Stored in the AppKit representation (`NSEvent`'s virtual `keyCode` and the
+/// device-independent `modifierFlags` raw value) so it survives round-trips
+/// without pulling Carbon into `KeepressoCore`; the app converts to Carbon
+/// modifiers when it registers the hotkey.
+public struct HotKeyShortcut: Codable, Equatable, Sendable {
+    /// The hardware-independent virtual key code (`NSEvent.keyCode`).
+    public var keyCode: Int
+    /// The device-independent modifier-flags raw value
+    /// (`NSEvent.ModifierFlags.rawValue`), masked to command/option/control/shift.
+    public var modifierFlags: Int
+
+    public init(keyCode: Int, modifierFlags: Int) {
+        self.keyCode = keyCode
+        self.modifierFlags = modifierFlags
+    }
 }
 
 /// Persistence seam for ``KeepressoSettings``, mirrors the other system seams

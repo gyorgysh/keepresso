@@ -234,6 +234,20 @@ private struct GeneralTab: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section {
+                LabeledContent("Toggle shortcut") {
+                    ShortcutRecorder(shortcut: Binding(
+                        get: { model.hotKey },
+                        set: { model.hotKey = $0 }
+                    ))
+                }
+            } header: {
+                Text("Global shortcut")
+            } footer: {
+                Text("A system-wide keyboard shortcut that starts or stops keep-awake from any app. Needs at least one modifier key.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Section("Startup") {
                 Toggle("Launch at login", isOn: Binding(
                     get: { launchAtLogin },
