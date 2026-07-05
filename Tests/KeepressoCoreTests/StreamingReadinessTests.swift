@@ -118,12 +118,31 @@ private func ifconfigBlock(_ device: String, status: String?) -> String {
     #expect(us.status == .tip)
     #expect(us.remediation?.hint.contains("channel 149") == true)
 
-    // Country unreadable (Location-gated): both regions offered, and the
+    // Country unreadable (Location-gated): both regions named, and the
     // aligned-channel fast path must not fire on either.
     let unknown = ReadinessCheck.wifiChannel(StreamingSnapshot(
         wifiChannel: 44, wifiBand: .ghz5, wifiWidthMHz: 80))
     #expect(unknown.status == .tip)
-    #expect(unknown.remediation?.hint.contains("44 (most regions) or 149 (US)") == true)
+    #expect(unknown.remediation?.hint.contains("44") == true)
+    #expect(unknown.remediation?.hint.contains("149") == true)
+}
+
+@Test func band24NamesTheFiveGHzTargetChannel() {
+    // The 2.4 GHz warning should also point at the region's 5 GHz channel, so a
+    // user moving off 2.4 GHz knows where to land.
+    let eu = ReadinessCheck.wifiChannel(StreamingSnapshot(
+        wifiChannel: 6, wifiBand: .ghz2, wifiWidthMHz: 20, wifiCountryCode: "FR"))
+    #expect(eu.remediation?.hint.contains("channel 44") == true)
+    let us = ReadinessCheck.wifiChannel(StreamingSnapshot(
+        wifiChannel: 6, wifiBand: .ghz2, wifiWidthMHz: 20, wifiCountryCode: "US"))
+    #expect(us.remediation?.hint.contains("channel 149") == true)
+}
+
+@Test func nonEUCountryUsesChannel149() {
+    // Canada allows UNII-3, so 149 (not 44) is the aligned channel.
+    let ca = ReadinessCheck.wifiChannel(StreamingSnapshot(
+        wifiChannel: 149, wifiBand: .ghz5, wifiWidthMHz: 80, wifiCountryCode: "CA"))
+    #expect(ca.status == .ok)
 }
 
 @Test func sixGHzAndNoWiFiAreHandled() {

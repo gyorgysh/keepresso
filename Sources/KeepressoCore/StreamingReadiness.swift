@@ -143,9 +143,9 @@ public extension ReadinessCheck {
     // MARK: - Wi-Fi channel vs AWDL's social channels
 
     /// AWDL parks its off-channel hops on fixed "social channels": 6 on
-    /// 2.4 GHz, and 44 (most regions) or 149 (US) on 5 GHz. A router aligned
-    /// with the right one keeps the hop on-channel, so it stops costing a
-    /// retune.
+    /// 2.4 GHz, and on 5 GHz either 44 (EU) or 149 (the US, Canada, and other
+    /// regions that allow UNII-3). A router aligned with the right one keeps the
+    /// hop on-channel, so it stops costing a retune. 6 GHz has no social channel.
     static func wifiChannel(_ snapshot: StreamingSnapshot) -> ReadinessCheck {
         let id = "stream-wifi-channel"
         let title = "Wi-Fi channel"
@@ -160,23 +160,23 @@ public extension ReadinessCheck {
         }
         let width = snapshot.wifiWidthMHz.map { " at \($0) MHz" } ?? ""
 
+        let five = Self.social5GHzChannel(countryCode: snapshot.wifiCountryCode)
         switch band {
         case .ghz2:
             return ReadinessCheck(
                 id: id, title: title, status: .warning,
                 detail: "On 2.4 GHz (channel \(channel)\(width)), the slowest band, where every AWDL hop costs the most.",
                 remediation: Remediation(
-                    hint: "Prefer a 5 GHz network; if 2.4 GHz is unavoidable, set the router to channel 6 (AWDL's 2.4 GHz social channel)."
+                    hint: "Prefer a 5 GHz network on \(five.description) at 80 MHz. If 2.4 GHz is unavoidable, set the router to channel 6, AWDL's 2.4 GHz social channel."
                 )
             )
         case .ghz6:
             return ReadinessCheck(
                 id: id, title: title, status: .ok,
-                detail: "On 6 GHz (channel \(channel)\(width)). AWDL's social channels live on 2.4 and 5 GHz, so there's nothing to align here."
+                detail: "On 6 GHz (channel \(channel)\(width)). AWDL's social channels live on 2.4 and 5 GHz, so there's nothing to align here. If stutter persists, a 5 GHz network on \(five.description) keeps AWDL's hops on-channel."
             )
         case .ghz5:
-            let social = socialChannelDescription(countryCode: snapshot.wifiCountryCode)
-            if channel == social.channel {
+            if let target = five.channel, channel == target {
                 let widthNote = (snapshot.wifiWidthMHz ?? 80) >= 80
                     ? "" : " Raising the router to 80 MHz width completes the alignment."
                 return ReadinessCheck(
@@ -186,24 +186,37 @@ public extension ReadinessCheck {
             }
             return ReadinessCheck(
                 id: id, title: title, status: .tip,
-                detail: "On channel \(channel)\(width). AWDL's off-channel hops leave this channel roughly every second.",
+                detail: "On 5 GHz channel \(channel)\(width). AWDL's off-channel hops leave this channel roughly every second.",
                 remediation: Remediation(
-                    hint: "Set the router to channel \(social.label) at 80 MHz so AWDL's hops stay on-channel."
+                    hint: "Set the router to \(five.description) at 80 MHz so AWDL's hops stay on-channel."
                 )
             )
         }
     }
 
-    /// The 5 GHz social channel for a regulatory region: 149 in the US, 44
-    /// most elsewhere; both offered when the country is unreadable (reading
-    /// it is Location-gated).
-    static func socialChannelDescription(countryCode: String?) -> (channel: Int?, label: String) {
-        switch countryCode {
-        case "US": return (149, "149")
-        case .some: return (44, "44")
-        case nil: return (nil, "44 (most regions) or 149 (US)")
+    /// AWDL's 5 GHz social channel is region-dependent: 44 in the EU and other
+    /// regions that don't permit the UNII-3 band, 149 where UNII-3 is allowed
+    /// (the US, Canada, and much of the world). Returns the aligned channel (or
+    /// `nil` when the region is unknown, so alignment can't be confirmed) plus a
+    /// human phrase naming it. The country read is Location-gated, so when it's
+    /// unavailable both channels are named and no alignment is claimed.
+    static func social5GHzChannel(countryCode: String?) -> (channel: Int?, description: String) {
+        guard let code = countryCode?.uppercased() else {
+            return (nil, "channel 44 (the EU social channel) or 149 (the US and Canada social channel), whichever your region allows")
         }
+        if euCountryCodes.contains(code) {
+            return (44, "channel 44, AWDL's 5 GHz social channel in the EU")
+        }
+        return (149, "channel 149, AWDL's 5 GHz social channel where UNII-3 is allowed (the US, Canada, and most of the world)")
     }
+
+    /// EU / EEA / UK regulatory regions, where UNII-3 (channels 149+) is not
+    /// permitted, so AWDL parks its 5 GHz social channel on 44 instead of 149.
+    static let euCountryCodes: Set<String> = [
+        "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR",
+        "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK",
+        "SI", "ES", "SE", "GB", "UK", "NO", "IS", "LI", "CH",
+    ]
 
     // MARK: - Bluetooth (shares the radio chip)
 
