@@ -62,6 +62,26 @@ private final class FakeWorkspace: WorkspaceMonitoring {
     #expect(grace.isSatisfied())
 }
 
+@Test func graceRemainingCountsDownAfterTheConditionDrops() {
+    var t = Date(timeIntervalSince1970: 1_000_000)
+    let inner = StubFlag(true)
+    let grace = GracePeriodTrigger(wrapping: inner, grace: 60, now: { t })
+
+    grace.tick()
+    #expect(grace.wrappedIsSatisfied)
+    #expect(grace.graceRemaining == nil) // condition holds: no countdown
+
+    inner.value = false
+    t = t.addingTimeInterval(20)
+    grace.tick()
+    #expect(grace.wrappedIsSatisfied == false)
+    #expect(grace.graceRemaining == 40) // 60 - 20 left in the window
+
+    t = t.addingTimeInterval(50) // past the window
+    grace.tick()
+    #expect(grace.graceRemaining == nil)
+}
+
 private final class StubFlag: Trigger {
     var value: Bool
     let label = "flag"

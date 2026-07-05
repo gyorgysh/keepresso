@@ -13,6 +13,10 @@ struct StreamingSetupView: View {
     /// Keeps the AWDL on/off readout honest while the window is open: the
     /// helper flips the interface up to a few seconds after a toggle.
     private let awdlTick = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
+    /// A lighter 1s pulse (no shell-out) so the auto-gaming grace countdown
+    /// ticks down smoothly.
+    private let statusTick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    @State private var statusPulse = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -37,6 +41,7 @@ struct StreamingSetupView: View {
         .glassWindowBackground()
         .onAppear { model.refreshStreaming() }
         .onReceive(awdlTick) { _ in model.refreshAWDLState() }
+        .onReceive(statusTick) { _ in statusPulse &+= 1 }
     }
 
     private var header: some View {
@@ -167,6 +172,8 @@ struct StreamingSetupView: View {
                     .foregroundStyle(.secondary)
             }
 
+            awdlStatusRow
+
             Toggle("Pause AWDL now", isOn: Binding(
                 get: { model.awdl.isRunning },
                 set: { model.setAWDLWatchdog($0) }
@@ -206,6 +213,26 @@ struct StreamingSetupView: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard()
+    }
+
+    /// A status pill showing why AWDL is paused (or its grace countdown after a
+    /// game closes). Hidden when the watchdog isn't running.
+    @ViewBuilder
+    private var awdlStatusRow: some View {
+        let _ = statusPulse // re-read the live status (and grace countdown) each second
+        if let style = AWDLStatusStyle(model.awdlStatus) {
+            HStack(spacing: 6) {
+                Image(systemName: style.icon)
+                    .foregroundStyle(style.color)
+                    .accessibilityHidden(true)
+                Text(style.text)
+                Spacer(minLength: 0)
+            }
+            .font(.callout)
+            .padding(.vertical, 4)
+            .padding(.horizontal, 8)
+            .background(style.color.opacity(0.12), in: Capsule())
+        }
     }
 
     private var interfaceStateLabel: String {

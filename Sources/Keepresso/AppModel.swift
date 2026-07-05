@@ -671,7 +671,7 @@ final class AppModel {
     /// config, so AWDL auto-pause just works without the user first enabling
     /// triggers and adding a "Playing a game" rule. Wrapped in a short grace so
     /// alt-tabbing out of a game doesn't immediately drop the pause.
-    @ObservationIgnored private let gamingWatcher: Trigger = GracePeriodTrigger(
+    @ObservationIgnored private let gamingWatcher = GracePeriodTrigger(
         wrapping: GamingTrigger(),
         grace: 60
     )
@@ -684,6 +684,35 @@ final class AppModel {
         gamingWatcher.tick() // advance the grace window once per pulse
         let gamingActive = gamingWatcher.isSatisfied()
         Task { await awdl.autoTick(gamingActive: gamingActive) }
+    }
+
+    /// Why the AWDL watchdog is (or isn't) currently pausing Wi-Fi discovery,
+    /// for the menu and the Gaming & Streaming window. Lets the user see the
+    /// auto-gaming grace window instead of wondering why AWDL is still paused
+    /// after they quit the game.
+    enum AWDLStatus: Equatable {
+        /// The watchdog isn't running; AWDL is normal.
+        case off
+        /// Running because the user turned it on by hand.
+        case pausedManually
+        /// Running because a game (or cloud-gaming app) is in the foreground.
+        case pausedForGame
+        /// The game closed; AWDL stays paused for a short grace, resuming in
+        /// this many seconds.
+        case resumingAfterGame(seconds: Int)
+    }
+
+    /// The live AWDL watchdog status. Reads ``gamingWatcher`` as of the last
+    /// ``awdlAutoTick()``, so the grace countdown is current within a second.
+    var awdlStatus: AWDLStatus {
+        guard awdl.isRunning else { return .off }
+        if settings.awdlAutoWithGaming {
+            if gamingWatcher.wrappedIsSatisfied { return .pausedForGame }
+            if let remaining = gamingWatcher.graceRemaining {
+                return .resumingAfterGame(seconds: Int(remaining.rounded(.up)))
+            }
+        }
+        return .pausedManually
     }
 
     // MARK: - Setup / headless readiness

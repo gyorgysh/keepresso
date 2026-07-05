@@ -132,6 +132,8 @@ struct MenuBarContent: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            awdlStatusLine
+
             Divider()
 
             Group {
@@ -299,6 +301,28 @@ struct MenuBarContent: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    /// AWDL watchdog state, so a user testing the app sees why Wi-Fi discovery
+    /// is paused and, once they quit a game, the grace countdown before it
+    /// resumes (yellow), rather than wondering why it's still off. Hidden when
+    /// the watchdog isn't running. Refreshes on the 1s tick.
+    @ViewBuilder
+    private var awdlStatusLine: some View {
+        let _ = liveRefresh
+        if let status = AWDLStatusStyle(model.awdlStatus) {
+            HStack(spacing: 6) {
+                Image(systemName: status.icon)
+                    .foregroundStyle(status.color)
+                    .font(.caption)
+                    .accessibilityHidden(true)
+                Text(status.text)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }

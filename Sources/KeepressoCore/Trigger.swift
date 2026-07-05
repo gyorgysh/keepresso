@@ -235,6 +235,19 @@ public final class GracePeriodTrigger: Trigger {
         guard grace > 0, let last = lastSatisfiedAt else { return false }
         return now().timeIntervalSince(last) < grace
     }
+
+    /// Whether the wrapped condition holds right now, ignoring the grace window.
+    /// Lets the UI distinguish "condition active" from "lingering in grace".
+    public var wrappedIsSatisfied: Bool { wrapped.isSatisfied() }
+
+    /// Seconds left in the linger window after the wrapped condition went false,
+    /// or `nil` when the wrapped condition holds now (no countdown) or the window
+    /// has already lapsed. For a "resuming shortly" countdown in the UI.
+    public var graceRemaining: TimeInterval? {
+        guard !wrapped.isSatisfied(), grace > 0, let last = lastSatisfiedAt else { return nil }
+        let remaining = grace - now().timeIntervalSince(last)
+        return remaining > 0 ? remaining : nil
+    }
 }
 
 /// How a rule set combines its triggers into a single on/off decision.
