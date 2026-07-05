@@ -314,7 +314,9 @@ struct MenuBarContent: View {
     @ViewBuilder
     private var awdlStatusLine: some View {
         let _ = liveRefresh
-        if let status = AWDLStatusStyle(model.awdlStatus) {
+        // Only surface an active pause in the menu; the "watching" state would
+        // just be persistent noise here (it lives in the Streaming window).
+        if model.awdlStatus.isPausing, let status = AWDLStatusStyle(model.awdlStatus) {
             HStack(spacing: 6) {
                 Image(systemName: status.icon)
                     .foregroundStyle(status.color)

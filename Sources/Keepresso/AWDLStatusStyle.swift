@@ -13,6 +13,10 @@ struct AWDLStatusStyle {
         switch status {
         case .off:
             return nil
+        case .watchingForGame:
+            icon = "binoculars"
+            color = .secondary
+            text = "Waiting for a game to come to the front"
         case .pausedManually:
             icon = "dot.radiowaves.left.and.right"
             color = .secondary

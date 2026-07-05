@@ -691,8 +691,10 @@ final class AppModel {
     /// auto-gaming grace window instead of wondering why AWDL is still paused
     /// after they quit the game.
     enum AWDLStatus: Equatable {
-        /// The watchdog isn't running; AWDL is normal.
+        /// The watchdog isn't running and auto mode is off; AWDL is normal.
         case off
+        /// Auto mode is on but no game is in front yet: armed and watching.
+        case watchingForGame
         /// Running because the user turned it on by hand.
         case pausedManually
         /// Running because a game (or cloud-gaming app) is in the foreground.
@@ -700,12 +702,25 @@ final class AppModel {
         /// The game closed; AWDL stays paused for a short grace, resuming in
         /// this many seconds.
         case resumingAfterGame(seconds: Int)
+
+        /// Whether AWDL is actively paused right now (vs off or merely watching).
+        /// The menu shows only these; the streaming window shows watching too.
+        var isPausing: Bool {
+            switch self {
+            case .pausedManually, .pausedForGame, .resumingAfterGame: return true
+            case .off, .watchingForGame: return false
+            }
+        }
     }
 
     /// The live AWDL watchdog status. Reads ``gamingWatcher`` as of the last
     /// ``awdlAutoTick()``, so the grace countdown is current within a second.
     var awdlStatus: AWDLStatus {
-        guard awdl.isRunning else { return .off }
+        guard awdl.isRunning else {
+            // Not paused. Say we're armed and watching when auto mode is on, so
+            // the user knows it's waiting for a game rather than doing nothing.
+            return settings.awdlAutoWithGaming ? .watchingForGame : .off
+        }
         if settings.awdlAutoWithGaming {
             if gamingWatcher.wrappedIsSatisfied { return .pausedForGame }
             if let remaining = gamingWatcher.graceRemaining {

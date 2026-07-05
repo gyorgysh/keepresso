@@ -205,7 +205,7 @@ struct StreamingSetupView: View {
                 set: { model.awdlAutoWithGaming = $0 }
             ))
             .toggleStyle(.switch)
-            Text("Watches for a game (or a cloud-gaming app like GeForce NOW) coming to the front and pauses AWDL on its own, then lifts the pause about a minute after you stop. No trigger setup needed: leave this on and forget it.")
+            Text("Watches for a game (or a cloud-gaming app like GeForce NOW) as the active window and pauses AWDL on its own, then lifts the pause about a minute after you switch away. It only counts while the game is in front and in use, not just running in the background. No trigger setup needed: leave this on and forget it.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

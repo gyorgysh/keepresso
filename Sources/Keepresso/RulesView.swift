@@ -257,6 +257,7 @@ struct RulesView: View {
         }
         Section("Gaming") {
             Button("Playing a game") { model.addRule(.gaming) }
+                .help("Counts only while a game (or a cloud-gaming app) is the active window, not just running in the background. Keeps holding for 5 minutes after you switch away.")
         }
         Section("Process is running") {
             ForEach(Self.processPresets, id: \.self) { name in
