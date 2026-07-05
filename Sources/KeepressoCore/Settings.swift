@@ -33,6 +33,10 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     /// Whether the AWDL watchdog starts and stops with a gaming trigger
     /// (see ``AWDLWatchdogController/autoWithGaming``).
     public var awdlAutoWithGaming: Bool
+    /// Whether to post a notification when auto mode detects a game and pauses
+    /// AWDL, and when it resumes. A password-required notice is always sent
+    /// regardless of this. Off by default.
+    public var awdlNotifications: Bool
     /// A system-wide keyboard shortcut that toggles keep-awake, or `nil` (the
     /// default) for none.
     public var hotKey: HotKeyShortcut?
@@ -62,6 +66,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         pauseBelowBatteryPercent: Int? = nil,
         showCountdownInMenuBar: Bool = false,
         awdlAutoWithGaming: Bool = false,
+        awdlNotifications: Bool = false,
         hotKey: HotKeyShortcut? = nil,
         startOnLaunch: Bool = false,
         presets: [Preset] = Preset.builtIns,
@@ -81,6 +86,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.pauseBelowBatteryPercent = pauseBelowBatteryPercent
         self.showCountdownInMenuBar = showCountdownInMenuBar
         self.awdlAutoWithGaming = awdlAutoWithGaming
+        self.awdlNotifications = awdlNotifications
         self.hotKey = hotKey
         self.startOnLaunch = startOnLaunch
         self.presets = presets
@@ -141,6 +147,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         pauseBelowBatteryPercent = try c.decodeIfPresent(Int.self, forKey: .pauseBelowBatteryPercent)
         showCountdownInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showCountdownInMenuBar) ?? false
         awdlAutoWithGaming = try c.decodeIfPresent(Bool.self, forKey: .awdlAutoWithGaming) ?? false
+        awdlNotifications = try c.decodeIfPresent(Bool.self, forKey: .awdlNotifications) ?? false
         hotKey = try c.decodeIfPresent(HotKeyShortcut.self, forKey: .hotKey)
         startOnLaunch = try c.decodeIfPresent(Bool.self, forKey: .startOnLaunch) ?? false
         presets = try c.decodeIfPresent([Preset].self, forKey: .presets) ?? Preset.builtIns

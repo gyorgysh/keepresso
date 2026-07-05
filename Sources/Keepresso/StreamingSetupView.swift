@@ -207,6 +207,16 @@ struct StreamingSetupView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            Toggle("Notify when auto-pausing and resuming", isOn: Binding(
+                get: { model.awdlNotifications },
+                set: { model.awdlNotifications = $0 }
+            ))
+            .toggleStyle(.switch)
+            Text("Posts a notification when a game is detected and AWDL pauses, and again when it resumes. A notice that your administrator password is needed is always sent (even behind a fullscreen game), regardless of this switch.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)

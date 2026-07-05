@@ -702,6 +702,20 @@ final class AppModel {
         grace: 60
     )
 
+    /// Whether auto mode posts a notification when it pauses (a game is detected)
+    /// and resumes AWDL. A password-required notice is always sent regardless.
+    var awdlNotifications: Bool {
+        get { settings.awdlNotifications }
+        set {
+            settings.awdlNotifications = newValue
+            if newValue { notifier.requestAuthorization() }
+            persist()
+        }
+    }
+
+    @ObservationIgnored private var wasGameInFront = false
+    @ObservationIgnored private var wasGamingActive = false
+
     /// Once-a-second pulse for the watchdog's auto mode. Detects a game directly
     /// via ``gamingWatcher`` (no trigger or active session required). The guard
     /// keeps the per-tick task from spawning while the feature is off.
@@ -709,7 +723,39 @@ final class AppModel {
         guard settings.awdlAutoWithGaming else { return }
         gamingWatcher.tick() // advance the grace window once per pulse
         let gamingActive = gamingWatcher.isSatisfied()
+        notifyAWDLEdges(gameInFront: gamingWatcher.wrappedIsSatisfied, gamingActive: gamingActive)
         Task { await awdl.autoTick(gamingActive: gamingActive) }
+    }
+
+    /// Fire AWDL notifications on the game-detected and game-ended edges. The
+    /// password-required notice always fires (it may land behind a fullscreen
+    /// game, where the in-window explanation can't be seen); the pause/resume
+    /// notices are gated by ``awdlNotifications``.
+    private func notifyAWDLEdges(gameInFront: Bool, gamingActive: Bool) {
+        defer { wasGameInFront = gameInFront; wasGamingActive = gamingActive }
+        if gameInFront, !wasGameInFront {
+            if !awdl.isAuthorized, !awdl.isRunning {
+                notifier.notify(
+                    title: "Keepresso needs your password",
+                    body: "Enter your administrator password to pause AWDL for this game.",
+                    sound: true
+                )
+            }
+            if settings.awdlNotifications {
+                notifier.notify(
+                    title: "Game detected",
+                    body: "Pausing AWDL to steady your connection.",
+                    sound: false
+                )
+            }
+        }
+        if !gamingActive, wasGamingActive, settings.awdlNotifications {
+            notifier.notify(
+                title: "AWDL resumed",
+                body: "The game closed; AirDrop, Handoff and Continuity are back.",
+                sound: false
+            )
+        }
     }
 
     /// Why the AWDL watchdog is (or isn't) currently pausing Wi-Fi discovery,
