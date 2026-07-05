@@ -320,6 +320,17 @@ public final class AWDLWatchdogController {
         autoStarted = false
     }
 
+    /// Hold auto mode off until the current game (and its grace) has fully ended,
+    /// so a manual override isn't immediately re-paused by the next auto tick.
+    /// ``autoTick(gamingActive:)`` clears it once it next sees no game.
+    public func holdAutoOff() { autoHeldOff = true }
+
+    /// Stop only an auto-started run; a manual run is left alone. For when auto
+    /// mode is switched off mid-bout.
+    public func stopIfAuto() async {
+        if autoStarted { await stop() }
+    }
+
     /// Auto mode's once-a-second pulse. Starts the watchdog while a game is
     /// running (`gamingActive`, decided by the host, one prompt; a cancel holds
     /// off until the bout ends) and stops it again when the bout is over. Only

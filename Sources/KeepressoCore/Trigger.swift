@@ -248,6 +248,11 @@ public final class GracePeriodTrigger: Trigger {
         let remaining = grace - now().timeIntervalSince(last)
         return remaining > 0 ? remaining : nil
     }
+
+    /// Forget the linger window, so ``isSatisfied()`` reflects only the wrapped
+    /// condition until it next holds. Lets a caller cancel an in-flight grace,
+    /// e.g. the user manually overriding an auto-pause that's still counting down.
+    public func resetGrace() { lastSatisfiedAt = nil }
 }
 
 /// How a rule set combines its triggers into a single on/off decision.

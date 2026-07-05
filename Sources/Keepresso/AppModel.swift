@@ -640,6 +640,13 @@ final class AppModel {
     /// rights, so the app becomes active first (same reason as
     /// ``setClosedDisplay(_:)``: an unfocused password dialog looks stuck).
     func setAWDLWatchdog(_ on: Bool) {
+        if !on {
+            // Manual override during an auto-gaming grace: clear the grace so the
+            // countdown stops now, and hold auto off so the next tick doesn't
+            // immediately re-pause while the game (or its grace) is still around.
+            gamingWatcher.resetGrace()
+            awdl.holdAutoOff()
+        }
         // The admin prompt steals focus and can bury the window the toggle lives
         // in (the Gaming & Streaming window). Capture it now, while it's key, and
         // bring it back once the prompt is answered.
@@ -651,8 +658,10 @@ final class AppModel {
             } else {
                 await awdl.stop()
             }
-            NSApp.activate(ignoringOtherApps: true)
-            window?.makeKeyAndOrderFront(nil)
+            if on {
+                NSApp.activate(ignoringOtherApps: true)
+                window?.makeKeyAndOrderFront(nil)
+            }
         }
     }
 
@@ -675,6 +684,11 @@ final class AppModel {
                     NSApp.activate(ignoringOtherApps: true)
                     window?.makeKeyAndOrderFront(nil)
                 }
+            } else if !newValue {
+                // Turning auto off mid-bout: clear the grace and lift any pause it
+                // started (autoTick won't, it early-returns once the feature's off).
+                gamingWatcher.resetGrace()
+                Task { await awdl.stopIfAuto() }
             }
         }
     }

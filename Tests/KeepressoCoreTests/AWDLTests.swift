@@ -131,6 +131,47 @@ private final class FakeAWDLReader: AWDLStateReading, @unchecked Sendable {
 }
 
 @MainActor
+@Test func holdAutoOffPreventsReengageDuringGrace() async {
+    // The reported "jumps back": a manual stop during the auto grace was undone
+    // by the next tick (grace still active). holdAutoOff must suppress that until
+    // the bout fully ends.
+    let launcher = FakeWatchdogLauncher()
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+    controller.autoWithGaming = true
+
+    await controller.autoTick(gamingActive: true) // game running: auto pauses
+    #expect(controller.isRunning)
+
+    await controller.stop()      // user turns "Pause AWDL now" off...
+    controller.holdAutoOff()     // ...which holds auto off
+    #expect(!controller.isRunning)
+
+    await controller.autoTick(gamingActive: true) // grace still active: must NOT re-pause
+    #expect(!controller.isRunning)
+
+    await controller.autoTick(gamingActive: false) // bout ends: clears the hold
+    await controller.autoTick(gamingActive: true)  // a new game: auto free to engage again
+    #expect(controller.isRunning)
+}
+
+@MainActor
+@Test func stopIfAutoLeavesAManualRunAlone() async {
+    let launcher = FakeWatchdogLauncher()
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+
+    _ = await controller.start()   // a manual run
+    await controller.stopIfAuto()
+    #expect(controller.isRunning)  // untouched: it wasn't auto-started
+
+    controller.autoWithGaming = true
+    await controller.stop()
+    await controller.autoTick(gamingActive: true) // now an auto run
+    #expect(controller.isRunning)
+    await controller.stopIfAuto()
+    #expect(!controller.isRunning) // auto run is stopped
+}
+
+@MainActor
 @Test func aCancelledPromptLeavesNoFlagBehind() async {
     // The flag is written before the prompt (the helper reads it on its first
     // cycle); a cancel or failure must clean it up so the next helper start
