@@ -37,11 +37,7 @@ public protocol GamingMonitoring: AnyObject {
 /// read is heavier than a workspace poll, so readings are cached briefly
 /// (mirroring ``IOBluetoothDeviceMonitor``). No permissions involved.
 public final class WorkspaceGamingMonitor: GamingMonitoring {
-    private let ttl: TimeInterval
-    private let now: () -> Date
-    private let probe: () -> GamingSnapshot
-    private var cached: GamingSnapshot?
-    private var cachedAt: Date?
+    private let cache: TTLCache<GamingSnapshot>
 
     public convenience init() {
         self.init(probe: Self.probeSystem)
@@ -53,20 +49,10 @@ public final class WorkspaceGamingMonitor: GamingMonitoring {
         now: @escaping () -> Date = Date.init,
         probe: @escaping () -> GamingSnapshot
     ) {
-        self.ttl = ttl
-        self.now = now
-        self.probe = probe
+        cache = TTLCache(ttl: ttl, now: now, probe: probe)
     }
 
-    public var current: GamingSnapshot {
-        if let cached, let cachedAt, now().timeIntervalSince(cachedAt) < ttl {
-            return cached
-        }
-        let snapshot = probe()
-        cached = snapshot
-        cachedAt = now()
-        return snapshot
-    }
+    public var current: GamingSnapshot { cache.current }
 
     /// The real probe: the frontmost app and its declared category.
     static func probeSystem() -> GamingSnapshot {

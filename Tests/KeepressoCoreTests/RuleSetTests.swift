@@ -7,6 +7,15 @@ private final class FakeWorkspace: WorkspaceMonitoring {
     init(_ s: WorkspaceSnapshot) { current = s }
 }
 
+@Test func rulePermissionMapping() {
+    #expect(TriggerRule.wifiSSID("Cafe").requiredPermission == .location)
+    #expect(TriggerRule.bluetoothDevice("AirPods").requiredPermission == .bluetooth)
+    #expect(TriggerRule.calendarEvent.requiredPermission == .calendar)
+    // A rule reading only unrestricted state needs no permission.
+    #expect(TriggerRule.gaming.requiredPermission == nil)
+    #expect(TriggerRule.cpuLoad(thresholdPercent: 50).requiredPermission == nil)
+}
+
 // MARK: - App trigger (running / frontmost)
 
 @Test func appTriggerMatchesRunning() {

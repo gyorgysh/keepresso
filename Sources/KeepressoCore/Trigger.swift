@@ -254,17 +254,14 @@ public final class TriggerEngine: TriggerEvaluating {
     /// How ``triggers`` are combined. Mutable so the UI can flip OR/AND live.
     public var combine: CombineMode
 
-    /// The conditions in this rule set.
-    public private(set) var triggers: [Trigger]
+    /// The conditions in this rule set. Fixed at construction: the app rebuilds
+    /// a fresh engine (carrying over live triggers) rather than mutating one.
+    public let triggers: [Trigger]
 
     public init(combine: CombineMode = .any, triggers: [Trigger] = []) {
         self.combine = combine
         self.triggers = triggers
     }
-
-    public func add(_ trigger: Trigger) { triggers.append(trigger) }
-
-    public func removeAll() { triggers.removeAll() }
 
     /// Advance every trigger once, unconditionally. Called once per reconcile
     /// before ``isSatisfied()`` so a stateful trigger steps at a fixed cadence

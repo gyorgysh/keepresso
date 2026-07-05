@@ -160,6 +160,21 @@ public final class SessionController {
         return max(0, total - now().timeIntervalSince(startedAt))
     }
 
+    /// Whether ``reconcile(now:systemIdleSeconds:batteryPercent:)`` can currently
+    /// use a HID idle reading: the screen-saver yield is configured (display
+    /// sleep prevented and a yield threshold set). The host skips the per-second
+    /// IOKit idle read when this is false, which is the default.
+    public var consumesIdleReading: Bool {
+        options.preventDisplaySleep && options.allowScreenSaverAfter != nil
+    }
+
+    /// Whether ``reconcile(now:systemIdleSeconds:batteryPercent:)`` can currently
+    /// use a battery reading: battery auto-pause is on. The host skips the
+    /// per-second power-source sweep when this is false (off by default).
+    public var consumesBatteryReading: Bool {
+        pauseBelowBatteryPercent != nil
+    }
+
     // MARK: - Reconciliation
 
     /// Bring live power assertions in line with current state, expire timed

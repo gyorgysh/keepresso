@@ -34,10 +34,15 @@ final class SessionTicker {
         guard timer == nil else { return }
         let timer = Timer(timeInterval: 1.0, repeats: true) { [weak session, weak disk, weak closedDisplay, weak self] _ in
             MainActor.assumeIsolated {
-                session?.reconcile(
-                    systemIdleSeconds: Self.systemIdleSeconds(),
-                    batteryPercent: self?.powerSource.current.percentage
-                )
+                if let session {
+                    // Only run the per-second IOKit sweeps reconcile can actually
+                    // use: the idle read feeds the screen-saver yield (off by
+                    // default), the battery read feeds auto-pause (off by default).
+                    session.reconcile(
+                        systemIdleSeconds: session.consumesIdleReading ? Self.systemIdleSeconds() : nil,
+                        batteryPercent: session.consumesBatteryReading ? self?.powerSource.current.percentage : nil
+                    )
+                }
                 disk?.tick(now: Date())
                 closedDisplay?.tick()
                 self?.onTick?()
@@ -53,7 +58,9 @@ final class SessionTicker {
     }
 
     /// Seconds since the last HID (keyboard/mouse/trackpad) event, via IOKit's
-    /// `IOHIDSystem` idle-time property.
+    /// `IOHIDSystem` idle-time property. Reads the single `HIDIdleTime` key
+    /// rather than copying the whole property dictionary (which carries a large
+    /// nested `HIDParameters` set), since this runs once a second.
     static func systemIdleSeconds() -> TimeInterval {
         var iterator: io_iterator_t = 0
         defer { if iterator != 0 { IOObjectRelease(iterator) } }
@@ -68,10 +75,9 @@ final class SessionTicker {
         guard entry != 0 else { return 0 }
         defer { IOObjectRelease(entry) }
 
-        var properties: Unmanaged<CFMutableDictionary>?
-        guard IORegistryEntryCreateCFProperties(entry, &properties, kCFAllocatorDefault, 0) == KERN_SUCCESS,
-              let dict = properties?.takeRetainedValue() as? [String: Any],
-              let nanoseconds = dict["HIDIdleTime"] as? UInt64
+        guard let value = IORegistryEntryCreateCFProperty(
+            entry, "HIDIdleTime" as CFString, kCFAllocatorDefault, 0
+        )?.takeRetainedValue(), let nanoseconds = value as? UInt64
         else { return 0 }
 
         return TimeInterval(nanoseconds) / 1_000_000_000

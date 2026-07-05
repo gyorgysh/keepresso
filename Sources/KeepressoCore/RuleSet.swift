@@ -58,6 +58,28 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
         case .gaming:                 return "Playing a game"
         }
     }
+
+    /// A system privacy permission a rule needs before it can evaluate.
+    public enum Permission: String, Sendable, CaseIterable {
+        /// Location access, needed to read the current Wi-Fi network name.
+        case location
+        /// Bluetooth access, needed to see which paired devices are connected.
+        case bluetooth
+        /// Full calendar access, needed to see events in progress.
+        case calendar
+    }
+
+    /// The privacy permission this rule needs to evaluate, or `nil` when it
+    /// reads only unrestricted state. Lets the Setup screen build its per-rule
+    /// permission checks from one table instead of a scan per permission.
+    public var requiredPermission: Permission? {
+        switch self {
+        case .wifiSSID:        return .location
+        case .bluetoothDevice: return .bluetooth
+        case .calendarEvent:   return .calendar
+        default:               return nil
+        }
+    }
 }
 
 /// A persisted "caffeinating app" rule: which app, how it's matched, and how

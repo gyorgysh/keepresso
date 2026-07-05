@@ -26,8 +26,12 @@ public final class HostCPULoadReader: CPULoadReading {
     private let ttl: TimeInterval
     private let now: () -> Date
     private let readTicks: () -> Ticks?
-    private var cachedLoad: Double?
-    private var cachedAt: Date?
+    /// The probe reads `self` (the delta advances ``previous``), so the cache is
+    /// built lazily on first read, once `self` is fully initialized, and holds
+    /// `self` unowned: the cache and this reader share a lifetime.
+    private lazy var cache = TTLCache<Double?>(ttl: ttl, now: now) { [unowned self] in
+        self.readLoadDelta()
+    }
 
     public convenience init() {
         self.init(readTicks: Self.machTicks)
@@ -45,15 +49,7 @@ public final class HostCPULoadReader: CPULoadReading {
         self.readTicks = readTicks
     }
 
-    public func currentLoad() -> Double? {
-        if let cachedAt, now().timeIntervalSince(cachedAt) < ttl {
-            return cachedLoad
-        }
-        let load = readLoadDelta()
-        cachedLoad = load
-        cachedAt = now()
-        return load
-    }
+    public func currentLoad() -> Double? { cache.current }
 
     private func readLoadDelta() -> Double? {
         guard let ticks = readTicks() else { return nil }

@@ -29,11 +29,7 @@ public protocol BluetoothMonitoring: AnyObject {
 /// TCC-gated (Bluetooth privacy), so the app requests access before offering
 /// Bluetooth rules and surfaces the grant in the Setup screen.
 public final class IOBluetoothDeviceMonitor: BluetoothMonitoring {
-    private let ttl: TimeInterval
-    private let now: () -> Date
-    private let probe: () -> BluetoothSnapshot
-    private var cached: BluetoothSnapshot?
-    private var cachedAt: Date?
+    private let cache: TTLCache<BluetoothSnapshot>
 
     public convenience init() {
         self.init(probe: Self.probeSystem)
@@ -46,20 +42,10 @@ public final class IOBluetoothDeviceMonitor: BluetoothMonitoring {
         now: @escaping () -> Date = Date.init,
         probe: @escaping () -> BluetoothSnapshot
     ) {
-        self.ttl = ttl
-        self.now = now
-        self.probe = probe
+        cache = TTLCache(ttl: ttl, now: now, probe: probe)
     }
 
-    public var current: BluetoothSnapshot {
-        if let cached, let cachedAt, now().timeIntervalSince(cachedAt) < ttl {
-            return cached
-        }
-        let snapshot = probe()
-        cached = snapshot
-        cachedAt = now()
-        return snapshot
-    }
+    public var current: BluetoothSnapshot { cache.current }
 
     /// The real probe: sweep the pairing registry once.
     static func probeSystem() -> BluetoothSnapshot {

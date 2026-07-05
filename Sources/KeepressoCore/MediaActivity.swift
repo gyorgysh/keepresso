@@ -41,11 +41,7 @@ public protocol MediaActivityMonitoring: AnyObject {
 /// through it also reads as microphone use. Built-in mics and speakers are
 /// separate devices, where the distinction is exact.
 public final class CoreMediaActivityMonitor: MediaActivityMonitoring {
-    private let ttl: TimeInterval
-    private let now: () -> Date
-    private let probe: () -> MediaActivitySnapshot
-    private var cached: MediaActivitySnapshot?
-    private var cachedAt: Date?
+    private let cache: TTLCache<MediaActivitySnapshot>
 
     public convenience init() {
         self.init(probe: Self.probeSystem)
@@ -58,20 +54,10 @@ public final class CoreMediaActivityMonitor: MediaActivityMonitoring {
         now: @escaping () -> Date = Date.init,
         probe: @escaping () -> MediaActivitySnapshot
     ) {
-        self.ttl = ttl
-        self.now = now
-        self.probe = probe
+        cache = TTLCache(ttl: ttl, now: now, probe: probe)
     }
 
-    public var current: MediaActivitySnapshot {
-        if let cached, let cachedAt, now().timeIntervalSince(cachedAt) < ttl {
-            return cached
-        }
-        let snapshot = probe()
-        cached = snapshot
-        cachedAt = now()
-        return snapshot
-    }
+    public var current: MediaActivitySnapshot { cache.current }
 
     /// The real probe: sweep CoreMediaIO video devices and CoreAudio devices.
     static func probeSystem() -> MediaActivitySnapshot {
