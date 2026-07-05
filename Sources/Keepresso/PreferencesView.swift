@@ -177,6 +177,16 @@ private struct GeneralTab: View {
                 Toggle("Prevent system sleep", isOn: optionBinding(\.preventSystemSleep))
             }
             Section {
+                Toggle("Keep me active", isOn: Binding(
+                    get: { model.simulateUserActivity },
+                    set: { model.simulateUserActivity = $0 }
+                ))
+            } footer: {
+                Text("Also tells macOS you're active while a session runs, so remote-desktop sessions, meeting presence (Teams, Slack), and corporate idle-logout don't mark you away. A plain keep-awake doesn't reach those. Off by default; some managed Macs flag simulated activity.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
                 Toggle("Show countdown in menu bar", isOn: Binding(
                     get: { model.showCountdownInMenuBar },
                     set: { model.showCountdownInMenuBar = $0 }

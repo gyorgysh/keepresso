@@ -105,6 +105,14 @@ final class AppModel {
 
     // MARK: - Keep-awake options
 
+    /// Whether the session also reports user activity to the OS, defeating
+    /// app-level and enterprise idle detection (remote desktop, meeting
+    /// presence, corporate idle-logout). Off by default.
+    var simulateUserActivity: Bool {
+        get { session.options.simulateUserActivity }
+        set { updateOptions { $0.simulateUserActivity = newValue } }
+    }
+
     /// Mutate the keep-awake options, mirror into settings, and persist.
     func updateOptions(_ mutate: (inout SleepPreventionOptions) -> Void) {
         var options = session.options

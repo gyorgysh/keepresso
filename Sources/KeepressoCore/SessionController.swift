@@ -63,7 +63,16 @@ public final class SessionController {
 
     private let assertions: PowerAsserting
     private let reminder: ReminderNotifying?
+    private let activity: ActivitySimulating
     private let now: () -> Date
+
+    /// When the keep-active poke last fired this session, so it runs on a slow
+    /// cadence (``activityPokeInterval``) rather than every reconcile.
+    private var lastActivityPokeAt: Date?
+
+    /// How often ``options`` `simulateUserActivity` reports activity to the OS.
+    /// Comfortably under the shortest common idle timeout (a minute or two).
+    static let activityPokeInterval: TimeInterval = 30
 
     /// How many reminder intervals have already been surfaced this session, so
     /// the per-second ``reconcile(now:systemIdleSeconds:)`` fires each at most
@@ -89,10 +98,12 @@ public final class SessionController {
     public init(
         assertions: PowerAsserting = IOKitPowerAssertionManager(),
         reminder: ReminderNotifying? = nil,
+        activity: ActivitySimulating = IOKitActivitySimulator(),
         now: @escaping () -> Date = Date.init
     ) {
         self.assertions = assertions
         self.reminder = reminder
+        self.activity = activity
         self.now = now
     }
 
@@ -110,6 +121,7 @@ public final class SessionController {
         self.startedAt = now()
         self.isActive = true
         remindersFired = 0
+        lastActivityPokeAt = nil
         log.record(began: true, reason: Self.startReason(cause: cause, restarted: restarted), at: now())
         reconcile(now: now())
     }
@@ -128,6 +140,7 @@ public final class SessionController {
         isActive = false
         startedAt = nil
         remindersFired = 0
+        lastActivityPokeAt = nil
         assertions.releaseAll()
         reminder?.cancelPending()
     }
@@ -222,6 +235,19 @@ public final class SessionController {
         )
 
         maybeRemind(at: instant)
+        maybePokeActivity(at: instant)
+    }
+
+    /// Report user activity to the OS on a slow cadence while a keep-active
+    /// session runs, so app-level and enterprise idle detectors don't mark the
+    /// user away. Fires once on activation, then every ``activityPokeInterval``.
+    /// No-op unless the session is active and the option is on.
+    private func maybePokeActivity(at instant: Date) {
+        guard isActive, options.simulateUserActivity else { return }
+        if let last = lastActivityPokeAt,
+           instant.timeIntervalSince(last) < Self.activityPokeInterval { return }
+        lastActivityPokeAt = instant
+        activity.poke()
     }
 
     /// Surface the reminder once an active session crosses an interval boundary.
@@ -262,12 +288,14 @@ public final class SessionController {
             isActive = true
             startedAt = instant
             remindersFired = 0
+            lastActivityPokeAt = nil
             let detail = triggerDescriber?().map { "Triggers: \($0)" }
             log.record(began: true, reason: detail ?? "Trigger conditions met", at: instant)
         } else if !want, isActive {
             isActive = false
             startedAt = nil
             remindersFired = 0
+            lastActivityPokeAt = nil
             reminder?.cancelPending()
             log.record(began: false, reason: "Trigger conditions ended", at: instant)
         }

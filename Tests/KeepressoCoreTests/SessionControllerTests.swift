@@ -15,6 +15,53 @@ private final class Clock {
     func advance(_ seconds: TimeInterval) { now.addTimeInterval(seconds) }
 }
 
+/// Records how often the keep-active poke fires.
+private final class FakeActivity: ActivitySimulating {
+    private(set) var pokeCount = 0
+    func poke() { pokeCount += 1 }
+}
+
+@MainActor
+@Test func keepActivePokesOnceOnActivationThenOnTheInterval() {
+    let clock = Clock()
+    let activity = FakeActivity()
+    let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true))
+    #expect(activity.pokeCount == 1) // start reconciles: pokes immediately
+
+    controller.reconcile() // same second
+    #expect(activity.pokeCount == 1) // not again within the interval
+
+    clock.advance(SessionController.activityPokeInterval)
+    controller.reconcile()
+    #expect(activity.pokeCount == 2) // interval elapsed: pokes again
+}
+
+@MainActor
+@Test func keepActiveNeverPokesWhenTheOptionIsOff() {
+    let clock = Clock()
+    let activity = FakeActivity()
+    let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
+    controller.start() // simulateUserActivity defaults off
+    clock.advance(120)
+    controller.reconcile()
+    #expect(activity.pokeCount == 0)
+}
+
+@MainActor
+@Test func keepActivePokesAgainImmediatelyOnANewSession() {
+    let clock = Clock()
+    let activity = FakeActivity()
+    let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
+    let options = SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true)
+    controller.start(options: options)
+    #expect(activity.pokeCount == 1)
+    controller.stop()
+    clock.advance(5) // well within the interval
+    controller.start(options: options)
+    #expect(activity.pokeCount == 2) // the fresh session pokes right away
+}
+
 @MainActor
 private func makeController() -> (SessionController, FakeAssertions, Clock) {
     let fake = FakeAssertions()
