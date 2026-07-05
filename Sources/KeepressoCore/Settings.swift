@@ -32,6 +32,9 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     /// A system-wide keyboard shortcut that toggles keep-awake, or `nil` (the
     /// default) for none.
     public var hotKey: HotKeyShortcut?
+    /// Start a manual keep-awake session as soon as the app launches (when
+    /// triggers aren't gating activation). Off by default.
+    public var startOnLaunch: Bool
     /// Saved trigger-rule bundles a user can apply in one action. Seeded with
     /// ``Preset/builtIns`` on first launch; a user may add or remove any of them.
     public var presets: [Preset]
@@ -54,6 +57,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         showCountdownInMenuBar: Bool = false,
         awdlAutoWithGaming: Bool = false,
         hotKey: HotKeyShortcut? = nil,
+        startOnLaunch: Bool = false,
         presets: [Preset] = Preset.builtIns,
         seededPresetIDs: [String] = Preset.builtIns.map(\.id)
     ) {
@@ -70,6 +74,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.showCountdownInMenuBar = showCountdownInMenuBar
         self.awdlAutoWithGaming = awdlAutoWithGaming
         self.hotKey = hotKey
+        self.startOnLaunch = startOnLaunch
         self.presets = presets
         self.seededPresetIDs = seededPresetIDs
     }
@@ -127,6 +132,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         showCountdownInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showCountdownInMenuBar) ?? false
         awdlAutoWithGaming = try c.decodeIfPresent(Bool.self, forKey: .awdlAutoWithGaming) ?? false
         hotKey = try c.decodeIfPresent(HotKeyShortcut.self, forKey: .hotKey)
+        startOnLaunch = try c.decodeIfPresent(Bool.self, forKey: .startOnLaunch) ?? false
         presets = try c.decodeIfPresent([Preset].self, forKey: .presets) ?? Preset.builtIns
         // Settings saved before seeding was tracked (1.2.x and earlier) had
         // exactly the original three built-ins seeded; assuming that set means

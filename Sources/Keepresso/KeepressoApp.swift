@@ -81,6 +81,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ticker.start()
         // Register the global keep-awake toggle shortcut, if the user set one.
         model.registerHotKey()
+        // Start a session right away if "Start keep-awake on launch" is on.
+        model.startOnLaunchIfNeeded()
         // The Control Center toggle: consume a command that may have launched
         // us, then keep listening while running.
         widgetObserver = WidgetCommandObserver { [weak model] in model?.applyPendingWidgetCommand() }

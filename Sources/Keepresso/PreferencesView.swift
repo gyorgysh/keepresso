@@ -248,7 +248,7 @@ private struct GeneralTab: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("Startup") {
+            Section {
                 Toggle("Launch at login", isOn: Binding(
                     get: { launchAtLogin },
                     set: { newValue in
@@ -256,6 +256,16 @@ private struct GeneralTab: View {
                         launchAtLogin = LoginItem.isEnabled
                     }
                 ))
+                Toggle("Start keep-awake on launch", isOn: Binding(
+                    get: { model.startOnLaunch },
+                    set: { model.startOnLaunch = $0 }
+                ))
+            } header: {
+                Text("Startup")
+            } footer: {
+                Text("Starts a session as soon as Keepresso launches, using the default duration. Ignored while triggers are controlling activation.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

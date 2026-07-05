@@ -347,6 +347,23 @@ final class AppModel {
         hotKeyManager.update(to: settings.hotKey) { [weak self] in self?.toggleManual() }
     }
 
+    // MARK: - Start on launch
+
+    /// Whether a manual session starts as soon as the app launches (when
+    /// triggers aren't gating activation).
+    var startOnLaunch: Bool {
+        get { settings.startOnLaunch }
+        set { settings.startOnLaunch = newValue; persist() }
+    }
+
+    /// Start a manual session at launch if the user asked for it. Skipped when
+    /// triggers own activation (the gate would fight it) or a session is already
+    /// running. Called once from the app delegate after relocation.
+    func startOnLaunchIfNeeded() {
+        guard settings.startOnLaunch, !settings.triggersEnabled, !session.isActive else { return }
+        session.start(mode: settings.defaultMode)
+    }
+
     // MARK: - Menu-bar countdown
 
     /// Whether the menu-bar icon shows a live countdown for timed sessions.
