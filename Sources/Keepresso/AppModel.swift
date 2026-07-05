@@ -33,7 +33,6 @@ final class AppModel {
     let awdl = AWDLWatchdogController()
 
     private let store: SettingsStore
-    private let factory: TriggerFactory
     private let notifier: UserNotificationReminder
     private(set) var settings: KeepressoSettings
 
@@ -45,7 +44,7 @@ final class AppModel {
         factory: TriggerFactory = TriggerFactory()
     ) {
         self.store = store
-        self.factory = factory
+        self.gate = TriggerGateController(factory: factory)
         let notifier = UserNotificationReminder()
         self.notifier = notifier
         var loaded = store.load()
@@ -201,85 +200,26 @@ final class AppModel {
         persist()
     }
 
-    /// The live engine currently gating the session, kept so the menu can read
-    /// each condition's live state for the next-trigger summary. `nil` when
-    /// trigger gating is off.
-    private(set) var currentEngine: TriggerEngine?
+    /// Owns the live engine gating the session and the menu's rule-state cache.
+    @ObservationIgnored private let gate: TriggerGateController
 
-    /// The rules ``currentEngine``'s triggers were built from, index-aligned
-    /// with `currentEngine.triggers`, so a rebuild can carry live triggers over
-    /// for rules that didn't change.
-    @ObservationIgnored private var engineRules: [TriggerRule] = []
-
-    /// Rebuild (or tear down) the controller's gate to match current settings.
-    ///
-    /// Live triggers are stateful (a ``GracePeriodTrigger`` remembers when it
-    /// was last satisfied), so this avoids discarding them: with the rules
-    /// unchanged (pause/resume, an OR/AND flip) the engine is kept as is, and
-    /// on a rule edit every unchanged rule keeps its existing trigger, so an
-    /// in-flight grace window survives edits to other rules.
+    /// Rebuild (or tear down) the controller's gate to match current settings,
+    /// then wire it to the session (nil while paused, so the manual toggle owns
+    /// activation). The reuse of live triggers across rebuilds lives in
+    /// ``TriggerGateController``.
     private func applyTriggerGate() {
-        if settings.triggersEnabled {
-            if let engine = currentEngine, engineRules == settings.ruleSet.rules {
-                engine.combine = settings.ruleSet.combine
-            } else {
-                var reusable: [TriggerRule: [Trigger]] = [:]
-                if let engine = currentEngine {
-                    for (rule, trigger) in zip(engineRules, engine.triggers) {
-                        reusable[rule, default: []].append(trigger)
-                    }
-                }
-                let triggers = settings.ruleSet.rules.map { rule -> Trigger in
-                    if var pool = reusable[rule], !pool.isEmpty {
-                        let trigger = pool.removeFirst()
-                        reusable[rule] = pool
-                        return trigger
-                    }
-                    return factory.makeTrigger(for: rule)
-                }
-                currentEngine = TriggerEngine(combine: settings.ruleSet.combine, triggers: triggers)
-                engineRules = settings.ruleSet.rules
-            }
-        } else {
-            currentEngine = nil
-            engineRules = []
-        }
-        session.triggerGate = (settings.triggersEnabled && !triggersPaused) ? currentEngine : nil
-        // The rules (or the engine) just changed; drop the cached states so the
-        // next read re-evaluates against the new rule set immediately.
-        cachedRuleStates = nil
-        ruleStatesComputedAt = nil
+        gate.rebuild(
+            rules: settings.ruleSet.rules,
+            combine: settings.ruleSet.combine,
+            enabled: settings.triggersEnabled
+        )
+        session.triggerGate = (settings.triggersEnabled && !triggersPaused) ? gate.engine : nil
     }
-
-    /// Cached result of ``ruleStates()`` and when it was computed. Evaluating a
-    /// rule can shell out (a process trigger spawns `ps`), and the menu asks for
-    /// the states several times per render and every second, so the result is
-    /// cached briefly to keep the menu responsive. `@ObservationIgnored` so the
-    /// cache itself never invalidates a view. Cleared in ``applyTriggerGate()``
-    /// whenever the rules change, so edits show immediately.
-    @ObservationIgnored private var cachedRuleStates: [(rule: TriggerRule, satisfied: Bool)]?
-    @ObservationIgnored private var ruleStatesComputedAt: Date?
-    private static let ruleStatesTTL: TimeInterval = 0.9
 
     /// Live satisfaction of each saved rule, aligned with ``rules`` order, or
     /// `nil` when trigger gating is off. Drives the menu's next-trigger summary.
-    /// Cached for ``ruleStatesTTL`` seconds (see ``cachedRuleStates``).
     func ruleStates() -> [(rule: TriggerRule, satisfied: Bool)]? {
-        guard settings.triggersEnabled, let engine = currentEngine else {
-            cachedRuleStates = nil
-            return nil
-        }
-        if let computedAt = ruleStatesComputedAt, let cached = cachedRuleStates,
-           Date().timeIntervalSince(computedAt) < Self.ruleStatesTTL {
-            return cached
-        }
-        let triggers = engine.triggers
-        let states = settings.ruleSet.rules.enumerated().map { index, rule in
-            (rule, index < triggers.count && triggers[index].isSatisfied())
-        }
-        cachedRuleStates = states
-        ruleStatesComputedAt = Date()
-        return states
+        gate.ruleStates()
     }
 
     /// One-line summary of trigger state for the menu header: what's holding the
