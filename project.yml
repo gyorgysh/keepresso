@@ -31,8 +31,8 @@ targets:
       properties:
         CFBundleName: Keepresso
         CFBundleDisplayName: Keepresso
-        CFBundleShortVersionString: "1.6.0"
-        CFBundleVersion: "14"
+        CFBundleShortVersionString: "1.7.0"
+        CFBundleVersion: "15"
         LSUIElement: true            # menu-bar agent: no Dock icon
         LSMinimumSystemVersion: "14.0"
         NSHumanReadableCopyright: "MIT License"
@@ -67,8 +67,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: sh.gyorgy.keepresso
-        MARKETING_VERSION: "1.6.0"
-        CURRENT_PROJECT_VERSION: "14"
+        MARKETING_VERSION: "1.7.0"
+        CURRENT_PROJECT_VERSION: "15"
         SWIFT_VERSION: "5.9"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Bridges the Objective-C virtual-display wrapper (private CG API) to Swift.
@@ -99,8 +99,8 @@ targets:
       properties:
         CFBundleName: KeepressoWidget
         CFBundleDisplayName: Keepresso
-        CFBundleShortVersionString: "1.6.0"
-        CFBundleVersion: "14"
+        CFBundleShortVersionString: "1.7.0"
+        CFBundleVersion: "15"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
@@ -121,8 +121,8 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         # Keep in lockstep with the app target's versions on every release
         # bump (the release scripts read the app's, the first in this file).
-        MARKETING_VERSION: "1.6.0"
-        CURRENT_PROJECT_VERSION: "14"
+        MARKETING_VERSION: "1.7.0"
+        CURRENT_PROJECT_VERSION: "15"
         SWIFT_VERSION: "5.9"
         ENABLE_HARDENED_RUNTIME: true
         CODE_SIGN_STYLE: Automatic

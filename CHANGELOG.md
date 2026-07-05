@@ -3,6 +3,68 @@
 All notable changes to Keepresso are documented here. Versions follow
 [Semantic Versioning](https://semver.org).
 
+## 1.7.0
+
+Theme: remote-work presence and everyday control.
+
+### New
+
+- **Keep me active (defeat idle detectors).** A plain power assertion keeps the
+  Mac awake but doesn't reset app-level or enterprise idle detection, so
+  remote-desktop and VDI sessions, meeting presence (Teams, Slack), and
+  corporate idle-logout still mark you away. An opt-in "Keep me active" mode
+  reports activity to macOS too, on the supported prompt-free path. It only
+  steps in once you've been idle a few seconds, so it never nudges the pointer
+  while you're using the Mac or gaming.
+- **Global hotkey.** A system-wide keyboard shortcut to toggle keep-awake from
+  any app, recorded in Preferences. Carbon-based, so it needs no Input
+  Monitoring or Accessibility permission.
+- **Start on launch.** Optionally begin a keep-awake session the moment
+  Keepresso launches, for an always-on Mac that shouldn't need a rule.
+- **"Held by <app>" in the menu.** When Keepresso is idle but the Mac still
+  won't sleep, the dropdown names the app holding it awake (Chrome, coreaudiod).
+- **Session-end notification and action.** Optionally get notified when a
+  session ends on its own (a timer expiring, triggers dropping), and run an
+  action: sleep the display or start the screen saver. Off by default.
+
+### Gaming & Streaming
+
+- **Auto AWDL pause just works.** Automatic mode now watches for a game (or a
+  cloud-gaming app) on its own, with no "Playing a game" trigger to set up.
+- **One password, up front.** Enabling auto mode authorizes the AWDL helper once,
+  right then, so it never pops a password dialog over a running game. The prompt
+  now explains what it's for (and that the "osascript" dialog is Keepresso).
+- **Live status.** The Gaming & Streaming window and the menu show whether AWDL
+  is paused for a game, paused manually, or counting down a grace after a game
+  closes; a manual "Pause AWDL now" off cancels the countdown instead of letting
+  it re-engage.
+- **Optional notifications** when auto mode pauses and resumes, plus an always-on
+  notice when your password is needed (even behind a fullscreen game).
+- **Clearer Wi-Fi channel advice.** The 5 GHz suggestion now names the right
+  social channel by region: 44 in the EU, 149 in the US, Canada, and elsewhere
+  UNII-3 is allowed. The 2.4 GHz warning points at the 5 GHz channel to move to.
+- A trigger condition in its grace window now shows amber with a countdown in the
+  menu, so a lingering "Playing a game" reads as timed rather than stuck.
+
+### Fixed
+
+- The menu dropdown no longer stays open behind the windows it opens
+  (Preferences, Setup, Gaming & Streaming, About).
+- Battery auto-pause now only kicks in while actually running on battery: a low
+  charge on AC (even while charging up) no longer pauses the session, and a
+  gate-held session no longer flaps right at the cutoff. The menu explains a
+  battery pause instead of just looking idle.
+- The 5-minute gaming grace (and other grace windows) is no longer silently lost
+  when combined with other conditions under "any"/"all".
+- URL, Shortcuts, and widget stops are logged accurately instead of as "Stopped
+  manually".
+- Assorted correctness and accessibility fixes, and a house-rule copy pass.
+
+### Under the hood
+
+- Fewer per-second system reads on the common configuration, and a leaner
+  internal structure (no behavior change).
+
 ## 1.6.0
 
 - **Gaming trigger.** A "Playing a game" condition: stay awake while a game

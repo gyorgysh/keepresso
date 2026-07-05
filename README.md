@@ -39,6 +39,13 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   duration), or **until a wall-clock time** ("until 18:00", today or tomorrow).
 - 🌙 **Yield the screen saver.** Let the screen saver or display sleep kick in
   after _N_ minutes idle while the system itself stays awake.
+- 🟢 **Keep me active (defeat idle detectors).** A plain power assertion keeps the
+  Mac awake but doesn't reset app-level or enterprise idle detection. Optionally
+  tell macOS you're active too, so remote-desktop and VDI sessions, meeting
+  presence (Teams, Slack), and corporate idle-logout don't mark you away. It only
+  steps in once you've been idle a few seconds, so it never nudges the pointer
+  while you're using the Mac or gaming. Off by default, and prompt-free (no
+  Accessibility permission).
 - ⚡ **Trigger engine.** Stay awake only while charging or on battery, an external
   display is connected, you're on a chosen Wi-Fi network, **a VPN is
   connected**, the **camera or microphone is in use**, **audio is playing**, a
@@ -62,10 +69,14 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   AWDL (AirDrop, Handoff, Sidecar) about once a second, which shows up as
   50-100 ms ping spikes mid-game or mid-stream. A dedicated window diagnoses
   it with a built-in **jitter test**, and fixes it with a session-scoped
-  **AWDL pause**: password once per launch, instant toggling after, optional
-  auto mode while gaming, and everything restores itself the moment you stop
-  (even after a crash). Plus radio-hygiene checks: wired network, Wi-Fi
-  channel alignment with AWDL's social channels, Bluetooth, Game Mode.
+  **AWDL pause**: password once per launch, instant toggling after, and
+  everything restores itself the moment you stop (even after a crash). An
+  **automatic mode** watches for a game (or a cloud-gaming app) on its own with
+  no trigger setup, authorizes once up front so it never pops a password dialog
+  over a running game, and shows a live status with a grace countdown when a
+  game closes. Optional notifications when it pauses and resumes. Plus
+  radio-hygiene checks: wired network, Wi-Fi channel alignment with AWDL's
+  social channels (44 in the EU, 149 in the US and Canada), Bluetooth, Game Mode.
 - 🎛️ **Presets.** Apply a named trigger bundle in one click, built-in (AI Agent,
   Meetings, Cloud Gaming, Remote Control, On AC Power, External Display
   Connected, Remote Session (SSH), Backup Running, Media Render) or your own
@@ -78,13 +89,19 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   assertions, a readable `pmset -g assertions`, so you can see exactly what's
   preventing sleep (whoever's doing it), plus a decision log of why each
   Keepresso session started or stopped: which trigger, a timer, the battery
-  pause, or a command.
+  pause, or a command. The menu bar even names another app that's holding the
+  Mac awake ("Held by Google Chrome") when Keepresso itself is idle.
 - 🪪 **Auto app detection.** Caffeinate while listed apps run or are frontmost,
   with an optional grace period before it lets go.
 - 🔋 **Battery-aware auto-pause.** Let the Mac sleep once charge drops below a
   threshold you choose, even mid-session, so it never runs the battery flat.
 - ⏱️ **Menu-bar countdown.** An optional live countdown next to the cup icon for
   timed sessions.
+- ⌨️ **Global hotkey.** A system-wide keyboard shortcut to toggle keep-awake from
+  any app, recorded in Preferences (Carbon-based, so no Input Monitoring or
+  Accessibility permission).
+- 🚀 **Start on launch.** Optionally begin a keep-awake session the moment
+  Keepresso launches, for an always-on Mac that shouldn't need a rule.
 - 🔗 **Shortcuts and URL scheme.** Native Shortcuts actions (Start, Stop,
   Toggle) for Shortcuts, Spotlight, and Siri, plus a URL scheme for Raycast,
   Alfred, or a shell script: `keepresso://start?duration=60`,
@@ -93,9 +110,11 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   display, on power or battery, for an always-on Mac or one you carry mid-task.
   The screen itself turns off when the lid closes, so it's not sitting lit
   inside a closed lid.
-- 🔔 **Reminders.** A "still brewing" notification (with an optional sound) after
-  _N_ minutes, one-time or recurring, so a forgotten session can't quietly drain
-  the battery.
+- 🔔 **Reminders and end actions.** A "still brewing" notification (with an
+  optional sound) after _N_ minutes, one-time or recurring, so a forgotten
+  session can't quietly drain the battery. Plus an optional notification and
+  action when a session ends on its own (a timer expiring, triggers dropping):
+  do nothing, sleep the display, or start the screen saver.
 - 💽 **Disk keep-alive.** Periodic no-op disk I/O to stop an external drive or NAS
   from spinning down.
 - 🖥️ **Headless Setup checklist.** Probes the system settings an always-on,
