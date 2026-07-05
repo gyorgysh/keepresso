@@ -640,6 +640,10 @@ final class AppModel {
     /// rights, so the app becomes active first (same reason as
     /// ``setClosedDisplay(_:)``: an unfocused password dialog looks stuck).
     func setAWDLWatchdog(_ on: Bool) {
+        // The admin prompt steals focus and can bury the window the toggle lives
+        // in (the Gaming & Streaming window). Capture it now, while it's key, and
+        // bring it back once the prompt is answered.
+        let window = NSApp.keyWindow
         if on { NSApp.activate(ignoringOtherApps: true) }
         Task {
             if on {
@@ -647,6 +651,8 @@ final class AppModel {
             } else {
                 await awdl.stop()
             }
+            NSApp.activate(ignoringOtherApps: true)
+            window?.makeKeyAndOrderFront(nil)
         }
     }
 
