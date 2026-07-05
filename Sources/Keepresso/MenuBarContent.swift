@@ -183,7 +183,7 @@ struct MenuBarContent: View {
         HStack(spacing: 8) {
             BrewingCupView(isActive: session.isActive)
             VStack(alignment: .leading, spacing: 2) {
-                Text(session.isActive ? "Brewing" : "Idle")
+                Text(session.pausedByBattery ? "Paused" : (session.isActive ? "Brewing" : "Idle"))
                     .font(.headline)
                 Text(statusDetail)
                     .font(.caption)
@@ -268,6 +268,11 @@ struct MenuBarContent: View {
     }
 
     private var statusDetail: String {
+        // Battery auto-pause overrides everything else: say so, or an otherwise
+        // satisfied session looks stuck for no visible reason.
+        if session.pausedByBattery {
+            return "Battery below \(model.pauseBelowBatteryPercent)%, letting the Mac sleep"
+        }
         if model.triggersEnabled && !model.triggersPaused {
             return model.triggerSummary() ?? "No conditions yet"
         }

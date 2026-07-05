@@ -89,8 +89,10 @@ public final class SessionController {
 
     /// True once ``pauseBelowBatteryPercent`` has force-stopped the session, so
     /// reactivation waits for a clear recovery instead of the exact cutoff. See
-    /// ``batteryResumeMargin``.
-    private var pausedByBattery = false
+    /// ``batteryResumeMargin``. Public so the UI can explain why an otherwise
+    /// satisfied session (manual or trigger-gated) isn't running: the battery is
+    /// below the cutoff and Keepresso is deliberately letting the Mac sleep.
+    public private(set) var pausedByBattery = false
 
     /// Extra charge (percentage points) above the cutoff required before a
     /// battery-paused session may reactivate. A dead-band: without it a reading
@@ -224,9 +226,11 @@ public final class SessionController {
     ///   - now: current time (defaults to the injected clock).
     ///   - systemIdleSeconds: how long the user has been idle (HID idle time).
     ///     The app supplies this; when omitted the screen-saver yield can't fire.
-    ///   - batteryPercent: current battery charge (0–100), or `nil` when
-    ///     unavailable (e.g. on AC-only desktops). The app supplies this; when
-    ///     omitted ``pauseBelowBatteryPercent`` can't fire.
+    ///   - batteryPercent: the battery charge (0–100) **while discharging on
+    ///     battery**, or `nil` when on AC, charging, or unavailable. Auto-pause
+    ///     exists to stop the Mac running flat, which can't happen on AC, so the
+    ///     host passes `nil` whenever it's plugged in (even at a low charge) and
+    ///     ``pauseBelowBatteryPercent`` then can't fire.
     public func reconcile(now: Date? = nil, systemIdleSeconds: TimeInterval? = nil, batteryPercent: Int? = nil) {
         let instant = now ?? self.now()
 

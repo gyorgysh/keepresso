@@ -258,6 +258,7 @@ private final class StubGate: TriggerEvaluating {
 
     controller.reconcile(batteryPercent: 19) // below cutoff: pause
     #expect(controller.isActive == false)
+    #expect(controller.pausedByBattery) // exposed so the UI can explain the hold
 
     // A reading back at (or just above) the cutoff must NOT reactivate: without
     // a dead-band a value bouncing 19/20/19/20 would flap on and off each tick.
@@ -268,6 +269,7 @@ private final class StubGate: TriggerEvaluating {
 
     controller.reconcile(batteryPercent: 23) // clears cutoff + margin: resume
     #expect(controller.isActive)
+    #expect(controller.pausedByBattery == false)
     #expect(fake.held == [.system])
 }
 
