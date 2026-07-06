@@ -167,6 +167,63 @@ func renderIcon(pixels: CGFloat, dark: Bool = false) -> Data {
     return rep.representation(using: .png, properties: [:])!
 }
 
+/// One separable layer of the mark, for the Liquid Glass (Icon Composer) build.
+enum IconLayer: String { case background, cup, steam }
+
+/// Render a single layer onto its own canvas so Icon Composer can stack them
+/// and apply the Liquid Glass material per layer. The background is full-bleed
+/// (Icon Composer masks the icon shape); the cup and steam sit on transparency,
+/// positioned with the exact same transform as ``renderIcon`` so they line up.
+func renderLayer(_ layer: IconLayer, pixels: CGFloat, dark: Bool) -> Data {
+    let px = Int(pixels)
+    let rep = NSBitmapImageRep(
+        bitmapDataPlanes: nil, pixelsWide: px, pixelsHigh: px,
+        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+        colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+    )!
+    rep.size = NSSize(width: pixels, height: pixels)
+
+    NSGraphicsContext.saveGraphicsState()
+    let gc = NSGraphicsContext(bitmapImageRep: rep)!
+    gc.imageInterpolation = .high
+    NSGraphicsContext.current = gc
+    defer { NSGraphicsContext.restoreGraphicsState() }
+
+    let palette = dark ? darkPalette : lightPalette
+
+    if layer == .background {
+        // Full bleed: Icon Composer masks to the rounded-rect and adds the glass,
+        // so no inset/squircle here.
+        NSGradient(starting: palette.backgroundTop, ending: palette.backgroundBottom)!
+            .draw(in: NSRect(x: 0, y: 0, width: pixels, height: pixels), angle: -90)
+    } else {
+        let ctx = gc.cgContext
+        ctx.saveGState()
+        let scale = pixels * 0.80 / 64
+        let offset = (pixels - 64 * scale) / 2
+        ctx.translateBy(x: offset, y: pixels - offset)
+        ctx.scaleBy(x: scale, y: -scale)
+        ctx.setLineCap(.round)
+        if layer == .cup {
+            ctx.setFillColor(palette.cup.cgColor)
+            ctx.addPath(BrandMark.cup()); ctx.fillPath()
+            ctx.setFillColor(palette.crema.cgColor)
+            ctx.addPath(BrandMark.crema()); ctx.fillPath()
+            ctx.setStrokeColor(palette.cup.cgColor)
+            ctx.setLineWidth(3.4); ctx.addPath(BrandMark.handle()); ctx.strokePath()
+            ctx.setLineWidth(3.6); ctx.addPath(BrandMark.saucer()); ctx.strokePath()
+        } else { // steam
+            ctx.setStrokeColor(palette.steam.cgColor)
+            ctx.setLineWidth(3.2)
+            for wisp in BrandMark.steamWisps() { ctx.addPath(wisp); ctx.strokePath() }
+        }
+        ctx.restoreGState()
+    }
+
+    gc.flushGraphics()
+    return rep.representation(using: .png, properties: [:])!
+}
+
 // (size in points, scale) entries for a macOS app icon.
 let specs: [(pt: Int, scale: Int)] = [
     (16, 1), (16, 2),
@@ -218,3 +275,19 @@ let json = try! JSONSerialization.data(withJSONObject: contents, options: [.pret
 try! json.write(to: outDir.appendingPathComponent("Contents.json"))
 
 print("Wrote \(written.count) PNGs + Contents.json to \(outDir.path)")
+
+// Liquid Glass source layers (Icon Composer inputs): the mark split into
+// stackable layers at 1024 px, light and dark, so Icon Composer can apply the
+// glass material per layer and generate the light/dark/tinted/clear appearances
+// for a modern macOS 26 icon. These are build-time sources, not shipped assets.
+let layersDir = root.appendingPathComponent("docs/assets/icon-layers")
+try? FileManager.default.createDirectory(at: layersDir, withIntermediateDirectories: true)
+var layerFiles = 0
+for layer in [IconLayer.background, .cup, .steam] {
+    for (name, dark) in [("light", false), ("dark", true)] {
+        let data = renderLayer(layer, pixels: 1024, dark: dark)
+        try! data.write(to: layersDir.appendingPathComponent("\(layer.rawValue)-\(name).png"))
+        layerFiles += 1
+    }
+}
+print("Wrote \(layerFiles) Liquid Glass source layers to \(layersDir.path)")
