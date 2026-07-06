@@ -158,7 +158,9 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
 /// A gate whose decision the test flips directly.
 private final class StubGate: TriggerEvaluating {
     var satisfied: Bool
+    private(set) var ticks = 0
     init(_ satisfied: Bool) { self.satisfied = satisfied }
+    func tick() { ticks += 1 }
     func isSatisfied() -> Bool { satisfied }
 }
 
@@ -249,7 +251,7 @@ private final class StubGate: TriggerEvaluating {
     controller.start()
     #expect(controller.isActive)
 
-    controller.reconcile(batteryPercent: 15)
+    controller.reconcile(battery: .discharging(15))
     #expect(controller.isActive == false)
     #expect(fake.held.isEmpty)
 }
@@ -261,11 +263,11 @@ private final class StubGate: TriggerEvaluating {
     let gate = StubGate(true)
     controller.triggerGate = gate
 
-    controller.reconcile(batteryPercent: 10) // low: stays idle even though gate wants on
+    controller.reconcile(battery: .discharging(10)) // low: stays idle even though gate wants on
     #expect(controller.isActive == false)
     #expect(fake.held.isEmpty)
 
-    controller.reconcile(batteryPercent: 50) // recovered: gate resumes control
+    controller.reconcile(battery: .discharging(50)) // recovered: gate resumes control
     #expect(controller.isActive)
     #expect(fake.held == [.system])
 }
@@ -276,18 +278,18 @@ private final class StubGate: TriggerEvaluating {
     controller.pauseBelowBatteryPercent = 20
     controller.triggerGate = StubGate(true)
 
-    controller.reconcile(batteryPercent: 19) // below cutoff: pause
+    controller.reconcile(battery: .discharging(19)) // below cutoff: pause
     #expect(controller.isActive == false)
     #expect(controller.pausedByBattery) // exposed so the UI can explain the hold
 
     // A reading back at (or just above) the cutoff must NOT reactivate: without
     // a dead-band a value bouncing 19/20/19/20 would flap on and off each tick.
-    controller.reconcile(batteryPercent: 20)
+    controller.reconcile(battery: .discharging(20))
     #expect(controller.isActive == false)
-    controller.reconcile(batteryPercent: 22) // still inside the resume margin
+    controller.reconcile(battery: .discharging(22)) // still inside the resume margin
     #expect(controller.isActive == false)
 
-    controller.reconcile(batteryPercent: 23) // clears cutoff + margin: resume
+    controller.reconcile(battery: .discharging(23)) // clears cutoff + margin: resume
     #expect(controller.isActive)
     #expect(controller.pausedByBattery == false)
     #expect(fake.held == [.system])
@@ -299,7 +301,56 @@ private final class StubGate: TriggerEvaluating {
     controller.pauseBelowBatteryPercent = 20
     controller.start()
 
-    controller.reconcile() // no batteryPercent (e.g. desktop Mac) → no override
+    controller.reconcile() // no battery reading (e.g. desktop Mac) → no override
     #expect(controller.isActive)
     #expect(fake.held == [.system])
+}
+
+@MainActor
+@Test func manualStartWhileBatteryPausedStaysPaused() {
+    let (controller, fake, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.triggerGate = StubGate(true)
+    controller.reconcile(battery: .discharging(15))
+    #expect(controller.pausedByBattery)
+
+    // A hotkey/menu/widget start must not activate for one tick and then be
+    // re-paused with natural-end effects: it stays paused, and the internal
+    // no-reading reconcile inside any start path must not clear the latch.
+    controller.start()
+    #expect(controller.isActive == false)
+    #expect(controller.pausedByBattery)
+    #expect(fake.held.isEmpty)
+
+    controller.reconcile() // internal-style reconcile: latch still holds
+    #expect(controller.pausedByBattery)
+    #expect(controller.isActive == false)
+}
+
+@MainActor
+@Test func pluggingInLiftsTheBatteryPause() {
+    let (controller, fake, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.triggerGate = StubGate(true)
+    controller.reconcile(battery: .discharging(15))
+    #expect(controller.pausedByBattery)
+
+    controller.reconcile(battery: .onAC) // on AC the pause is moot
+    #expect(controller.pausedByBattery == false)
+    #expect(controller.isActive)
+    #expect(fake.held == [.system])
+}
+
+@MainActor
+@Test func batteryPauseKeepsTickingTheTriggerGate() {
+    let (controller, _, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    let gate = StubGate(true)
+    controller.triggerGate = gate
+    controller.reconcile(battery: .discharging(10))
+    let before = gate.ticks
+
+    controller.reconcile(battery: .discharging(10)) // still paused
+    controller.reconcile()                          // paused, no reading
+    #expect(gate.ticks == before + 2) // rule state keeps advancing while paused
 }

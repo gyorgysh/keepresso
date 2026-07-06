@@ -51,12 +51,30 @@ public final class SessionController {
     /// What to do to the Mac when a session ends on its own. Default none.
     public var endAction: SessionEndAction = .none
 
-    /// When set, ``reconcile(now:systemIdleSeconds:batteryPercent:)`` force-stops
+    /// When set, ``reconcile(now:systemIdleSeconds:battery:)`` force-stops
     /// an active session (releasing assertions and letting the Mac sleep) once
     /// the battery drops below this percentage, and holds off reactivating,
-    /// manual or trigger-gated, until it's fed a reading at or above it again.
-    /// `nil` (the default) never overrides on battery level.
+    /// manual or trigger-gated, until it's fed a reading at or above it again
+    /// (or an on-AC reading). `nil` (the default) never overrides on battery
+    /// level.
     public var pauseBelowBatteryPercent: Int?
+
+    /// The power situation fed to ``reconcile(now:systemIdleSeconds:battery:)``.
+    ///
+    /// A three-way value, not an optional percentage, because the two "no
+    /// number" cases must behave differently: on AC the pause is moot and the
+    /// latch clears; with no information (internal reconciles, feature off)
+    /// the latch must hold, otherwise any `start()` while battery-paused would
+    /// clear it, activate for one tick, and die again with natural-end effects
+    /// (notification, display sleep) the user never asked for.
+    public enum BatteryReading: Equatable, Sendable {
+        /// Discharging on battery at this charge percentage (0-100).
+        case discharging(Int)
+        /// Plugged in (charging or not): the battery cannot run flat.
+        case onAC
+        /// No reading this call; leaves the pause latch as it is.
+        case unknown
+    }
 
     /// Every session transition, with when and why (the awake-explainer's
     /// "why did Keepresso act?" half). In-memory only.
@@ -133,6 +151,18 @@ public final class SessionController {
         options: SleepPreventionOptions? = nil,
         cause: SessionCause = .manual
     ) {
+        // Honor the battery pause: activating here would only live until the
+        // next tick's reading re-paused it, firing the natural-end effects at
+        // the user seconds after they asked to start. The menu explains the
+        // pause; raising the threshold or plugging in lifts it.
+        if pausedByBattery {
+            log.record(
+                began: false,
+                reason: "Not started, battery below \(pauseBelowBatteryPercent ?? 0)%",
+                at: now()
+            )
+            return
+        }
         let restarted = isActive
         if let options { self.options = options }
         self.mode = mode
@@ -202,13 +232,13 @@ public final class SessionController {
 
     /// Seconds remaining in a timed session, or `nil` for indefinite/idle or a
     /// trigger-gated session (gating ignores the timed cap, so there's nothing
-    /// counting down, see ``reconcile(now:systemIdleSeconds:batteryPercent:)``).
+    /// counting down, see ``reconcile(now:systemIdleSeconds:battery:)``).
     public var remaining: TimeInterval? {
         guard triggerGate == nil, isActive, let total = mode.duration, let startedAt else { return nil }
         return max(0, total - now().timeIntervalSince(startedAt))
     }
 
-    /// Whether ``reconcile(now:systemIdleSeconds:batteryPercent:)`` can currently
+    /// Whether ``reconcile(now:systemIdleSeconds:battery:)`` can currently
     /// use a HID idle reading. True when the screen-saver yield is configured, or
     /// when keep-active is on (it needs idle time to avoid nudging a user who is
     /// actively at the keyboard/mouse). The host skips the per-second IOKit idle
@@ -218,7 +248,7 @@ public final class SessionController {
             || options.simulateUserActivity
     }
 
-    /// Whether ``reconcile(now:systemIdleSeconds:batteryPercent:)`` can currently
+    /// Whether ``reconcile(now:systemIdleSeconds:battery:)`` can currently
     /// use a battery reading: battery auto-pause is on. The host skips the
     /// per-second power-source sweep when this is false (off by default).
     public var consumesBatteryReading: Bool {
@@ -234,28 +264,42 @@ public final class SessionController {
     ///   - now: current time (defaults to the injected clock).
     ///   - systemIdleSeconds: how long the user has been idle (HID idle time).
     ///     The app supplies this; when omitted the screen-saver yield can't fire.
-    ///   - batteryPercent: the battery charge (0–100) **while discharging on
-    ///     battery**, or `nil` when on AC, charging, or unavailable. Auto-pause
-    ///     exists to stop the Mac running flat, which can't happen on AC, so the
-    ///     host passes `nil` whenever it's plugged in (even at a low charge) and
-    ///     ``pauseBelowBatteryPercent`` then can't fire.
-    public func reconcile(now: Date? = nil, systemIdleSeconds: TimeInterval? = nil, batteryPercent: Int? = nil) {
+    ///   - battery: the power situation. The host passes ``BatteryReading/onAC``
+    ///     whenever it's plugged in (auto-pause exists to stop the Mac running
+    ///     flat, which can't happen on AC, even at a low charge) and
+    ///     ``BatteryReading/discharging(_:)`` with the percentage otherwise;
+    ///     internal reconciles default to ``BatteryReading/unknown``, which
+    ///     leaves the pause latch untouched.
+    public func reconcile(now: Date? = nil, systemIdleSeconds: TimeInterval? = nil, battery: BatteryReading = .unknown) {
         let instant = now ?? self.now()
 
-        if let threshold = pauseBelowBatteryPercent, let percent = batteryPercent {
+        if pauseBelowBatteryPercent == nil {
+            // Feature off: never leave a stale pause latched.
+            pausedByBattery = false
+        } else if let threshold = pauseBelowBatteryPercent, case .discharging(let percent) = battery {
             if pausedByBattery {
                 // Stay paused until charge clears the cutoff by the resume margin,
                 // so a reading hovering at the threshold doesn't restart every tick.
-                guard percent >= threshold + Self.batteryResumeMargin else { return }
+                guard percent >= threshold + Self.batteryResumeMargin else {
+                    // Keep trigger state advancing so the rule list stays live
+                    // and the first post-resume decision isn't hours stale.
+                    triggerGate?.tick()
+                    return
+                }
                 pausedByBattery = false
             } else if percent < threshold {
                 pausedByBattery = true
                 if isActive { stop(reason: "Paused, battery below \(threshold)%", endedNaturally: true) }
                 return
             }
-        } else {
-            // Feature off or no reading: never leave a stale pause latched.
+        } else if case .onAC = battery {
+            // Plugged in: the pause is moot, resume normal control.
             pausedByBattery = false
+        } else if pausedByBattery {
+            // No reading (an internal reconcile from start/stop): hold the
+            // latch rather than activating for one tick and dying on the next.
+            triggerGate?.tick()
+            return
         }
 
         if let triggerGate {

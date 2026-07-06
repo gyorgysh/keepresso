@@ -38,17 +38,21 @@ final class SessionTicker {
                     // Only run the per-second IOKit sweeps reconcile can actually
                     // use: the idle read feeds the screen-saver yield (off by
                     // default), the battery read feeds auto-pause (off by default).
-                    // Feed a battery level only while actually discharging: on AC
-                    // (even at a low charge, even while charging up from empty) the
-                    // Mac isn't going to run flat, so auto-pause must not fire.
-                    var batteryPercent: Int?
-                    if session.consumesBatteryReading, let power = self?.powerSource.current,
-                       power.provider == .battery {
-                        batteryPercent = power.percentage
+                    // Report a discharging level only while actually on battery:
+                    // on AC (even at a low charge, even while charging up from
+                    // empty) the Mac isn't going to run flat, so auto-pause must
+                    // not fire and any latched pause may lift.
+                    var battery = SessionController.BatteryReading.unknown
+                    if session.consumesBatteryReading, let power = self?.powerSource.current {
+                        if power.provider == .battery, let percent = power.percentage {
+                            battery = .discharging(percent)
+                        } else if power.provider == .ac {
+                            battery = .onAC
+                        }
                     }
                     session.reconcile(
                         systemIdleSeconds: session.consumesIdleReading ? Self.systemIdleSeconds() : nil,
-                        batteryPercent: batteryPercent
+                        battery: battery
                     )
                 }
                 disk?.tick(now: Date())

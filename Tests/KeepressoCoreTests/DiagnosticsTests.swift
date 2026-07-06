@@ -66,7 +66,7 @@ private func makeController(now: @escaping () -> Date) -> SessionController {
     session.pauseBelowBatteryPercent = 20
 
     session.start(mode: .indefinite)
-    session.reconcile(systemIdleSeconds: 0, batteryPercent: 15)
+    session.reconcile(systemIdleSeconds: 0, battery: .discharging(15))
 
     #expect(session.log.events.last?.reason == "Paused, battery below 20%")
 }
