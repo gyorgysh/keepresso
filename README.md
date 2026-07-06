@@ -52,7 +52,9 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   chosen **Bluetooth device is connected** (headphones, a controller), a
   **calendar event is in progress**, a specific app or process is running, a
   chosen **volume is mounted**, **CPU usage** sits above a threshold (builds,
-  renders, training runs), **a game is in front**, or during a
+  renders, training runs), **network throughput** stays above a threshold (a
+  large download, upload, or sync), a **download is in progress** in a folder you
+  choose (keep awake until it finishes), **a game is in front**, or during a
   **scheduled time window** (weekdays 9:00-18:00, overnight hours). Combine
   conditions with **any** (OR) or **all** (AND). A one-click "Pause Triggers"
   in the menu bar stops brewing without touching your rules.
@@ -81,6 +83,10 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   Meetings, Cloud Gaming, Remote Control, On AC Power, External Display
   Connected, Remote Session (SSH), Backup Running, Media Render) or your own
   saved rule sets. Deleted a built-in? "Restore default presets" brings it back.
+- 👋 **First-run setup.** A welcome window on a new Mac points out that Keepresso
+  lives in the menu bar (no Dock icon) and sets you up in one click for how you
+  work: agentic coding, gaming and streaming, meetings and calls, or remote
+  access. Reopen it any time from Preferences.
 - 🧩 **Desktop widgets and a Control Center toggle.** A small widget that's a
   one-tap toggle (the brand cup fills and steams while brewing, with a live
   countdown), a medium widget with Start/Stop and Pause/Resume Triggers
@@ -102,6 +108,9 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   Accessibility permission).
 - 🚀 **Start on launch.** Optionally begin a keep-awake session the moment
   Keepresso launches, for an always-on Mac that shouldn't need a rule.
+- 💾 **Export and import.** Back up your settings, triggers, and presets to a JSON
+  file, or move them to another Mac, from Preferences > General. The file is
+  version-stamped and validated on import.
 - 🔗 **Shortcuts and URL scheme.** Native Shortcuts actions (Start, Stop,
   Toggle) for Shortcuts, Spotlight, and Siri, plus a URL scheme for Raycast,
   Alfred, or a shell script: `keepresso://start?duration=60`,
@@ -211,7 +220,8 @@ Click the cup in the menu bar to open Keepresso.
   Turn it off when you're done; on battery in a bag it can drain and heat up.
 - **Preferences** (⌘,) holds the set-and-forget configuration, in tabs:
   - **General**: what to keep awake, menu-bar countdown, battery auto-pause,
-    closed-display mode, launch at login.
+    closed-display mode, launch at login, settings backup (export/import), and
+    the welcome screen.
   - **Triggers**: turn on rule-based activation, apply a preset, and build your
     rule set.
   - **Reminder**: a one-time or recurring "still brewing" alert, with a sound.
@@ -296,8 +306,8 @@ verified without touching real hardware.
 
 ### Scripts
 
-- `scripts/run.sh` — generate the project and open it in Xcode.
-- `scripts/make-icon.swift` — regenerate the app icon asset catalog.
+- `scripts/run.sh`: generate the project and open it in Xcode.
+- `scripts/make-icon.swift`: regenerate the app icon asset catalog.
 
 See [docs/BUILDING.md](docs/BUILDING.md) for a full build walkthrough and
 [CLAUDE.md](CLAUDE.md) for the architecture and contributor workflow.

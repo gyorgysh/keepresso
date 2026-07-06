@@ -3,7 +3,9 @@
 All notable changes to Keepresso are documented here. Versions follow
 [Semantic Versioning](https://semver.org).
 
-## Unreleased
+## 1.8.0
+
+Theme: onboarding, portability, and two new triggers.
 
 ### Fixed
 
