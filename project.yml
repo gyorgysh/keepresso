@@ -123,6 +123,10 @@ targets:
       # The shared brand-mark geometry (CoreGraphics only), so the widgets
       # draw the real cup instead of an SF Symbols lookalike.
       - path: Sources/Keepresso/BrandCupMark.swift
+      # The widget/control intents, compiled into both targets so
+      # `openAppWhenRun` can run them in the app process (launching it when
+      # needed); appex-only intent types make that flag a silent no-op.
+      - path: Sources/Keepresso/WidgetIntents.swift
     dependencies:
       - package: KeepressoCore
         product: KeepressoCore

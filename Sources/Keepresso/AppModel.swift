@@ -600,7 +600,9 @@ final class AppModel {
         case .stop:
             if session.isActive { handle(.stop) }
         case .pauseTriggers:
-            pauseTriggers()
+            // .command, not the default .manual: the decision log should say
+            // a widget did it, matching the start/stop cases above.
+            pauseTriggers(cause: .command)
         case .resumeTriggers:
             resumeTriggers()
         }

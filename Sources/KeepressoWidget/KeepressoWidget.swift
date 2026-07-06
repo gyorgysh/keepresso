@@ -25,49 +25,12 @@ struct KeepressoControls: WidgetBundle {
 }
 
 // MARK: - Shared plumbing
-
-/// Everything here runs in the sandboxed appex process, which can't touch the
-/// app's memory, so state rides the ``WidgetBridge`` App Group channel: the
-/// widgets read what the app mirrors on every change, and their intents write
-/// a command back and ring the Darwin doorbell (the app reloads the widgets
-/// once it has acted, which is what flips the visible state).
-private func currentSharedState() -> SharedSessionState? {
-    WidgetBridge.groupDefaults().flatMap { WidgetBridge.readState(from: $0) }
-}
-
-private func send(_ command: WidgetCommand) {
-    guard let defaults = WidgetBridge.groupDefaults() else { return }
-    WidgetBridge.writeCommand(command, to: defaults)
-    WidgetBridge.postCommandNotification()
-}
-
-/// Start/stop from a desktop widget button.
-struct ToggleKeepAwakeWidgetIntent: AppIntent {
-    static let title: LocalizedStringResource = "Toggle Keep Awake"
-
-    func perform() async throws -> some IntentResult {
-        send(currentSharedState()?.isActive == true ? .stop : .start)
-        return .result()
-    }
-}
-
-/// Pause or resume trigger gating from the medium widget.
-struct SetTriggersPausedWidgetIntent: AppIntent {
-    static let title: LocalizedStringResource = "Pause or Resume Triggers"
-
-    @Parameter(title: "Paused")
-    var paused: Bool
-
-    init() {}
-    init(paused: Bool) {
-        self.paused = paused
-    }
-
-    func perform() async throws -> some IntentResult {
-        send(paused ? .pauseTriggers : .resumeTriggers)
-        return .result()
-    }
-}
+//
+// The widget views run in the sandboxed appex process, which can't touch the
+// app's memory, so state rides the ``WidgetBridge`` App Group channel: the
+// widgets read what the app mirrors on every change. The button/toggle intents
+// live in `WidgetIntents.swift`, shared with the app target so
+// `openAppWhenRun` can launch a quit app before the command is consumed.
 
 // MARK: - Desktop widget
 
@@ -96,11 +59,25 @@ struct SessionProvider: TimelineProvider {
     /// One entry reflecting the shared state; the app reloads the timeline on
     /// every change, so the only self-scheduled refresh is a timed session's
     /// end (in case the app isn't there to announce it).
+    ///
+    /// The stored state is only trusted while the app is actually running: a
+    /// crash or force quit skips the clean-quit "off" write, and the session's
+    /// assertions died with the process, so rendering the stored "Brewing"
+    /// would lie indefinitely. A deadline already in the past is the same
+    /// story (the timed session provably ended), and rendering it inactive
+    /// also avoids scheduling a reload loop one second in the future forever.
     func getTimeline(in context: Context, completion: @escaping (Timeline<SessionEntry>) -> Void) {
-        let state = currentSharedState() ?? SharedSessionState(isActive: false)
+        var state = currentSharedState() ?? SharedSessionState(isActive: false)
+        if !keepressoAppIsRunning() {
+            state.isActive = false
+            state.endsAt = nil
+        } else if let endsAt = state.endsAt, endsAt <= .now {
+            state.isActive = false
+            state.endsAt = nil
+        }
         let entry = SessionEntry(date: .now, state: state)
         let policy: TimelineReloadPolicy =
-            state.endsAt.map { .after(max($0, .now.addingTimeInterval(1))) } ?? .never
+            state.isActive ? state.endsAt.map { .after($0) } ?? .never : .never
         completion(Timeline(entries: [entry], policy: policy))
     }
 }
@@ -127,6 +104,10 @@ private enum WidgetPalette {
     static let roast = Color(red: 43 / 255, green: 26 / 255, blue: 14 / 255)
     static let idleRoast = Color(red: 32 / 255, green: 26 / 255, blue: 22 / 255)
     static let cream = Color(red: 248 / 255, green: 236 / 255, blue: 221 / 255)
+    /// Secondary text and idle strokes. Fixed like the background: adaptive
+    /// styles (.primary/.secondary) resolve to near-black in light mode and
+    /// vanish against the dark roast.
+    static let creamDim = cream.opacity(0.6)
 }
 
 /// Deep roast with a caramel glow while brewing; flat and dim while idle.
@@ -165,7 +146,7 @@ struct KeepAwakeWidgetView: View {
                     .frame(width: 44, height: 44)
                 Text(state.isActive ? "Brewing" : "Off")
                     .font(.headline)
-                    .foregroundStyle(state.isActive ? WidgetPalette.cream : .secondary)
+                    .foregroundStyle(state.isActive ? WidgetPalette.cream : WidgetPalette.creamDim)
                 countdown
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -182,11 +163,11 @@ struct KeepAwakeWidgetView: View {
                         .frame(width: 24, height: 24)
                     Text("Keepresso")
                         .font(.headline)
-                        .foregroundStyle(state.isActive ? WidgetPalette.cream : .primary)
+                        .foregroundStyle(state.isActive ? WidgetPalette.cream : WidgetPalette.cream.opacity(0.9))
                 }
                 Text(state.isActive ? "Keeping the Mac awake" : "The Mac can sleep")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(WidgetPalette.creamDim)
                 countdown
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -259,11 +240,11 @@ private struct BrandCupBadge: View {
                     }
                 } else {
                     Path(BrandCupMark.cupAndHandle()).applying(transform)
-                        .stroke(.secondary, style: .init(
+                        .stroke(WidgetPalette.creamDim, style: .init(
                             lineWidth: BrandCupMark.outlineWidth * scale, lineCap: .round))
                 }
                 Path(BrandCupMark.saucer()).applying(transform)
-                    .stroke(active ? WidgetPalette.brew : Color.secondary, style: .init(
+                    .stroke(active ? WidgetPalette.brew : WidgetPalette.creamDim, style: .init(
                         lineWidth: BrandCupMark.saucerWidth * scale, lineCap: .round))
             }
             .compositingGroup() // confine destinationOut to the glyph's layers
@@ -296,26 +277,7 @@ struct KeepAwakeControl: ControlWidget {
         var previewValue: Bool { true }
 
         func currentValue() async throws -> Bool {
-            currentSharedState()?.isActive ?? false
+            keepressoAppIsRunning() && currentSharedState()?.isActive == true
         }
-    }
-}
-
-/// The Control Center toggle's intent: the exact same bridge as the desktop
-/// widget buttons. Deliberately NOT `openAppWhenRun`: that flag makes the
-/// system run the intent in the app process, where this appex-only type
-/// doesn't exist, so `perform()` silently never ran and the toggle was a
-/// no-op. Like the widgets, it drives the running menu-bar app; launch at
-/// login covers the rest.
-@available(macOS 26.0, *)
-struct SetKeepAwakeControlIntent: SetValueIntent {
-    static let title: LocalizedStringResource = "Set Keep Awake"
-
-    @Parameter(title: "Keep Awake")
-    var value: Bool
-
-    func perform() async throws -> some IntentResult {
-        send(value ? .start : .stop)
-        return .result()
     }
 }
