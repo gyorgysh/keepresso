@@ -40,6 +40,8 @@ Theme: onboarding, portability, and two new triggers.
   to apply the matching triggers, plus launch-at-login and notifications. Shown
   once on a new Mac; reopen it any time from Preferences > General. Existing
   users aren't shown it on upgrade.
+- **Liquid Glass app icon.** A new macOS 26 app icon built with Icon Composer,
+  with light, dark, and tinted appearances and the Liquid Glass material.
 
 ## 1.7.0
 

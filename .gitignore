@@ -54,3 +54,7 @@ docs/V1.7-FEATURES.md
 
 # Internal next-release plan (post-1.7 candidate features). Working notes.
 docs/NEXT-PLAN.md
+
+# Icon Composer's rendered preview exports (local; Sources/Keepresso/AppIcon.icon
+# is the source of truth, and docs/assets/icon-layers holds the layer sources).
+docs/assets/AppIcon Exports/

@@ -134,8 +134,9 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   crisp instead of a fuzzy 1920×1080. Off by default; uses a private macOS API,
   so it's a no-dummy-plug software alternative you should treat as experimental.
 - ✨ **Native and quiet.** A menu-bar agent with an animated cup while brewing, a
-  live summary of what's holding the session on, and Liquid Glass styling on
-  macOS 26+.
+  live summary of what's holding the session on, a Liquid Glass app icon (Icon
+  Composer, with light, dark, and tinted appearances), and Liquid Glass window
+  styling on macOS 26+.
 - ⬆️ **Self-updating.** Built-in auto-updates via [Sparkle](https://sparkle-project.org),
   with an EdDSA-signed appcast on GitHub Releases.
 
