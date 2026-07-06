@@ -3,6 +3,39 @@
 All notable changes to Keepresso are documented here. Versions follow
 [Semantic Versioning](https://semver.org).
 
+## 1.9.0
+
+Theme: a command-line tool, and reliability fixes from a full-history review.
+
+### New
+
+- **The `keepresso` command-line tool.** A caffeinate-style CLI, shipped inside
+  the app bundle and linked onto PATH by the Homebrew cask. `keepresso start /
+  stop / toggle / status` drive the app; `keepresso -t <seconds>`, `-w <pid>`,
+  `-i`, `-d`, and `-u` hold a power assertion directly, so scripts and
+  pipelines can block on it even when the app is not running. `keepresso help`
+  lists everything.
+- The app now mirrors its session state to
+  `~/Library/Application Support/Keepresso/status.json` (JSON, ISO 8601 dates)
+  for the CLI and other tooling to read.
+
+### Fixed
+
+- Battery auto-pause no longer fights a manual start. Starting a session (menu,
+  hotkey, widget, or URL) while paused on low battery used to activate for one
+  second and then stop again, firing the session-end notification or action;
+  the pause now holds, the menu explains it, and plugging in lifts it.
+- The desktop widget buttons and the Control Center toggle now launch Keepresso
+  when it isn't running, instead of silently doing nothing.
+- The widgets no longer show "Brewing" after a crash or force quit: they check
+  that the app is actually running, and a timed session whose end already
+  passed renders as off.
+- Idle widget text is readable in light mode (it could blend into the dark
+  tile before).
+- On a first launch from the DMG, the welcome window now appears after the app
+  moves itself to Applications, not in the copy that is about to quit (which
+  lost it forever).
+
 ## 1.8.0
 
 Theme: onboarding, portability, and two new triggers.
