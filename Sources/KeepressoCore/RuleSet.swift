@@ -37,6 +37,11 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
     /// A game (by declared app category) or a cloud-gaming client is frontmost
     /// (with a generous release grace, so alt-tabbing doesn't drop the session).
     case gaming
+    /// Smoothed overall network throughput (in + out) is above this many KB/s.
+    case throughput(kilobytesPerSecond: Int)
+    /// An in-progress download exists in this folder (a partial-download file,
+    /// with a release grace bridging the gap between files in a batch).
+    case downloadInFolder(URL)
 
     /// A human-readable summary for the rules UI.
     public var label: String {
@@ -56,6 +61,10 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
             return "Bluetooth \u{201C}\(name)\u{201D} connected"
         case .calendarEvent:          return "Calendar event in progress"
         case .gaming:                 return "Playing a game"
+        case .throughput(let kb):
+            return "Network above \(NetworkThroughput.rateLabel(kilobytesPerSecond: kb))"
+        case .downloadInFolder(let url):
+            return "Downloading in \u{201C}\(url.lastPathComponent)\u{201D}"
         }
     }
 
@@ -140,6 +149,8 @@ public struct TriggerFactory {
     private let bluetooth: BluetoothMonitoring
     private let calendar: CalendarMonitoring
     private let gaming: GamingMonitoring
+    private let throughput: NetworkThroughputReading
+    private let downloads: DownloadFolderScanning
     private let now: () -> Date
 
     public init(
@@ -155,6 +166,8 @@ public struct TriggerFactory {
         bluetooth: BluetoothMonitoring = IOBluetoothDeviceMonitor(),
         calendar: CalendarMonitoring = EventKitCalendarMonitor(),
         gaming: GamingMonitoring = WorkspaceGamingMonitor(),
+        throughput: NetworkThroughputReading = GetifaddrsThroughputReader(),
+        downloads: DownloadFolderScanning = FileManagerDownloadScanner(),
         now: @escaping () -> Date = Date.init
     ) {
         self.powerSource = powerSource
@@ -169,6 +182,8 @@ public struct TriggerFactory {
         self.bluetooth = bluetooth
         self.calendar = calendar
         self.gaming = gaming
+        self.throughput = throughput
+        self.downloads = downloads
         self.now = now
     }
 
@@ -216,6 +231,14 @@ public struct TriggerFactory {
             return GracePeriodTrigger(
                 wrapping: GamingTrigger(monitor: gaming),
                 grace: GamingTrigger.releaseGrace,
+                now: now
+            )
+        case .throughput(let kb):
+            return NetworkThroughputTrigger(thresholdKilobytesPerSecond: kb, reader: throughput)
+        case .downloadInFolder(let url):
+            return GracePeriodTrigger(
+                wrapping: DownloadInFolderTrigger(folder: url, scanner: downloads),
+                grace: DownloadInFolderTrigger.releaseGrace,
                 now: now
             )
         }

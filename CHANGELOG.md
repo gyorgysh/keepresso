@@ -3,6 +3,31 @@
 All notable changes to Keepresso are documented here. Versions follow
 [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+### Fixed
+
+- The global keep-awake shortcut no longer springs back when triggers are
+  active. Pressing it now pauses trigger gating (the same in-memory pause as the
+  menu's Pause Triggers), so the toggle sticks and the menu shows "Resume
+  Triggers", instead of the gate turning the session back on a second later.
+
+### New
+
+- **Export and import settings.** Back up your settings, triggers, and presets
+  to a JSON file, or move them to another Mac, from Preferences > General. The
+  file is version-stamped and validated on import.
+- **Keep awake until a download finishes.** A new trigger that watches a folder
+  you pick (Downloads by default) and holds the Mac awake while an in-progress
+  download file (.crdownload, .download, .part, and the like) is present, then
+  lets it sleep once the transfer completes. Holds for 30 seconds between files
+  in a batch. Add it from Triggers > Apps & Activity > Downloads.
+- **Network-activity trigger.** Keep awake while a large transfer is running,
+  even when no single app or process rule fits. Fires while smoothed throughput
+  stays above a threshold you choose, with the same moving-average and hysteresis
+  the CPU-load trigger uses so a brief burst doesn't start a session. Add it from
+  Triggers > Network & Devices > Network activity.
+
 ## 1.7.0
 
 Theme: remote-work presence and everyday control.

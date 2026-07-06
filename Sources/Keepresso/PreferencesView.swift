@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 import KeepressoCore
 
 /// The Preferences window. Holds the settings that used to crowd the menu
@@ -167,6 +169,11 @@ private struct ActivityTab: View {
 private struct GeneralTab: View {
     @Bindable var model: AppModel
     @State private var launchAtLogin = LoginItem.isEnabled
+    /// The result of the last export/import, shown inline under the buttons.
+    @State private var transferNote: TransferNote?
+
+    /// A one-line outcome for the settings backup buttons.
+    private struct TransferNote { let message: String; let isError: Bool }
 
     private var session: SessionController { model.session }
 
@@ -270,10 +277,70 @@ private struct GeneralTab: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section {
+                HStack {
+                    Button("Export Settings\u{2026}") { exportSettings() }
+                    Button("Import Settings\u{2026}") { importSettings() }
+                }
+                if let note = transferNote {
+                    Label(note.message, systemImage: note.isError ? "exclamationmark.triangle" : "checkmark.circle")
+                        .font(.caption)
+                        .foregroundStyle(note.isError ? .orange : .secondary)
+                }
+            } header: {
+                Text("Backup")
+            } footer: {
+                Text("Save your settings, triggers, and presets to a JSON file to back them up or move them to another Mac. Importing replaces your current configuration and ends any running session.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .onAppear { model.refreshClosedDisplay() }
+    }
+
+    // MARK: - Settings backup
+
+    private func exportSettings() {
+        let panel = NSSavePanel()
+        panel.title = "Export Keepresso Settings"
+        panel.nameFieldStringValue = "Keepresso Settings.json"
+        panel.allowedContentTypes = [.json]
+        panel.isExtensionHidden = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try model.exportSettingsData().write(to: url)
+            transferNote = TransferNote(message: "Exported to \(url.lastPathComponent).", isError: false)
+        } catch {
+            transferNote = TransferNote(message: "Couldn't export settings: \(error.localizedDescription)", isError: true)
+        }
+    }
+
+    private func importSettings() {
+        let panel = NSOpenPanel()
+        panel.title = "Import Keepresso Settings"
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try model.importSettings(from: Data(contentsOf: url))
+            transferNote = TransferNote(message: "Settings imported.", isError: false)
+        } catch let error as SettingsTransferError {
+            transferNote = TransferNote(message: Self.message(for: error), isError: true)
+        } catch {
+            transferNote = TransferNote(message: "Couldn't read the file: \(error.localizedDescription)", isError: true)
+        }
+    }
+
+    private static func message(for error: SettingsTransferError) -> String {
+        switch error {
+        case .unrecognizedFile:
+            return "That file isn't a Keepresso settings export."
+        case .unsupportedVersion:
+            return "That export was made by a newer version of Keepresso."
+        }
     }
 
     private func optionBinding(_ keyPath: WritableKeyPath<SleepPreventionOptions, Bool>) -> Binding<Bool> {

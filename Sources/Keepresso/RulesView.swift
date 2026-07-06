@@ -24,6 +24,9 @@ struct RulesView: View {
     /// Threshold options for the CPU-load rule.
     private static let cpuThresholds = [25, 50, 75, 90]
 
+    /// Threshold options for the network-activity rule, in KB/s.
+    private static let throughputThresholds = [100, 500, 1024, 5120]
+
     /// Grace presets offered for app rules.
     private static let gracePresets: [(label: String, seconds: TimeInterval)] = [
         ("No grace", 0),
@@ -86,6 +89,9 @@ struct RulesView: View {
             }
             if case .cpuLoad(let threshold) = rule {
                 cpuOptionsMenu(index: index, threshold: threshold)
+            }
+            if case .throughput(let kb) = rule {
+                throughputOptionsMenu(index: index, kilobytesPerSecond: kb)
             }
 
             Button {
@@ -166,6 +172,25 @@ struct RulesView: View {
         .help("CPU threshold")
     }
 
+    /// In-place editor for a network-activity rule's threshold.
+    private func throughputOptionsMenu(index: Int, kilobytesPerSecond: Int) -> some View {
+        Menu {
+            Picker("Threshold", selection: Binding(
+                get: { kilobytesPerSecond },
+                set: { model.updateRule(at: index, to: .throughput(kilobytesPerSecond: $0)) }
+            )) {
+                ForEach(Self.throughputThresholds, id: \.self) { kb in
+                    Text("Above \(NetworkThroughput.rateLabel(kilobytesPerSecond: kb))").tag(kb)
+                }
+            }
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Network threshold")
+    }
+
     /// Conditions are added from three menus grouped by what the user is
     /// thinking about, not by API. One flat menu held eleven scrolling
     /// sections by v1.6, which had become a chore to navigate.
@@ -240,6 +265,13 @@ struct RulesView: View {
                 }
             }
         }
+        Section("Network activity") {
+            ForEach(Self.throughputThresholds, id: \.self) { kb in
+                Button("Above \(NetworkThroughput.rateLabel(kilobytesPerSecond: kb))") {
+                    model.addRule(.throughput(kilobytesPerSecond: kb))
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -263,6 +295,10 @@ struct RulesView: View {
             ForEach(Self.processPresets, id: \.self) { name in
                 Button(name) { model.addRule(.process(name)) }
             }
+        }
+        Section("Downloads") {
+            Button("Watch a folder for downloads\u{2026}") { model.chooseDownloadFolder() }
+                .help("Keeps the Mac awake while a partial-download file (.crdownload, .download, .part, and the like) exists in the chosen folder, then lets it sleep once the download finishes. Holds for 30 seconds between files in a batch.")
         }
         Section("CPU load") {
             ForEach(Self.cpuThresholds, id: \.self) { percent in
@@ -339,6 +375,8 @@ struct RulesView: View {
         case .bluetoothDevice:         return "antenna.radiowaves.left.and.right"
         case .calendarEvent:           return "calendar"
         case .gaming:                  return "gamecontroller"
+        case .throughput:              return "arrow.up.arrow.down"
+        case .downloadInFolder:        return "arrow.down.circle"
         }
     }
 }

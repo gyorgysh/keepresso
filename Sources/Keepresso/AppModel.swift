@@ -96,9 +96,22 @@ final class AppModel {
 
     // MARK: - Manual activation
 
-    /// Flip a manual (non-gated) session, starting with the saved duration.
+    /// Flip keep-awake by hand (the global hotkey and the menu switch), starting
+    /// with the saved duration.
+    ///
+    /// If triggers are actively gating the session, pause them first, the same
+    /// in-memory pause the menu's Pause Triggers uses and that ``handle(_:)``
+    /// applies to URL and widget commands. Without it a bare start/stop here
+    /// would be undone by the gate on the very next reconcile (once a second),
+    /// so a hotkey press would appear to spring back. After pausing, the menu
+    /// shows "Triggers paused / Resume Triggers" and control stays manual until
+    /// the user resumes or relaunches (the pause isn't persisted). The pause is
+    /// a no-op when triggers are off or already paused, so the menu switch (only
+    /// reachable in those states) behaves exactly as before.
     func toggleManual() {
-        if session.isActive {
+        let wasActive = session.isActive
+        pauseTriggers()
+        if wasActive {
             session.stop()
         } else {
             session.start(mode: settings.defaultMode)
@@ -217,6 +230,23 @@ final class AppModel {
         settings.ruleSet.rules[index] = rule
         applyTriggerGate()
         persist()
+    }
+
+    /// Prompt for a folder to watch for in-progress downloads and add a rule for
+    /// it (defaults to ~/Downloads). The panel only opens on this explicit click,
+    /// never on window open; picking a folder grants access with no permission
+    /// prompt (the app is unsandboxed, so the plain URL persists). Cancelling
+    /// adds nothing.
+    func chooseDownloadFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+        panel.prompt = "Watch"
+        panel.message = "Keep awake while downloads are in progress in this folder."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        addRule(.downloadInFolder(url))
     }
 
     /// Owns the live engine gating the session and the menu's rule-state cache.
@@ -445,6 +475,55 @@ final class AppModel {
     /// presets untouched.
     func restoreDefaultPresets() {
         settings.restoreMissingBuiltInPresets()
+        persist()
+    }
+
+    // MARK: - Settings export / import
+
+    /// Encode the current configuration (options, triggers, reminder, presets,
+    /// everything in ``KeepressoSettings``) as a portable, version-stamped JSON
+    /// export the user can back up or move to another Mac.
+    func exportSettingsData() throws -> Data {
+        try SettingsTransfer.exportData(settings, appVersion: AppInfo.version)
+    }
+
+    /// Replace the entire live configuration with an imported settings file,
+    /// then re-derive everything that hangs off settings. Throws a
+    /// ``SettingsTransferError`` if `data` isn't a valid Keepresso export,
+    /// leaving the current configuration untouched.
+    func importSettings(from data: Data) throws {
+        var imported = try SettingsTransfer.importSettings(from: data)
+        // An export from an older build can predate built-ins added since; seed
+        // them the same way launch does so the import isn't missing new defaults.
+        imported.seedNewBuiltInPresets()
+        apply(imported)
+    }
+
+    /// Adopt a wholesale-new settings value and push every derived piece of
+    /// state into the controller/backends that own it, mirroring ``init``. The
+    /// piecemeal setters elsewhere each re-derive only their own slice; this is
+    /// the one path that swaps the lot at once (import).
+    ///
+    /// Ends any running session first: the new config takes over cleanly, the
+    /// same reason the ``triggersEnabled`` setter stops (a gate-held session
+    /// must not linger as a manual one with a stale duration once the rules
+    /// that were holding it are gone).
+    private func apply(_ newSettings: KeepressoSettings) {
+        session.stop()
+        settings = newSettings
+        session.options = newSettings.options
+        session.reminderAfter = newSettings.reminderAfter
+        session.reminderRepeats = newSettings.reminderRepeats
+        session.reminderSound = newSettings.reminderSound
+        session.notifyOnEnd = newSettings.notifyOnEnd
+        session.endAction = newSettings.endAction
+        session.pauseBelowBatteryPercent = newSettings.pauseBelowBatteryPercent
+        disk.config = newSettings.diskKeepAlive
+        virtualDisplay.config = newSettings.virtualDisplay
+        awdl.autoWithGaming = newSettings.awdlAutoWithGaming
+        triggersPaused = false // a fresh config always comes in unpaused, like launch
+        applyTriggerGate()
+        registerHotKey()
         persist()
     }
 
