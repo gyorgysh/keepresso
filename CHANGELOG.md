@@ -7,6 +7,11 @@ All notable changes to Keepresso are documented here. Versions follow
 
 ### Fixed
 
+- App-based trigger conditions now show the app's name instead of its raw bundle
+  identifier. The menu's condition list and the rules editor read "NVIDIA
+  GeForce NOW is running" rather than "App com.nvidia.gfnpc.mall is running";
+  the Cloud Gaming and Remote Control presets and any rule added from the
+  running-apps menu carry a friendly name.
 - The global keep-awake shortcut no longer springs back when triggers are
   active. Pressing it now pauses trigger gating (the same in-memory pause as the
   menu's Pause Triggers), so the toggle sticks and the menu shows "Resume
@@ -27,6 +32,12 @@ All notable changes to Keepresso are documented here. Versions follow
   stays above a threshold you choose, with the same moving-average and hysteresis
   the CPU-load trigger uses so a brief burst doesn't start a session. Add it from
   Triggers > Network & Devices > Network activity.
+- **Welcome window.** A short first-run window points out that Keepresso lives in
+  the menu bar (no Dock icon) and offers one-click setup: pick how you use your
+  Mac (agentic coding, gaming and streaming, meetings and calls, remote access)
+  to apply the matching triggers, plus launch-at-login and notifications. Shown
+  once on a new Mac; reopen it any time from Preferences > General. Existing
+  users aren't shown it on upgrade.
 
 ## 1.7.0
 

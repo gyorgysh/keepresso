@@ -427,6 +427,22 @@ final class AppModel {
         session.start(mode: settings.defaultMode)
     }
 
+    // MARK: - First-run onboarding
+
+    /// Whether the first-run welcome window has been shown. Set `true` the first
+    /// time it opens so it appears exactly once; the menu can reopen it anytime.
+    var hasOnboarded: Bool {
+        get { settings.hasOnboarded }
+        set { settings.hasOnboarded = newValue; persist() }
+    }
+
+    /// Request notification permission, for the welcome window's opt-in button.
+    /// Safe to call repeatedly (it no-ops after the first decision) and prompts
+    /// only on this explicit call, never on window open.
+    func requestNotificationAuthorization() {
+        notifier.requestAuthorization()
+    }
+
     // MARK: - Menu-bar countdown
 
     /// Whether the menu-bar icon shows a live countdown for timed sessions.

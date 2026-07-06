@@ -168,6 +168,7 @@ private struct ActivityTab: View {
 
 private struct GeneralTab: View {
     @Bindable var model: AppModel
+    @Environment(\.openWindow) private var openWindow
     @State private var launchAtLogin = LoginItem.isEnabled
     /// The result of the last export/import, shown inline under the buttons.
     @State private var transferNote: TransferNote?
@@ -291,6 +292,16 @@ private struct GeneralTab: View {
                 Text("Backup")
             } footer: {
                 Text("Save your settings, triggers, and presets to a JSON file to back them up or move them to another Mac. Importing replaces your current configuration and ends any running session.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                Button("Show Welcome Screen\u{2026}") {
+                    NSApp.activate(ignoringOtherApps: true)
+                    openWindow(id: KeepressoApp.welcomeWindowID)
+                }
+            } footer: {
+                Text("Reopen the first-run welcome, with quick one-click setup for how you use your Mac.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

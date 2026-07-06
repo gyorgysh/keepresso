@@ -96,19 +96,29 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
 public struct AppRule: Codable, Equatable, Hashable, Sendable {
     /// Bundle identifier, e.g. `com.apple.FaceTime`.
     public var bundleID: String
+    /// A friendly display name (e.g. "NVIDIA GeForce NOW") shown instead of the
+    /// bundle id in the menu and rules editor. Optional (older rules and hand-made
+    /// ones may lack it); set when the rule is built from a known app, i.e. a
+    /// preset or the running-apps menu, which already have the name. Matching is
+    /// always by ``bundleID``, so a stale or missing name never affects behavior.
+    public var name: String?
     /// Running vs frontmost.
     public var match: AppMatch
     /// Seconds to stay active after the app stops matching (0 = no grace).
     public var grace: TimeInterval
 
-    public init(bundleID: String, match: AppMatch = .running, grace: TimeInterval = 0) {
+    public init(bundleID: String, name: String? = nil, match: AppMatch = .running, grace: TimeInterval = 0) {
         self.bundleID = bundleID
+        self.name = name
         self.match = match
         self.grace = grace
     }
 
     public var label: String {
-        let base = "App \(bundleID) \(match.label)"
+        // A bundle id reads as machine noise in the UI, so prefer the friendly
+        // name when we have it; keep the "App " prefix only as the bare-id fallback.
+        let subject = name ?? "App \(bundleID)"
+        let base = "\(subject) \(match.label)"
         return grace > 0 ? base + " (+\(Int(grace))s)" : base
     }
 }

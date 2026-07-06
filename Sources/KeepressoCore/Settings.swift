@@ -50,6 +50,10 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     /// ``seedNewBuiltInPresets()`` adds a new built-in exactly once and never
     /// resurrects one the user deleted.
     public var seededPresetIDs: [String]
+    /// Whether the first-run welcome window has already been shown. Fresh installs
+    /// start `false` and see it once; settings saved before this field existed
+    /// decode to `true` (see ``init(from:)``), so upgrading users aren't shown it.
+    public var hasOnboarded: Bool
 
     public init(
         options: SleepPreventionOptions = .default,
@@ -70,7 +74,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         hotKey: HotKeyShortcut? = nil,
         startOnLaunch: Bool = false,
         presets: [Preset] = Preset.builtIns,
-        seededPresetIDs: [String] = Preset.builtIns.map(\.id)
+        seededPresetIDs: [String] = Preset.builtIns.map(\.id),
+        hasOnboarded: Bool = false
     ) {
         self.options = options
         self.defaultMode = defaultMode
@@ -91,6 +96,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.startOnLaunch = startOnLaunch
         self.presets = presets
         self.seededPresetIDs = seededPresetIDs
+        self.hasOnboarded = hasOnboarded
     }
 
     /// Append any built-in preset this user has never been offered. Called once
@@ -156,6 +162,11 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         // only genuinely new built-ins get appended for those users.
         seededPresetIDs = try c.decodeIfPresent([String].self, forKey: .seededPresetIDs)
             ?? Preset.preSeedTrackingBuiltInIDs
+        // Absent means a blob saved before onboarding existed, i.e. an existing
+        // user: treat them as already onboarded so an update doesn't surprise
+        // them with the welcome window. Only a genuinely fresh install (the
+        // memberwise default) starts false and sees it.
+        hasOnboarded = try c.decodeIfPresent(Bool.self, forKey: .hasOnboarded) ?? true
     }
 
     /// First-launch defaults: keep system awake, no triggers.

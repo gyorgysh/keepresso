@@ -78,8 +78,8 @@ extension Preset {
             name: "Cloud Gaming",
             ruleSet: RuleSet(combine: .any, rules: [
                 .gaming,
-                .app(AppRule(bundleID: "com.nvidia.gfnpc.mall")),
-                .app(AppRule(bundleID: "com.boosteroid.macclient")),
+                .app(AppRule(bundleID: "com.nvidia.gfnpc.mall", name: "NVIDIA GeForce NOW")),
+                .app(AppRule(bundleID: "com.boosteroid.macclient", name: "Boosteroid")),
             ])
         ),
         // While actively driving another machine from this Mac. Frontmost,
@@ -90,9 +90,9 @@ extension Preset {
             id: "remote-control",
             name: "Remote Control",
             ruleSet: RuleSet(combine: .any, rules: [
-                .app(AppRule(bundleID: "com.teamviewer.TeamViewer", match: .frontmost, grace: 120)),
-                .app(AppRule(bundleID: "com.philandro.anydesk", match: .frontmost, grace: 120)),
-                .app(AppRule(bundleID: "tv.parsec.www", match: .frontmost, grace: 120)),
+                .app(AppRule(bundleID: "com.teamviewer.TeamViewer", name: "TeamViewer", match: .frontmost, grace: 120)),
+                .app(AppRule(bundleID: "com.philandro.anydesk", name: "AnyDesk", match: .frontmost, grace: 120)),
+                .app(AppRule(bundleID: "tv.parsec.www", name: "Parsec", match: .frontmost, grace: 120)),
             ])
         ),
     ]

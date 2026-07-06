@@ -134,6 +134,42 @@ import Foundation
     }
 }
 
+@Test func appRuleLabelPrefersTheFriendlyNameOverTheBundleID() {
+    let named = AppRule(bundleID: "com.nvidia.gfnpc.mall", name: "NVIDIA GeForce NOW")
+    #expect(named.label == "NVIDIA GeForce NOW is running")
+    // No name falls back to the bundle id, keeping the "App" prefix.
+    #expect(AppRule(bundleID: "com.acme.tool").label == "App com.acme.tool is running")
+    // Grace still appends.
+    let grace = AppRule(bundleID: "tv.parsec.www", name: "Parsec", match: .frontmost, grace: 120)
+    #expect(grace.label == "Parsec is frontmost (+120s)")
+}
+
+@Test func appRuleWithoutANameDecodesForBackwardCompatibility() throws {
+    // A rule saved before AppRule carried a name must still decode (name nil),
+    // matching stays by bundle id, and the label falls back to the bundle id.
+    let json = """
+    { "bundleID": "com.acme.tool", "match": "running", "grace": 0 }
+    """
+    let decoded = try JSONDecoder().decode(AppRule.self, from: Data(json.utf8))
+    #expect(decoded.name == nil)
+    #expect(decoded.bundleID == "com.acme.tool")
+    #expect(decoded.label == "App com.acme.tool is running")
+}
+
+@Test func cloudGamingAndRemoteControlPresetsRenderFriendlyLabels() {
+    // These presets ship app rules by bundle id; each must carry a friendly
+    // name so the menu doesn't show "App com.nvidia.gfnpc.mall is running".
+    let appRules = Preset.builtIns
+        .filter { ["cloud-gaming", "remote-control"].contains($0.id) }
+        .flatMap(\.ruleSet.rules)
+        .compactMap { rule -> AppRule? in if case .app(let r) = rule { return r } else { return nil } }
+    #expect(!appRules.isEmpty)
+    for rule in appRules {
+        #expect(rule.name != nil, "\(rule.bundleID) should have a friendly name")
+        #expect(!rule.label.contains(rule.bundleID), "label should not show the raw bundle id: \(rule.label)")
+    }
+}
+
 @Test func remoteSessionPresetMatchesConnectionsNotTheListener() {
     // The idle sshd listener must not hold the Mac awake; a live connection
     // (either OpenSSH process naming) must.

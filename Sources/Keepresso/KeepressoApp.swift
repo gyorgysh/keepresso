@@ -11,7 +11,7 @@ struct KeepressoApp: App {
         MenuBarExtra {
             MenuBarContent(model: appDelegate.model, updater: appDelegate.updater)
         } label: {
-            MenuBarLabel(session: appDelegate.model.session, showCountdown: appDelegate.model.showCountdownInMenuBar)
+            MenuBarLabelView(model: appDelegate.model)
         }
         .menuBarExtraStyle(.window)
 
@@ -36,6 +36,13 @@ struct KeepressoApp: App {
             AboutView()
         }
         .windowResizability(.contentSize)
+
+        // Shown once on first launch (see `MenuBarLabelView`) and reopenable from
+        // the menu via `openWindow(id: "welcome")`.
+        Window("Welcome to Keepresso", id: Self.welcomeWindowID) {
+            WelcomeView(model: appDelegate.model)
+        }
+        .windowResizability(.contentSize)
     }
 
     /// Scene ids shared with the menu's window-opening buttons.
@@ -43,6 +50,28 @@ struct KeepressoApp: App {
     static let streamingWindowID = "streaming"
     static let preferencesWindowID = "preferences"
     static let aboutWindowID = "about"
+    static let welcomeWindowID = "welcome"
+}
+
+/// The menu-bar icon, plus a one-shot trigger that opens the welcome window on
+/// the very first launch. The label view is alive from launch (the icon shows
+/// immediately), unlike the dropdown content, which is built lazily on first
+/// click, so a launch-time open belongs here. Guarded by ``AppModel/hasOnboarded``
+/// and flipped before opening, so it fires exactly once even if the label
+/// re-renders.
+private struct MenuBarLabelView: View {
+    @Bindable var model: AppModel
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        MenuBarLabel(session: model.session, showCountdown: model.showCountdownInMenuBar)
+            .task {
+                guard !model.hasOnboarded else { return }
+                model.hasOnboarded = true
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: KeepressoApp.welcomeWindowID)
+            }
+    }
 }
 
 /// Owns the long-lived ``AppModel`` (settings + session) and the per-second
