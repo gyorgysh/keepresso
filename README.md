@@ -259,6 +259,28 @@ open "keepresso://toggle"
 Either way, if triggers are on they pause first (same as the menu's Pause
 Triggers), so the command actually takes effect.
 
+### The `keepresso` command-line tool
+
+The app bundle ships a caffeinate-style CLI (the Homebrew cask links it onto
+your PATH). It drives the app for session commands and can also hold its own
+assertion when you need to block in a pipeline:
+
+```sh
+keepresso start --for 90     # tell the app to brew for 90 minutes
+keepresso stop               # end the session
+keepresso status             # exit 0 awake, 1 not, 2 app not running
+keepresso status --json      # machine-readable, jq-friendly
+
+keepresso -t 3600            # hold an assertion itself for an hour
+keepresso -w $!              # stay awake until a process exits
+keepresso -d -i              # also keep the display awake, until Ctrl-C
+keepresso -u                 # wake the display now
+```
+
+The standalone holds work even when the app is not running; `keepresso help`
+lists everything. Installed from a DMG instead of Homebrew? Symlink it
+yourself: `ln -s /Applications/Keepresso.app/Contents/Helpers/keepresso /usr/local/bin/`.
+
 ## Why not the Mac App Store?
 
 The App Sandbox blocks the `IOPMAssertion` power APIs Keepresso depends on, so

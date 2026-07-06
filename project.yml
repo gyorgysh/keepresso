@@ -26,6 +26,17 @@ targets:
         product: Sparkle
       - target: KeepressoWidget
         embed: true
+      # The command-line tool, copied into Contents/Helpers and signed with
+      # the app so the one existing notarization covers it; the Homebrew cask
+      # symlinks it onto PATH with a `binary` stanza. Not Contents/MacOS: on
+      # a case-insensitive filesystem `keepresso` there would overwrite the
+      # `Keepresso` app executable.
+      - target: keepresso-cli
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
     info:
       path: Sources/Keepresso/Info.plist
       properties:
@@ -78,6 +89,27 @@ targets:
         # Not sandboxed by design: App Sandbox blocks IOPMAssertion. This is why
         # Keepresso ships via GitHub/Homebrew, not the Mac App Store.
         ENABLE_APP_SANDBOX: false
+
+  # The caffeinate-style `keepresso` CLI. Also buildable as a SwiftPM
+  # executable (`swift build`) for the toolchain-only dev loop; this target
+  # exists so the release archive builds, embeds, and signs it with the app.
+  keepresso-cli:
+    type: tool
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/keepresso-cli
+    dependencies:
+      - package: KeepressoCore
+        product: KeepressoCore
+    settings:
+      base:
+        PRODUCT_NAME: keepresso
+        SWIFT_VERSION: "5.9"
+        ENABLE_HARDENED_RUNTIME: true
+        CODE_SIGN_STYLE: Automatic
+        # Embedded in the app; not an install product of its own.
+        SKIP_INSTALL: true
 
   # Widget extension: desktop widgets on macOS 14+, plus the Control Center
   # toggle where it exists (macOS 26+, availability-gated in code). Sandboxed
