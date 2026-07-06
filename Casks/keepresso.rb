@@ -10,8 +10,8 @@
 #   (shasum -a 256 dist/Keepresso-<version>.dmg), then commit to the tap.
 # The `livecheck` block lets `brew livecheck` notice new GitHub releases.
 cask "keepresso" do
-  version "1.8.0"
-  sha256 "a3b4935322eeb92bc8b4e904bba6a1de19f2808dd5f02c60963311fa7520344e"
+  version "1.9.0"
+  sha256 "f78fcfe6f31b927347aac5a5fb890de5ffb39c7150620f4c8636e6d56e89a05d"
 
   url "https://github.com/gyorgysh/keepresso/releases/download/v#{version}/Keepresso-#{version}.dmg"
   name "Keepresso"
@@ -27,6 +27,8 @@ cask "keepresso" do
   depends_on macos: :sonoma
 
   app "Keepresso.app"
+  # The caffeinate-style CLI, embedded in the app bundle (Contents/Helpers).
+  binary "#{appdir}/Keepresso.app/Contents/Helpers/keepresso"
 
   zap trash: [
     "~/Library/Caches/sh.gyorgy.keepresso",
