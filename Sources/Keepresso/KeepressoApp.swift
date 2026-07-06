@@ -56,9 +56,10 @@ struct KeepressoApp: App {
 /// The menu-bar icon, plus a one-shot trigger that opens the welcome window on
 /// the very first launch. The label view is alive from launch (the icon shows
 /// immediately), unlike the dropdown content, which is built lazily on first
-/// click, so a launch-time open belongs here. Guarded by ``AppModel/hasOnboarded``
-/// and flipped before opening, so it fires exactly once even if the label
-/// re-renders.
+/// click, so a launch-time open belongs here. Guarded by ``AppModel/hasOnboarded``,
+/// which `WelcomeView.onAppear` flips: consuming the one-shot only once the
+/// window is really on screen means a launch that never shows it (a failed
+/// open, or the relocation hand-off below) doesn't burn the first run.
 private struct MenuBarLabelView: View {
     @Bindable var model: AppModel
     @Environment(\.openWindow) private var openWindow
@@ -67,7 +68,12 @@ private struct MenuBarLabelView: View {
         MenuBarLabel(session: model.session, showCountdown: model.showCountdownInMenuBar)
             .task {
                 guard !model.hasOnboarded else { return }
-                model.hasOnboarded = true
+                // First launch from a DMG: this instance is about to copy
+                // itself to /Applications and quit. Flashing the welcome here
+                // would persist hasOnboarded into the shared defaults and the
+                // relaunched copy, the one fresh installs actually keep,
+                // would never show it.
+                guard !AppRelocator.isRelocating else { return }
                 NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: KeepressoApp.welcomeWindowID)
             }

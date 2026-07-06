@@ -119,6 +119,10 @@ struct WelcomeView: View {
         .frame(width: 400)
         .tint(.keepressoBrew)
         .glassWindowBackground()
+        // The one-shot is consumed by actually being seen, not by the attempt
+        // to open the window (see `MenuBarLabelView`): if launch is cut short
+        // (DMG relocation hand-off) the flag stays false for the real run.
+        .onAppear { model.hasOnboarded = true }
         .task { notificationStatus = await model.notificationAuthorizationStatus() }
     }
 

@@ -8,6 +8,12 @@ import AppKit
 /// Silent and best-effort by design: any failure just leaves the app running
 /// from where it is. Development builds are never touched.
 enum AppRelocator {
+    /// True once this instance has decided to hand over to the /Applications
+    /// copy (or to an already running one) and terminate. Launch-time one-shots
+    /// (the welcome window) check this so they don't fire, and persist state,
+    /// in a process that is about to die.
+    private(set) static var isRelocating = false
+
     static func relocateIfNeeded() {
         let fm = FileManager.default
         let bundleURL = Bundle.main.bundleURL
@@ -34,6 +40,7 @@ enum AppRelocator {
         // spawning a second instance (two cups, both holding assertions). If
         // it's an older version, Sparkle will offer the update from there.
         if let running = runningInstance(at: dest) {
+            isRelocating = true
             running.activate()
             NSApp.terminate(nil)
             return
@@ -61,6 +68,7 @@ enum AppRelocator {
 
         // Launch the /Applications copy, then terminate. No running instance
         // exists (checked above), so this starts it rather than duplicating it.
+        isRelocating = true
         NSWorkspace.shared.openApplication(at: dest, configuration: NSWorkspace.OpenConfiguration()) { _, _ in
             DispatchQueue.main.async { NSApp.terminate(nil) }
         }
