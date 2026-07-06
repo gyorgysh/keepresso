@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import UserNotifications
 import KeepressoCore
 
 /// App-level glue around ``SessionController``: owns persisted settings, builds
@@ -436,11 +437,21 @@ final class AppModel {
         set { settings.hasOnboarded = newValue; persist() }
     }
 
-    /// Request notification permission, for the welcome window's opt-in button.
-    /// Safe to call repeatedly (it no-ops after the first decision) and prompts
-    /// only on this explicit call, never on window open.
-    func requestNotificationAuthorization() {
-        notifier.requestAuthorization()
+    /// The current notification authorization status, so the welcome window can
+    /// show whether notifications are already granted, not yet asked, or denied,
+    /// rather than blindly offering "Enable".
+    func notificationAuthorizationStatus() async -> UNAuthorizationStatus {
+        await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+    }
+
+    /// Request notification permission and report the resulting status. Prompts
+    /// only on this explicit call (never on window open) and no-ops once decided;
+    /// the welcome window uses the returned status to reflect the real outcome.
+    @discardableResult
+    func requestNotificationAuthorization() async -> UNAuthorizationStatus {
+        let center = UNUserNotificationCenter.current()
+        _ = try? await center.requestAuthorization(options: [.alert, .sound])
+        return await center.notificationSettings().authorizationStatus
     }
 
     // MARK: - Menu-bar countdown

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UserNotifications
 import KeepressoCore
 
 /// The first-run welcome window: a short intro to a menu-bar app that has no
@@ -15,7 +16,9 @@ struct WelcomeView: View {
     @Environment(\.openWindow) private var openWindow
 
     @State private var launchAtLogin = LoginItem.isEnabled
-    @State private var notificationsRequested = false
+    /// The live notification authorization status, so the row reflects "already
+    /// on" / "not asked" / "denied" instead of always offering Enable.
+    @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     /// The preset id of the use case the user picked, for the checkmark. Local
     /// to this window: applying a preset is the persisted action.
     @State private var selectedUseCase: String?
@@ -29,6 +32,9 @@ struct WelcomeView: View {
         let icon: String
     }
 
+    /// The id of the opt-out row: no triggers, keep-awake stays a manual toggle.
+    private static let manualID = "manual"
+
     private static let useCases: [UseCase] = [
         UseCase(id: "ai-agent", title: "Agentic coding",
                 detail: "Stay awake while Claude, Codex, or Grok is running.", icon: "terminal"),
@@ -38,6 +44,9 @@ struct WelcomeView: View {
                 detail: "Stay awake whenever the camera or microphone is in use.", icon: "video"),
         UseCase(id: "remote-session", title: "Remote access",
                 detail: "Stay awake while someone is connected over SSH.", icon: "network"),
+        UseCase(id: manualID, title: "Keep it manual for now",
+                detail: "Just toggle keep-awake yourself, and set up your own triggers later in Preferences.",
+                icon: "hand.tap"),
     ]
 
     var body: some View {
@@ -60,7 +69,7 @@ struct WelcomeView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("How do you use your Mac?")
                     .font(.callout.weight(.semibold))
-                Text("Pick one to set up the matching triggers. You can change or remove them later in Preferences.")
+                Text("Pick one to set up matching triggers, or keep it manual and add your own later. You can change this any time in Preferences.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -92,11 +101,7 @@ struct WelcomeView: View {
                     title: "Notifications",
                     detail: "Let Keepresso remind you when a long session is still keeping the Mac awake."
                 ) {
-                    Button(notificationsRequested ? "Requested" : "Enable") {
-                        model.requestNotificationAuthorization()
-                        notificationsRequested = true
-                    }
-                    .disabled(notificationsRequested)
+                    notificationControl
                 }
             }
 
@@ -114,6 +119,33 @@ struct WelcomeView: View {
         .frame(width: 400)
         .tint(.keepressoBrew)
         .glassWindowBackground()
+        .task { notificationStatus = await model.notificationAuthorizationStatus() }
+    }
+
+    /// The Notifications row's trailing control, reflecting the real permission
+    /// state: already granted shows a static "Enabled", a prior denial sends the
+    /// user to System Settings (a re-request would silently no-op), and only an
+    /// undecided state offers to ask.
+    @ViewBuilder
+    private var notificationControl: some View {
+        switch notificationStatus {
+        case .authorized, .provisional, .ephemeral:
+            Label("Enabled", systemImage: "checkmark.circle.fill")
+                .labelStyle(.titleAndIcon)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        case .denied:
+            Button("Open Settings") { openNotificationSettings() }
+        default: // .notDetermined and any future case: safe to ask
+            Button("Enable") {
+                Task { notificationStatus = await model.requestNotificationAuthorization() }
+            }
+        }
+    }
+
+    private func openNotificationSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") else { return }
+        NSWorkspace.shared.open(url)
     }
 
     /// Offered when the gaming use case is picked: a hop to the Gaming &
@@ -147,15 +179,24 @@ struct WelcomeView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
+    /// Act on a picked use case: the manual opt-out turns trigger gating off (so
+    /// keep-awake stays a plain manual toggle), any other applies its preset,
+    /// which switches the rule set and turns triggers on.
+    private func apply(_ useCase: UseCase) {
+        if useCase.id == Self.manualID {
+            model.triggersEnabled = false
+        } else if let preset = Preset.builtIns.first(where: { $0.id == useCase.id }) {
+            model.applyPreset(preset)
+        }
+        selectedUseCase = useCase.id
+    }
+
     /// A pickable use case: applying it switches the whole rule set to the
     /// matching preset (a switch, not a merge) and turns triggers on.
     private func useCaseRow(_ useCase: UseCase) -> some View {
         let selected = selectedUseCase == useCase.id
         return Button {
-            if let preset = Preset.builtIns.first(where: { $0.id == useCase.id }) {
-                model.applyPreset(preset)
-            }
-            selectedUseCase = useCase.id
+            apply(useCase)
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: useCase.icon)
