@@ -3,6 +3,29 @@
 All notable changes to Keepresso are documented here. Versions follow
 [Semantic Versioning](https://semver.org).
 
+## 1.10.0
+
+Theme: closed-display mode that follows the session, and the website's copper
+inside the app.
+
+### New
+
+- **Closed-display mode, only while brewing.** A new "Only while brewing"
+  option (Preferences > General > Closed-display mode) ties the lid-closed
+  keep-awake to the session: it switches on when a keep-awake session starts
+  and back off when the session ends or the app quits (even after a crash),
+  instead of staying on globally until you remember to turn it off. Your
+  administrator password is asked once per app run, not at every flip;
+  enabling the option authorizes right away so a trigger-started session
+  never pops a surprise password dialog. The manual toggle still works and
+  still wins mid-session.
+
+### Changed
+
+- The app's accent now matches the website's burnt-copper palette (copper in
+  light mode, soft copper in dark), across the menu, Preferences, the setup
+  windows, and the widgets.
+
 ## 1.9.0
 
 Theme: a command-line tool, and reliability fixes from a full-history review.
