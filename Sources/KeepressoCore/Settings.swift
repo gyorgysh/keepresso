@@ -37,6 +37,11 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     /// AWDL, and when it resumes. A password-required notice is always sent
     /// regardless of this. Off by default.
     public var awdlNotifications: Bool
+    /// Whether closed-display mode follows the keep-awake session, on when it
+    /// starts and off when it ends, instead of staying on until manually
+    /// turned off (see ``ClosedDisplayAutoController/onlyWhileBrewing``).
+    /// Off by default.
+    public var closedDisplayOnlyWhileBrewing: Bool
     /// A system-wide keyboard shortcut that toggles keep-awake, or `nil` (the
     /// default) for none.
     public var hotKey: HotKeyShortcut?
@@ -71,6 +76,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         showCountdownInMenuBar: Bool = false,
         awdlAutoWithGaming: Bool = false,
         awdlNotifications: Bool = false,
+        closedDisplayOnlyWhileBrewing: Bool = false,
         hotKey: HotKeyShortcut? = nil,
         startOnLaunch: Bool = false,
         presets: [Preset] = Preset.builtIns,
@@ -92,6 +98,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.showCountdownInMenuBar = showCountdownInMenuBar
         self.awdlAutoWithGaming = awdlAutoWithGaming
         self.awdlNotifications = awdlNotifications
+        self.closedDisplayOnlyWhileBrewing = closedDisplayOnlyWhileBrewing
         self.hotKey = hotKey
         self.startOnLaunch = startOnLaunch
         self.presets = presets
@@ -154,6 +161,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         showCountdownInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showCountdownInMenuBar) ?? false
         awdlAutoWithGaming = try c.decodeIfPresent(Bool.self, forKey: .awdlAutoWithGaming) ?? false
         awdlNotifications = try c.decodeIfPresent(Bool.self, forKey: .awdlNotifications) ?? false
+        closedDisplayOnlyWhileBrewing = try c.decodeIfPresent(Bool.self, forKey: .closedDisplayOnlyWhileBrewing) ?? false
         hotKey = try c.decodeIfPresent(HotKeyShortcut.self, forKey: .hotKey)
         startOnLaunch = try c.decodeIfPresent(Bool.self, forKey: .startOnLaunch) ?? false
         presets = try c.decodeIfPresent([Preset].self, forKey: .presets) ?? Preset.builtIns

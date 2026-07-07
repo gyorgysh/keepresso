@@ -238,10 +238,23 @@ private struct GeneralTab: View {
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
+                Toggle("Only while brewing", isOn: Binding(
+                    get: { model.closedDisplayOnlyWhileBrewing },
+                    set: { model.closedDisplayOnlyWhileBrewing = $0 }
+                ))
+                .disabled(model.closedDisplayAutoBusy)
+                if model.closedDisplayAutoBusy {
+                    AdminAuthNote(purpose: "switch closed-display mode with the session")
+                }
+                if let error = model.closedDisplayAutoError {
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
             } header: {
                 Text("Closed-display mode")
             } footer: {
-                Text("Keeps running with the lid shut and no external display, on power or battery. The display itself still turns off when the lid closes (unless an external display is attached), so it's not lighting up uselessly inside the closed lid. Changing this needs your administrator password and flips a system setting (pmset disablesleep), so it stays in effect until you turn it off. On battery and closed it can still drain the battery over time, so don't leave it on in a bag.")
+                Text("Keeps running with the lid shut and no external display, on power or battery. The display itself still turns off when the lid closes (unless an external display is attached), so it's not lighting up uselessly inside the closed lid. Changing this needs your administrator password and flips a system setting (pmset disablesleep), so it stays in effect until you turn it off. On battery and closed it can still drain the battery over time, so don't leave it on in a bag. With \u{201C}Only while brewing\u{201D} on, Keepresso instead switches it on when a keep-awake session starts and back off when it ends or the app quits, asking for your password once per app run.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

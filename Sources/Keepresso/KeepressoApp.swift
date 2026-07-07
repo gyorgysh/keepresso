@@ -95,6 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         onTick: { [weak self] in
             self?.model.syncWidgetState()
             self?.model.awdlAutoTick()
+            self?.model.closedDisplayAutoTick()
         }
     )
     /// Listens for the Control Center toggle's Darwin doorbell.
@@ -113,6 +114,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Any AWDL watchdog flag surviving from a previous process is stale
         // (the loop it kept alive has already exited via its pid check).
         Task { await model.awdl.cleanupAtLaunch() }
+        // Same for the closed-display sleep watchdog's flag.
+        Task { await model.closedDisplayAuto.cleanupAtLaunch() }
         ticker.start()
         // Register the global keep-awake toggle shortcut, if the user set one.
         model.registerHotKey()

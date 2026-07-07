@@ -118,7 +118,10 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 - 💻 **Closed-display mode.** Keep running with the **lid shut** and no external
   display, on power or battery, for an always-on Mac or one you carry mid-task.
   The screen itself turns off when the lid closes, so it's not sitting lit
-  inside a closed lid.
+  inside a closed lid. An optional **"Only while brewing"** mode ties it to the
+  session instead of leaving it on globally: on when a keep-awake session
+  starts, off when it ends (or the app quits, even after a crash), with the
+  password asked once per app run.
 - 🔔 **Reminders and end actions.** A "still brewing" notification (with an
   optional sound) after _N_ minutes, one-time or recurring, so a forgotten
   session can't quietly drain the battery. Plus an optional notification and
@@ -219,6 +222,9 @@ Click the cup in the menu bar to open Keepresso.
   the lid or unplug. It asks for your administrator password once, because it
   flips a system setting (`pmset disablesleep`), and works on power or battery.
   Turn it off when you're done; on battery in a bag it can drain and heat up.
+  Or set it to **"Only while brewing"** in Preferences > General and it follows
+  the session on its own: on at session start, off at session end or app quit,
+  one password prompt per app run.
 - **Preferences** (⌘,) holds the set-and-forget configuration, in tabs:
   - **General**: what to keep awake, menu-bar countdown, battery auto-pause,
     closed-display mode, launch at login, settings backup (export/import), and

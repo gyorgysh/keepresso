@@ -19,6 +19,10 @@ final class AppModel {
     /// keeps the Mac awake with the lid shut). Its state is read live from the
     /// system, so nothing about it is persisted in ``KeepressoSettings``.
     let closedDisplay = ClosedDisplayController()
+    /// Closed-display mode's "only while brewing" automation: a session-scoped
+    /// root helper (one admin prompt per app run) that flips `disablesleep` on
+    /// when the session starts and off when it ends.
+    let closedDisplayAuto = ClosedDisplayAutoController()
     /// Backs the headless-readiness Setup screen. Populated on demand via
     /// ``refreshReadiness()``, empty until the Setup window first appears.
     let readiness = SystemReadinessController()
@@ -63,6 +67,7 @@ final class AppModel {
         self.disk.config = loaded.diskKeepAlive
         self.virtualDisplay.config = loaded.virtualDisplay
         self.awdl.autoWithGaming = loaded.awdlAutoWithGaming
+        self.closedDisplayAuto.onlyWhileBrewing = loaded.closedDisplayOnlyWhileBrewing
         // Launch idle: a manual session waits for the user's toggle, a gated
         // one waits for its conditions (the ticker's reconcile activates it).
         applyTriggerGate()
@@ -548,6 +553,12 @@ final class AppModel {
         disk.config = newSettings.diskKeepAlive
         virtualDisplay.config = newSettings.virtualDisplay
         awdl.autoWithGaming = newSettings.awdlAutoWithGaming
+        closedDisplayAuto.onlyWhileBrewing = newSettings.closedDisplayOnlyWhileBrewing
+        if !newSettings.closedDisplayOnlyWhileBrewing {
+            // An import that turns the automation off must also release any
+            // hold it had (autoTick won't, it early-returns once it's off).
+            Task { await closedDisplayAuto.stopIfHolding() }
+        }
         triggersPaused = false // a fresh config always comes in unpaused, like launch
         applyTriggerGate()
         registerHotKey()
@@ -706,6 +717,77 @@ final class AppModel {
     func setClosedDisplay(_ on: Bool) {
         NSApp.activate(ignoringOtherApps: true)
         Task { await closedDisplay.set(on) }
+    }
+
+    /// Whether closed-display mode follows the session instead of staying on
+    /// until manually turned off (see
+    /// ``ClosedDisplayAutoController/onlyWhileBrewing``). Persisted. Turning it
+    /// on pre-authorizes the root helper now, in this window, so the next
+    /// session start doesn't pop a password dialog out of nowhere. One prompt
+    /// here, prompt-free automation afterward. No-op if already authorized.
+    var closedDisplayOnlyWhileBrewing: Bool {
+        get { settings.closedDisplayOnlyWhileBrewing }
+        set {
+            settings.closedDisplayOnlyWhileBrewing = newValue
+            closedDisplayAuto.onlyWhileBrewing = newValue
+            persist()
+            if newValue && !closedDisplayAuto.isAuthorized {
+                NSApp.activate(ignoringOtherApps: true)
+                let window = NSApp.keyWindow
+                Task {
+                    await closedDisplayAuto.prime()
+                    NSApp.activate(ignoringOtherApps: true)
+                    window?.makeKeyAndOrderFront(nil)
+                }
+            } else if !newValue {
+                // Turning it off mid-session: release the hold (autoTick won't,
+                // it early-returns once the feature's off), then re-read the
+                // system setting once the helper has had a cycle to apply it.
+                Task {
+                    await closedDisplayAuto.stopIfHolding()
+                    try? await Task.sleep(for: .seconds(3))
+                    await closedDisplay.refresh()
+                }
+            }
+        }
+    }
+
+    /// Any error message from the automation's last engage attempt.
+    var closedDisplayAutoError: String? { closedDisplayAuto.lastError }
+
+    /// True while the automation's administrator prompt is on screen.
+    var closedDisplayAutoBusy: Bool { closedDisplayAuto.isBusy }
+
+    @ObservationIgnored private var wasBrewingForClosedDisplay = false
+    @ObservationIgnored private var wasClosedDisplayHolding = false
+
+    /// Once-a-second pulse for closed-display mode's "only while brewing"
+    /// automation. The guard keeps the per-tick task from spawning while the
+    /// feature is off.
+    func closedDisplayAutoTick() {
+        guard settings.closedDisplayOnlyWhileBrewing else { return }
+        let brewing = session.isActive
+        // The first engage of an app run prompts for the password (e.g. auto
+        // mode was enabled in a previous run): become the active app on the
+        // session-start edge so the dialog is focused (same reason as
+        // ``setClosedDisplay(_:)``). Edge-only, so a cancelled prompt isn't
+        // followed by a focus steal every second for the rest of the session.
+        if brewing, !wasBrewingForClosedDisplay, !closedDisplayAuto.isAuthorized {
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        wasBrewingForClosedDisplay = brewing
+        Task { await closedDisplayAuto.autoTick(brewing: brewing) }
+        // Mirror an engage or release into the closed-display toggle's live
+        // state (and the ticker's lid handling, which keys off it) once the
+        // helper has had a cycle to apply the change.
+        let holding = closedDisplayAuto.isHolding
+        if holding != wasClosedDisplayHolding {
+            wasClosedDisplayHolding = holding
+            Task {
+                try? await Task.sleep(for: .seconds(3))
+                await closedDisplay.refresh()
+            }
+        }
     }
 
     // MARK: - Virtual display (experimental)
