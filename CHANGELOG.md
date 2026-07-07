@@ -3,6 +3,40 @@
 All notable changes to Keepresso are documented here. Versions follow
 [Semantic Versioning](https://semver.org).
 
+## 1.11.0
+
+Theme: one password, ever.
+
+### New
+
+- **The administrator helper: one password, ever.** A small privileged helper
+  service (Preferences > General > Administrator helper) now handles
+  closed-display mode and AWDL pausing. Install it once, approve it under
+  System Settings > Login Items (macOS asks for your administrator password
+  that one time), and every privileged switch after that is instant and
+  silent: no more password prompt on each app launch for "Only while brewing"
+  or the AWDL watchdog. The helper survives restarts and app updates, can
+  only flip those specific switches, restores everything if the app quits or
+  crashes, and can be removed again from the same place. Without it,
+  everything keeps working the old way, with the per-run prompt. The helper
+  sits at the top of Preferences > General, and the welcome screen offers it
+  as a one-time setup step on first launch.
+- **The CLI on PATH for DMG installs.** The helper also creates the
+  `/usr/local/bin/keepresso` link (and re-heals it after the app moves or
+  updates), so the command-line tool just works on a drag-installed copy, not
+  only via Homebrew. It never touches a file it didn't create.
+
+### Fixed
+
+- When the old-style password prompt is triggered in the background (a
+  trigger-started session engaging "Only while brewing"), Keepresso now also
+  posts a notification saying the password is needed and why, instead of
+  leaving an unexplained dialog behind other windows. That notification was
+  previously dropped by macOS whenever Keepresso was the active app; it now
+  shows reliably. The in-app notes point at the helper as the way to stop
+  the prompts for good, and no longer flash under a toggle during quick,
+  prompt-free operations.
+
 ## 1.10.0
 
 Theme: closed-display mode that follows the session, and the website's copper
