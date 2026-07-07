@@ -96,11 +96,12 @@ struct KeepAwakeWidget: Widget {
     }
 }
 
-/// The brand's caramel palette (matching `Theme.keepressoBrew`), fixed rather
-/// than appearance-driven because the widget paints its own background.
+/// The brand's copper palette (matching `Theme.keepressoBrew`), fixed rather
+/// than appearance-driven because the widget paints its own background. The
+/// dark-mode variants apply: everything sits on the dark roast.
 private enum WidgetPalette {
-    static let brew = Color(red: 232 / 255, green: 163 / 255, blue: 92 / 255)
-    static let steam = Color(red: 217 / 255, green: 122 / 255, blue: 74 / 255)
+    static let brew = Color(red: 217 / 255, green: 143 / 255, blue: 82 / 255)
+    static let steam = Color(red: 208 / 255, green: 130 / 255, blue: 74 / 255)
     static let roast = Color(red: 43 / 255, green: 26 / 255, blue: 14 / 255)
     static let idleRoast = Color(red: 32 / 255, green: 26 / 255, blue: 22 / 255)
     static let cream = Color(red: 248 / 255, green: 236 / 255, blue: 221 / 255)

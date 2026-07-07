@@ -2,20 +2,21 @@ import SwiftUI
 import AppKit
 
 extension Color {
-    /// The brewing/active accent, matching the website's coffee palette and the
-    /// app icon: caramel (#B45309) in light mode, warm amber (#E8A35C) in dark.
+    /// The brewing/active accent, matching the website's burnt-copper palette:
+    /// burnt copper (#A64B23) in light mode, soft copper (#D98F52) in dark.
     static let keepressoBrew = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.isDarkAppearance
-            ? NSColor(srgbRed: 232 / 255, green: 163 / 255, blue: 92 / 255, alpha: 1)
-            : NSColor(srgbRed: 180 / 255, green: 83 / 255, blue: 9 / 255, alpha: 1)
+            ? NSColor(srgbRed: 217 / 255, green: 143 / 255, blue: 82 / 255, alpha: 1)
+            : NSColor(srgbRed: 166 / 255, green: 75 / 255, blue: 35 / 255, alpha: 1)
     })
 
     /// The secondary copper tone, used for the steam in ``BrewingCupView``:
-    /// #C2410C in light mode, #D97A4A in dark.
+    /// a deeper, redder companion to the accent. #8F3F1C in light mode
+    /// (the website's hover/strong copper), #D0824A in dark.
     static let keepressoSteam = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.isDarkAppearance
-            ? NSColor(srgbRed: 217 / 255, green: 122 / 255, blue: 74 / 255, alpha: 1)
-            : NSColor(srgbRed: 194 / 255, green: 65 / 255, blue: 12 / 255, alpha: 1)
+            ? NSColor(srgbRed: 208 / 255, green: 130 / 255, blue: 74 / 255, alpha: 1)
+            : NSColor(srgbRed: 143 / 255, green: 63 / 255, blue: 28 / 255, alpha: 1)
     })
 }
 
