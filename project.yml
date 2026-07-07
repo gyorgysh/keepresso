@@ -19,6 +19,15 @@ targets:
     platform: macOS
     sources:
       - path: Sources/Keepresso
+        excludes:
+          - sh.gyorgy.keepresso.helper.plist
+      # The privileged helper's launchd plist. SMAppService.daemon(plistName:)
+      # requires it at Contents/Library/LaunchDaemons inside the app bundle.
+      - path: Sources/Keepresso/sh.gyorgy.keepresso.helper.plist
+        buildPhase:
+          copyFiles:
+            destination: wrapper
+            subpath: Contents/Library/LaunchDaemons
     dependencies:
       - package: KeepressoCore
         product: KeepressoCore
@@ -37,6 +46,15 @@ targets:
         copy:
           destination: wrapper
           subpath: Contents/Helpers
+      # The privileged helper daemon (SMAppService LaunchDaemon). Its plist's
+      # BundleProgram points at Contents/MacOS/keepresso-helper; no name clash
+      # with the app executable, unlike the CLI.
+      - target: keepresso-helper
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/MacOS
     info:
       path: Sources/Keepresso/Info.plist
       properties:
@@ -105,6 +123,41 @@ targets:
     settings:
       base:
         PRODUCT_NAME: keepresso
+        SWIFT_VERSION: "5.9"
+        ENABLE_HARDENED_RUNTIME: true
+        CODE_SIGN_STYLE: Automatic
+        # Embedded in the app; not an install product of its own.
+        SKIP_INSTALL: true
+
+  # The privileged helper daemon: registered by the app as an SMAppService
+  # LaunchDaemon (one admin approval, ever) and driven over XPC, so
+  # closed-display mode and the AWDL watchdog stop asking for the password on
+  # every app run. Also buildable with `swift build` for the dev loop.
+  keepresso-helper:
+    type: tool
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/keepresso-helper
+    dependencies:
+      - package: KeepressoCore
+        product: KeepressoCore
+    # Embedded as an __info_plist section (no bundle around a bare tool):
+    # codesign takes the signing identifier from CFBundleIdentifier, giving
+    # the deterministic identifier the XPC peer checks require, in ad-hoc dev
+    # builds and Developer ID release builds alike.
+    info:
+      path: Sources/keepresso-helper/Info.plist
+      properties:
+        CFBundleName: keepresso-helper
+        CFBundleIdentifier: sh.gyorgy.keepresso.helper
+    settings:
+      base:
+        PRODUCT_NAME: keepresso-helper
+        # The code-signing identifier both sides verify over XPC; must match
+        # HelperService.helperCodeSignIdentifier.
+        PRODUCT_BUNDLE_IDENTIFIER: sh.gyorgy.keepresso.helper
+        CREATE_INFOPLIST_SECTION_IN_BINARY: true
         SWIFT_VERSION: "5.9"
         ENABLE_HARDENED_RUNTIME: true
         CODE_SIGN_STYLE: Automatic

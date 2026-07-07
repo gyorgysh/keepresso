@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import ServiceManagement
 import UserNotifications
 import KeepressoCore
 
@@ -103,6 +104,13 @@ struct WelcomeView: View {
                 ) {
                     notificationControl
                 }
+                setupRow(
+                    icon: "checkmark.seal",
+                    title: "Administrator helper",
+                    detail: "Approve a small helper once and the privileged extras (lid-closed mode, AWDL pausing) never ask for your password again. Set and forget; removable in Preferences."
+                ) {
+                    helperControl
+                }
             }
 
             Divider()
@@ -122,7 +130,11 @@ struct WelcomeView: View {
         // The one-shot is consumed by actually being seen, not by the attempt
         // to open the window (see `MenuBarLabelView`): if launch is cut short
         // (DMG relocation hand-off) the flag stays false for the real run.
-        .onAppear { model.hasOnboarded = true }
+        .onAppear {
+            model.hasOnboarded = true
+            // Status reads only; showing the window never prompts for anything.
+            model.helper.refresh()
+        }
         .task { notificationStatus = await model.notificationAuthorizationStatus() }
     }
 
@@ -144,6 +156,25 @@ struct WelcomeView: View {
             Button("Enable") {
                 Task { notificationStatus = await model.requestNotificationAuthorization() }
             }
+        }
+    }
+
+    /// The Administrator helper row's trailing control, mirroring
+    /// ``HelperStatusRows`` in the compact welcome layout. Installing acts
+    /// only on the button press, never on the window appearing (the one-time
+    /// approval, with its password ask, happens over in System Settings).
+    @ViewBuilder
+    private var helperControl: some View {
+        switch model.helper.status {
+        case .enabled:
+            Label("Installed", systemImage: "checkmark.circle.fill")
+                .labelStyle(.titleAndIcon)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        case .requiresApproval:
+            Button("Approve\u{2026}") { model.helper.openApprovalSettings() }
+        default:
+            Button("Install\u{2026}") { model.installHelper() }
         }
     }
 

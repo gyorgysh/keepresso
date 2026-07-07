@@ -7,9 +7,28 @@ import KeepressoCore
 /// and its API is callable from any context, so leaving this non-isolated lets
 /// it satisfy the non-isolated protocol without an actor-hop, mirroring
 /// ``LocationAuthorizer``'s reasoning about main-thread confinement.
-final class UserNotificationReminder: ReminderNotifying {
+final class UserNotificationReminder: NSObject, ReminderNotifying, UNUserNotificationCenterDelegate {
     private let center = UNUserNotificationCenter.current()
     private let identifier = "sh.gyorgy.keepresso.reminder"
+
+    override init() {
+        super.init()
+        // Without a delegate, macOS silently drops banners posted while the
+        // app is frontmost. That's exactly when the "needs your password"
+        // notices fire: Keepresso activates itself so the password dialog is
+        // focused, and posts the explanation in the same breath. (The center
+        // holds the delegate weakly; this instance lives as long as the app.)
+        center.delegate = self
+    }
+
+    /// Present notifications even while Keepresso is the active app.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .list, .sound])
+    }
 
     /// Ask for permission to post alerts. No-op after the first decision; safe
     /// to call whenever the user enables reminders.

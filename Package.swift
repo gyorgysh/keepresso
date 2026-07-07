@@ -10,7 +10,11 @@ let package = Package(
         .library(name: "KeepressoCore", targets: ["KeepressoCore"]),
         // The caffeinate-style CLI. Built here for the dev loop; the release
         // app embeds the identically sourced `keepresso-cli` Xcode target.
-        .executable(name: "keepresso", targets: ["keepresso-cli"])
+        .executable(name: "keepresso", targets: ["keepresso-cli"]),
+        // The privileged helper daemon (an SMAppService LaunchDaemon). Same
+        // arrangement: built here for the dev loop, shipped via the
+        // identically sourced `keepresso-helper` Xcode target.
+        .executable(name: "keepresso-helper", targets: ["keepresso-helper"])
     ],
     targets: [
         .target(
@@ -21,6 +25,11 @@ let package = Package(
             name: "keepresso-cli",
             dependencies: ["KeepressoCore"],
             path: "Sources/keepresso-cli"
+        ),
+        .executableTarget(
+            name: "keepresso-helper",
+            dependencies: ["KeepressoCore"],
+            path: "Sources/keepresso-helper"
         ),
         .testTarget(
             name: "KeepressoCoreTests",

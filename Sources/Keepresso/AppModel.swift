@@ -18,11 +18,14 @@ final class AppModel {
     /// Controls closed-display mode (the global `pmset disablesleep` setting that
     /// keeps the Mac awake with the lid shut). Its state is read live from the
     /// system, so nothing about it is persisted in ``KeepressoSettings``.
-    let closedDisplay = ClosedDisplayController()
-    /// Closed-display mode's "only while brewing" automation: a session-scoped
-    /// root helper (one admin prompt per app run) that flips `disablesleep` on
-    /// when the session starts and off when it ends.
-    let closedDisplayAuto = ClosedDisplayAutoController()
+    /// Writes route through the privileged helper daemon when it's installed
+    /// (no prompt) and through the osascript admin prompt otherwise.
+    let closedDisplay: ClosedDisplayController
+    /// Closed-display mode's "only while brewing" automation: flips
+    /// `disablesleep` on when the session starts and off when it ends. Holds
+    /// go through the helper daemon when installed (never a prompt); the
+    /// fallback is the session-scoped root loop (one admin prompt per app run).
+    let closedDisplayAuto: ClosedDisplayAutoController
     /// Backs the headless-readiness Setup screen. Populated on demand via
     /// ``refreshReadiness()``, empty until the Setup window first appears.
     let readiness = SystemReadinessController()
@@ -34,8 +37,12 @@ final class AppModel {
     let streaming = StreamingReadinessController()
     /// The built-in AWDL jitter diagnosis (ping burst + analysis).
     let jitter = JitterTestController()
-    /// The session-scoped AWDL watchdog (root loop behind one admin prompt).
-    let awdl = AWDLWatchdogController()
+    /// The AWDL watchdog: the helper daemon when installed, else the
+    /// session-scoped root loop behind one admin prompt per app run.
+    let awdl: AWDLWatchdogController
+    /// Registration and status of the privileged helper daemon, the one-time
+    /// password alternative to the per-run osascript prompts.
+    let helper: HelperManager
 
     private let store: SettingsStore
     private let notifier: UserNotificationReminder
@@ -52,6 +59,38 @@ final class AppModel {
         self.gate = TriggerGateController(factory: factory)
         let notifier = UserNotificationReminder()
         self.notifier = notifier
+        // The privileged seams route through the helper daemon whenever it's
+        // installed (silent XPC, no prompt) and fall back to the original
+        // osascript admin prompts otherwise. The availability box is the
+        // thread-safe bridge: the manager writes it, the detached-task
+        // closures read it at each engage.
+        let helperClient = XPCHelperClient()
+        let helperManager = HelperManager(client: helperClient)
+        self.helper = helperManager
+        let helperInstalled: @Sendable () -> Bool = { [availability = helperManager.availability] in
+            availability.isEnabled
+        }
+        self.closedDisplay = ClosedDisplayController(
+            control: RoutedSleepControl(
+                helper: helperClient,
+                fallback: PMSetSleepControl(),
+                helperInstalled: helperInstalled
+            )
+        )
+        self.closedDisplayAuto = ClosedDisplayAutoController(
+            launcher: RoutedSleepWatchdog(
+                daemon: HelperDaemonSleepWatchdog(helper: helperClient),
+                fallback: OsascriptSleepWatchdog(),
+                helperInstalled: helperInstalled
+            )
+        )
+        self.awdl = AWDLWatchdogController(
+            launcher: RoutedAWDLWatchdog(
+                daemon: HelperDaemonAWDLWatchdog(helper: helperClient),
+                fallback: OsascriptAWDLWatchdog(),
+                helperInstalled: helperInstalled
+            )
+        )
         var loaded = store.load()
         loaded.seedNewBuiltInPresets() // new built-ins reach existing users once
         self.settings = loaded
@@ -68,6 +107,16 @@ final class AppModel {
         self.virtualDisplay.config = loaded.virtualDisplay
         self.awdl.autoWithGaming = loaded.awdlAutoWithGaming
         self.closedDisplayAuto.onlyWhileBrewing = loaded.closedDisplayOnlyWhileBrewing
+        // With one of the auto features on and no helper installed, this run
+        // can hit a password prompt in the background (e.g. a trigger-started
+        // session engaging "Only while brewing"). Its "Keepresso needs your
+        // password" notification only shows if we're authorized to post it, so
+        // secure that now rather than in the same instant the prompt appears.
+        // A no-op once the user has decided either way.
+        if !helperManager.isInstalled,
+           loaded.closedDisplayOnlyWhileBrewing || loaded.awdlAutoWithGaming {
+            notifier.requestAuthorization()
+        }
         // Launch idle: a manual session waits for the user's toggle, a gated
         // one waits for its conditions (the ticker's reconcile activates it).
         applyTriggerGate()
@@ -698,6 +747,31 @@ final class AppModel {
     /// Non-blocking: the underlying `pmset` read runs off the main thread.
     func refreshClosedDisplay() { Task { await closedDisplay.refresh() } }
 
+    // MARK: - Privileged helper
+
+    /// Whether the helper daemon is installed and approved, so the privileged
+    /// toggles are prompt-free.
+    var helperInstalled: Bool { helper.isInstalled }
+
+    /// Register the helper daemon (opens System Settings for the one-time
+    /// approval when macOS wants it).
+    func installHelper() {
+        helper.install()
+    }
+
+    /// Unregister the helper daemon. Any live holds are released first, so
+    /// nothing stays held by a service that's going away; the osascript
+    /// fallback takes over from the next engage.
+    func removeHelper() {
+        Task {
+            await closedDisplayAuto.stopIfHolding()
+            await awdl.stop()
+            await helper.uninstall()
+        }
+    }
+
+    // MARK: - Closed-display mode
+
     /// Whether the Mac is currently kept awake with the lid closed.
     var closedDisplayEnabled: Bool { closedDisplay.isEnabled ?? false }
 
@@ -713,9 +787,12 @@ final class AppModel {
     ///
     /// Keepresso is a background agent (`LSUIElement`), so it must become the
     /// active app first or the system password dialog can appear unfocused
-    /// behind other windows, leaving the menu in a stuck-looking state.
+    /// behind other windows, leaving the menu in a stuck-looking state. With
+    /// the helper installed there is no dialog, so no focus grab either.
     func setClosedDisplay(_ on: Bool) {
-        NSApp.activate(ignoringOtherApps: true)
+        if !helperInstalled {
+            NSApp.activate(ignoringOtherApps: true)
+        }
         Task { await closedDisplay.set(on) }
     }
 
@@ -731,7 +808,14 @@ final class AppModel {
             settings.closedDisplayOnlyWhileBrewing = newValue
             closedDisplayAuto.onlyWhileBrewing = newValue
             persist()
-            if newValue && !closedDisplayAuto.isAuthorized {
+            // Priming exists to front-load the fallback's password prompt into
+            // this window; with the helper installed no engage ever prompts,
+            // so there is nothing to pre-authorize (and priming through the
+            // daemon would flip the real setting on and off for nothing).
+            if newValue && !closedDisplayAuto.isAuthorized && !helperInstalled {
+                // A fallback engage may later need a password mid-session; be
+                // able to say so even behind other windows.
+                notifier.requestAuthorization()
                 NSApp.activate(ignoringOtherApps: true)
                 let window = NSApp.keyWindow
                 Task {
@@ -767,13 +851,20 @@ final class AppModel {
     func closedDisplayAutoTick() {
         guard settings.closedDisplayOnlyWhileBrewing else { return }
         let brewing = session.isActive
-        // The first engage of an app run prompts for the password (e.g. auto
-        // mode was enabled in a previous run): become the active app on the
-        // session-start edge so the dialog is focused (same reason as
-        // ``setClosedDisplay(_:)``). Edge-only, so a cancelled prompt isn't
+        // Without the helper, the first engage of an app run prompts for the
+        // password (e.g. auto mode was enabled in a previous run): become the
+        // active app on the session-start edge so the dialog is focused (same
+        // reason as ``setClosedDisplay(_:)``), and say what's happening in a
+        // notification, since the dialog itself is easy to miss and names
+        // "osascript", not Keepresso. Edge-only, so a cancelled prompt isn't
         // followed by a focus steal every second for the rest of the session.
-        if brewing, !wasBrewingForClosedDisplay, !closedDisplayAuto.isAuthorized {
+        if brewing, !wasBrewingForClosedDisplay, !closedDisplayAuto.isAuthorized, !helperInstalled {
             NSApp.activate(ignoringOtherApps: true)
+            notifier.notify(
+                title: "Keepresso needs your password",
+                body: "Enter your administrator password to switch closed-display mode on for this session.",
+                sound: true
+            )
         }
         wasBrewingForClosedDisplay = brewing
         Task { await closedDisplayAuto.autoTick(brewing: brewing) }
@@ -818,6 +909,8 @@ final class AppModel {
     func refreshStreaming() {
         Task { await streaming.refresh() }
         refreshAWDLState()
+        // The window shows the helper's install state alongside the watchdog.
+        helper.refresh()
     }
 
     /// Re-read just the AWDL flag and interface state; cheap enough for the
@@ -839,16 +932,19 @@ final class AppModel {
         }
         // The admin prompt steals focus and can bury the window the toggle lives
         // in (the Gaming & Streaming window). Capture it now, while it's key, and
-        // bring it back once the prompt is answered.
-        let window = NSApp.keyWindow
-        if on { NSApp.activate(ignoringOtherApps: true) }
+        // bring it back once the prompt is answered. No prompt can appear when
+        // the helper daemon is installed (or the fallback loop is already
+        // authorized this run), so skip the dance there.
+        let dance = on && !helperInstalled && !awdl.isAuthorized
+        let window = dance ? NSApp.keyWindow : nil
+        if dance { NSApp.activate(ignoringOtherApps: true) }
         Task {
             if on {
                 await awdl.start()
             } else {
                 await awdl.stop()
             }
-            if on {
+            if dance {
                 NSApp.activate(ignoringOtherApps: true)
                 window?.makeKeyAndOrderFront(nil)
             }
@@ -863,10 +959,13 @@ final class AppModel {
             settings.awdlAutoWithGaming = newValue
             awdl.autoWithGaming = newValue
             persist()
-            // Pre-authorize the root helper now, in this window, so the first
-            // game later doesn't pop a password dialog mid-play. One prompt here,
-            // prompt-free auto pausing afterward. No-op if already authorized.
-            if newValue && !awdl.isAuthorized {
+            // Pre-authorize the fallback's root loop now, in this window, so
+            // the first game later doesn't pop a password dialog mid-play. One
+            // prompt here, prompt-free auto pausing afterward. No-op if
+            // already authorized; pointless with the helper daemon installed
+            // (no engage ever prompts, and priming through the daemon would
+            // blip awdl0 down and up for nothing).
+            if newValue && !awdl.isAuthorized && !helperInstalled {
                 NSApp.activate(ignoringOtherApps: true)
                 let window = NSApp.keyWindow
                 Task {
@@ -924,7 +1023,7 @@ final class AppModel {
     private func notifyAWDLEdges(gameInFront: Bool, gamingActive: Bool) {
         defer { wasGameInFront = gameInFront; wasGamingActive = gamingActive }
         if gameInFront, !wasGameInFront {
-            if !awdl.isAuthorized, !awdl.isRunning {
+            if !awdl.isAuthorized, !awdl.isRunning, !helperInstalled {
                 notifier.notify(
                     title: "Keepresso needs your password",
                     body: "Enter your administrator password to pause AWDL for this game.",

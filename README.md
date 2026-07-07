@@ -71,8 +71,9 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   AWDL (AirDrop, Handoff, Sidecar) about once a second, which shows up as
   50-100 ms ping spikes mid-game or mid-stream. A dedicated window diagnoses
   it with a built-in **jitter test**, and fixes it with a session-scoped
-  **AWDL pause**: password once per launch, instant toggling after, and
-  everything restores itself the moment you stop (even after a crash). An
+  **AWDL pause**: no password at all with the administrator helper installed
+  (once per launch without it), instant toggling, and everything restores
+  itself the moment you stop (even after a crash). An
   **automatic mode** watches for a game (or a cloud-gaming app) on its own with
   no trigger setup, authorizes once up front so it never pops a password dialog
   over a running game, and shows a live status with a grace countdown when a
@@ -121,7 +122,17 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   inside a closed lid. An optional **"Only while brewing"** mode ties it to the
   session instead of leaving it on globally: on when a keep-awake session
   starts, off when it ends (or the app quits, even after a crash), with the
-  password asked once per app run.
+  password asked once per app run, or never with the administrator helper.
+- 🔑 **One password, ever.** An optional **administrator helper**, a small
+  system service installed from Preferences > General (or the welcome screen),
+  handles the privileged switches for Keepresso: closed-display mode and the
+  AWDL pause become instant and silent, with no password prompt on any launch.
+  macOS asks for your password once, when you approve the helper under Login
+  Items, and the approval survives restarts and updates. The helper can only
+  flip those specific switches, restores everything if the app quits or
+  crashes, puts the `keepresso` CLI on PATH for DMG installs, and can be
+  removed at any time. Without it, everything still works the old way, with a
+  once-per-run prompt (now always announced by a notification).
 - 🔔 **Reminders and end actions.** A "still brewing" notification (with an
   optional sound) after _N_ minutes, one-time or recurring, so a forgotten
   session can't quietly drain the battery. Plus an optional notification and
@@ -219,16 +230,16 @@ Click the cup in the menu bar to open Keepresso.
   indefinitely, a preset (15 minutes, 1 hour, 4 hours), any custom duration, or
   until a time of day. The cup fills and animates while brewing.
 - **Keep awake with lid closed.** Toggle it right from the menu before you shut
-  the lid or unplug. It asks for your administrator password once, because it
-  flips a system setting (`pmset disablesleep`), and works on power or battery.
-  Turn it off when you're done; on battery in a bag it can drain and heat up.
-  Or set it to **"Only while brewing"** in Preferences > General and it follows
-  the session on its own: on at session start, off at session end or app quit,
-  one password prompt per app run.
+  the lid or unplug. It flips a system setting (`pmset disablesleep`), so it
+  needs administrator rights: silent with the helper installed, one password
+  ask without it. Works on power or battery; turn it off when you're done, on
+  battery in a bag it can drain and heat up. Or set it to **"Only while
+  brewing"** in Preferences > General and it follows the session on its own:
+  on at session start, off at session end or app quit.
 - **Preferences** (⌘,) holds the set-and-forget configuration, in tabs:
-  - **General**: what to keep awake, menu-bar countdown, battery auto-pause,
-    closed-display mode, launch at login, settings backup (export/import), and
-    the welcome screen.
+  - **General**: what to keep awake, the administrator helper, menu-bar
+    countdown, battery auto-pause, closed-display mode, launch at login,
+    settings backup (export/import), and the welcome screen.
   - **Triggers**: turn on rule-based activation, apply a preset, and build your
     rule set.
   - **Reminder**: a one-time or recurring "still brewing" alert, with a sound.
@@ -267,9 +278,11 @@ Triggers), so the command actually takes effect.
 
 ### The `keepresso` command-line tool
 
-The app bundle ships a caffeinate-style CLI (the Homebrew cask links it onto
-your PATH). It drives the app for session commands and can also hold its own
-assertion when you need to block in a pipeline:
+The app bundle ships a caffeinate-style CLI. The Homebrew cask links it onto
+your PATH; on a DMG install, the administrator helper creates the
+`/usr/local/bin/keepresso` link for you. It drives the app for session
+commands and can also hold its own assertion when you need to block in a
+pipeline:
 
 ```sh
 keepresso start --for 90     # tell the app to brew for 90 minutes

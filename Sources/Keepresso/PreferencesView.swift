@@ -55,6 +55,9 @@ struct PreferencesView: View {
         .frame(width: 520, height: 560)
         .tint(.keepressoBrew)
         .glassWindowBackground()
+        // The helper can be approved (or revoked) over in System Settings at
+        // any time; re-read on every open so the section tells the truth.
+        .onAppear { model.helper.refresh() }
     }
 
     @ViewBuilder
@@ -184,6 +187,17 @@ private struct GeneralTab: View {
                 Toggle("Prevent display sleep", isOn: optionBinding(\.preventDisplaySleep))
                 Toggle("Prevent system sleep", isOn: optionBinding(\.preventSystemSleep))
             }
+            // High up on purpose: this is the one-time set-and-forget step that
+            // makes every privileged switch below (and AWDL pausing) silent.
+            Section {
+                HelperStatusRows(model: model)
+            } header: {
+                Text("Administrator helper")
+            } footer: {
+                Text("A small system service that handles the privileged switches (closed-display mode below, AWDL pausing in Gaming & Streaming) for Keepresso, so no password prompts ever again: macOS asks once when you approve it under Login Items, and the approval survives restarts and updates. It can only flip those specific switches, everything it changes is restored if the app quits or crashes, and you can remove it here at any time. It also puts the keepresso command-line tool on your PATH (Homebrew installs already have it). After removal, System Settings can keep showing a stale Login Items row until macOS refreshes its list; the status shown here is the real one.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Section {
                 Toggle("Keep me active", isOn: Binding(
                     get: { model.simulateUserActivity },
@@ -230,7 +244,7 @@ private struct GeneralTab: View {
                     set: { model.setClosedDisplay($0) }
                 ))
                 .disabled(model.closedDisplayBusy)
-                if model.closedDisplayBusy {
+                if model.closedDisplayBusy && !model.helperInstalled {
                     AdminAuthNote(purpose: "keep the Mac awake with the lid closed")
                 }
                 if let error = model.closedDisplayError {
@@ -243,7 +257,7 @@ private struct GeneralTab: View {
                     set: { model.closedDisplayOnlyWhileBrewing = $0 }
                 ))
                 .disabled(model.closedDisplayAutoBusy)
-                if model.closedDisplayAutoBusy {
+                if model.closedDisplayAutoBusy && !model.helperInstalled {
                     AdminAuthNote(purpose: "switch closed-display mode with the session")
                 }
                 if let error = model.closedDisplayAutoError {
@@ -254,7 +268,7 @@ private struct GeneralTab: View {
             } header: {
                 Text("Closed-display mode")
             } footer: {
-                Text("Keeps running with the lid shut and no external display, on power or battery. The display itself still turns off when the lid closes (unless an external display is attached), so it's not lighting up uselessly inside the closed lid. Changing this needs your administrator password and flips a system setting (pmset disablesleep), so it stays in effect until you turn it off. On battery and closed it can still drain the battery over time, so don't leave it on in a bag. With \u{201C}Only while brewing\u{201D} on, Keepresso instead switches it on when a keep-awake session starts and back off when it ends or the app quits, asking for your password once per app run.")
+                Text("Keeps running with the lid shut and no external display, on power or battery. The display itself still turns off when the lid closes (unless an external display is attached), so it's not lighting up uselessly inside the closed lid. Changing this flips a system setting (pmset disablesleep), so it stays in effect until you turn it off. On battery and closed it can still drain the battery over time, so don't leave it on in a bag. With \u{201C}Only while brewing\u{201D} on, Keepresso instead switches it on when a keep-awake session starts and back off when it ends or the app quits. Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password (once per app run for \u{201C}Only while brewing\u{201D}).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
