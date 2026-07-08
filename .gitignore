@@ -34,8 +34,8 @@ ExportOptions.local.plist
 # macOS
 .DS_Store
 
-# Claude Code local settings
-.claude/settings.local.json
+# Claude Code workspace (skills, local settings): internal, kept out of git
+.claude/
 
 # Internal progress tracker (not for the public repo)
 PROGRESS.local.md

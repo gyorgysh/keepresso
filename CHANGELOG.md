@@ -3,6 +3,34 @@
 All notable changes to Keepresso are documented here. Versions follow
 [Semantic Versioning](https://semver.org).
 
+## 1.11.2
+
+Theme: the helper stays on.
+
+### Fixed
+
+- **The helper's background switch no longer keeps turning itself off.** Old
+  copies of Keepresso left in the Trash by an update (Homebrew upgrades and
+  manual reinstalls both put one there) made macOS re-disable the helper
+  minutes after every repair or reinstall, over and over. Keepresso now finds
+  those stale copies, by remembering where it last ran from and by reading
+  macOS's own background-item records, and deletes them by itself before
+  repairing, so the fix finally sticks.
+- **The repair window tells the truth now.** Before offering a reinstall,
+  Keepresso checks the system's records: if the real problem is that the
+  background switch is off, the window says exactly that (System Settings,
+  Login Items & Extensions, App Background Activity) and flips to "All set"
+  by itself the moment you turn it on, even when macOS's status API never
+  notices the change.
+- **Removing the helper explains what you'll see.** After a removal, System
+  Settings can keep showing a leftover Keepresso row under App Background
+  Activity until macOS refreshes its list (a restart clears it). The status
+  in Keepresso now says so instead of looking like the removal failed.
+- **Development builds keep their hands off.** A copy of Keepresso running
+  from outside the Applications folder no longer touches the helper's
+  registration at all; even a status check from one could hand the
+  registration to the wrong copy and get the helper disabled.
+
 ## 1.11.1
 
 Theme: the helper heals itself.
