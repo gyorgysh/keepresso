@@ -786,6 +786,28 @@ final class AppModel {
     /// dismisses the window.
     private(set) var helperAttention: HelperAttention?
 
+    /// Watches for the approval landing while the attention window shows the
+    /// switch-it-on step. The manager polls `SMAppService.status`, but that
+    /// status can sit at `.enabled` the whole time (BTM disabled the daemon
+    /// record behind its back), so the flip is only visible to a ping.
+    @ObservationIgnored private var approvalRecoveryWatch: Task<Void, Never>?
+
+    private func watchForApprovalRecovery() {
+        approvalRecoveryWatch?.cancel()
+        approvalRecoveryWatch = Task { [weak self] in
+            // Five minutes of deciding time, one cheap ping per pass.
+            for _ in 0..<150 {
+                try? await Task.sleep(for: .seconds(2))
+                guard let self, !Task.isCancelled else { return }
+                guard self.helperAttention == .needsApproval else { return }
+                if await self.helper.daemonResponds() {
+                    await self.verifyHelperAndFollowUp()
+                    return
+                }
+            }
+        }
+    }
+
     /// Check that the installed helper daemon actually responds, repairing a
     /// stale registration when it doesn't (see
     /// ``HelperManager/verifyAndRepairIfNeeded()``). Called at launch, where
@@ -796,6 +818,11 @@ final class AppModel {
     }
 
     private func verifyHelperAndFollowUp() async {
+        // First clear any previous copy of the app that an update pushed into
+        // the Trash: BTM's bookmark keeps resolving the helper's record into
+        // the Trash and disabling the daemon while one is there, so a repair
+        // before the sweep wouldn't stick.
+        await Task.detached { StaleBundleCleaner.sweepAndRemember() }.value
         switch await helper.verifyAndRepairIfNeeded() {
         case .healthy:
             helperAttention = nil
@@ -815,12 +842,13 @@ final class AppModel {
             // behind whatever the user is doing at login.
             notifier.notify(
                 title: "Keepresso needs a new approval",
-                body: "macOS lost the helper's registration. Turn Keepresso back on under Login Items in System Settings to keep the password-free helper.",
+                body: "macOS turned Keepresso's background switch off. Turn it back on under Login Items & Extensions in System Settings to keep the password-free helper.",
                 sound: true
             )
         case .broken:
             helperAttention = .broken
         }
+        if helperAttention == .needsApproval { watchForApprovalRecovery() }
     }
 
     /// The user closed the attention window; stop pointing at it. The helper's
@@ -834,6 +862,9 @@ final class AppModel {
     /// `requiresApproval`, which the attention window walks the user through.
     func reinstallHelper() {
         Task {
+            // The reinstall lands on a record BTM will invalidate again if an
+            // old copy still sits in the Trash; sweep before rebuilding.
+            await Task.detached { StaleBundleCleaner.sweepAndRemember() }.value
             await closedDisplayAuto.stopIfHolding()
             await awdl.stop()
             await helper.uninstall()

@@ -73,9 +73,28 @@ final class HelperManager {
     /// /Applications. Seen live: a Debug run re-registered the record and left
     /// the real install pointing at DerivedData.
     @ObservationIgnored private let canRepair = HelperService.selfTeamIdentifier() != nil
+    /// Whether this copy may talk to Background Task Management at all.
+    /// Reading `SMAppService.status` is not passive: BTM repoints the app's
+    /// record at whichever same-signed copy contacted it last, so a Debug
+    /// build in DerivedData that merely checks the status steals the record
+    /// from the installed copy, and BTM then disables the daemon when it
+    /// revalidates against the wrong bundle (seen live in the unified log:
+    /// `_bundleURLForAuditToken ... URL to: .../DerivedData/...`). Only the
+    /// copy in an Applications folder manages the daemon; any other stays
+    /// entirely hands-off, so its helper features fall back to the admin
+    /// prompt path. Set the `KeepressoManageHelperAnywhere` default to test
+    /// helper flows from a dev build on purpose.
+    @ObservationIgnored private let managesDaemon =
+        AppRelocator.runsFromApplications
+        || UserDefaults.standard.bool(forKey: "KeepressoManageHelperAnywhere")
+    /// Reads BTM's own records (`sfltool dumpbtm`, prompt-free). They are the
+    /// only honest view: `SMAppService.status` reported `.enabled` on a live
+    /// machine while the daemon record underneath sat disabled.
+    @ObservationIgnored private let dumper: BTMDumpProviding
 
-    init(client: XPCHelperClient) {
+    init(client: XPCHelperClient, dumper: BTMDumpProviding = SFLToolBTMDumper()) {
         self.client = client
+        self.dumper = dumper
         refresh()
     }
 
@@ -84,6 +103,7 @@ final class HelperManager {
 
     /// Re-read the daemon's registration status and mirror it for the seams.
     func refresh() {
+        guard managesDaemon else { return }
         let wasInstalled = status == .enabled
         status = service.status
         availability.set(status == .enabled)
@@ -99,6 +119,10 @@ final class HelperManager {
     /// one-time approval: we open the Login Items pane for them and poll until
     /// they've decided.
     func install() {
+        guard managesDaemon else {
+            lastError = "This copy of Keepresso isn't in the Applications folder, so it leaves the helper alone. Install from /Applications."
+            return
+        }
         lastError = nil
         do {
             try service.register()
@@ -128,6 +152,7 @@ final class HelperManager {
     /// Note System Settings can keep a stale row under Login Items for a
     /// while after a successful unregister; the status here is authoritative.
     func uninstall() async {
+        guard managesDaemon else { return }
         lastError = nil
         approvalPoll?.cancel()
         do {
@@ -138,6 +163,17 @@ final class HelperManager {
         refresh()
         if status == .enabled, lastError == nil {
             lastError = "macOS still reports the helper as registered. Try again, or restart the Mac."
+        }
+        // A clean unregister often leaves a disabled tombstone in BTM's
+        // records, and System Settings keeps showing the app's row off it.
+        // That's cosmetic (nothing can launch), clears at the latest with a
+        // restart, and nothing programmatic can remove it: BTM's records and
+        // switches are deliberately user-only, root included (sfltool
+        // resetbtm would reset every app's approvals). Say so, instead of
+        // letting the lingering row read as a failed removal.
+        if status != .enabled, lastError == nil,
+           let findings = await inspectRecords(), findings.daemonState != .missing {
+            lastError = "Removed. System Settings may keep showing Keepresso under App Background Activity until macOS refreshes its list; restarting the Mac clears the leftover row."
         }
     }
 
@@ -171,6 +207,24 @@ final class HelperManager {
         // A dev build stays hands-off: no repair, no attention window. The
         // installed release copy owns the registration.
         guard canRepair else { return .notApplicable }
+        // Ask BTM's records what is actually wrong before churning the
+        // registration; two of the states no re-register can fix. An old
+        // copy of the app in the Trash keeps poisoning the record (BTM's
+        // bookmark resolves there and it disables the daemon on every
+        // revalidation), so delete it. And a daemon whose Background
+        // Activity switch is off can only be revived by the user: route to
+        // the approval step instead of claiming a reinstall would help.
+        let findings = await inspectRecords()
+        if let findings {
+            if !findings.staleCopyPaths.isEmpty {
+                let paths = findings.staleCopyPaths
+                await Task.detached { StaleBundleCleaner.removeTrashedCopies(at: paths) }.value
+            }
+            if findings.daemonState == .disabled {
+                lastError = nil
+                return .needsApproval
+            }
+        }
         guard !repairAttempted else { return .broken }
         repairAttempted = true
         // First try re-submitting the registration in place: no approval can
@@ -195,7 +249,12 @@ final class HelperManager {
             lastError = nil
             return .repaired
         }
-        lastError = "The helper isn't responding. Remove it and install it again."
+        lastError = switch findings?.daemonState {
+        case .disallowed:
+            "macOS is refusing the helper's registration outright. Reinstall the helper; if that doesn't take, restart the Mac and try once more."
+        default:
+            "The helper isn't responding. If an old copy of Keepresso is in the Trash, empty the Trash first: macOS keeps disabling the helper while one is there. Then reinstall the helper."
+        }
         return .broken
     }
 
@@ -204,6 +263,27 @@ final class HelperManager {
     private func pings() async -> Bool {
         let client = self.client
         return await Task.detached { client.ping() }.value
+    }
+
+    /// One ping, for callers watching a recovery (the attention window's
+    /// approval step, where the status alone can't signal success).
+    func daemonResponds() async -> Bool {
+        await pings()
+    }
+
+    /// This app's slice of BTM's records, or nil where the dump is
+    /// unavailable (root-gated on some macOS versions).
+    private func inspectRecords() async -> BTMFindings? {
+        guard let bundleID = Bundle.main.bundleIdentifier else { return nil }
+        let dumper = self.dumper
+        return await Task.detached {
+            guard let dump = dumper.dumpBTM() else { return nil }
+            return BTMInspection.findings(
+                inDump: dump,
+                bundleIdentifier: bundleID,
+                helperLabel: HelperService.machServiceLabel
+            )
+        }.value
     }
 
     /// Open System Settings at the approval toggle again, for when the user

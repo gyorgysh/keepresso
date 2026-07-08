@@ -14,6 +14,14 @@ enum AppRelocator {
     /// in a process that is about to die.
     private(set) static var isRelocating = false
 
+    /// True when this copy runs from an Applications folder (system or user):
+    /// the installed copy, as opposed to an Xcode build in DerivedData or a
+    /// stray copy somewhere. The `SMAppService` wrappers check this before
+    /// touching Background Task Management at all.
+    static var runsFromApplications: Bool {
+        Bundle.main.bundleURL.deletingLastPathComponent().lastPathComponent == "Applications"
+    }
+
     static func relocateIfNeeded() {
         let fm = FileManager.default
         let bundleURL = Bundle.main.bundleURL

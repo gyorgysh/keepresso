@@ -91,9 +91,9 @@ struct HelperAttentionView: View {
         case .checking:
             "Making sure Keepresso's helper is awake and answering."
         case .needsApproval:
-            "macOS lost the helper's registration, so it wants your one-time approval again: in System Settings, under Login Items, turn Keepresso's background switch on. Everything is password-free again right after."
+            "macOS turned the helper's background switch off, so it needs your approval again: in System Settings, under Login Items & Extensions, find Keepresso in App Background Activity and turn it on. Everything is password-free again right after."
         case .broken:
-            "Keepresso repaired the helper's registration, but it still isn't responding. Reinstalling it usually clears this up; nothing else about your setup changes."
+            "Keepresso repaired the helper's registration, but macOS keeps disabling it. An old copy of Keepresso in the Trash is the usual cause: empty the Trash, then reinstall the helper below. Nothing else about your setup changes."
         case .allSet:
             "The helper is back. Closed-display mode and AWDL pausing work without password prompts again."
         }
