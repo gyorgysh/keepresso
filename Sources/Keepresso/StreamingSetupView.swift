@@ -203,7 +203,24 @@ struct StreamingSetupView: View {
                 set: { model.awdlAutoWithGaming = $0 }
             ))
             .toggleStyle(.switch)
-            Text("Watches for a game (or a cloud-gaming app like GeForce NOW) as the active window and pauses AWDL on its own, then lifts the pause about a minute after you switch away. It only counts while the game is in front and in use, not just running in the background. Without the administrator helper, turning this on asks for your password once per app run, right now rather than mid-game; with the helper it never asks at all. No trigger setup needed: leave this on and forget it.")
+            Text("Watches for a game (or a cloud-gaming app like GeForce NOW) as the active window and pauses AWDL on its own, then lifts the pause a little after you switch away (the delay below). It only counts while the game is in front and in use, not just running in the background. Without the administrator helper, turning this on asks for your password once per app run, right now rather than mid-game; with the helper it never asks at all. No trigger setup needed: leave this on and forget it.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Picker("Resume AWDL after leaving the game", selection: Binding(
+                get: { model.awdlGraceSeconds },
+                set: { model.awdlGraceSeconds = $0 }
+            )) {
+                Text("10 seconds").tag(TimeInterval(10))
+                Text("30 seconds").tag(TimeInterval(30))
+                Text("1 minute").tag(TimeInterval(60))
+                Text("2 minutes").tag(TimeInterval(120))
+                Text("5 minutes").tag(TimeInterval(300))
+            }
+            .pickerStyle(.menu)
+            .disabled(!model.awdlAutoWithGaming)
+            Text("How long the pause lingers after the game stops being the active window, so a quick alt-tab doesn't flap the radios. Shorter brings AirDrop and Handoff back faster; longer rides out launchers and loading screens.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

@@ -306,3 +306,44 @@ private final class FakeAWDLReader: AWDLStateReading, @unchecked Sendable {
     let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: data)
     #expect(decoded.awdlAutoWithGaming)
 }
+
+@Test func awdlGraceSettingDefaultsToAMinuteAndRoundTrips() throws {
+    // Absent in older saved blobs: falls back to the pre-picker minute.
+    let empty = try JSONDecoder().decode(KeepressoSettings.self, from: "{}".data(using: .utf8)!)
+    #expect(empty.awdlGraceSeconds == 60)
+
+    var settings = KeepressoSettings.default
+    settings.awdlGraceSeconds = 300
+    let data = try JSONEncoder().encode(settings)
+    let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: data)
+    #expect(decoded.awdlGraceSeconds == 300)
+}
+
+@Test func gracePeriodRetunesLive() {
+    // The picker changes the grace mid-run; a linger already counting down
+    // measures against the new value on the next read, both shortening and
+    // lengthening.
+    var now = Date(timeIntervalSinceReferenceDate: 0)
+    let game = StubGamingTrigger()
+    let watcher = GracePeriodTrigger(wrapping: game, grace: 60, now: { now })
+
+    game.active = true
+    watcher.tick()
+    game.active = false
+    now += 30
+    watcher.tick()
+    #expect(watcher.isSatisfied()) // 30s < 60s: lingering
+
+    watcher.grace = 10
+    #expect(!watcher.isSatisfied()) // 30s > 10s: the shorter pick applies now
+
+    watcher.grace = 120
+    #expect(watcher.isSatisfied()) // 30s < 120s: and so does a longer one
+}
+
+private final class StubGamingTrigger: Trigger {
+    var active = false
+    var label: String { "game" }
+    func tick() {}
+    func isSatisfied() -> Bool { active }
+}

@@ -106,6 +106,7 @@ final class AppModel {
         self.disk.config = loaded.diskKeepAlive
         self.virtualDisplay.config = loaded.virtualDisplay
         self.awdl.autoWithGaming = loaded.awdlAutoWithGaming
+        self.gamingWatcher.grace = loaded.awdlGraceSeconds
         self.closedDisplayAuto.onlyWhileBrewing = loaded.closedDisplayOnlyWhileBrewing
         // With one of the auto features on and no helper installed, this run
         // can hit a password prompt in the background (e.g. a trigger-started
@@ -1064,12 +1065,26 @@ final class AppModel {
 
     /// Watches for a frontmost game on its own, independent of the trigger
     /// config, so AWDL auto-pause just works without the user first enabling
-    /// triggers and adding a "Playing a game" rule. Wrapped in a short grace so
-    /// alt-tabbing out of a game doesn't immediately drop the pause.
+    /// triggers and adding a "Playing a game" rule. Wrapped in a grace so
+    /// alt-tabbing out of a game doesn't immediately drop the pause; the
+    /// window length is the user's ``awdlGraceSeconds`` (init overwrites this
+    /// placeholder with the persisted value).
     @ObservationIgnored private let gamingWatcher = GracePeriodTrigger(
         wrapping: GamingTrigger(),
         grace: 60
     )
+
+    /// How long the auto pause lingers after the game leaves the front, in
+    /// seconds. Persisted; applies immediately, including to a linger that is
+    /// already counting down.
+    var awdlGraceSeconds: TimeInterval {
+        get { settings.awdlGraceSeconds }
+        set {
+            settings.awdlGraceSeconds = newValue
+            gamingWatcher.grace = newValue
+            persist()
+        }
+    }
 
     /// Whether auto mode posts a notification when it pauses (a game is detected)
     /// and resumes AWDL. A password-required notice is always sent regardless.

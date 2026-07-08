@@ -37,6 +37,10 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     /// AWDL, and when it resumes. A password-required notice is always sent
     /// regardless of this. Off by default.
     public var awdlNotifications: Bool
+    /// How long the AWDL auto pause lingers after the game leaves the front,
+    /// in seconds, so alt-tabbing out doesn't immediately resume AWDL.
+    /// One minute by default.
+    public var awdlGraceSeconds: TimeInterval
     /// Whether closed-display mode follows the keep-awake session, on when it
     /// starts and off when it ends, instead of staying on until manually
     /// turned off (see ``ClosedDisplayAutoController/onlyWhileBrewing``).
@@ -76,6 +80,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         showCountdownInMenuBar: Bool = false,
         awdlAutoWithGaming: Bool = false,
         awdlNotifications: Bool = false,
+        awdlGraceSeconds: TimeInterval = 60,
         closedDisplayOnlyWhileBrewing: Bool = false,
         hotKey: HotKeyShortcut? = nil,
         startOnLaunch: Bool = false,
@@ -98,6 +103,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.showCountdownInMenuBar = showCountdownInMenuBar
         self.awdlAutoWithGaming = awdlAutoWithGaming
         self.awdlNotifications = awdlNotifications
+        self.awdlGraceSeconds = awdlGraceSeconds
         self.closedDisplayOnlyWhileBrewing = closedDisplayOnlyWhileBrewing
         self.hotKey = hotKey
         self.startOnLaunch = startOnLaunch
@@ -161,6 +167,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         showCountdownInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showCountdownInMenuBar) ?? false
         awdlAutoWithGaming = try c.decodeIfPresent(Bool.self, forKey: .awdlAutoWithGaming) ?? false
         awdlNotifications = try c.decodeIfPresent(Bool.self, forKey: .awdlNotifications) ?? false
+        awdlGraceSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .awdlGraceSeconds) ?? 60
         closedDisplayOnlyWhileBrewing = try c.decodeIfPresent(Bool.self, forKey: .closedDisplayOnlyWhileBrewing) ?? false
         hotKey = try c.decodeIfPresent(HotKeyShortcut.self, forKey: .hotKey)
         startOnLaunch = try c.decodeIfPresent(Bool.self, forKey: .startOnLaunch) ?? false

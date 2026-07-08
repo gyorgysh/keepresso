@@ -213,7 +213,10 @@ public final class ProcessTrigger: Trigger {
 /// non-positive grace makes it a transparent pass-through.
 public final class GracePeriodTrigger: Trigger {
     private let wrapped: Trigger
-    private let grace: TimeInterval
+    /// The linger window. Mutable so a host can retune it live (the AWDL auto
+    /// grace is user-configurable); an in-flight linger simply measures against
+    /// the new value on the next read.
+    public var grace: TimeInterval
     private let now: () -> Date
     private var lastSatisfiedAt: Date?
 
