@@ -53,6 +53,9 @@ final class HelperManager {
 
     private(set) var status: SMAppService.Status = .notRegistered
     private(set) var lastError: String?
+    /// True while a health check (and possibly a repair) is in flight, so the
+    /// attention window can show progress instead of a stale verdict.
+    private(set) var isChecking = false
 
     /// Polls while the user is over in System Settings deciding, so the UI
     /// flips to "installed" by itself once they approve.
@@ -148,7 +151,9 @@ final class HelperManager {
         if let running = healthCheck { return await running.value }
         let check = Task { await self.runHealthCheck() }
         healthCheck = check
+        isChecking = true
         let health = await check.value
+        isChecking = false
         healthCheck = nil
         return health
     }

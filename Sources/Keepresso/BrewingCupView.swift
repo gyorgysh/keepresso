@@ -13,6 +13,11 @@ struct BrewingCupView: View {
     /// so the layout doesn't jump.
     var isActive: Bool
 
+    /// Size multiplier over the menu-header size (22 pt wide). Everything
+    /// scales together (paths, stroke widths, drift), so a window header can
+    /// show the same mark large and still crisp.
+    var scale: CGFloat = 1
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// One full rise-and-dissolve cycle per wisp, staggered thirds apart.
@@ -20,11 +25,11 @@ struct BrewingCupView: View {
     private static let wispDelays: [TimeInterval] = [0, 1.15, 2.3]
 
     var body: some View {
-        VStack(spacing: 1) {
+        VStack(spacing: 1 * scale) {
             steam
-                .frame(width: 22, height: 9)
+                .frame(width: 22 * scale, height: 9 * scale)
             BrandCupGlyph(filled: isActive)
-                .frame(width: 22, height: 16.6)
+                .frame(width: 22 * scale, height: 16.6 * scale)
         }
         .accessibilityHidden(true) // the header text next to it carries the status
     }
@@ -46,14 +51,14 @@ struct BrewingCupView: View {
 
     private func wisps(state: (TimeInterval) -> (opacity: Double, rise: CGFloat)) -> some View {
         let states = Self.wispDelays.map(state)
-        return HStack(alignment: .bottom, spacing: 3.5) {
+        return HStack(alignment: .bottom, spacing: 3.5 * scale) {
             ForEach(0 ..< 3) { index in
                 let wisp = states[index]
                 SteamWisp()
-                    .stroke(Color.keepressoSteam, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
-                    .frame(width: 4, height: index == 1 ? 8 : 6.5)
+                    .stroke(Color.keepressoSteam, style: StrokeStyle(lineWidth: 1.5 * scale, lineCap: .round))
+                    .frame(width: 4 * scale, height: (index == 1 ? 8 : 6.5) * scale)
                     .opacity(wisp.opacity)
-                    .offset(y: wisp.rise)
+                    .offset(y: wisp.rise * scale)
             }
         }
     }

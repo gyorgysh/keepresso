@@ -37,6 +37,13 @@ struct KeepressoApp: App {
         }
         .windowResizability(.contentSize)
 
+        // Opened automatically (from `MenuBarLabelView`) when the helper
+        // daemon's self-heal needs the user: approve once more, or reinstall.
+        Window("Keepresso Helper", id: Self.helperWindowID) {
+            HelperAttentionView(model: appDelegate.model)
+        }
+        .windowResizability(.contentSize)
+
         // Shown once on first launch (see `MenuBarLabelView`) and reopenable from
         // the menu via `openWindow(id: "welcome")`.
         Window("Welcome to Keepresso", id: Self.welcomeWindowID) {
@@ -51,6 +58,7 @@ struct KeepressoApp: App {
     static let preferencesWindowID = "preferences"
     static let aboutWindowID = "about"
     static let welcomeWindowID = "welcome"
+    static let helperWindowID = "helper"
 }
 
 /// The menu-bar icon, plus a one-shot trigger that opens the welcome window on
@@ -76,6 +84,14 @@ private struct MenuBarLabelView: View {
                 guard !AppRelocator.isRelocating else { return }
                 NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: KeepressoApp.welcomeWindowID)
+            }
+            // The helper self-heal got stuck on a step only the user can do:
+            // walk them through it. This view is the app's one always-alive
+            // view, so the edge is caught no matter what else is open.
+            .onChange(of: model.helperAttention) { _, attention in
+                guard attention != nil else { return }
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: KeepressoApp.helperWindowID)
             }
     }
 }

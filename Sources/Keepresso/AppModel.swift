@@ -770,6 +770,21 @@ final class AppModel {
         }
     }
 
+    /// Why the helper attention window is up: the automatic repair got stuck
+    /// on something only the user can do.
+    enum HelperAttention: Equatable {
+        /// macOS wants the one-time approval again (Login Items switch).
+        case needsApproval
+        /// The daemon stayed unresponsive after a repair; offer a reinstall.
+        case broken
+    }
+
+    /// Set when the helper self-heal needs the user (approve again, or
+    /// reinstall); the always-alive menu bar label opens the attention window
+    /// on this edge. Cleared once a check comes back healthy or the user
+    /// dismisses the window.
+    private(set) var helperAttention: HelperAttention?
+
     /// Check that the installed helper daemon actually responds, repairing a
     /// stale registration when it doesn't (see
     /// ``HelperManager/verifyAndRepairIfNeeded()``). Called at launch, where
@@ -781,19 +796,48 @@ final class AppModel {
 
     private func verifyHelperAndFollowUp() async {
         switch await helper.verifyAndRepairIfNeeded() {
-        case .notApplicable, .healthy, .broken:
-            break // a broken helper shows up via helper.lastError in Preferences
+        case .healthy:
+            helperAttention = nil
+        case .notApplicable:
+            // Mid-reinstall the status parks at requiresApproval; keep the
+            // window on the approval step rather than declaring success.
+            helperAttention = helper.awaitingApproval ? .needsApproval : nil
         case .repaired:
             // Healed silently; let features a failed engage put on hold try
             // again on their next tick instead of waiting out the session.
+            helperAttention = nil
             closedDisplayAuto.retryEngage()
             awdl.retryEngage()
         case .needsApproval:
+            helperAttention = .needsApproval
+            // Also say so in a notification: the attention window can land
+            // behind whatever the user is doing at login.
             notifier.notify(
                 title: "Keepresso needs a new approval",
                 body: "macOS lost the helper's registration. Turn Keepresso back on under Login Items in System Settings to keep the password-free helper.",
                 sound: true
             )
+        case .broken:
+            helperAttention = .broken
+        }
+    }
+
+    /// The user closed the attention window; stop pointing at it. The helper's
+    /// state itself stays visible in Preferences.
+    func dismissHelperAttention() {
+        helperAttention = nil
+    }
+
+    /// A fresh start for a helper the automatic repair couldn't revive:
+    /// release any holds, unregister, and register again. May land in
+    /// `requiresApproval`, which the attention window walks the user through.
+    func reinstallHelper() {
+        Task {
+            await closedDisplayAuto.stopIfHolding()
+            await awdl.stop()
+            await helper.uninstall()
+            helper.install()
+            await verifyHelperAndFollowUp()
         }
     }
 
