@@ -54,6 +54,9 @@ struct HelperAttentionView: View {
         .frame(width: 380)
         .tint(.keepressoBrew)
         .glassWindowBackground()
+        // This window exists to be seen: Keepresso is a background agent, so
+        // an ordinary window would open behind whatever the user is doing.
+        .background(WindowElevator())
         .animation(.smooth(duration: 0.3), value: stageKey)
         // The manager polls while the user is over in System Settings; the
         // moment the approval lands, confirm the daemon really answers, which
@@ -166,4 +169,24 @@ struct HelperAttentionView: View {
         model.dismissHelperAttention()
         dismiss()
     }
+}
+
+/// Lifts the hosting window to the front of everything once, when it appears:
+/// centered, floating above normal windows, and ordered front even though the
+/// app is a background agent that can't always become active. Floating is
+/// deliberate for an attention dialog; the window is small and dismissible.
+private struct WindowElevator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            window.level = .floating
+            window.center()
+            window.orderFrontRegardless()
+            window.makeKey()
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }

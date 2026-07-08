@@ -53,6 +53,10 @@ struct MenuBarContent: View {
         VStack(alignment: .leading, spacing: 12) {
             header
 
+            if model.helperAttention != nil {
+                helperAttentionBanner
+            }
+
             heldByLine
 
             if model.triggersEnabled && !model.triggersPaused {
@@ -208,6 +212,35 @@ struct MenuBarContent: View {
             in: RoundedRectangle(cornerRadius: 12, style: .continuous)
         )
         .animation(.easeInOut(duration: 0.35), value: session.isActive)
+    }
+
+    /// A warning row shown while the privileged helper needs the user (approve
+    /// again, or reinstall), so a missed attention window still leaves a
+    /// visible cue in the place the user looks anyway. "Fix" reopens the
+    /// walkthrough window.
+    private var helperAttentionBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("The helper needs attention")
+                    .font(.callout.weight(.medium))
+                Text(model.helperAttention == .needsApproval
+                    ? "Approve Keepresso again in System Settings."
+                    : "The helper isn't responding; reinstall it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Button("Fix\u{2026}") {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: KeepressoApp.helperWindowID)
+            }
+        }
+        .padding(8)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     // MARK: - Duration editors

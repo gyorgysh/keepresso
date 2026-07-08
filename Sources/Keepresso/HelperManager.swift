@@ -66,6 +66,13 @@ final class HelperManager {
     @ObservationIgnored private var healthCheck: Task<HelperHealth, Never>?
     /// One repair per app run: registration churn must never loop.
     @ObservationIgnored private var repairAttempted = false
+    /// Whether this build may rewrite the daemon registration. BTM refuses
+    /// team-less executables outright ("disallowed"), so an ad-hoc dev build
+    /// could never revive the daemon by re-registering; worse, its attempt
+    /// hijacks the record that belongs to the properly signed copy in
+    /// /Applications. Seen live: a Debug run re-registered the record and left
+    /// the real install pointing at DerivedData.
+    @ObservationIgnored private let canRepair = HelperService.selfTeamIdentifier() != nil
 
     init(client: XPCHelperClient) {
         self.client = client
@@ -161,6 +168,9 @@ final class HelperManager {
     private func runHealthCheck() async -> HelperHealth {
         guard status == .enabled else { return .notApplicable }
         if await pings() { return .healthy }
+        // A dev build stays hands-off: no repair, no attention window. The
+        // installed release copy owns the registration.
+        guard canRepair else { return .notApplicable }
         guard !repairAttempted else { return .broken }
         repairAttempted = true
         // First try re-submitting the registration in place: no approval can

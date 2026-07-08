@@ -865,7 +865,14 @@ final class AppModel {
         if !helperInstalled {
             NSApp.activate(ignoringOtherApps: true)
         }
-        Task { await closedDisplay.set(on) }
+        Task {
+            await closedDisplay.set(on)
+            // A failure through the installed helper points at a stale daemon
+            // registration: check and repair it (dedupes, once per run).
+            if closedDisplay.lastError != nil, helperInstalled {
+                verifyHelper()
+            }
+        }
     }
 
     /// Whether closed-display mode follows the session instead of staying on
@@ -1022,6 +1029,10 @@ final class AppModel {
         Task {
             if on {
                 await awdl.start()
+                // Same stale-registration suspicion as ``setClosedDisplay(_:)``.
+                if awdl.lastError != nil, helperInstalled {
+                    verifyHelper()
+                }
             } else {
                 await awdl.stop()
             }
