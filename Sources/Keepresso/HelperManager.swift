@@ -23,6 +23,20 @@ final class HelperAvailability: @unchecked Sendable {
     }
 }
 
+/// Outcome of ``HelperManager/verifyAndRepairIfNeeded()``.
+enum HelperHealth {
+    /// Not installed (or approval still pending): nothing to verify.
+    case notApplicable
+    /// The daemon answered the version handshake.
+    case healthy
+    /// The registration had gone stale; re-registering brought it back.
+    case repaired
+    /// The repair needs a fresh approval in System Settings.
+    case needsApproval
+    /// Still not responding after a repair.
+    case broken
+}
+
 /// Registration and status of the privileged helper daemon, over
 /// `SMAppService`. Installing is the one-time trade the user makes to stop
 /// the per-run password prompts: macOS asks for administrator credentials
@@ -43,6 +57,12 @@ final class HelperManager {
     /// Polls while the user is over in System Settings deciding, so the UI
     /// flips to "installed" by itself once they approve.
     @ObservationIgnored private var approvalPoll: Task<Void, Never>?
+
+    /// Single-flight guard for the health check, so a launch-time check and a
+    /// failure-triggered one join the same run instead of stacking repairs.
+    @ObservationIgnored private var healthCheck: Task<HelperHealth, Never>?
+    /// One repair per app run: registration churn must never loop.
+    @ObservationIgnored private var repairAttempted = false
 
     init(client: XPCHelperClient) {
         self.client = client
@@ -109,6 +129,66 @@ final class HelperManager {
         if status == .enabled, lastError == nil {
             lastError = "macOS still reports the helper as registered. Try again, or restart the Mac."
         }
+    }
+
+    /// Verify that an installed daemon actually responds, and repair its
+    /// registration when it doesn't.
+    ///
+    /// macOS can lose the ability to spawn the daemon while still reporting it
+    /// enabled: the Background Task Management record keeps a stale reference
+    /// to the app bundle (typically after an app update followed by a reboot),
+    /// launchd then fails every spawn with EX_CONFIG, and every XPC call times
+    /// out. `SMAppService.status` can't see this (it stays `.enabled`), so the
+    /// daemon is checked the honest way, a ping, and healed by re-submitting
+    /// the registration, which rewrites the record. The approval is keyed to
+    /// the app's signing identity, so the repair normally needs no new
+    /// password or approval.
+    @discardableResult
+    func verifyAndRepairIfNeeded() async -> HelperHealth {
+        if let running = healthCheck { return await running.value }
+        let check = Task { await self.runHealthCheck() }
+        healthCheck = check
+        let health = await check.value
+        healthCheck = nil
+        return health
+    }
+
+    private func runHealthCheck() async -> HelperHealth {
+        guard status == .enabled else { return .notApplicable }
+        if await pings() { return .healthy }
+        guard !repairAttempted else { return .broken }
+        repairAttempted = true
+        // First try re-submitting the registration in place: no approval can
+        // be lost this way, and it rewrites the record's bundle reference.
+        try? service.register()
+        if await pings() {
+            lastError = nil
+            return .repaired
+        }
+        // Not enough: rebuild the record from scratch. Between the unregister
+        // and the register the mirrored availability deliberately stays as it
+        // was, so a concurrent engage still routes to the (dead) daemon and
+        // fails quietly instead of falling back to a surprise password prompt.
+        try? await service.unregister()
+        try? service.register()
+        refresh()
+        if status == .requiresApproval {
+            pollWhileAwaitingApproval()
+            return .needsApproval
+        }
+        if await pings() {
+            lastError = nil
+            return .repaired
+        }
+        lastError = "The helper isn't responding. Remove it and install it again."
+        return .broken
+    }
+
+    /// Whether a matching daemon answers, off the main actor (a dead daemon
+    /// means waiting out the XPC timeout).
+    private func pings() async -> Bool {
+        let client = self.client
+        return await Task.detached { client.ping() }.value
     }
 
     /// Open System Settings at the approval toggle again, for when the user

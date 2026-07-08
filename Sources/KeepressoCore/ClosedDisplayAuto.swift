@@ -24,6 +24,15 @@ public protocol SleepWatchdogLaunching: AnyObject, Sendable {
     /// Spawn the root helper loop. Blocking: it waits for the user to answer
     /// the administrator prompt. Called once per app run, on first activation.
     func startHelper(appPID: Int32) -> SleepSettingResult
+    /// Message to surface when ``createFlag()`` fails, naming what actually
+    /// failed in this backend (a file write here, an XPC call in the daemon).
+    var engageFailureMessage: String { get }
+}
+
+extension SleepWatchdogLaunching {
+    public var engageFailureMessage: String {
+        "Couldn't create the sleep watchdog flag file."
+    }
 }
 
 /// Real backend: the flag lives in Application Support, and the loop is
@@ -199,6 +208,13 @@ public final class ClosedDisplayAutoController {
         if isHolding { await release() }
     }
 
+    /// Let the next tick try engaging again. For after an external fix (the
+    /// helper daemon's registration was repaired); without this a failed
+    /// engage stays held off until the session ends.
+    public func retryEngage() {
+        heldOff = false
+    }
+
     /// The once-a-second pulse. Engages while a session is active (one prompt
     /// on the first engage of an app run; a cancel holds off until the session
     /// ends) and releases when it stops.
@@ -231,7 +247,7 @@ public final class ClosedDisplayAutoController {
         let launcher = self.launcher
         let flagCreated = await Task.detached { launcher.createFlag() }.value
         guard flagCreated else {
-            let message = "Couldn't create the sleep watchdog flag file."
+            let message = launcher.engageFailureMessage
             lastError = message
             return .failed(message)
         }

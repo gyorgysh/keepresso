@@ -83,6 +83,15 @@ public protocol AWDLWatchdogLaunching: AnyObject, Sendable {
     /// Spawn the root helper loop. Blocking: it waits for the user to answer
     /// the administrator prompt. Called once per app run, on first activation.
     func startHelper(appPID: Int32) -> AWDLWatchdogStartResult
+    /// Message to surface when ``createFlag()`` fails, naming what actually
+    /// failed in this backend (a file write here, an XPC call in the daemon).
+    var engageFailureMessage: String { get }
+}
+
+extension AWDLWatchdogLaunching {
+    public var engageFailureMessage: String {
+        "Couldn't create the watchdog flag file."
+    }
 }
 
 /// Real backend: the flag lives in Application Support, and the loop is
@@ -267,7 +276,7 @@ public final class AWDLWatchdogController {
         let launcher = self.launcher
         let flagCreated = await Task.detached { launcher.createFlag() }.value
         guard flagCreated else {
-            let message = "Couldn't create the watchdog flag file."
+            let message = launcher.engageFailureMessage
             lastError = message
             return .failed(message)
         }
@@ -324,6 +333,13 @@ public final class AWDLWatchdogController {
     /// so a manual override isn't immediately re-paused by the next auto tick.
     /// ``autoTick(gamingActive:)`` clears it once it next sees no game.
     public func holdAutoOff() { autoHeldOff = true }
+
+    /// Let the next auto tick try starting again. For after an external fix
+    /// (the helper daemon's registration was repaired); without this a failed
+    /// start stays held off until the current game ends.
+    public func retryEngage() {
+        autoHeldOff = false
+    }
 
     /// Stop only an auto-started run; a manual run is left alone. For when auto
     /// mode is switched off mid-bout.

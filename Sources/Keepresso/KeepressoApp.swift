@@ -116,6 +116,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { await model.awdl.cleanupAtLaunch() }
         // Same for the closed-display sleep watchdog's flag.
         Task { await model.closedDisplayAuto.cleanupAtLaunch() }
+        // The helper daemon can be "enabled" yet unlaunchable (launchd's
+        // record goes stale after an app update plus a reboot); check it now,
+        // and repair the registration, before the first engage fails on it.
+        model.verifyHelper()
         ticker.start()
         // Register the global keep-awake toggle shortcut, if the user set one.
         model.registerHotKey()

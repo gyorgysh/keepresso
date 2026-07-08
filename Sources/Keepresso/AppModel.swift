@@ -770,6 +770,33 @@ final class AppModel {
         }
     }
 
+    /// Check that the installed helper daemon actually responds, repairing a
+    /// stale registration when it doesn't (see
+    /// ``HelperManager/verifyAndRepairIfNeeded()``). Called at launch, where
+    /// the breakage typically surfaces (it follows an app update plus a
+    /// reboot), and again from the failure edges of the privileged features.
+    func verifyHelper() {
+        Task { await verifyHelperAndFollowUp() }
+    }
+
+    private func verifyHelperAndFollowUp() async {
+        switch await helper.verifyAndRepairIfNeeded() {
+        case .notApplicable, .healthy, .broken:
+            break // a broken helper shows up via helper.lastError in Preferences
+        case .repaired:
+            // Healed silently; let features a failed engage put on hold try
+            // again on their next tick instead of waiting out the session.
+            closedDisplayAuto.retryEngage()
+            awdl.retryEngage()
+        case .needsApproval:
+            notifier.notify(
+                title: "Keepresso needs a new approval",
+                body: "macOS lost the helper's registration. Turn Keepresso back on under Login Items in System Settings to keep the password-free helper.",
+                sound: true
+            )
+        }
+    }
+
     // MARK: - Closed-display mode
 
     /// Whether the Mac is currently kept awake with the lid closed.
@@ -844,6 +871,7 @@ final class AppModel {
 
     @ObservationIgnored private var wasBrewingForClosedDisplay = false
     @ObservationIgnored private var wasClosedDisplayHolding = false
+    @ObservationIgnored private var sawClosedDisplayAutoError = false
 
     /// Once-a-second pulse for closed-display mode's "only while brewing"
     /// automation. The guard keeps the per-tick task from spawning while the
@@ -867,6 +895,14 @@ final class AppModel {
             )
         }
         wasBrewingForClosedDisplay = brewing
+        // With the helper installed an engage should never fail; when one
+        // does, suspect a stale daemon registration and check it (edge-only,
+        // and the check dedupes and repairs at most once per run).
+        let autoFailed = closedDisplayAuto.lastError != nil
+        if autoFailed, !sawClosedDisplayAutoError, helperInstalled {
+            verifyHelper()
+        }
+        sawClosedDisplayAutoError = autoFailed
         Task { await closedDisplayAuto.autoTick(brewing: brewing) }
         // Mirror an engage or release into the closed-display toggle's live
         // state (and the ticker's lid handling, which keys off it) once the
@@ -1004,6 +1040,7 @@ final class AppModel {
 
     @ObservationIgnored private var wasGameInFront = false
     @ObservationIgnored private var wasGamingActive = false
+    @ObservationIgnored private var sawAWDLError = false
 
     /// Once-a-second pulse for the watchdog's auto mode. Detects a game directly
     /// via ``gamingWatcher`` (no trigger or active session required). The guard
@@ -1013,6 +1050,12 @@ final class AppModel {
         gamingWatcher.tick() // advance the grace window once per pulse
         let gamingActive = gamingWatcher.isSatisfied()
         notifyAWDLEdges(gameInFront: gamingWatcher.wrappedIsSatisfied, gamingActive: gamingActive)
+        // Same stale-registration suspicion as ``closedDisplayAutoTick()``.
+        let awdlFailed = awdl.lastError != nil
+        if awdlFailed, !sawAWDLError, helperInstalled {
+            verifyHelper()
+        }
+        sawAWDLError = awdlFailed
         Task { await awdl.autoTick(gamingActive: gamingActive) }
     }
 

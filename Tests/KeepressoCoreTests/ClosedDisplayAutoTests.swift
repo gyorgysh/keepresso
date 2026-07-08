@@ -28,11 +28,14 @@ import Foundation
 private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecked Sendable {
     var flagPresent = false
     var result: SleepSettingResult = .applied
+    var createFlagSucceeds = true
+    var engageFailureMessage = "backend says no"
     /// Helper spawns, i.e. how often the user was asked for a password.
     var startCalls = 0
 
     func isFlagPresent() -> Bool { flagPresent }
     func createFlag() -> Bool {
+        guard createFlagSucceeds else { return false }
         flagPresent = true
         return true
     }
@@ -140,6 +143,44 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     await controller.autoTick(brewing: true)
     #expect(controller.lastError == nil)
     #expect(!controller.isHolding)
+}
+
+@MainActor
+@Test func aFailedEngageSurfacesTheLaunchersOwnMessage() async {
+    // The daemon-backed launcher fails in XPC, not on a file write; the
+    // controller must not claim a flag file was the problem.
+    let launcher = FakeSleepWatchdogLauncher()
+    launcher.createFlagSucceeds = false
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+    controller.onlyWhileBrewing = true
+
+    await controller.autoTick(brewing: true)
+    #expect(controller.lastError == "backend says no")
+    #expect(!controller.isHolding)
+}
+
+@MainActor
+@Test func retryEngageLetsAFailedEngageTryAgainMidSession() async {
+    // A failed engage normally holds off until the session ends; after an
+    // external fix (the helper daemon was repaired) retryEngage lets the next
+    // tick try again within the same session.
+    let launcher = FakeSleepWatchdogLauncher()
+    launcher.createFlagSucceeds = false
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+    controller.onlyWhileBrewing = true
+
+    await controller.autoTick(brewing: true)
+    await controller.autoTick(brewing: true)
+    #expect(!controller.isHolding)
+
+    launcher.createFlagSucceeds = true
+    await controller.autoTick(brewing: true) // still held off, no engage
+    #expect(!controller.isHolding)
+
+    controller.retryEngage()
+    await controller.autoTick(brewing: true)
+    #expect(controller.isHolding)
+    #expect(controller.lastError == nil)
 }
 
 @MainActor

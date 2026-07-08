@@ -155,6 +155,28 @@ private final class FakeAWDLReader: AWDLStateReading, @unchecked Sendable {
 }
 
 @MainActor
+@Test func retryEngageLetsAFailedAutoStartTryAgainMidGame() async {
+    // A failed auto start holds off until the bout ends; after an external
+    // fix (the helper daemon was repaired) retryEngage lets the next tick try
+    // again while the game is still running.
+    let launcher = FakeWatchdogLauncher()
+    launcher.result = .failed("helper down")
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+    controller.autoWithGaming = true
+
+    await controller.autoTick(gamingActive: true)
+    #expect(!controller.isRunning)
+    await controller.autoTick(gamingActive: true) // held off, no retry on its own
+    #expect(launcher.startCalls == 1)
+
+    launcher.result = .started
+    controller.retryEngage()
+    await controller.autoTick(gamingActive: true)
+    #expect(controller.isRunning)
+    #expect(launcher.startCalls == 2)
+}
+
+@MainActor
 @Test func stopIfAutoLeavesAManualRunAlone() async {
     let launcher = FakeWatchdogLauncher()
     let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)

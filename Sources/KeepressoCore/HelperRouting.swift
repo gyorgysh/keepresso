@@ -48,6 +48,10 @@ public final class HelperDaemonSleepWatchdog: SleepWatchdogLaunching, @unchecked
     public func startHelper(appPID: Int32) -> SleepSettingResult {
         helper.ping() ? .applied : .failed("The Keepresso helper isn't responding.")
     }
+
+    public var engageFailureMessage: String {
+        "The Keepresso helper isn't responding."
+    }
 }
 
 /// ``AWDLWatchdogLaunching`` over the helper daemon; same shape as
@@ -84,6 +88,10 @@ public final class HelperDaemonAWDLWatchdog: AWDLWatchdogLaunching, @unchecked S
 
     public func startHelper(appPID: Int32) -> AWDLWatchdogStartResult {
         helper.ping() ? .started : .failed("The Keepresso helper isn't responding.")
+    }
+
+    public var engageFailureMessage: String {
+        "The Keepresso helper isn't responding."
     }
 }
 
@@ -131,6 +139,10 @@ public final class RoutedSleepWatchdog: SleepWatchdogLaunching, @unchecked Senda
     public func startHelper(appPID: Int32) -> SleepSettingResult {
         helperInstalled() ? daemon.startHelper(appPID: appPID) : fallback.startHelper(appPID: appPID)
     }
+
+    public var engageFailureMessage: String {
+        helperInstalled() ? daemon.engageFailureMessage : fallback.engageFailureMessage
+    }
 }
 
 /// The AWDL twin of ``RoutedSleepWatchdog``.
@@ -166,6 +178,10 @@ public final class RoutedAWDLWatchdog: AWDLWatchdogLaunching, @unchecked Sendabl
 
     public func startHelper(appPID: Int32) -> AWDLWatchdogStartResult {
         helperInstalled() ? daemon.startHelper(appPID: appPID) : fallback.startHelper(appPID: appPID)
+    }
+
+    public var engageFailureMessage: String {
+        helperInstalled() ? daemon.engageFailureMessage : fallback.engageFailureMessage
     }
 }
 

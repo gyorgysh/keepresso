@@ -110,6 +110,22 @@ private final class FakeFallbackSleepControl: SleepSettingControlling, @unchecke
     #expect(client.calls.isEmpty)
 }
 
+@Test func routedWatchdogFailureMessageNamesTheActiveBackend() {
+    // A failed engage through the daemon is an XPC failure, not a file-write
+    // one; the message must match whichever backend is actually in use.
+    let client = FakeHelperClient()
+    let installed = LockedFlag(true)
+    let routed = RoutedSleepWatchdog(
+        daemon: HelperDaemonSleepWatchdog(helper: client),
+        fallback: FakeFallbackSleepWatchdog(),
+        helperInstalled: { installed.value }
+    )
+
+    #expect(routed.engageFailureMessage == "The Keepresso helper isn't responding.")
+    installed.value = false
+    #expect(routed.engageFailureMessage == "Couldn't create the sleep watchdog flag file.")
+}
+
 @Test func routedWatchdogReleasesADaemonHoldEvenAfterUninstall() {
     let client = FakeHelperClient()
     let installed = LockedFlag(true)
