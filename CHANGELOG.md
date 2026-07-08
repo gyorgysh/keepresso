@@ -3,6 +3,37 @@
 All notable changes to Keepresso are documented here. Versions follow
 [Semantic Versioning](https://semver.org).
 
+## 1.11.1
+
+Theme: the helper heals itself.
+
+### Fixed
+
+- **The helper survives updates and reboots for real now.** macOS could lose
+  the helper's launch registration after an app update followed by a restart
+  (the system record kept pointing at the old app copy), leaving the helper
+  installed but unreachable: closed-display mode and AWDL pausing then failed
+  with a confusing flag-file error. Keepresso now checks the helper at launch
+  and whenever a privileged switch fails, and repairs the registration by
+  itself, silently and without a password, in the common case. Errors from
+  the helper path now say what actually happened ("the helper isn't
+  responding") instead of blaming a flag file.
+- **When the repair does need you, it's unmissable.** If macOS insists on a
+  fresh approval, or the helper stays unresponsive after a repair, a small
+  window opens front and center and walks through the single step (approve in
+  Login Items, or reinstall), updating live and confirming success on its
+  own. The menu also shows a warning row with a Fix button until it's
+  resolved, and a failed engage retries in the same session once the helper
+  is back.
+
+### New
+
+- **Pick the AWDL resume delay.** Gaming & Streaming now has a "Resume AWDL
+  after leaving the game" picker (10 seconds to 5 minutes, 1 minute as
+  before), so quick alt-tabs don't flap the radios but AirDrop and Handoff
+  can come back as fast as you like. Changes apply immediately, even to a
+  countdown already running.
+
 ## 1.11.0
 
 Theme: one password, ever.
