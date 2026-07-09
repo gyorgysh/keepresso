@@ -16,6 +16,11 @@ struct MenuBarContent: View {
     /// The controller the views read live state from.
     private var session: SessionController { model.session }
 
+    /// Text styles and metrics at the readability scale (grows on very dense
+    /// screens; exactly 1 everywhere else). Recomputed each render, and the
+    /// body re-renders every second, so display changes are picked up live.
+    private var type: ScaledType { ScaledType() }
+
     /// Drives the live duration label and re-evaluates trigger state each second.
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     @State private var displayedElapsed: TimeInterval = 0
@@ -69,7 +74,7 @@ struct MenuBarContent: View {
 
             if model.triggersEnabled && !model.triggersPaused {
                 Text("Activation is controlled by triggers.\nEdit them in Preferences.")
-                    .font(.caption)
+                    .font(type.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Button("Pause Triggers") { model.pauseTriggers() }
@@ -78,7 +83,7 @@ struct MenuBarContent: View {
             } else {
                 if model.triggersEnabled {
                     Text("Triggers paused. Controlling manually for now.")
-                        .font(.caption)
+                        .font(type.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -131,13 +136,13 @@ struct MenuBarContent: View {
             }
             if model.closedDisplayEnabled {
                 Text("Stays awake on battery too; the display turns off when the lid closes. Turn it off before putting it in a bag.")
-                    .font(.caption)
+                    .font(type.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let error = model.closedDisplayError {
                 Text(error)
-                    .font(.caption)
+                    .font(type.caption)
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -164,7 +169,7 @@ struct MenuBarContent: View {
                 .buttonStyle(.menuRow)
         }
         .padding(14)
-        .frame(width: 280)
+        .frame(width: 280 * type.scale)
         // Morph between the panel's states (triggers paused, closed-display
         // captions, the helper banner) instead of jump-cutting. Scoped to
         // these values so the per-second tick never animates layout.
@@ -176,6 +181,9 @@ struct MenuBarContent: View {
         .animation(.snappy(duration: 0.25), value: model.helperAttention)
         .glassPanelBackground()
         .tint(.keepressoBrew)
+        // Cascades to every text that sets no font of its own (toggles,
+        // buttons, menu rows), so the whole panel scales together.
+        .font(type.body)
         .onAppear { model.refreshClosedDisplay() }
         .onReceive(tick) { _ in
             displayedElapsed = session.elapsed
@@ -202,13 +210,13 @@ struct MenuBarContent: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            BrewingCupView(isActive: session.isActive)
+            BrewingCupView(isActive: session.isActive, scale: type.scale)
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.pausedByBattery ? "Paused" : (session.isActive ? "Brewing" : "Idle"))
-                    .font(.headline)
+                    .font(type.headline)
                     .contentTransition(.opacity)
                 Text(statusDetail)
-                    .font(.caption)
+                    .font(type.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     // Roll the digits of "Awake for" / "Stops in" like a
@@ -241,11 +249,11 @@ struct MenuBarContent: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text("The helper needs attention")
-                    .font(.callout.weight(.medium))
+                    .font(type.callout.weight(.medium))
                 Text(model.helperAttention == .needsApproval
                     ? "Approve Keepresso again in System Settings."
                     : "The helper isn't responding; reinstall it.")
-                    .font(.caption)
+                    .font(type.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -269,6 +277,7 @@ struct MenuBarContent: View {
         @State private var minutes: Int
         let apply: (TimeInterval) -> Void
         @Environment(\.dismiss) private var dismiss
+        private let type = ScaledType()
 
         init(initial: TimeInterval, apply: @escaping (TimeInterval) -> Void) {
             let totalMinutes = max(1, Int((initial / 60).rounded()))
@@ -290,7 +299,8 @@ struct MenuBarContent: View {
                 .disabled(hours == 0 && minutes == 0)
             }
             .padding(14)
-            .frame(width: 180)
+            .frame(width: 180 * type.scale)
+            .font(type.body)
         }
     }
 
@@ -301,12 +311,13 @@ struct MenuBarContent: View {
         let start: (Int, Int) -> Void
         @State private var time = Date().addingTimeInterval(60 * 60)
         @Environment(\.dismiss) private var dismiss
+        private let type = ScaledType()
 
         var body: some View {
             VStack(alignment: .leading, spacing: 10) {
                 DatePicker("Until", selection: $time, displayedComponents: .hourAndMinute)
                 Text("If that time already passed today, it means tomorrow.")
-                    .font(.caption)
+                    .font(type.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Button(isActive ? "Update Session" : "Start") {
@@ -318,7 +329,8 @@ struct MenuBarContent: View {
                 .frame(maxWidth: .infinity)
             }
             .padding(14)
-            .frame(width: 220)
+            .frame(width: 220 * type.scale)
+            .font(type.body)
         }
     }
 
@@ -348,10 +360,10 @@ struct MenuBarContent: View {
             HStack(spacing: 6) {
                 Image(systemName: "bolt.horizontal.circle")
                     .foregroundStyle(.secondary)
-                    .font(.caption)
+                    .font(type.caption)
                     .accessibilityHidden(true)
                 Text("\(assertion.processName): \(effect.lowercased())")
-                    .font(.caption)
+                    .font(type.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -373,10 +385,10 @@ struct MenuBarContent: View {
             HStack(spacing: 6) {
                 Image(systemName: status.icon)
                     .foregroundStyle(status.color)
-                    .font(.caption)
+                    .font(type.caption)
                     .accessibilityHidden(true)
                 Text(status.text)
-                    .font(.caption)
+                    .font(type.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
@@ -395,20 +407,20 @@ struct MenuBarContent: View {
                     HStack(spacing: 6) {
                         Image(systemName: state.satisfied ? "checkmark.circle.fill" : "circle")
                             .foregroundStyle(state.inGrace ? Color.orange : (state.satisfied ? Color.green : Color.secondary))
-                            .font(.caption)
+                            .font(type.caption)
                             .contentTransition(.symbolEffect(.replace))
                             .animation(.snappy(duration: 0.25), value: state.satisfied)
                             .animation(.snappy(duration: 0.25), value: state.inGrace)
                             .accessibilityLabel(state.inGrace ? "Met, in grace period" : (state.satisfied ? "Met" : "Not met"))
                         Text(state.rule.label)
-                            .font(.caption)
+                            .font(type.caption)
                             .foregroundStyle(state.satisfied ? .primary : .secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Spacer(minLength: 4)
                         if let remaining = state.graceRemaining {
                             Text(Self.graceCountdown(remaining))
-                                .font(.caption2.monospacedDigit())
+                                .font(type.caption2.monospacedDigit())
                                 .foregroundStyle(.orange)
                                 .contentTransition(.numericText(countsDown: true))
                                 .animation(.linear(duration: 0.2), value: remaining)
@@ -418,7 +430,7 @@ struct MenuBarContent: View {
             }
         } else {
             Text("No conditions yet. Add some in Preferences ▸ Triggers.")
-                .font(.caption)
+                .font(type.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

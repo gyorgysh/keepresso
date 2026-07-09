@@ -64,6 +64,48 @@ extension ButtonStyle where Self == MenuRowButtonStyle {
     static var menuRow: MenuRowButtonStyle { MenuRowButtonStyle() }
 }
 
+/// How much to grow the app's own surfaces (the menu panel, the welcome
+/// window) for readability on very dense screens: native 4K/5K modes and
+/// laptop "More Space" modes pack so many points per inch that a point is
+/// physically tiny. The factor is the screen's points-per-inch over the
+/// ~135 that Apple's densest default modes reach, so every normal
+/// configuration stays at exactly 1; capped so nothing balloons.
+enum Readability {
+    static func scale(for screen: NSScreen? = NSScreen.main) -> CGFloat {
+        guard let screen,
+              let number = screen.deviceDescription[
+                  NSDeviceDescriptionKey("NSScreenNumber")
+              ] as? NSNumber
+        else { return 1 }
+        let millimeters = CGDisplayScreenSize(CGDirectDisplayID(truncating: number))
+        guard millimeters.width > 0 else { return 1 }
+        let pointsPerInch = screen.frame.width / (millimeters.width / 25.4)
+        return min(1.5, max(1, pointsPerInch / 135))
+    }
+}
+
+/// The app's text styles at the readability scale. The fonts themselves
+/// grow because nothing else works on macOS: dynamicTypeSize is a no-op
+/// (verified empirically), and scaleEffect rasterizes, which blurs text
+/// precisely on the dense 1x displays this exists for.
+struct ScaledType {
+    let scale: CGFloat
+
+    init(scale: CGFloat = Readability.scale()) { self.scale = scale }
+
+    private func size(_ style: NSFont.TextStyle) -> CGFloat {
+        NSFont.preferredFont(forTextStyle: style, options: [:]).pointSize * scale
+    }
+
+    var body: Font { .system(size: size(.body)) }
+    var headline: Font { .system(size: size(.headline), weight: .semibold) }
+    var callout: Font { .system(size: size(.callout)) }
+    var caption: Font { .system(size: size(.caption1)) }
+    var caption2: Font { .system(size: size(.caption2)) }
+    var title2: Font { .system(size: size(.title2)) }
+    var title3: Font { .system(size: size(.title3)) }
+}
+
 /// The backing that keeps text readable over glass on any wallpaper: a material
 /// for blur, plus a wash of the window background color so a very dark or busy
 /// desktop can't pull the surface's luminance away from what the text color

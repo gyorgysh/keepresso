@@ -67,12 +67,18 @@ struct WelcomeView: View {
     /// change (and each open) rather than being read once per app run.
     @State private var screenHeight: CGFloat = NSScreen.main?.visibleFrame.height ?? 800
 
+    /// Text styles and metrics at the readability scale (grows on very dense
+    /// screens; exactly 1 everywhere else). The body re-renders whenever
+    /// `screenHeight` refreshes, which covers display and resolution changes.
+    private var type: ScaledType { ScaledType() }
+
     /// The scroll area's height cap: the visible screen height minus room
-    /// for the pinned footer and the window chrome. On a regular display
-    /// the whole checklist fits under it and the window hugs the content
-    /// exactly; on a low-resolution one the checklist scrolls behind the
-    /// footer instead of running off screen.
-    private var scrollCap: CGFloat { max(320, screenHeight - 130) }
+    /// for the pinned footer and the window chrome (which grow with the
+    /// readability scale). On a regular display the whole checklist fits
+    /// under it and the window hugs the content exactly; on a low-resolution
+    /// one the checklist scrolls behind the footer instead of running off
+    /// screen.
+    private var scrollCap: CGFloat { max(320, screenHeight - 130 * type.scale) }
 
     private static let scrollSpace = "welcome-scroll"
 
@@ -137,8 +143,11 @@ struct WelcomeView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 20)
         }
-        .frame(width: 400)
+        .frame(width: 400 * type.scale)
         .tint(.keepressoBrew)
+        // Cascades to every text that sets no font of its own (toggles,
+        // buttons, links), so the whole window scales together.
+        .font(type.body)
         .glassWindowBackground()
         // The one-shot is consumed by actually being seen, not by the attempt
         // to open the window (see `MenuBarLabelView`): if launch is cut short
@@ -167,11 +176,11 @@ struct WelcomeView: View {
     private var checklist: some View {
         VStack(spacing: 18) {
             VStack(spacing: 10) {
-                BrewingCupView(isActive: cupBrewing, scale: 2.8)
+                BrewingCupView(isActive: cupBrewing, scale: 2.8 * type.scale)
                 Text("Welcome to Keepresso")
-                    .font(.title2.bold())
+                    .font(type.title2.bold())
                 Text("Keepresso keeps your Mac awake on your terms. It lives in the menu bar near the clock, with no Dock icon. Click its cup any time to start or stop.")
-                    .font(.callout)
+                    .font(type.callout)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -182,9 +191,9 @@ struct WelcomeView: View {
                 Divider()
                     .padding(.bottom, 8)
                 Text("How do you use your Mac?")
-                    .font(.callout.weight(.semibold))
+                    .font(type.callout.weight(.semibold))
                 Text("Pick one to set up matching triggers, or keep it manual and add your own later. You can change this any time in Preferences.")
-                    .font(.caption)
+                    .font(type.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 ForEach(Self.useCases) { useCase in
@@ -239,7 +248,7 @@ struct WelcomeView: View {
             Divider()
             HStack {
                 Link("Learn more", destination: AppInfo.repository)
-                    .font(.callout)
+                    .font(type.callout)
                 Spacer()
                 Button("Get Started") { dismiss() }
                     .prominentActionStyle()
@@ -258,7 +267,7 @@ struct WelcomeView: View {
                 endPoint: .bottom
             )
             Image(systemName: "chevron.compact.down")
-                .font(.title3)
+                .font(type.title3)
                 .foregroundStyle(.secondary)
                 .padding(.bottom, 2)
         }
@@ -276,7 +285,7 @@ struct WelcomeView: View {
         case .authorized, .provisional, .ephemeral:
             Label("Enabled", systemImage: "checkmark.circle.fill")
                 .labelStyle(.titleAndIcon)
-                .font(.callout)
+                .font(type.callout)
                 .foregroundStyle(.secondary)
         case .denied:
             Button("Open Settings") { openNotificationSettings() }
@@ -297,7 +306,7 @@ struct WelcomeView: View {
         case .enabled:
             Label("Installed", systemImage: "checkmark.circle.fill")
                 .labelStyle(.titleAndIcon)
-                .font(.callout)
+                .font(type.callout)
                 .foregroundStyle(.secondary)
         case .requiresApproval:
             Button("Approve\u{2026}") { model.helper.openApprovalSettings() }
@@ -320,14 +329,14 @@ struct WelcomeView: View {
     private var gamingJitterCallout: some View {
         HStack(spacing: 12) {
             Image(systemName: "wifi")
-                .font(.title3)
+                .font(type.title3)
                 .foregroundStyle(Color.keepressoBrew)
-                .frame(width: 26)
+                .frame(width: 26 * type.scale)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Reduce lag and jitter")
-                    .font(.callout.weight(.medium))
+                    .font(type.callout.weight(.medium))
                 Text("Pause AWDL to steady your connection, and test your jitter, in Gaming & Streaming.")
-                    .font(.caption)
+                    .font(type.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -362,13 +371,13 @@ struct WelcomeView: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: useCase.icon)
-                    .font(.title3)
+                    .font(type.title3)
                     .foregroundStyle(Color.keepressoBrew)
-                    .frame(width: 26)
+                    .frame(width: 26 * type.scale)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(useCase.title).font(.callout.weight(.medium))
+                    Text(useCase.title).font(type.callout.weight(.medium))
                     Text(useCase.detail)
-                        .font(.caption)
+                        .font(type.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -396,13 +405,13 @@ struct WelcomeView: View {
     ) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.title3)
+                .font(type.title3)
                 .foregroundStyle(Color.keepressoBrew)
-                .frame(width: 26)
+                .frame(width: 26 * type.scale)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.callout.weight(.medium))
+                Text(title).font(type.callout.weight(.medium))
                 Text(detail)
-                    .font(.caption)
+                    .font(type.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
