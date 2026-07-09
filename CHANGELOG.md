@@ -3,6 +3,50 @@
 All notable changes to Keepresso are documented here. Versions follow
 [Semantic Versioning](https://semver.org).
 
+## 1.12.0
+
+Theme: a livelier cup, and updates that clean up after themselves.
+
+### New
+
+- **The cup now pours.** Starting a session fills the menu panel's cup with
+  a short pour animation, the steam rising once the pour lands, and stopping
+  drains it. The welcome window leads with the same brewing cup and pours it
+  the moment you pick how you use your Mac.
+- **The menu panel moves like it means it.** Countdowns roll their digits
+  like a timer, trigger checkmarks swap in place, and the panel morphs
+  smoothly between its states instead of jump-cutting. Everything respects
+  the system's Reduce Motion setting.
+- **Liquid Glass, where it belongs.** On macOS Tahoe the primary buttons and
+  the accented cards use the real glass material with the same warm copper
+  tint everywhere; earlier systems keep the familiar frosted look.
+- **Readable on ultra-dense screens.** On native 4K/5K resolutions and
+  laptop More Space modes, where a point is physically tiny, the menu panel
+  and the welcome window scale their text and layout up based on the
+  screen's actual density. Normal configurations are untouched.
+- **Windows open where you expect.** Preferences, Setup, Gaming & Streaming,
+  About, and the welcome open centered and in front now, instead of wherever
+  macOS last left them (or behind the app you were using), and they don't
+  stay on top of anything afterwards.
+
+### Fixed
+
+- **Updates remove the old app copy properly.** The previous version that an
+  update pushes into the Trash is now deleted before Keepresso first talks
+  to macOS's background-task records, closing the last gap that could get
+  the helper disabled after an update (previously that could take a manual
+  Trash empty).
+- **The helper hands off cleanly across updates.** The app no longer keeps
+  the old helper process serving after an update: the freshly installed
+  binary takes over within moments, and anything the helper was holding
+  carries over without a password prompt.
+- **The welcome window fits every screen.** On low resolutions it scrolls
+  inside the visible screen, with a clear "more below" cue and the Get
+  Started button always in view, instead of running off under the Dock; it
+  also adapts when the resolution changes while Keepresso is running.
+- **The Triggers tab sits left like every other tab** instead of floating
+  centered while the trigger switch is off.
+
 ## 1.11.2
 
 Theme: the helper stays on.
