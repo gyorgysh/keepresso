@@ -62,12 +62,17 @@ struct WelcomeView: View {
             || (selectedUseCase != nil && selectedUseCase != Self.manualID)
     }
 
+    /// The screen's visible height, kept live: resolutions change at runtime
+    /// and displays come and go, so this refreshes on every screen-parameter
+    /// change (and each open) rather than being read once per app run.
+    @State private var screenHeight: CGFloat = NSScreen.main?.visibleFrame.height ?? 800
+
     /// The scroll area's height cap: the visible screen height minus room
-    /// for the pinned footer and the window margins. On a regular display
+    /// for the pinned footer and the window chrome. On a regular display
     /// the whole checklist fits under it and the window hugs the content
     /// exactly; on a low-resolution one the checklist scrolls behind the
     /// footer instead of running off screen.
-    private static let scrollCap: CGFloat = max(320, (NSScreen.main?.visibleFrame.height ?? 800) - 130)
+    private var scrollCap: CGFloat { max(320, screenHeight - 130) }
 
     private static let scrollSpace = "welcome-scroll"
 
@@ -103,7 +108,7 @@ struct WelcomeView: View {
             // checklist whenever it fits under the cap and scrolls when it
             // doesn't. (Verified empirically: without fixedSize the window
             // ignores the content and opens at a default height.)
-            .frame(maxHeight: Self.scrollCap)
+            .frame(maxHeight: scrollCap)
             .fixedSize(horizontal: false, vertical: true)
             .background(GeometryReader { proxy in
                 Color.clear.preference(
@@ -143,8 +148,20 @@ struct WelcomeView: View {
             // Status reads only; showing the window never prompts for anything.
             model.helper.refresh()
             revealed = true
+            refreshScreenHeight()
+        }
+        // Resolution or display changes while the app runs must re-cap the
+        // window, or it can end up taller than the new screen.
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSApplication.didChangeScreenParametersNotification
+        )) { _ in
+            refreshScreenHeight()
         }
         .task { notificationStatus = await model.notificationAuthorizationStatus() }
+    }
+
+    private func refreshScreenHeight() {
+        screenHeight = NSScreen.main?.visibleFrame.height ?? 800
     }
 
     private var checklist: some View {
