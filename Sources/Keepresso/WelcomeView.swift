@@ -62,97 +62,66 @@ struct WelcomeView: View {
             || (selectedUseCase != nil && selectedUseCase != Self.manualID)
     }
 
-    /// The window height: enough for the whole checklist on a regular
-    /// display, capped to the visible screen on small ones, where the content
-    /// scrolls instead of running off the bottom.
-    private static let windowHeight: CGFloat = {
-        let available = (NSScreen.main?.visibleFrame.height ?? 800) - 40
-        return min(790, available)
-    }()
+    /// The scroll area's height cap: the visible screen height minus room
+    /// for the pinned footer and the window margins. On a regular display
+    /// the whole checklist fits under it and the window hugs the content
+    /// exactly; on a low-resolution one the checklist scrolls behind the
+    /// footer instead of running off screen.
+    private static let scrollCap: CGFloat = max(320, (NSScreen.main?.visibleFrame.height ?? 800) - 130)
+
+    private static let scrollSpace = "welcome-scroll"
+
+    /// The checklist's measured natural height, so the window sizes to the
+    /// content whenever it fits (no dead space above the footer).
+    @State private var contentHeight: CGFloat?
+    /// The checklist's top edge inside the scroll viewport: 0 at rest, going
+    /// negative as the user scrolls.
+    @State private var scrollOffset: CGFloat = 0
+
+    private var scrollHeight: CGFloat { min(contentHeight ?? Self.scrollCap, Self.scrollCap) }
+    private var needsScroll: Bool { (contentHeight ?? 0) > Self.scrollCap + 1 }
+    private var reachedBottom: Bool {
+        guard let contentHeight else { return true }
+        return scrollOffset <= scrollHeight - contentHeight + 2
+    }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 18) {
-                VStack(spacing: 10) {
-                    BrewingCupView(isActive: cupBrewing, scale: 2.8)
-                    Text("Welcome to Keepresso")
-                        .font(.title2.bold())
-                    Text("Keepresso keeps your Mac awake on your terms. It lives in the menu bar near the clock, with no Dock icon. Click its cup any time to start or stop.")
-                        .font(.callout)
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .entrance(0, revealed: revealed, animated: !reduceMotion)
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Divider()
-                        .padding(.bottom, 8)
-                    Text("How do you use your Mac?")
-                        .font(.callout.weight(.semibold))
-                    Text("Pick one to set up matching triggers, or keep it manual and add your own later. You can change this any time in Preferences.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    ForEach(Self.useCases) { useCase in
-                        useCaseRow(useCase)
-                    }
-                    if selectedUseCase == "cloud-gaming" {
-                        gamingJitterCallout
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
-                }
-                .animation(.snappy(duration: 0.25), value: selectedUseCase)
-                .entrance(1, revealed: revealed, animated: !reduceMotion)
-
-                VStack(alignment: .leading, spacing: 14) {
-                    Divider()
-                        .padding(.bottom, 4)
-                    setupRow(
-                        icon: "power",
-                        title: "Launch at login",
-                        detail: "Start Keepresso automatically when you log in."
-                    ) {
-                        Toggle("", isOn: Binding(
-                            get: { launchAtLogin },
-                            set: { LoginItem.setEnabled($0); launchAtLogin = LoginItem.isEnabled }
-                        ))
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                    }
-                    setupRow(
-                        icon: "bell.badge",
-                        title: "Notifications",
-                        detail: "Let Keepresso remind you when a long session is still keeping the Mac awake."
-                    ) {
-                        notificationControl
-                    }
-                    setupRow(
-                        icon: "checkmark.seal",
-                        title: "Administrator helper",
-                        detail: "Approve a small helper once and the privileged extras (lid-closed mode, AWDL pausing) never ask for your password again. Set and forget; removable in Preferences."
-                    ) {
-                        helperControl
-                    }
-                }
-                .entrance(2, revealed: revealed, animated: !reduceMotion)
-
-                VStack(spacing: 18) {
-                    Divider()
-                    HStack {
-                        Link("Learn more", destination: AppInfo.repository)
-                            .font(.callout)
-                        Spacer()
-                        Button("Get Started") { dismiss() }
-                            .prominentActionStyle()
-                            .keyboardShortcut(.defaultAction)
-                    }
-                }
-                .entrance(3, revealed: revealed, animated: !reduceMotion)
+        VStack(spacing: 0) {
+            ScrollView {
+                checklist
+                    .padding(.horizontal, 24)
+                    .padding(.top, 24)
+                    .padding(.bottom, 12)
+                    .background(GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: ChecklistFrameKey.self,
+                            value: proxy.frame(in: .named(Self.scrollSpace))
+                        )
+                    })
             }
-            .padding(24)
+            .coordinateSpace(name: Self.scrollSpace)
+            .frame(height: scrollHeight)
+            // The cue that more of the checklist sits below the fold: a fade
+            // and a chevron, gone once the user reaches the end (and never
+            // shown when everything fits).
+            .overlay(alignment: .bottom) {
+                if needsScroll && !reachedBottom {
+                    moreBelowCue
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: reachedBottom)
+            .onPreferenceChange(ChecklistFrameKey.self) { frame in
+                contentHeight = frame.height
+                scrollOffset = frame.minY
+            }
+
+            footer
+                .padding(.horizontal, 24)
+                .padding(.top, 12)
+                .padding(.bottom, 20)
         }
-        .frame(width: 400, height: Self.windowHeight)
+        .frame(width: 400)
         .tint(.keepressoBrew)
         .glassWindowBackground()
         // The one-shot is consumed by actually being seen, not by the attempt
@@ -165,6 +134,108 @@ struct WelcomeView: View {
             revealed = true
         }
         .task { notificationStatus = await model.notificationAuthorizationStatus() }
+    }
+
+    private var checklist: some View {
+        VStack(spacing: 18) {
+            VStack(spacing: 10) {
+                BrewingCupView(isActive: cupBrewing, scale: 2.8)
+                Text("Welcome to Keepresso")
+                    .font(.title2.bold())
+                Text("Keepresso keeps your Mac awake on your terms. It lives in the menu bar near the clock, with no Dock icon. Click its cup any time to start or stop.")
+                    .font(.callout)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .entrance(0, revealed: revealed, animated: !reduceMotion)
+
+            VStack(alignment: .leading, spacing: 10) {
+                Divider()
+                    .padding(.bottom, 8)
+                Text("How do you use your Mac?")
+                    .font(.callout.weight(.semibold))
+                Text("Pick one to set up matching triggers, or keep it manual and add your own later. You can change this any time in Preferences.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(Self.useCases) { useCase in
+                    useCaseRow(useCase)
+                }
+                if selectedUseCase == "cloud-gaming" {
+                    gamingJitterCallout
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+            .animation(.snappy(duration: 0.25), value: selectedUseCase)
+            .entrance(1, revealed: revealed, animated: !reduceMotion)
+
+            VStack(alignment: .leading, spacing: 14) {
+                Divider()
+                    .padding(.bottom, 4)
+                setupRow(
+                    icon: "power",
+                    title: "Launch at login",
+                    detail: "Start Keepresso automatically when you log in."
+                ) {
+                    Toggle("", isOn: Binding(
+                        get: { launchAtLogin },
+                        set: { LoginItem.setEnabled($0); launchAtLogin = LoginItem.isEnabled }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                }
+                setupRow(
+                    icon: "bell.badge",
+                    title: "Notifications",
+                    detail: "Let Keepresso remind you when a long session is still keeping the Mac awake."
+                ) {
+                    notificationControl
+                }
+                setupRow(
+                    icon: "checkmark.seal",
+                    title: "Administrator helper",
+                    detail: "Approve a small helper once and the privileged extras (lid-closed mode, AWDL pausing) never ask for your password again. Set and forget; removable in Preferences."
+                ) {
+                    helperControl
+                }
+            }
+            .entrance(2, revealed: revealed, animated: !reduceMotion)
+        }
+    }
+
+    /// Pinned under the scroll area, so Get Started is always on screen no
+    /// matter how small the display is.
+    private var footer: some View {
+        VStack(spacing: 14) {
+            Divider()
+            HStack {
+                Link("Learn more", destination: AppInfo.repository)
+                    .font(.callout)
+                Spacer()
+                Button("Get Started") { dismiss() }
+                    .prominentActionStyle()
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .entrance(3, revealed: revealed, animated: !reduceMotion)
+    }
+
+    /// A soft fade with a compact chevron over the scroll area's last points.
+    private var moreBelowCue: some View {
+        ZStack(alignment: .bottom) {
+            LinearGradient(
+                colors: [.clear, Color(nsColor: .windowBackgroundColor).opacity(0.85)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            Image(systemName: "chevron.compact.down")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 2)
+        }
+        .frame(height: 34)
+        .allowsHitTesting(false)
     }
 
     /// The Notifications row's trailing control, reflecting the real permission
@@ -310,6 +381,16 @@ struct WelcomeView: View {
             Spacer(minLength: 8)
             control()
         }
+    }
+}
+
+/// The welcome checklist's frame in the scroll view's space: the height
+/// sizes the window to the content, the top edge drives the "more below"
+/// cue.
+private struct ChecklistFrameKey: PreferenceKey {
+    static let defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
     }
 }
 
