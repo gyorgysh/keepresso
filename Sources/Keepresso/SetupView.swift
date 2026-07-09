@@ -33,6 +33,7 @@ struct SetupView: View {
         .frame(width: 460, height: 520)
         .tint(.keepressoBrew)
         .glassWindowBackground()
+        .centersAndFrontsWindow()
         .onAppear { model.refreshReadiness() }
     }
 

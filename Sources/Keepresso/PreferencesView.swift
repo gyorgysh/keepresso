@@ -60,6 +60,7 @@ struct PreferencesView: View {
         .frame(width: 520, height: 560)
         .tint(.keepressoBrew)
         .glassWindowBackground()
+        .centersAndFrontsWindow()
         // The helper can be approved (or revoked) over in System Settings at
         // any time; re-read on every open so the section tells the truth.
         .onAppear { model.helper.refresh() }

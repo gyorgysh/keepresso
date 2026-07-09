@@ -35,5 +35,6 @@ struct AboutView: View {
         .frame(width: 320)
         .tint(.keepressoBrew)
         .glassWindowBackground()
+        .centersAndFrontsWindow()
     }
 }

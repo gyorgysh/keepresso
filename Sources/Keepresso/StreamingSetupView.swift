@@ -39,6 +39,7 @@ struct StreamingSetupView: View {
         .frame(width: 460, height: 560)
         .tint(.keepressoBrew)
         .glassWindowBackground()
+        .centersAndFrontsWindow()
         .onAppear { model.refreshStreaming() }
         .onReceive(awdlTick) { _ in model.refreshAWDLState() }
         .onReceive(statusTick) { _ in statusPulse &+= 1 }

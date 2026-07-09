@@ -149,6 +149,7 @@ struct WelcomeView: View {
         // buttons, links), so the whole window scales together.
         .font(type.body)
         .glassWindowBackground()
+        .centersAndFrontsWindow()
         // The one-shot is consumed by actually being seen, not by the attempt
         // to open the window (see `MenuBarLabelView`): if launch is cut short
         // (DMG relocation hand-off) the flag stays false for the real run.

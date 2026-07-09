@@ -106,6 +106,37 @@ struct ScaledType {
     var title3: Font { .system(size: size(.title3)) }
 }
 
+/// Places the hosting window when it appears: centered on its screen and
+/// ordered front. Keepresso is a background agent (LSUIElement), so a plain
+/// window open can land behind the active app and wherever macOS last left
+/// the frame. One shot, at open only; the window level stays normal unless
+/// `floating`, so nothing keeps blocking other windows afterwards.
+struct WindowPlacement: NSViewRepresentable {
+    var floating = false
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            if floating { window.level = .floating }
+            window.center()
+            window.orderFrontRegardless()
+            window.makeKey()
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+extension View {
+    /// Center the window and bring it to the front when it opens. Applied
+    /// once per open; an already open window is left where the user put it.
+    func centersAndFrontsWindow() -> some View {
+        background(WindowPlacement())
+    }
+}
+
 /// The backing that keeps text readable over glass on any wallpaper: a material
 /// for blur, plus a wash of the window background color so a very dark or busy
 /// desktop can't pull the surface's luminance away from what the text color
