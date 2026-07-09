@@ -71,19 +71,17 @@ struct WelcomeView: View {
 
     private static let scrollSpace = "welcome-scroll"
 
-    /// The checklist's measured natural height, so the window sizes to the
-    /// content whenever it fits (no dead space above the footer).
-    @State private var contentHeight: CGFloat?
+    /// Measurements for the "more below" cue only. Deliberately never fed
+    /// back into layout: the scroll area's height comes from `maxHeight`
+    /// below, not from these.
+    @State private var contentHeight: CGFloat = 0
+    @State private var viewportHeight: CGFloat = 0
     /// The checklist's top edge inside the scroll viewport: 0 at rest, going
     /// negative as the user scrolls.
     @State private var scrollOffset: CGFloat = 0
 
-    private var scrollHeight: CGFloat { min(contentHeight ?? Self.scrollCap, Self.scrollCap) }
-    private var needsScroll: Bool { (contentHeight ?? 0) > Self.scrollCap + 1 }
-    private var reachedBottom: Bool {
-        guard let contentHeight else { return true }
-        return scrollOffset <= scrollHeight - contentHeight + 2
-    }
+    private var needsScroll: Bool { contentHeight > viewportHeight + 1 }
+    private var reachedBottom: Bool { scrollOffset <= viewportHeight - contentHeight + 2 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -100,7 +98,19 @@ struct WelcomeView: View {
                     })
             }
             .coordinateSpace(name: Self.scrollSpace)
-            .frame(height: scrollHeight)
+            // fixedSize makes the scroll area ask for its content's full
+            // height and the capped frame clamps it, so the window hugs the
+            // checklist whenever it fits under the cap and scrolls when it
+            // doesn't. (Verified empirically: without fixedSize the window
+            // ignores the content and opens at a default height.)
+            .frame(maxHeight: Self.scrollCap)
+            .fixedSize(horizontal: false, vertical: true)
+            .background(GeometryReader { proxy in
+                Color.clear.preference(
+                    key: ViewportHeightKey.self,
+                    value: proxy.size.height
+                )
+            })
             // The cue that more of the checklist sits below the fold: a fade
             // and a chevron, gone once the user reaches the end (and never
             // shown when everything fits).
@@ -115,6 +125,7 @@ struct WelcomeView: View {
                 contentHeight = frame.height
                 scrollOffset = frame.minY
             }
+            .onPreferenceChange(ViewportHeightKey.self) { viewportHeight = $0 }
 
             footer
                 .padding(.horizontal, 24)
@@ -390,6 +401,15 @@ struct WelcomeView: View {
 private struct ChecklistFrameKey: PreferenceKey {
     static let defaultValue: CGRect = .zero
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
+    }
+}
+
+/// The scroll viewport's height, compared against the checklist's to decide
+/// whether the cue is needed at all.
+private struct ViewportHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
     }
 }
