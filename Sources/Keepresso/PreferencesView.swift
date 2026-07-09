@@ -49,7 +49,10 @@ struct PreferencesView: View {
             Divider()
 
             content
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                // topLeading, not top: a tab whose content hugs its width
+                // (Triggers with the switch off) must still sit left like
+                // every Form tab, not float centered.
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 // A fast crossfade between sections; no sliding.
                 .animation(.easeOut(duration: 0.15), value: section)
         }

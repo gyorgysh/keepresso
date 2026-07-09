@@ -62,87 +62,97 @@ struct WelcomeView: View {
             || (selectedUseCase != nil && selectedUseCase != Self.manualID)
     }
 
+    /// The window height: enough for the whole checklist on a regular
+    /// display, capped to the visible screen on small ones, where the content
+    /// scrolls instead of running off the bottom.
+    private static let windowHeight: CGFloat = {
+        let available = (NSScreen.main?.visibleFrame.height ?? 800) - 40
+        return min(790, available)
+    }()
+
     var body: some View {
-        VStack(spacing: 18) {
-            VStack(spacing: 10) {
-                BrewingCupView(isActive: cupBrewing, scale: 2.8)
-                Text("Welcome to Keepresso")
-                    .font(.title2.bold())
-                Text("Keepresso keeps your Mac awake on your terms. It lives in the menu bar near the clock, with no Dock icon. Click its cup any time to start or stop.")
-                    .font(.callout)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .entrance(0, revealed: revealed, animated: !reduceMotion)
-
-            VStack(alignment: .leading, spacing: 10) {
-                Divider()
-                    .padding(.bottom, 8)
-                Text("How do you use your Mac?")
-                    .font(.callout.weight(.semibold))
-                Text("Pick one to set up matching triggers, or keep it manual and add your own later. You can change this any time in Preferences.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                ForEach(Self.useCases) { useCase in
-                    useCaseRow(useCase)
-                }
-                if selectedUseCase == "cloud-gaming" {
-                    gamingJitterCallout
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-            }
-            .animation(.snappy(duration: 0.25), value: selectedUseCase)
-            .entrance(1, revealed: revealed, animated: !reduceMotion)
-
-            VStack(alignment: .leading, spacing: 14) {
-                Divider()
-                    .padding(.bottom, 4)
-                setupRow(
-                    icon: "power",
-                    title: "Launch at login",
-                    detail: "Start Keepresso automatically when you log in."
-                ) {
-                    Toggle("", isOn: Binding(
-                        get: { launchAtLogin },
-                        set: { LoginItem.setEnabled($0); launchAtLogin = LoginItem.isEnabled }
-                    ))
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                }
-                setupRow(
-                    icon: "bell.badge",
-                    title: "Notifications",
-                    detail: "Let Keepresso remind you when a long session is still keeping the Mac awake."
-                ) {
-                    notificationControl
-                }
-                setupRow(
-                    icon: "checkmark.seal",
-                    title: "Administrator helper",
-                    detail: "Approve a small helper once and the privileged extras (lid-closed mode, AWDL pausing) never ask for your password again. Set and forget; removable in Preferences."
-                ) {
-                    helperControl
-                }
-            }
-            .entrance(2, revealed: revealed, animated: !reduceMotion)
-
+        ScrollView {
             VStack(spacing: 18) {
-                Divider()
-                HStack {
-                    Link("Learn more", destination: AppInfo.repository)
+                VStack(spacing: 10) {
+                    BrewingCupView(isActive: cupBrewing, scale: 2.8)
+                    Text("Welcome to Keepresso")
+                        .font(.title2.bold())
+                    Text("Keepresso keeps your Mac awake on your terms. It lives in the menu bar near the clock, with no Dock icon. Click its cup any time to start or stop.")
                         .font(.callout)
-                    Spacer()
-                    Button("Get Started") { dismiss() }
-                        .prominentActionStyle()
-                        .keyboardShortcut(.defaultAction)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .entrance(0, revealed: revealed, animated: !reduceMotion)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Divider()
+                        .padding(.bottom, 8)
+                    Text("How do you use your Mac?")
+                        .font(.callout.weight(.semibold))
+                    Text("Pick one to set up matching triggers, or keep it manual and add your own later. You can change this any time in Preferences.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    ForEach(Self.useCases) { useCase in
+                        useCaseRow(useCase)
+                    }
+                    if selectedUseCase == "cloud-gaming" {
+                        gamingJitterCallout
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+                .animation(.snappy(duration: 0.25), value: selectedUseCase)
+                .entrance(1, revealed: revealed, animated: !reduceMotion)
+
+                VStack(alignment: .leading, spacing: 14) {
+                    Divider()
+                        .padding(.bottom, 4)
+                    setupRow(
+                        icon: "power",
+                        title: "Launch at login",
+                        detail: "Start Keepresso automatically when you log in."
+                    ) {
+                        Toggle("", isOn: Binding(
+                            get: { launchAtLogin },
+                            set: { LoginItem.setEnabled($0); launchAtLogin = LoginItem.isEnabled }
+                        ))
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                    }
+                    setupRow(
+                        icon: "bell.badge",
+                        title: "Notifications",
+                        detail: "Let Keepresso remind you when a long session is still keeping the Mac awake."
+                    ) {
+                        notificationControl
+                    }
+                    setupRow(
+                        icon: "checkmark.seal",
+                        title: "Administrator helper",
+                        detail: "Approve a small helper once and the privileged extras (lid-closed mode, AWDL pausing) never ask for your password again. Set and forget; removable in Preferences."
+                    ) {
+                        helperControl
+                    }
+                }
+                .entrance(2, revealed: revealed, animated: !reduceMotion)
+
+                VStack(spacing: 18) {
+                    Divider()
+                    HStack {
+                        Link("Learn more", destination: AppInfo.repository)
+                            .font(.callout)
+                        Spacer()
+                        Button("Get Started") { dismiss() }
+                            .prominentActionStyle()
+                            .keyboardShortcut(.defaultAction)
+                    }
+                }
+                .entrance(3, revealed: revealed, animated: !reduceMotion)
             }
-            .entrance(3, revealed: revealed, animated: !reduceMotion)
+            .padding(24)
         }
-        .padding(24)
-        .frame(width: 400)
+        .frame(width: 400, height: Self.windowHeight)
         .tint(.keepressoBrew)
         .glassWindowBackground()
         // The one-shot is consumed by actually being seen, not by the attempt
