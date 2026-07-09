@@ -23,6 +23,10 @@ struct WelcomeView: View {
     /// The preset id of the use case the user picked, for the checkmark. Local
     /// to this window: applying a preset is the persisted action.
     @State private var selectedUseCase: String?
+    /// Drives the one-time entrance: sections fade up in a quick stagger the
+    /// first time the window draws. Skipped entirely under Reduce Motion.
+    @State private var revealed = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// A way someone uses their Mac, mapped to a built-in preset that sets up the
     /// matching triggers in one tap.
@@ -50,12 +54,18 @@ struct WelcomeView: View {
                 icon: "hand.tap"),
     ]
 
+    /// Whether the hero cup is brewing: a live session, or a use case just
+    /// picked (the pour is the payoff for the choice; the manual opt-out
+    /// keeps the cup honest and empty).
+    private var cupBrewing: Bool {
+        model.session.isActive
+            || (selectedUseCase != nil && selectedUseCase != Self.manualID)
+    }
+
     var body: some View {
         VStack(spacing: 18) {
             VStack(spacing: 10) {
-                Image(nsImage: NSApp.applicationIconImage)
-                    .resizable()
-                    .frame(width: 60, height: 60)
+                BrewingCupView(isActive: cupBrewing, scale: 2.8)
                 Text("Welcome to Keepresso")
                     .font(.title2.bold())
                 Text("Keepresso keeps your Mac awake on your terms. It lives in the menu bar near the clock, with no Dock icon. Click its cup any time to start or stop.")
@@ -64,10 +74,11 @@ struct WelcomeView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-
-            Divider()
+            .entrance(0, revealed: revealed, animated: !reduceMotion)
 
             VStack(alignment: .leading, spacing: 10) {
+                Divider()
+                    .padding(.bottom, 8)
                 Text("How do you use your Mac?")
                     .font(.callout.weight(.semibold))
                 Text("Pick one to set up matching triggers, or keep it manual and add your own later. You can change this any time in Preferences.")
@@ -79,12 +90,15 @@ struct WelcomeView: View {
                 }
                 if selectedUseCase == "cloud-gaming" {
                     gamingJitterCallout
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
-
-            Divider()
+            .animation(.snappy(duration: 0.25), value: selectedUseCase)
+            .entrance(1, revealed: revealed, animated: !reduceMotion)
 
             VStack(alignment: .leading, spacing: 14) {
+                Divider()
+                    .padding(.bottom, 4)
                 setupRow(
                     icon: "power",
                     title: "Launch at login",
@@ -112,16 +126,20 @@ struct WelcomeView: View {
                     helperControl
                 }
             }
+            .entrance(2, revealed: revealed, animated: !reduceMotion)
 
-            Divider()
-
-            HStack {
-                Link("Learn more", destination: AppInfo.repository)
-                    .font(.callout)
-                Spacer()
-                Button("Get Started") { dismiss() }
-                    .keyboardShortcut(.defaultAction)
+            VStack(spacing: 18) {
+                Divider()
+                HStack {
+                    Link("Learn more", destination: AppInfo.repository)
+                        .font(.callout)
+                    Spacer()
+                    Button("Get Started") { dismiss() }
+                        .prominentActionStyle()
+                        .keyboardShortcut(.defaultAction)
+                }
             }
+            .entrance(3, revealed: revealed, animated: !reduceMotion)
         }
         .padding(24)
         .frame(width: 400)
@@ -134,6 +152,7 @@ struct WelcomeView: View {
             model.hasOnboarded = true
             // Status reads only; showing the window never prompts for anything.
             model.helper.refresh()
+            revealed = true
         }
         .task { notificationStatus = await model.notificationAuthorizationStatus() }
     }
@@ -210,8 +229,7 @@ struct WelcomeView: View {
             }
         }
         .padding(8)
-        .background(Color.keepressoBrew.opacity(0.10))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .glassCard(cornerRadius: 8, tint: Color.keepressoBrew.opacity(0.14))
     }
 
     /// Act on a picked use case: the manual opt-out turns trigger gating off (so
@@ -248,6 +266,7 @@ struct WelcomeView: View {
                 Spacer(minLength: 8)
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(selected ? Color.keepressoBrew : Color.secondary)
+                    .contentTransition(.symbolEffect(.replace))
             }
             .padding(8)
             .background(selected ? Color.keepressoBrew.opacity(0.10) : Color.clear)
@@ -281,5 +300,19 @@ struct WelcomeView: View {
             Spacer(minLength: 8)
             control()
         }
+    }
+}
+
+private extension View {
+    /// One step of the welcome window's one-time entrance: fade up in order,
+    /// a quick stagger per section. With `animated` false (Reduce Motion) the
+    /// reveal is instant.
+    func entrance(_ order: Int, revealed: Bool, animated: Bool) -> some View {
+        opacity(revealed ? 1 : 0)
+            .offset(y: revealed ? 0 : 10)
+            .animation(
+                animated ? .easeOut(duration: 0.4).delay(0.05 + Double(order) * 0.08) : nil,
+                value: revealed
+            )
     }
 }

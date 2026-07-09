@@ -118,10 +118,22 @@ struct HelperAttentionView: View {
                 statusBadge(icon: "exclamationmark.triangle", text: error)
             }
         case .allSet:
+            AllSetBadge()
+        }
+    }
+
+    /// The success line, with a single seal bounce when it lands. One shot on
+    /// appear, never a loop.
+    private struct AllSetBadge: View {
+        @State private var landed = false
+
+        var body: some View {
             Label("Helper installed and responding", systemImage: "checkmark.seal.fill")
                 .font(.callout)
                 .foregroundStyle(.green)
+                .symbolEffect(.bounce, value: landed)
                 .transition(.scale(scale: 0.85).combined(with: .opacity))
+                .onAppear { landed = true }
         }
     }
 
@@ -136,8 +148,7 @@ struct HelperAttentionView: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.keepressoBrew.opacity(0.10))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .glassCard(cornerRadius: 8, tint: Color.keepressoBrew.opacity(0.14))
     }
 
     @ViewBuilder

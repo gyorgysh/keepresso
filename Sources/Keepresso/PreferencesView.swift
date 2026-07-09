@@ -50,6 +50,8 @@ struct PreferencesView: View {
 
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                // A fast crossfade between sections; no sliding.
+                .animation(.easeOut(duration: 0.15), value: section)
         }
         // 520 fits six labeled segments; 480 truncated them once Activity joined.
         .frame(width: 520, height: 560)
@@ -335,6 +337,11 @@ private struct GeneralTab: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+        // Slide the conditional rows (battery threshold, error notes) in and
+        // out instead of popping them.
+        .animation(.snappy(duration: 0.25), value: model.batteryAutoPauseEnabled)
+        .animation(.snappy(duration: 0.25), value: model.closedDisplayError)
+        .animation(.snappy(duration: 0.25), value: model.closedDisplayAutoError)
         .onAppear { model.refreshClosedDisplay() }
     }
 
@@ -425,6 +432,8 @@ private struct TriggersTab: View {
             }
             Spacer(minLength: 0)
         }
+        .animation(.snappy(duration: 0.25), value: model.triggersEnabled)
+        .animation(.snappy(duration: 0.25), value: model.triggersPaused)
     }
 
     private var presets: some View {
@@ -515,6 +524,7 @@ private struct ReminderTab: View {
                      : "A one-time notification once a session has run this long, in case you forget the Mac is awake.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .contentTransition(.opacity)
             }
             Section {
                 Toggle("Notify when a session ends", isOn: Binding(
@@ -539,6 +549,8 @@ private struct ReminderTab: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+        .animation(.snappy(duration: 0.25), value: model.reminderEnabled)
+        .animation(.snappy(duration: 0.25), value: model.reminderRepeats)
     }
 }
 
@@ -605,6 +617,7 @@ private struct DisplayTab: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+        .animation(.snappy(duration: 0.25), value: model.virtualDisplayEnabled)
     }
 }
 
@@ -654,5 +667,6 @@ private struct DiskTab: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+        .animation(.snappy(duration: 0.25), value: model.diskKeepAliveEnabled)
     }
 }

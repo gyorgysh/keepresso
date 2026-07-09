@@ -43,10 +43,19 @@ struct MenuRowButtonStyle: ButtonStyle {
                 .padding(.horizontal, 8)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(isHovering || configuration.isPressed ? Color.primary.opacity(0.1) : .clear)
+                        .fill(highlight)
                 )
+                // Ease the hover highlight in and out; presses stay instant
+                // (the value below changes without an animation) so clicks
+                // keep their immediate feel.
+                .animation(.easeOut(duration: 0.12), value: isHovering)
                 .contentShape(Rectangle())
                 .onHover { isHovering = $0 }
+        }
+
+        private var highlight: Color {
+            if configuration.isPressed { return Color.primary.opacity(0.14) }
+            return isHovering ? Color.primary.opacity(0.1) : .clear
         }
     }
 }
@@ -81,16 +90,33 @@ extension View {
     /// Liquid Glass material, tinted faintly toward the window background color
     /// so its content keeps contrast over dark desktops; on earlier systems it
     /// falls back to a frosted `ultraThinMaterial`, which reads as glass too.
+    /// Pass a `tint` for an accented card (the copper callouts, the warning
+    /// banner); it replaces the neutral wash on both paths.
     @ViewBuilder
-    func glassCard(cornerRadius: CGFloat = 12) -> some View {
+    func glassCard(cornerRadius: CGFloat = 12, tint: Color? = nil) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         if #available(macOS 26.0, *) {
             self.glassEffect(
-                .regular.tint(Color(nsColor: .windowBackgroundColor).opacity(0.25)),
+                .regular.tint(tint ?? Color(nsColor: .windowBackgroundColor).opacity(0.25)),
                 in: shape
             )
         } else {
+            // The tint sits behind the material, so it shows through the blur
+            // softly instead of flat.
             self.background(.ultraThinMaterial, in: shape)
+                .background(tint ?? .clear, in: shape)
+        }
+    }
+
+    /// The style for a primary call to action: real Liquid Glass on macOS 26,
+    /// the familiar bordered prominent button before. Both pick up the brew
+    /// accent from the surrounding `tint`.
+    @ViewBuilder
+    func prominentActionStyle() -> some View {
+        if #available(macOS 26.0, *) {
+            self.buttonStyle(.glassProminent)
+        } else {
+            self.buttonStyle(.borderedProminent)
         }
     }
 

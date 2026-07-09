@@ -14,6 +14,8 @@ struct CheckRow: View {
                 .foregroundStyle(tint)
                 .font(.title3)
                 .frame(width: 22)
+                .contentTransition(.symbolEffect(.replace))
+                .animation(.snappy(duration: 0.25), value: check.status)
                 .accessibilityLabel(statusLabel)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -42,6 +44,8 @@ struct CheckRow: View {
                         if let command = remediation.command {
                             Button(copied ? "Copied!" : "Copy command") { copy(command) }
                                 .buttonStyle(.link)
+                                .contentTransition(.opacity)
+                                .animation(.easeInOut(duration: 0.2), value: copied)
                             Text(command)
                                 .font(.system(.caption, design: .monospaced))
                                 .foregroundStyle(.secondary)
@@ -95,5 +99,11 @@ struct CheckRow: View {
         pasteboard.clearContents()
         pasteboard.setString(command, forType: .string)
         copied = true
+        // Settle back to the offer after a moment, so the row doesn't read
+        // "Copied!" forever.
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            copied = false
+        }
     }
 }

@@ -55,12 +55,14 @@ struct MenuBarContent: View {
 
             if model.helperAttention != nil {
                 helperAttentionBanner
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
             heldByLine
 
             if model.triggersEnabled && !model.triggersPaused {
                 triggerSummary
+                    .transition(.opacity)
             }
 
             Divider()
@@ -71,7 +73,7 @@ struct MenuBarContent: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Button("Pause Triggers") { model.pauseTriggers() }
-                    .buttonStyle(.borderedProminent)
+                    .prominentActionStyle()
                     .frame(maxWidth: .infinity)
             } else {
                 if model.triggersEnabled {
@@ -111,7 +113,7 @@ struct MenuBarContent: View {
 
                 if model.triggersEnabled {
                     Button("Resume Triggers") { model.resumeTriggers() }
-                        .buttonStyle(.borderedProminent)
+                        .prominentActionStyle()
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -163,6 +165,15 @@ struct MenuBarContent: View {
         }
         .padding(14)
         .frame(width: 280)
+        // Morph between the panel's states (triggers paused, closed-display
+        // captions, the helper banner) instead of jump-cutting. Scoped to
+        // these values so the per-second tick never animates layout.
+        .animation(.snappy(duration: 0.25), value: session.isActive)
+        .animation(.snappy(duration: 0.25), value: model.triggersEnabled)
+        .animation(.snappy(duration: 0.25), value: model.triggersPaused)
+        .animation(.snappy(duration: 0.25), value: model.closedDisplayEnabled)
+        .animation(.snappy(duration: 0.25), value: model.closedDisplayError)
+        .animation(.snappy(duration: 0.25), value: model.helperAttention)
         .glassPanelBackground()
         .tint(.keepressoBrew)
         .onAppear { model.refreshClosedDisplay() }
@@ -195,10 +206,15 @@ struct MenuBarContent: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.pausedByBattery ? "Paused" : (session.isActive ? "Brewing" : "Idle"))
                     .font(.headline)
+                    .contentTransition(.opacity)
                 Text(statusDetail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    // Roll the digits of "Awake for" / "Stops in" like a
+                    // timer instead of re-stamping the line every second.
+                    .contentTransition(.numericText())
+                    .animation(.linear(duration: 0.25), value: statusDetail)
             }
             Spacer()
         }
@@ -240,7 +256,7 @@ struct MenuBarContent: View {
             }
         }
         .padding(8)
-        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .glassCard(cornerRadius: 8, tint: Color.orange.opacity(0.16))
     }
 
     // MARK: - Duration editors
@@ -269,7 +285,7 @@ struct MenuBarContent: View {
                     apply(TimeInterval(hours * 3600 + minutes * 60))
                     dismiss()
                 }
-                .buttonStyle(.borderedProminent)
+                .prominentActionStyle()
                 .frame(maxWidth: .infinity)
                 .disabled(hours == 0 && minutes == 0)
             }
@@ -298,7 +314,7 @@ struct MenuBarContent: View {
                     start(parts.hour ?? 0, parts.minute ?? 0)
                     dismiss()
                 }
-                .buttonStyle(.borderedProminent)
+                .prominentActionStyle()
                 .frame(maxWidth: .infinity)
             }
             .padding(14)
@@ -380,6 +396,9 @@ struct MenuBarContent: View {
                         Image(systemName: state.satisfied ? "checkmark.circle.fill" : "circle")
                             .foregroundStyle(state.inGrace ? Color.orange : (state.satisfied ? Color.green : Color.secondary))
                             .font(.caption)
+                            .contentTransition(.symbolEffect(.replace))
+                            .animation(.snappy(duration: 0.25), value: state.satisfied)
+                            .animation(.snappy(duration: 0.25), value: state.inGrace)
                             .accessibilityLabel(state.inGrace ? "Met, in grace period" : (state.satisfied ? "Met" : "Not met"))
                         Text(state.rule.label)
                             .font(.caption)
@@ -391,6 +410,8 @@ struct MenuBarContent: View {
                             Text(Self.graceCountdown(remaining))
                                 .font(.caption2.monospacedDigit())
                                 .foregroundStyle(.orange)
+                                .contentTransition(.numericText(countsDown: true))
+                                .animation(.linear(duration: 0.2), value: remaining)
                         }
                     }
                 }

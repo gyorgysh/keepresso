@@ -20,6 +20,13 @@ struct BrewingCupView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// The animated pour level (0 empty, 1 full). Appears in the current
+    /// state; only a live `isActive` change plays the pour or the drain.
+    @State private var fill: CGFloat = 0
+    /// Steam waits for the pour to finish, so the sequence reads pour first,
+    /// then steam, rather than everything at once.
+    @State private var steaming = false
+
     /// One full rise-and-dissolve cycle per wisp, staggered thirds apart.
     private static let loopDuration: TimeInterval = 3.4
     private static let wispDelays: [TimeInterval] = [0, 1.15, 2.3]
@@ -28,20 +35,43 @@ struct BrewingCupView: View {
         VStack(spacing: 1 * scale) {
             steam
                 .frame(width: 22 * scale, height: 9 * scale)
-            BrandCupGlyph(filled: isActive)
+                .animation(.easeInOut(duration: 0.25), value: steaming)
+            BrandCupGlyph(fill: fill)
                 .frame(width: 22 * scale, height: 16.6 * scale)
         }
         .accessibilityHidden(true) // the header text next to it carries the status
+        .onAppear {
+            fill = isActive ? 1 : 0
+            steaming = isActive
+        }
+        .onChange(of: isActive) { _, active in
+            guard !reduceMotion else {
+                fill = active ? 1 : 0
+                steaming = active
+                return
+            }
+            steaming = false
+            if active {
+                withAnimation(.easeOut(duration: 0.55)) {
+                    fill = 1
+                } completion: {
+                    // Only steam if nothing drained the cup mid-pour.
+                    if fill == 1 { steaming = true }
+                }
+            } else {
+                withAnimation(.easeIn(duration: 0.4)) { fill = 0 }
+            }
+        }
     }
 
     @ViewBuilder
     private var steam: some View {
-        if isActive && !reduceMotion {
+        if steaming && !reduceMotion {
             TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
                 let now = context.date.timeIntervalSinceReferenceDate
                 wisps { delay in Self.wispState(at: now, delay: delay) }
             }
-        } else if isActive {
+        } else if steaming {
             // Reduce Motion: steady mid-rise steam instead of movement.
             wisps { _ in (opacity: 0.55, rise: -1) }
         } else {

@@ -64,9 +64,16 @@ enum MenuBarIcon {
 
 /// The brand cup (body, handle, saucer, no steam) as a SwiftUI view for real
 /// windows, where color runs normally: brew accent when filled, secondary as
-/// an outline. ``BrewingCupView`` draws its own animated steam above this.
+/// an outline. `fill` is the pour level, 0 (empty outline) through 1 (the
+/// solid brewing cup); animating it raises the brew inside the outline and
+/// dissolves the outline near the brim, so starting a session reads as a
+/// pour rather than a swap. ``BrewingCupView`` drives that animation and
+/// draws its own steam above this.
 struct BrandCupGlyph: View {
-    var filled: Bool
+    var fill: CGFloat
+
+    init(filled: Bool) { fill = filled ? 1 : 0 }
+    init(fill: CGFloat) { self.fill = min(1, max(0, fill)) }
 
     var body: some View {
         GeometryReader { geo in
@@ -74,25 +81,47 @@ struct BrandCupGlyph: View {
             let scale = min(geo.size.width / ink.width, geo.size.height / ink.height)
             let transform = CGAffineTransform(scaleX: scale, y: scale)
                 .translatedBy(x: -ink.minX, y: -ink.minY)
-            let color = filled ? Color.keepressoBrew : Color.secondary
 
             ZStack {
-                if filled {
-                    Path(BrandCupMark.cup()).applying(transform)
-                        .fill(color)
-                    Path(BrandCupMark.crema()).applying(transform)
-                        .fill(.black)
-                        .blendMode(.destinationOut)
-                    Path(BrandCupMark.handle()).applying(transform)
-                        .stroke(color, style: .init(lineWidth: BrandCupMark.outlineWidth * scale, lineCap: .round))
-                } else {
+                // The empty cup, gone once the pour reaches the brim so the
+                // full state matches the solid brewing mark exactly.
+                Group {
                     Path(BrandCupMark.cupAndHandle()).applying(transform)
-                        .stroke(color, style: .init(lineWidth: BrandCupMark.outlineWidth * scale, lineCap: .round))
+                        .stroke(Color.secondary, style: .init(lineWidth: BrandCupMark.outlineWidth * scale, lineCap: .round))
+                    Path(BrandCupMark.saucer()).applying(transform)
+                        .stroke(Color.secondary, style: .init(lineWidth: BrandCupMark.saucerWidth * scale, lineCap: .round))
                 }
-                Path(BrandCupMark.saucer()).applying(transform)
-                    .stroke(color, style: .init(lineWidth: BrandCupMark.saucerWidth * scale, lineCap: .round))
+                .opacity(outlineOpacity)
+
+                // The brew, rising from the saucer up. The crema stripe and
+                // the handle are revealed by the same rising mask.
+                Group {
+                    ZStack {
+                        Path(BrandCupMark.cup()).applying(transform)
+                            .fill(Color.keepressoBrew)
+                        Path(BrandCupMark.crema()).applying(transform)
+                            .fill(.black)
+                            .blendMode(.destinationOut)
+                        Path(BrandCupMark.handle()).applying(transform)
+                            .stroke(Color.keepressoBrew, style: .init(lineWidth: BrandCupMark.outlineWidth * scale, lineCap: .round))
+                    }
+                    .compositingGroup() // confine destinationOut to the brew's layers
+                    Path(BrandCupMark.saucer()).applying(transform)
+                        .stroke(Color.keepressoBrew, style: .init(lineWidth: BrandCupMark.saucerWidth * scale, lineCap: .round))
+                }
+                .mask {
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        Rectangle().frame(height: geo.size.height * fill)
+                    }
+                }
             }
-            .compositingGroup() // confine destinationOut to the glyph's layers
         }
+    }
+
+    /// The outline holds while the brew rises, then dissolves over the last
+    /// quarter of the pour.
+    private var outlineOpacity: Double {
+        fill <= 0.75 ? 1 : Double((1 - fill) / 0.25)
     }
 }
