@@ -73,6 +73,31 @@ public final class FileRestoreState: HelperRestoreStatePersisting {
     }
 }
 
+/// When the helper daemon process may exit, kept pure so it's testable (the
+/// daemon's timer feeds in its counters).
+///
+/// Two ways out, both requiring no clients and no holds:
+/// - The ordinary idle exit additionally waits for two consecutive idle
+///   checks, so a freshly accepted connection can't be cut off before its
+///   first call. launchd relaunches the daemon on the next XPC message.
+/// - Retirement, requested by the app after an update or a protocol bump,
+///   skips that grace and exits at the first fully idle check: this process
+///   is still the pre-update binary image, and the client releases its
+///   connection between calls precisely so this moment arrives. Live *holds*
+///   always block an exit; dropping a sleep hold for even a moment with the
+///   lid closed could put the Mac to sleep before any re-assert lands.
+public enum HelperShutdownPolicy {
+    public static func shouldExit(
+        clientCount: Int,
+        holdsIdle: Bool,
+        terminateRequested: Bool,
+        consecutiveIdleChecks: Int
+    ) -> Bool {
+        guard clientCount == 0, holdsIdle else { return false }
+        return terminateRequested || consecutiveIdleChecks >= 2
+    }
+}
+
 /// The helper daemon's whole brain, kept out of the executable target so it
 /// can be unit-tested (the `keepresso-helper` binary is just XPC wiring around
 /// this). Tracks which client connections hold the sleep and AWDL switches,

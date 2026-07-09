@@ -91,10 +91,20 @@ final class HelperManager {
     /// only honest view: `SMAppService.status` reported `.enabled` on a live
     /// machine while the daemon record underneath sat disabled.
     @ObservationIgnored private let dumper: BTMDumpProviding
+    /// Whether this is the first run after an app update, so the enabled edge
+    /// retires the daemon even when the protocol still matches: launchd keeps
+    /// the old binary image serving otherwise, since the file under it was
+    /// swapped, not the process.
+    @ObservationIgnored private let appUpdatedSinceLastRun: Bool
 
-    init(client: XPCHelperClient, dumper: BTMDumpProviding = SFLToolBTMDumper()) {
+    init(
+        client: XPCHelperClient,
+        dumper: BTMDumpProviding = SFLToolBTMDumper(),
+        appUpdatedSinceLastRun: Bool = false
+    ) {
         self.client = client
         self.dumper = dumper
+        self.appUpdatedSinceLastRun = appUpdatedSinceLastRun
         refresh()
     }
 
@@ -108,10 +118,12 @@ final class HelperManager {
         status = service.status
         availability.set(status == .enabled)
         if status == .enabled, !wasInstalled {
-            // Warm the connection and, after an app update, nudge a stale
-            // daemon to retire so launchd relaunches the new binary.
+            // Warm the connection and, after an app update or a protocol
+            // bump, nudge the stale daemon to retire so launchd relaunches
+            // the binary now in the bundle.
             let client = self.client
-            Task.detached { client.retireStaleDaemon() }
+            let appUpdated = self.appUpdatedSinceLastRun
+            Task.detached { client.retireStaleDaemon(appUpdated: appUpdated) }
         }
     }
 

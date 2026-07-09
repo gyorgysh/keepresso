@@ -85,8 +85,9 @@ public enum HelperService {
     /// watchdog). While any hold is live the daemon re-downs the interface
     /// every few seconds, since macOS re-raises it on its own.
     func setAWDLHold(_ holding: Bool, reply: @escaping @Sendable (Bool) -> Void)
-    /// Ask the daemon to exit once it has no clients and no holds, so launchd
-    /// relaunches the (possibly newer) binary on the next call.
+    /// Ask the daemon to exit at its first fully idle moment, without the
+    /// ordinary exit's extra grace period (see ``HelperShutdownPolicy``), so
+    /// launchd relaunches the binary currently in the bundle on the next call.
     func terminateWhenIdle()
 }
 
@@ -101,12 +102,15 @@ public protocol PrivilegedHelperCalling: AnyObject, Sendable {
     func setAWDLHold(_ holding: Bool) -> Bool
 }
 
-/// Real client over `NSXPCConnection`. Keeps one long-lived connection on
-/// purpose: the daemon scopes holds to the connection, so this object's
-/// connection *is* the app's claim on them. If the daemon is killed or updated
-/// mid-hold the interruption handler re-asserts the desired holds on the
-/// relaunched daemon, so a hold survives a daemon restart but never an app
-/// death.
+/// Real client over `NSXPCConnection`. The connection *is* the app's claim on
+/// its holds: the daemon scopes holds to the connection, so it stays open
+/// exactly as long as a hold is wanted, and is released after any call made
+/// with nothing held. Letting go matters for updates: launchd only spawns the
+/// binary currently in the app bundle on the *next* connection, so a client
+/// that never disconnects would keep the pre-update daemon image serving
+/// forever. If the daemon is killed, retired, or updated mid-hold the
+/// interruption handler re-asserts the desired holds on the relaunched (new)
+/// daemon, so a hold survives a daemon restart but never an app death.
 public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable {
     private let lock = NSLock()
     private var connection: NSXPCConnection?
@@ -152,13 +156,20 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     /// Fire the version-handshake-and-retire nudge: if the daemon on the other
-    /// end predates this app's protocol, ask it to exit once idle. Called in
-    /// the background at app launch; best-effort.
-    public func retireStaleDaemon() {
+    /// end predates this app's protocol, or the app itself just updated (the
+    /// daemon can't tell; its in-memory image predates the swap either way),
+    /// ask it to exit once nothing is held. Called in the background at app
+    /// launch; best-effort.
+    public func retireStaleDaemon(appUpdated: Bool = false) {
         guard let proxy = proxyForAsyncUse() else { return }
-        proxy.ping { version in
-            if version != HelperService.protocolVersion {
+        proxy.ping { [weak self] version in
+            if version != HelperService.protocolVersion || appUpdated {
                 proxy.terminateWhenIdle()
+            }
+            // The retire message is one-way: give it a beat to land, then
+            // release the connection so the daemon is free to exit.
+            DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
+                self?.releaseConnectionUnlessHeld()
             }
         }
     }
@@ -178,9 +189,24 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         body(proxy, done)
         guard semaphore.wait(timeout: .now() + timeout) == .success else {
             _ = outcome.settle(false)
+            releaseConnectionUnlessHeld()
             return false
         }
+        releaseConnectionUnlessHeld()
         return outcome.value
+    }
+
+    /// Drop the connection when no hold is wanted. With nothing held there is
+    /// no claim to keep alive, and holding on would pin the daemon: it can't
+    /// idle-exit (or retire after an update) while a client is connected, and
+    /// launchd only picks up a newly installed binary on a fresh connection.
+    private func releaseConnectionUnlessHeld() {
+        lock.lock()
+        let held = wantsSleepHold || wantsAWDLHold
+        let stale = held ? nil : connection
+        if !held { connection = nil }
+        lock.unlock()
+        stale?.invalidate()
     }
 
     private func proxy(errorHandler: @escaping @Sendable () -> Void) -> HelperXPCProtocol? {

@@ -100,10 +100,23 @@ private struct MenuBarLabelView: View {
 /// ticker so they outlive any transient menu UI.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    let model = AppModel()
+    let model: AppModel
     /// Sparkle-backed auto-updater, behind the ``Updating`` seam. Started here so
     /// it schedules background checks for the app's whole lifetime.
     let updater: any Updating = SparkleUpdater()
+
+    override init() {
+        // Order matters: constructing AppModel builds HelperManager, whose
+        // first SMAppService status read is already a BTM contact, and BTM
+        // revalidates the helper's record on contact. Any old copy of the app
+        // that an update pushed into the Trash must be deleted before that
+        // moment, or the record resolves into the Trash and macOS disables
+        // the daemon behind our back.
+        let updated = UpdateArrival.checkAndRecord()
+        StaleBundleCleaner.sweepAtStartup(afterUpdate: updated)
+        model = AppModel(appUpdatedSinceLastRun: updated)
+        super.init()
+    }
     private lazy var ticker = SessionTicker(
         session: model.session,
         disk: model.disk,

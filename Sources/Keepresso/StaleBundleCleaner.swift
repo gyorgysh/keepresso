@@ -12,12 +12,48 @@ import KeepressoCore
 enum StaleBundleCleaner {
     private static let bookmarkKey = "PreviousBundleBookmark"
 
+    /// The launch sweep, run synchronously before anything in the process
+    /// touches `SMAppService` or BTM: even a plain status read makes BTM
+    /// revalidate the helper's record, so the poisonous Trash copy has to be
+    /// gone before the first contact, not cleaned up sometime after.
+    ///
+    /// The bookmark pass runs every launch (a few file stats). The deeper
+    /// pass, reading BTM's own records and probing the obvious Trash path,
+    /// runs only when this looks like the first launch after an update, so
+    /// ordinary launches pay nothing for it.
+    static func sweepAtStartup(afterUpdate: Bool) {
+        let result = sweepAndRemember()
+        guard afterUpdate || result != .nothingToSweep else { return }
+        // BTM's records name every copy it still tracks; any of them inside
+        // a Trash folder is exactly the poison that gets the daemon disabled.
+        if let bundleID = Bundle.main.bundleIdentifier,
+           let dump = SFLToolBTMDumper().dumpBTM() {
+            let findings = BTMInspection.findings(
+                inDump: dump,
+                bundleIdentifier: bundleID,
+                helperLabel: HelperService.machServiceLabel
+            )
+            if !findings.staleCopyPaths.isEmpty {
+                removeTrashedCopies(at: findings.staleCopyPaths)
+            }
+        }
+        // And the copy Sparkle or Homebrew just trashed under our own name,
+        // whether or not BTM has a record of it. The Trash itself can't be
+        // enumerated without Full Disk Access, but a direct path needs none.
+        if let trash = FileManager.default.urls(for: .trashDirectory, in: .userDomainMask).first {
+            let candidate = trash.appendingPathComponent(Bundle.main.bundleURL.lastPathComponent)
+            removeTrashedCopies(at: [candidate.path])
+        }
+    }
+
     /// Delete the trashed previous copy if there is one, then remember the
     /// current bundle for the run after the next update. Blocking file work;
-    /// call it off the main actor.
-    static func sweepAndRemember() {
+    /// call it off the main actor (or from `sweepAtStartup`, before the UI
+    /// exists).
+    @discardableResult
+    static func sweepAndRemember() -> StaleBundleSweepResult {
         let bundleURL = Bundle.main.bundleURL
-        guard let bundleID = Bundle.main.bundleIdentifier else { return }
+        guard let bundleID = Bundle.main.bundleIdentifier else { return .nothingToSweep }
         let defaults = UserDefaults.standard
         let result = StaleBundleSweep.sweep(
             previousBookmark: defaults.data(forKey: bookmarkKey),
@@ -48,6 +84,7 @@ enum StaleBundleCleaner {
         if let bookmark = try? bundleURL.bookmarkData() {
             defaults.set(bookmark, forKey: bookmarkKey)
         }
+        return result
     }
 
     /// Delete copies of the app that a BTM dump says are still tracked in a
@@ -71,5 +108,27 @@ enum StaleBundleCleaner {
                 NSLog("Keepresso: couldn't delete stale copy at %@: %@", path, error.localizedDescription)
             }
         }
+    }
+}
+
+/// Detects the first launch after an update by comparing the build number
+/// against the one recorded on the previous run. The flag drives the two
+/// version-boundary chores: the deep stale-bundle sweep above, and retiring
+/// the helper daemon so launchd's next spawn runs the freshly installed
+/// binary instead of the old image it kept in memory.
+enum UpdateArrival {
+    private static let key = "LastRunBuild"
+
+    /// Whether the build changed since the last run, recording the current
+    /// one either way. The very first launch reports false: there is no
+    /// previous version to clean up after.
+    static func checkAndRecord() -> Bool {
+        let defaults = UserDefaults.standard
+        let previous = defaults.string(forKey: key)
+        guard let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        else { return false }
+        defaults.set(current, forKey: key)
+        guard let previous else { return false }
+        return current != previous
     }
 }

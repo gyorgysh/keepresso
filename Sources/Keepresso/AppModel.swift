@@ -53,7 +53,8 @@ final class AppModel {
 
     init(
         store: SettingsStore = UserDefaultsSettingsStore(),
-        factory: TriggerFactory = TriggerFactory()
+        factory: TriggerFactory = TriggerFactory(),
+        appUpdatedSinceLastRun: Bool = false
     ) {
         self.store = store
         self.gate = TriggerGateController(factory: factory)
@@ -65,7 +66,10 @@ final class AppModel {
         // thread-safe bridge: the manager writes it, the detached-task
         // closures read it at each engage.
         let helperClient = XPCHelperClient()
-        let helperManager = HelperManager(client: helperClient)
+        let helperManager = HelperManager(
+            client: helperClient,
+            appUpdatedSinceLastRun: appUpdatedSinceLastRun
+        )
         self.helper = helperManager
         let helperInstalled: @Sendable () -> Bool = { [availability = helperManager.availability] in
             availability.isEnabled
@@ -822,7 +826,7 @@ final class AppModel {
         // the Trash: BTM's bookmark keeps resolving the helper's record into
         // the Trash and disabling the daemon while one is there, so a repair
         // before the sweep wouldn't stick.
-        await Task.detached { StaleBundleCleaner.sweepAndRemember() }.value
+        await Task.detached { _ = StaleBundleCleaner.sweepAndRemember() }.value
         switch await helper.verifyAndRepairIfNeeded() {
         case .healthy:
             helperAttention = nil
@@ -864,7 +868,7 @@ final class AppModel {
         Task {
             // The reinstall lands on a record BTM will invalidate again if an
             // old copy still sits in the Trash; sweep before rebuilding.
-            await Task.detached { StaleBundleCleaner.sweepAndRemember() }.value
+            await Task.detached { _ = StaleBundleCleaner.sweepAndRemember() }.value
             await closedDisplayAuto.stopIfHolding()
             await awdl.stop()
             await helper.uninstall()
