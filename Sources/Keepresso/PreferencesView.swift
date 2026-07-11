@@ -224,25 +224,27 @@ private struct GeneralTab: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section {
-                Toggle("Pause on low battery", isOn: Binding(
-                    get: { model.batteryAutoPauseEnabled },
-                    set: { model.batteryAutoPauseEnabled = $0 }
-                ))
-                if model.batteryAutoPauseEnabled {
-                    Picker("Below", selection: Binding(
-                        get: { model.pauseBelowBatteryPercent },
-                        set: { model.pauseBelowBatteryPercent = $0 }
-                    )) {
-                        ForEach([10, 15, 20, 30, 50], id: \.self) { percent in
-                            Text("\(percent)%").tag(percent)
+            if model.machineHasBattery {
+                Section {
+                    Toggle("Pause on low battery", isOn: Binding(
+                        get: { model.batteryAutoPauseEnabled },
+                        set: { model.batteryAutoPauseEnabled = $0 }
+                    ))
+                    if model.batteryAutoPauseEnabled {
+                        Picker("Below", selection: Binding(
+                            get: { model.pauseBelowBatteryPercent },
+                            set: { model.pauseBelowBatteryPercent = $0 }
+                        )) {
+                            ForEach([10, 15, 20, 30, 50, 60, 70, 80, 90], id: \.self) { percent in
+                                Text("\(percent)%").tag(percent)
+                            }
                         }
                     }
+                } footer: {
+                    Text("Lets the Mac sleep once battery charge drops below this level, even mid-session, so it doesn't run flat.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-            } footer: {
-                Text("Lets the Mac sleep once battery charge drops below this level, even mid-session, so it doesn't run flat.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
             Section {
                 Toggle("Keep awake with the lid closed", isOn: Binding(

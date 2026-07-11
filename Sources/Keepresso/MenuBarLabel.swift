@@ -27,12 +27,12 @@ struct MenuBarLabel: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(nsImage: session.isActive ? MenuBarIcon.brewing : MenuBarIcon.idle)
-            if session.pausedByBattery {
-                // The battery pause otherwise reads as a plain idle cup; say
-                // why right in the bar: it's time to charge.
-                Image(systemName: "battery.25percent")
-            }
+            // One image for every state, battery pause included: the status
+            // item never widens for a conditionally added second image (it
+            // just clips it), so the low-battery badge is baked into a wider
+            // composite in ``MenuBarIcon``. Added text does relayout, which
+            // is why the countdown below works as a separate view.
+            Image(nsImage: icon)
             if showCountdown, session.isActive, session.remaining != nil {
                 Text(remainingText)
                     .font(.caption.monospacedDigit())
@@ -42,6 +42,11 @@ struct MenuBarLabel: View {
             }
         }
         .accessibilityLabel(accessibilityText)
+    }
+
+    private var icon: NSImage {
+        if session.pausedByBattery { return MenuBarIcon.pausedLowBattery }
+        return session.isActive ? MenuBarIcon.brewing : MenuBarIcon.idle
     }
 
     private var accessibilityText: String {

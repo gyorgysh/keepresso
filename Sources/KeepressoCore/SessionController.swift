@@ -300,7 +300,7 @@ public final class SessionController {
                         endedNaturally: true,
                         notice: (
                             title: "Paused on low battery",
-                            body: "Battery is at \(percent)%. Keepresso is letting the Mac sleep; plug in to charge, or it resumes above \(threshold + Self.batteryResumeMargin)%."
+                            body: "Battery is at \(percent)%. Keepresso is letting the Mac sleep until you plug in to charge."
                         )
                     )
                 }

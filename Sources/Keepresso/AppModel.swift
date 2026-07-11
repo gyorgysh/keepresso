@@ -425,6 +425,12 @@ final class AppModel {
     /// The default cutoff used when the feature is first enabled.
     static let defaultPauseBelowBatteryPercent = 20
 
+    /// Whether this Mac has an internal battery at all. Read once at launch
+    /// (battery hardware doesn't come and go): desktops (Mac mini, Studio,
+    /// Pro) report none, and Preferences hides the auto-pause section and the
+    /// battery trigger rules there, where they could never fire.
+    @ObservationIgnored let machineHasBattery = IOKitPowerSourceMonitor().current.hasBattery
+
     /// Whether an active session force-stops (letting the Mac sleep) once
     /// battery charge drops below ``pauseBelowBatteryPercent``. Enabling it
     /// requests notification permission: the pause announces itself in a

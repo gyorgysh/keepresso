@@ -376,7 +376,9 @@ private final class FakeReminder: ReminderNotifying {
     #expect(reminder.notices.count == 1)
     #expect(reminder.notices.first?.title == "Paused on low battery")
     #expect(reminder.notices.first?.body.contains("15%") == true)
-    #expect(reminder.notices.first?.body.contains("23%") == true) // cutoff + resume margin
+    // Resuming is tied to charging, not to a charge level: on battery the
+    // percentage only ever falls, so the notice tells the user to plug in.
+    #expect(reminder.notices.first?.body.contains("plug in") == true)
 
     // Staying below the cutoff must not repeat the notice every tick.
     controller.reconcile(battery: .discharging(14))

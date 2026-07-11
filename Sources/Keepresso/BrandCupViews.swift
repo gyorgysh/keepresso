@@ -9,19 +9,31 @@ import AppKit
 enum MenuBarIcon {
     static let idle = render(active: false)
     static let brewing = render(active: true)
+    /// The idle cup with a drained battery beside it, for the battery pause:
+    /// without it the pause reads as a plain idle cup. One composite image
+    /// rather than a second `Image` in the label's HStack, because the
+    /// MenuBarExtra label's status item never widens for a conditionally
+    /// added image, it just clips it (measured on macOS 26: adding an
+    /// `Image(systemName:)` left the item at 23 pt, while swapping in a
+    /// single wider NSImage resized it; added `Text` also resizes, which is
+    /// why the countdown works).
+    static let pausedLowBattery = render(active: false, lowBatteryBadge: true)
 
-    private static func render(active: Bool) -> NSImage {
+    private static func render(active: Bool, lowBatteryBadge: Bool = false) -> NSImage {
         let side = BrandCupMark.grid
-        let image = NSImage(size: NSSize(width: side, height: side), flipped: true) { _ in
+        let width = lowBatteryBadge ? side + 12 : side
+        let image = NSImage(size: NSSize(width: width, height: side), flipped: true) { _ in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
             ctx.setLineCap(.round)
             ctx.setFillColor(NSColor.black.cgColor)
             ctx.setStrokeColor(NSColor.black.cgColor)
 
+            ctx.saveGState()
             if !active {
                 // No steam in this state, so don't reserve its headroom: grow
-                // the cup a touch and center its ink in the canvas, keeping
-                // the glyph's optical size in line with neighboring icons.
+                // the cup a touch and center its ink in the left side-by-side
+                // cell, keeping the glyph's optical size in line with
+                // neighboring icons.
                 let ink = BrandCupMark.cupInk
                 ctx.translateBy(x: side / 2, y: side / 2)
                 ctx.scaleBy(x: 1.1, y: 1.1)
@@ -55,10 +67,30 @@ enum MenuBarIcon {
             ctx.setLineWidth(BrandCupMark.saucerWidth)
             ctx.addPath(BrandCupMark.saucer())
             ctx.strokePath()
+            ctx.restoreGState()
+
+            if lowBatteryBadge { drawLowBattery(in: ctx, leftEdge: side + 1.5) }
             return true
         }
         image.isTemplate = true
         return image
+    }
+
+    /// A small outline battery with a thin charge sliver, drawn to the right
+    /// of the cup and vertically centered on the cup's body.
+    private static func drawLowBattery(in ctx: CGContext, leftEdge: CGFloat) {
+        let body = CGRect(x: leftEdge, y: 6.6, width: 8.2, height: 4.8)
+        ctx.setLineWidth(1.1)
+        ctx.addPath(CGPath(roundedRect: body, cornerWidth: 1.4, cornerHeight: 1.4, transform: nil))
+        ctx.strokePath()
+        // Terminal nub.
+        ctx.addPath(CGPath(
+            roundedRect: CGRect(x: body.maxX + 0.7, y: body.midY - 0.9, width: 1.0, height: 1.8),
+            cornerWidth: 0.5, cornerHeight: 0.5, transform: nil
+        ))
+        ctx.fillPath()
+        // What little charge is left.
+        ctx.fill(CGRect(x: body.minX + 1.1, y: body.minY + 1.1, width: 1.9, height: body.height - 2.2))
     }
 }
 

@@ -213,8 +213,11 @@ struct RulesView: View {
     private var powerDisplayItems: some View {
         Section("Power") {
             Button("On AC power") { model.addRule(.powerSource(.onACPower)) }
-            Button("On battery") { model.addRule(.powerSource(.onBattery)) }
-            Button("Charging") { model.addRule(.powerSource(.charging)) }
+            // Desktops are always on AC: a battery rule could never fire.
+            if model.machineHasBattery {
+                Button("On battery") { model.addRule(.powerSource(.onBattery)) }
+                Button("Charging") { model.addRule(.powerSource(.charging)) }
+            }
         }
         Section("Display") {
             Button("External display connected") { model.addRule(.externalDisplay) }
