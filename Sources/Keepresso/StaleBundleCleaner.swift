@@ -1,5 +1,6 @@
 import Foundation
 import KeepressoCore
+import UserNotifications
 
 /// App-side wiring for ``StaleBundleSweep``: remembers where this bundle runs
 /// from (a bookmark in `UserDefaults`) and, on later runs, deletes that
@@ -11,6 +12,33 @@ import KeepressoCore
 /// `~/.Trash`).
 enum StaleBundleCleaner {
     private static let bookmarkKey = "PreviousBundleBookmark"
+
+    /// Set when a poisonous copy survived every removal route (the app's own
+    /// delete, the root helper, the Finder rescue): only the user can fix it
+    /// now, so the launch path tells them via
+    /// ``notifyIfSweepNeedsUser()``.
+    private(set) static var unremovableTrashPath: String?
+
+    /// Tell the user about a copy nothing could remove. Called after the app
+    /// model exists: the notification-center delegate must already be in
+    /// place, or a banner posted while the app is frontmost (which it is,
+    /// during launch) gets silently dropped. A stable identifier keeps
+    /// repeat launches updating one notice instead of stacking them.
+    static func notifyIfSweepNeedsUser() {
+        guard unremovableTrashPath != nil else { return }
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "Old copy stuck in the Trash"
+            content.body = "An old copy of Keepresso in the Trash keeps the background helper from working. Please delete it from the Trash, or empty the Trash."
+            center.add(UNNotificationRequest(
+                identifier: "sh.gyorgy.keepresso.stale-trash",
+                content: content,
+                trigger: nil
+            ))
+        }
+    }
 
     /// The launch sweep, run synchronously before anything in the process
     /// touches `SMAppService` or BTM: even a plain status read makes BTM
@@ -152,6 +180,12 @@ enum StaleBundleCleaner {
                     if XPCHelperClient().removeTrashedBundle(path) {
                         NSLog("Keepresso: helper deleted stale copy at %@ (Trash is TCC-protected for the app)", path)
                     } else {
+                        // Nothing left to try: the Trash is TCC-sealed against
+                        // the app, the root daemon (tested live: root doesn't
+                        // bypass it), and even Finder scripting (Finder
+                        // proxies the caller's file rights, error -5000).
+                        // Only the user can delete it; tell them.
+                        unremovableTrashPath = path
                         NSLog("Keepresso: couldn't delete stale copy at %@ (no permission), and the helper couldn't either", path)
                     }
                 } else {

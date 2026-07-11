@@ -116,6 +116,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         StaleBundleCleaner.sweepAtStartup(afterUpdate: updated)
         model = AppModel(appUpdatedSinceLastRun: updated)
         super.init()
+        // After AppModel: its notifier is the notification-center delegate,
+        // without which a banner posted mid-launch is silently dropped.
+        StaleBundleCleaner.notifyIfSweepNeedsUser()
     }
     private lazy var ticker = SessionTicker(
         session: model.session,
