@@ -27,11 +27,11 @@ struct MenuBarLabel: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            // One image for every state, battery pause included: the status
-            // item never widens for a conditionally added second image (it
-            // just clips it), so the low-battery badge is baked into a wider
-            // composite in ``MenuBarIcon``. Added text does relayout, which
-            // is why the countdown below works as a separate view.
+            // One same-size image for every state, battery pause included:
+            // the status item never widens for a conditionally added second
+            // image (it just clips it), so state changes swap this single
+            // image instead. Added text does relayout, which is why the
+            // countdown below works as a separate view.
             Image(nsImage: icon)
             if showCountdown, session.isActive, session.remaining != nil {
                 Text(remainingText)

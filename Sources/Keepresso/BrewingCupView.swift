@@ -13,6 +13,10 @@ struct BrewingCupView: View {
     /// so the layout doesn't jump.
     var isActive: Bool
 
+    /// Whether the battery pause is holding the session: the idle cup keeps a
+    /// last sip of low-power yellow at the bottom, matching the menu bar icon.
+    var pausedLowBattery: Bool = false
+
     /// Size multiplier over the menu-header size (22 pt wide). Everything
     /// scales together (paths, stroke widths, drift), so a window header can
     /// show the same mark large and still crisp.
@@ -36,7 +40,7 @@ struct BrewingCupView: View {
             steam
                 .frame(width: 22 * scale, height: 9 * scale)
                 .animation(.easeInOut(duration: 0.25), value: steaming)
-            BrandCupGlyph(fill: fill)
+            BrandCupGlyph(fill: fill, lowSip: pausedLowBattery && !isActive)
                 .frame(width: 22 * scale, height: 16.6 * scale)
         }
         .accessibilityHidden(true) // the header text next to it carries the status

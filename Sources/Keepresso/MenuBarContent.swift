@@ -210,7 +210,11 @@ struct MenuBarContent: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            BrewingCupView(isActive: session.isActive, scale: type.scale)
+            BrewingCupView(
+                isActive: session.isActive,
+                pausedLowBattery: session.pausedByBattery,
+                scale: type.scale
+            )
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.pausedByBattery ? "Paused" : (session.isActive ? "Brewing" : "Idle"))
                     .font(type.headline)
