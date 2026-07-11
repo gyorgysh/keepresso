@@ -108,11 +108,18 @@ enum StaleBundleCleaner {
         return result
     }
 
-    /// Delete copies of the app that a BTM dump says are still tracked in a
-    /// Trash folder. Catches strays from before the bookmark existed, with
-    /// the same guards as the bookmark sweep: never the running bundle, only
-    /// inside a Trash folder, only this app's bundle identifier. Blocking
-    /// file work; call it off the main actor.
+    /// Delete copies of the app found in a Trash folder (the own-name probe
+    /// and the BTM dump both funnel here), with the same guards as the
+    /// bookmark sweep: never the running bundle, only inside a Trash folder,
+    /// only this app. Blocking file work; call it off the main actor.
+    ///
+    /// Identification reads the copy's Info.plist directly rather than
+    /// through `Bundle(url:)`: reads inside the Trash can themselves be
+    /// blocked (TCC), and an unreadable plist must not silently veto the
+    /// sweep, that's exactly how the poisonous copy survives. A copy that
+    /// can't be read but sits under this app's own bundle file name is still
+    /// swept (the name plus the Trash location is the validation); anything
+    /// else unreadable is left alone, loudly.
     static func removeTrashedCopies(at paths: [String]) {
         guard let bundleID = Bundle.main.bundleIdentifier else { return }
         let current = Bundle.main.bundleURL.standardizedFileURL
@@ -120,13 +127,37 @@ enum StaleBundleCleaner {
             let url = URL(fileURLWithPath: path)
             guard url.standardizedFileURL != current,
                   StaleBundleSweep.isInTrash(url),
-                  Bundle(url: url)?.bundleIdentifier == bundleID
+                  FileManager.default.fileExists(atPath: url.path)
             else { continue }
+            let plist = url.appendingPathComponent("Contents/Info.plist")
+            let foundID = NSDictionary(contentsOf: plist)?["CFBundleIdentifier"] as? String
+            if let foundID, foundID != bundleID {
+                NSLog("Keepresso: trashed copy at %@ left alone (bundle identifier differs)", path)
+                continue
+            }
+            if foundID == nil, url.lastPathComponent != current.lastPathComponent {
+                NSLog("Keepresso: trashed item at %@ left alone (can't read its Info.plist)", path)
+                continue
+            }
             do {
                 try FileManager.default.removeItem(at: url)
-                NSLog("Keepresso: deleted stale copy at %@ (found in BTM's records)", path)
-            } catch {
-                NSLog("Keepresso: couldn't delete stale copy at %@: %@", path, error.localizedDescription)
+                NSLog("Keepresso: deleted stale copy at %@", path)
+            } catch let error as NSError {
+                // The Trash is TCC-protected: without Full Disk Access the
+                // app's own delete fails with Cocoa 513 no matter what. The
+                // root helper daemon is the fallback; it re-validates the
+                // path itself and refuses anything that isn't a trashed copy
+                // of this app.
+                if error.domain == NSCocoaErrorDomain, error.code == NSFileWriteNoPermissionError {
+                    if XPCHelperClient().removeTrashedBundle(path) {
+                        NSLog("Keepresso: helper deleted stale copy at %@ (Trash is TCC-protected for the app)", path)
+                    } else {
+                        NSLog("Keepresso: couldn't delete stale copy at %@ (no permission), and the helper couldn't either", path)
+                    }
+                } else {
+                    NSLog("Keepresso: couldn't delete stale copy at %@: %@ (domain %@ code %ld)",
+                          path, error.localizedDescription, error.domain, error.code)
+                }
             }
         }
     }

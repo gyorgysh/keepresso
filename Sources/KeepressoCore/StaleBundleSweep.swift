@@ -70,4 +70,29 @@ public enum StaleBundleSweep {
     public static func isInTrash(_ url: URL) -> Bool {
         url.standardizedFileURL.pathComponents.contains { $0 == ".Trash" || $0 == ".Trashes" }
     }
+
+    /// Helper-side validation for the `removeTrashedBundle` XPC verb: whether
+    /// the daemon may delete `path` on the app's behalf. The app falls back to
+    /// the daemon because the Trash is TCC-protected for the app itself
+    /// (`removeItem` fails with Cocoa 513 without Full Disk Access), and the
+    /// daemon treats the requested path as untrusted: it must sit inside a
+    /// Trash folder, carry the same bundle file name as the app the daemon
+    /// ships in, not be the installed copy itself, and identify as this app,
+    /// except that an unreadable Info.plist doesn't veto (the name plus the
+    /// Trash location still identify it; an unreadable plist is how the
+    /// poisonous copy survives the app-side sweep in the first place).
+    public static func daemonMayRemove(
+        _ path: String,
+        appBundleURL: URL,
+        expectedBundleIdentifier: String,
+        bundleIdentifier: (URL) -> String?
+    ) -> Bool {
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        guard isInTrash(url),
+              url.lastPathComponent == appBundleURL.lastPathComponent,
+              url != appBundleURL.standardizedFileURL
+        else { return false }
+        let found = bundleIdentifier(url)
+        return found == nil || found == expectedBundleIdentifier
+    }
 }

@@ -25,6 +25,11 @@ private final class FakeHelperClient: PrivilegedHelperCalling, @unchecked Sendab
         return holdSucceeds
     }
 
+    func removeTrashedBundle(_ path: String) -> Bool {
+        record("removeTrashedBundle(\(path))")
+        return holdSucceeds
+    }
+
     func setAWDLHold(_ holding: Bool) -> Bool {
         record("setAWDLHold(\(holding))")
         return holdSucceeds

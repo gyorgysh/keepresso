@@ -20,11 +20,18 @@ import KeepressoCore
 final class HelperConnection: NSObject, HelperXPCProtocol {
     private let engine: HelperEngine
     private let clientID: Int
+    private let appBundleURL: URL
     private let onTerminateRequest: @Sendable () -> Void
 
-    init(engine: HelperEngine, clientID: Int, onTerminateRequest: @escaping @Sendable () -> Void) {
+    init(
+        engine: HelperEngine,
+        clientID: Int,
+        appBundleURL: URL,
+        onTerminateRequest: @escaping @Sendable () -> Void
+    ) {
         self.engine = engine
         self.clientID = clientID
+        self.appBundleURL = appBundleURL
         self.onTerminateRequest = onTerminateRequest
     }
 
@@ -44,6 +51,30 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
         reply(engine.setAWDLHold(client: clientID, holding: holding))
     }
 
+    func removeTrashedBundle(_ path: String, reply: @escaping @Sendable (Bool) -> Void) {
+        // The path is untrusted; the validation (in a Trash folder, our own
+        // bundle name, identifies as the app, not the installed copy) is the
+        // entire reason this verb exists instead of a generic delete.
+        guard StaleBundleSweep.daemonMayRemove(
+            path,
+            appBundleURL: appBundleURL,
+            expectedBundleIdentifier: HelperService.appCodeSignIdentifier,
+            bundleIdentifier: { url in
+                NSDictionary(contentsOf: url.appendingPathComponent("Contents/Info.plist"))?[
+                    "CFBundleIdentifier"] as? String
+            }
+        ) else {
+            reply(false)
+            return
+        }
+        do {
+            try FileManager.default.removeItem(at: URL(fileURLWithPath: path))
+            reply(true)
+        } catch {
+            reply(false)
+        }
+    }
+
     func terminateWhenIdle() {
         onTerminateRequest()
     }
@@ -51,13 +82,15 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
 
 final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     private let engine: HelperEngine
+    private let appBundleURL: URL
     private let lock = NSLock()
     private var nextClientID = 1
     private var liveConnections = 0
     private var terminateRequested = false
 
-    init(engine: HelperEngine) {
+    init(engine: HelperEngine, appBundleURL: URL) {
         self.engine = engine
+        self.appBundleURL = appBundleURL
     }
 
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection newConnection: NSXPCConnection) -> Bool {
@@ -78,6 +111,7 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
         newConnection.exportedObject = HelperConnection(
             engine: engine,
             clientID: clientID,
+            appBundleURL: appBundleURL,
             onTerminateRequest: { [weak self] in self?.requestTerminate() }
         )
         // Invalidation is the connection's definitive end (interruption never
@@ -138,7 +172,12 @@ engine.ensureCLILink(
     cliPath: bundleContents.appendingPathComponent("Helpers/keepresso").path
 )
 
-let delegate = ListenerDelegate(engine: engine)
+// The app bundle this daemon ships in: .../Keepresso.app, two levels up from
+// Contents/MacOS. The trash-sweep verb uses it to refuse deleting anything
+// that doesn't carry this exact bundle name (and to never delete this copy).
+let appBundleURL = bundleContents.deletingLastPathComponent()
+
+let delegate = ListenerDelegate(engine: engine, appBundleURL: appBundleURL)
 let listener = NSXPCListener(machServiceName: HelperService.machServiceLabel)
 listener.delegate = delegate
 listener.resume()

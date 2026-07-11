@@ -105,3 +105,53 @@ private func sweep(
     #expect(!StaleBundleSweep.isInTrash(URL(fileURLWithPath: "/Users/g/my.Trash.notes/App.app")))
     #expect(!StaleBundleSweep.isInTrash(URL(fileURLWithPath: "/Applications/App.app")))
 }
+
+// MARK: - The daemon's own validation for the removeTrashedBundle verb
+
+@Test func daemonRemovesOnlyATrashedCopyOfTheApp() {
+    #expect(StaleBundleSweep.daemonMayRemove(
+        "/Users/g/.Trash/Keepresso.app",
+        appBundleURL: installed,
+        expectedBundleIdentifier: "sh.gyorgy.keepresso",
+        bundleIdentifier: { _ in "sh.gyorgy.keepresso" }
+    ))
+    // An unreadable Info.plist doesn't veto: the bundle name and the Trash
+    // location still identify the copy, and an unreadable plist is how the
+    // poisonous copy survives the app-side sweep in the first place.
+    #expect(StaleBundleSweep.daemonMayRemove(
+        "/Users/g/.Trash/Keepresso.app",
+        appBundleURL: installed,
+        expectedBundleIdentifier: "sh.gyorgy.keepresso",
+        bundleIdentifier: { _ in nil }
+    ))
+}
+
+@Test func daemonRefusesAnythingElse() {
+    let ownID: (URL) -> String? = { _ in "sh.gyorgy.keepresso" }
+    // Outside a Trash folder.
+    #expect(!StaleBundleSweep.daemonMayRemove(
+        "/Applications/Keepresso.app", appBundleURL: installed,
+        expectedBundleIdentifier: "sh.gyorgy.keepresso", bundleIdentifier: ownID
+    ))
+    // A different bundle name, even inside the Trash.
+    #expect(!StaleBundleSweep.daemonMayRemove(
+        "/Users/g/.Trash/Other.app", appBundleURL: installed,
+        expectedBundleIdentifier: "sh.gyorgy.keepresso", bundleIdentifier: ownID
+    ))
+    // The right name but a different app's identifier.
+    #expect(!StaleBundleSweep.daemonMayRemove(
+        "/Users/g/.Trash/Keepresso.app", appBundleURL: installed,
+        expectedBundleIdentifier: "sh.gyorgy.keepresso",
+        bundleIdentifier: { _ in "com.example.impostor" }
+    ))
+    // The installed copy itself, if it ever ended up named by the caller.
+    #expect(!StaleBundleSweep.daemonMayRemove(
+        installed.path, appBundleURL: installed,
+        expectedBundleIdentifier: "sh.gyorgy.keepresso", bundleIdentifier: ownID
+    ))
+    // Path traversal dressed up as a Trash path.
+    #expect(!StaleBundleSweep.daemonMayRemove(
+        "/Users/g/.Trash/../../../Applications/Keepresso.app", appBundleURL: installed,
+        expectedBundleIdentifier: "sh.gyorgy.keepresso", bundleIdentifier: ownID
+    ))
+}

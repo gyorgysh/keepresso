@@ -27,7 +27,8 @@ public enum HelperService {
     /// Bumped whenever the XPC surface changes. The app compares the daemon's
     /// `ping` reply with this and asks a stale daemon to exit once idle
     /// (launchd relaunches the new binary from the bundle on the next call).
-    public static let protocolVersion = 1
+    /// 2: added `removeTrashedBundle` (the Trash sweep's TCC fallback).
+    public static let protocolVersion = 2
 
     /// The code-signing requirement one side demands of the other: an
     /// Apple-issued certificate, the expected identifier, and the same team as
@@ -85,6 +86,13 @@ public enum HelperService {
     /// watchdog). While any hold is live the daemon re-downs the interface
     /// every few seconds, since macOS re-raises it on its own.
     func setAWDLHold(_ holding: Bool, reply: @escaping @Sendable (Bool) -> Void)
+    /// Delete a stale copy of the app that an update pushed into a Trash
+    /// folder. The app's own sweep can't: the Trash is TCC-protected, so
+    /// `removeItem` fails with Cocoa 513 unless the app has Full Disk Access.
+    /// Not a generic delete: the daemon validates the path itself with
+    /// ``StaleBundleSweep/daemonMayRemove(_:appBundleURL:expectedBundleIdentifier:bundleIdentifier:)``
+    /// and refuses anything that isn't a trashed copy of this app.
+    func removeTrashedBundle(_ path: String, reply: @escaping @Sendable (Bool) -> Void)
     /// Ask the daemon to exit at its first fully idle moment, without the
     /// ordinary exit's extra grace period (see ``HelperShutdownPolicy``), so
     /// launchd relaunches the binary currently in the bundle on the next call.
@@ -100,6 +108,11 @@ public protocol PrivilegedHelperCalling: AnyObject, Sendable {
     func setSleepDisabled(_ disabled: Bool) -> Bool
     func setSleepHold(_ holding: Bool) -> Bool
     func setAWDLHold(_ holding: Bool) -> Bool
+    /// Ask the daemon to delete a trashed stale copy of the app (see
+    /// ``HelperXPCProtocol/removeTrashedBundle(_:reply:)``). False when the
+    /// daemon isn't installed, predates the verb, refused the path, or the
+    /// delete itself failed.
+    func removeTrashedBundle(_ path: String) -> Bool
 }
 
 /// Real client over `NSXPCConnection`. The connection *is* the app's claim on
@@ -153,6 +166,10 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         wantsAWDLHold = holding
         lock.unlock()
         return call { proxy, done in proxy.setAWDLHold(holding, reply: done) }
+    }
+
+    public func removeTrashedBundle(_ path: String) -> Bool {
+        call { proxy, done in proxy.removeTrashedBundle(path, reply: done) }
     }
 
     /// Fire the version-handshake-and-retire nudge: if the daemon on the other
