@@ -28,6 +28,11 @@ struct MenuBarLabel: View {
     var body: some View {
         HStack(spacing: 3) {
             Image(nsImage: session.isActive ? MenuBarIcon.brewing : MenuBarIcon.idle)
+            if session.pausedByBattery {
+                // The battery pause otherwise reads as a plain idle cup; say
+                // why right in the bar: it's time to charge.
+                Image(systemName: "battery.25percent")
+            }
             if showCountdown, session.isActive, session.remaining != nil {
                 Text(remainingText)
                     .font(.caption.monospacedDigit())
@@ -36,7 +41,12 @@ struct MenuBarLabel: View {
                     .onAppear { remainingText = Self.format(session.remaining) }
             }
         }
-        .accessibilityLabel(session.isActive ? "Keepresso: brewing" : "Keepresso: idle")
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private var accessibilityText: String {
+        if session.pausedByBattery { return "Keepresso: paused, battery low" }
+        return session.isActive ? "Keepresso: brewing" : "Keepresso: idle"
     }
 
     /// "12:03" for under an hour, "1:02:03" once it reaches an hour.

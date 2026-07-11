@@ -354,3 +354,58 @@ private final class StubGate: TriggerEvaluating {
     controller.reconcile()                          // paused, no reading
     #expect(gate.ticks == before + 2) // rule state keeps advancing while paused
 }
+
+/// Records posted notifications, for the battery-pause notice tests.
+private final class FakeReminder: ReminderNotifying {
+    private(set) var notices: [(title: String, body: String, sound: Bool)] = []
+    func notify(title: String, body: String, sound: Bool) { notices.append((title, body, sound)) }
+    func cancelPending() {}
+}
+
+@MainActor
+@Test func batteryPauseExplainsItselfInANotification() {
+    let reminder = FakeReminder()
+    let clock = Clock()
+    let controller = SessionController(assertions: FakeAssertions(), reminder: reminder, now: { clock.now })
+    controller.pauseBelowBatteryPercent = 20
+    controller.notifyOnEnd = true // must not add a second, generic notification
+    controller.start()
+
+    controller.reconcile(battery: .discharging(15))
+    #expect(controller.pausedByBattery)
+    #expect(reminder.notices.count == 1)
+    #expect(reminder.notices.first?.title == "Paused on low battery")
+    #expect(reminder.notices.first?.body.contains("15%") == true)
+    #expect(reminder.notices.first?.body.contains("23%") == true) // cutoff + resume margin
+
+    // Staying below the cutoff must not repeat the notice every tick.
+    controller.reconcile(battery: .discharging(14))
+    #expect(reminder.notices.count == 1)
+}
+
+@MainActor
+@Test func batteryPauseNotifiesEvenWithEndNotificationsOff() {
+    let reminder = FakeReminder()
+    let clock = Clock()
+    let controller = SessionController(assertions: FakeAssertions(), reminder: reminder, now: { clock.now })
+    controller.pauseBelowBatteryPercent = 20
+    controller.start() // notifyOnEnd stays false
+
+    controller.reconcile(battery: .discharging(15))
+    #expect(reminder.notices.count == 1)
+    #expect(reminder.notices.first?.title == "Paused on low battery")
+}
+
+@MainActor
+@Test func batteryPauseLatchingWhileIdleStaysQuiet() {
+    let reminder = FakeReminder()
+    let clock = Clock()
+    let controller = SessionController(assertions: FakeAssertions(), reminder: reminder, now: { clock.now })
+    controller.pauseBelowBatteryPercent = 20
+
+    // No session running: the latch engages, but nothing visibly changed for
+    // the user, so there is nothing to announce.
+    controller.reconcile(battery: .discharging(15))
+    #expect(controller.pausedByBattery)
+    #expect(reminder.notices.isEmpty)
+}

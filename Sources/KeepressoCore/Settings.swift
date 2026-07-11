@@ -222,7 +222,11 @@ public final class UserDefaultsSettingsStore: SettingsStore {
     private let defaults: UserDefaults
     private let key: String
 
-    public init(defaults: UserDefaults = .standard, key: String = "sh.gyorgy.keepresso.settings.v1") {
+    /// Where the settings blob lives in `UserDefaults` by default. Public so
+    /// "has this app ever run before" checks can probe for it.
+    public static let defaultKey = "sh.gyorgy.keepresso.settings.v1"
+
+    public init(defaults: UserDefaults = .standard, key: String = UserDefaultsSettingsStore.defaultKey) {
         self.defaults = defaults
         self.key = key
     }

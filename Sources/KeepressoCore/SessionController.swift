@@ -183,7 +183,10 @@ public final class SessionController {
     /// (idempotent stops don't spam the log), then releases everything. When the
     /// session ended on its own (`endedNaturally`), fire the end notification and
     /// action; a manual stop passes `false` so it never surprise-sleeps the Mac.
-    private func stop(reason: String, endedNaturally: Bool = false) {
+    /// A `notice` replaces the generic end notification with a specific
+    /// explanation (the battery pause), delivered even when ``notifyOnEnd`` is
+    /// off: that stop is invisible otherwise, which is the notice's whole point.
+    private func stop(reason: String, endedNaturally: Bool = false, notice: (title: String, body: String)? = nil) {
         let wasActive = isActive
         if isActive {
             log.record(began: false, reason: reason, at: now())
@@ -194,13 +197,15 @@ public final class SessionController {
         lastActivityPokeAt = nil
         assertions.releaseAll()
         reminder?.cancelPending()
-        if wasActive, endedNaturally { performEndEffects() }
+        if wasActive, endedNaturally { performEndEffects(notice: notice) }
     }
 
     /// Notify (and optionally act) when a session ends on its own. The cancelled
     /// reminder above is the mid-session nudge; this is a separate one-shot.
-    private func performEndEffects() {
-        if notifyOnEnd {
+    private func performEndEffects(notice: (title: String, body: String)?) {
+        if let notice {
+            reminder?.notify(title: notice.title, body: notice.body, sound: reminderSound)
+        } else if notifyOnEnd {
             reminder?.notify(
                 title: "Keepresso stopped",
                 body: "Your keep-awake session has ended.",
@@ -289,7 +294,16 @@ public final class SessionController {
                 pausedByBattery = false
             } else if percent < threshold {
                 pausedByBattery = true
-                if isActive { stop(reason: "Paused, battery below \(threshold)%", endedNaturally: true) }
+                if isActive {
+                    stop(
+                        reason: "Paused, battery below \(threshold)%",
+                        endedNaturally: true,
+                        notice: (
+                            title: "Paused on low battery",
+                            body: "Battery is at \(percent)%. Keepresso is letting the Mac sleep; plug in to charge, or it resumes above \(threshold + Self.batteryResumeMargin)%."
+                        )
+                    )
+                }
                 return
             }
         } else if case .onAC = battery {

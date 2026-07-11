@@ -426,7 +426,9 @@ final class AppModel {
     static let defaultPauseBelowBatteryPercent = 20
 
     /// Whether an active session force-stops (letting the Mac sleep) once
-    /// battery charge drops below ``pauseBelowBatteryPercent``.
+    /// battery charge drops below ``pauseBelowBatteryPercent``. Enabling it
+    /// requests notification permission: the pause announces itself in a
+    /// notification (an otherwise silent stop just looks like the app quit).
     var batteryAutoPauseEnabled: Bool {
         get { settings.pauseBelowBatteryPercent != nil }
         set {
@@ -434,6 +436,7 @@ final class AppModel {
                 ? (settings.pauseBelowBatteryPercent ?? Self.defaultPauseBelowBatteryPercent)
                 : nil
             session.pauseBelowBatteryPercent = settings.pauseBelowBatteryPercent
+            if newValue { notifier.requestAuthorization() }
             persist()
         }
     }
@@ -826,7 +829,7 @@ final class AppModel {
         // the Trash: BTM's bookmark keeps resolving the helper's record into
         // the Trash and disabling the daemon while one is there, so a repair
         // before the sweep wouldn't stick.
-        await Task.detached { _ = StaleBundleCleaner.sweepAndRemember() }.value
+        await Task.detached { StaleBundleCleaner.sweepNow() }.value
         switch await helper.verifyAndRepairIfNeeded() {
         case .healthy:
             helperAttention = nil
@@ -868,7 +871,7 @@ final class AppModel {
         Task {
             // The reinstall lands on a record BTM will invalidate again if an
             // old copy still sits in the Trash; sweep before rebuilding.
-            await Task.detached { _ = StaleBundleCleaner.sweepAndRemember() }.value
+            await Task.detached { StaleBundleCleaner.sweepNow() }.value
             await closedDisplayAuto.stopIfHolding()
             await awdl.stop()
             await helper.uninstall()

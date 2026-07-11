@@ -23,6 +23,15 @@ enum StaleBundleCleaner {
     /// ordinary launches pay nothing for it.
     static func sweepAtStartup(afterUpdate: Bool) {
         let result = sweepAndRemember()
+        // The copy Sparkle or Homebrew just trashed under our own name,
+        // whether or not BTM has a record of it. Runs every launch (one file
+        // stat when the Trash is clean), never gated on `afterUpdate` or the
+        // bookmark: the bookmark can resolve to the new bundle at the same
+        // path instead of following the old one into the Trash, and the
+        // update flag can't fire on the first update from a build that
+        // predates its record. Both gaps left the trashed 1.11.x copy behind
+        // and got the helper disabled right after the update.
+        removeTrashedCopyUnderOwnName()
         guard afterUpdate || result != .nothingToSweep else { return }
         // BTM's records name every copy it still tracks; any of them inside
         // a Trash folder is exactly the poison that gets the daemon disabled.
@@ -37,13 +46,25 @@ enum StaleBundleCleaner {
                 removeTrashedCopies(at: findings.staleCopyPaths)
             }
         }
-        // And the copy Sparkle or Homebrew just trashed under our own name,
-        // whether or not BTM has a record of it. The Trash itself can't be
-        // enumerated without Full Disk Access, but a direct path needs none.
-        if let trash = FileManager.default.urls(for: .trashDirectory, in: .userDomainMask).first {
-            let candidate = trash.appendingPathComponent(Bundle.main.bundleURL.lastPathComponent)
-            removeTrashedCopies(at: [candidate.path])
-        }
+    }
+
+    /// The bookmark pass plus the direct probe under our own name, for the
+    /// helper repair paths (verify, reinstall): a repair can't stick while a
+    /// trashed copy remains, however it got missed at launch. Blocking file
+    /// work; call it off the main actor.
+    static func sweepNow() {
+        _ = sweepAndRemember()
+        removeTrashedCopyUnderOwnName()
+    }
+
+    /// Probe the user's Trash for a copy under this bundle's own file name
+    /// and delete it. The Trash itself can't be enumerated without Full Disk
+    /// Access, but a direct path needs none.
+    private static func removeTrashedCopyUnderOwnName() {
+        guard let trash = FileManager.default.urls(for: .trashDirectory, in: .userDomainMask).first
+        else { return }
+        let candidate = trash.appendingPathComponent(Bundle.main.bundleURL.lastPathComponent)
+        removeTrashedCopies(at: [candidate.path])
     }
 
     /// Delete the trashed previous copy if there is one, then remember the
@@ -120,7 +141,7 @@ enum UpdateArrival {
     private static let key = "LastRunBuild"
 
     /// Whether the build changed since the last run, recording the current
-    /// one either way. The very first launch reports false: there is no
+    /// one either way. A genuinely first launch reports false: there is no
     /// previous version to clean up after.
     static func checkAndRecord() -> Bool {
         let defaults = UserDefaults.standard
@@ -128,7 +149,13 @@ enum UpdateArrival {
         guard let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
         else { return false }
         defaults.set(current, forKey: key)
-        guard let previous else { return false }
-        return current != previous
+        if let previous { return current != previous }
+        // No build recorded: either a fresh install (nothing to clean up
+        // after) or the first run after updating from a build that predates
+        // this record. Saved settings tell the two apart, a fresh install
+        // has none yet, so an update from any pre-record build still gets
+        // its version-boundary chores (missing them is what got the helper
+        // disabled on the 1.12.0 update).
+        return defaults.data(forKey: UserDefaultsSettingsStore.defaultKey) != nil
     }
 }
