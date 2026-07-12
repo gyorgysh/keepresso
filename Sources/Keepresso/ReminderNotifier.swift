@@ -1,3 +1,4 @@
+import AppKit
 import UserNotifications
 import KeepressoCore
 
@@ -28,6 +29,22 @@ final class UserNotificationReminder: NSObject, ReminderNotifying, UNUserNotific
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .list, .sound])
+    }
+
+    /// A click on the stale-Trash notice opens the Trash in Finder, so the
+    /// user lands right where the copy they need to delete is. Opening a
+    /// folder just asks Finder to show a window; unlike deleting in there, it
+    /// needs no Trash permission.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        if response.notification.request.identifier == StaleBundleCleaner.notificationIdentifier,
+           let trash = FileManager.default.urls(for: .trashDirectory, in: .userDomainMask).first {
+            DispatchQueue.main.async { NSWorkspace.shared.open(trash) }
+        }
+        completionHandler()
     }
 
     /// Ask for permission to post alerts. No-op after the first decision; safe

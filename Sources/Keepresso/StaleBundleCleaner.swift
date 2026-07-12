@@ -13,27 +13,31 @@ import UserNotifications
 enum StaleBundleCleaner {
     private static let bookmarkKey = "PreviousBundleBookmark"
 
-    /// Set when a poisonous copy survived every removal route (the app's own
-    /// delete, the root helper, the Finder rescue): only the user can fix it
-    /// now, so the launch path tells them via
-    /// ``notifyIfSweepNeedsUser()``.
+    /// Set when a poisonous copy sits in a Trash the app has no permission to
+    /// touch. Only the user can fix it (tested live: the Trash's TCC
+    /// protection blocks the app, the root helper, and Finder scripting
+    /// alike), so the launch path tells them via ``notifyIfSweepNeedsUser()``.
     private(set) static var unremovableTrashPath: String?
 
-    /// Tell the user about a copy nothing could remove. Called after the app
+    /// Stable notification identifier: repeat launches update one notice
+    /// instead of stacking them, and the notification delegate recognizes a
+    /// click on it (``UserNotificationReminder``) to open the Trash.
+    static let notificationIdentifier = "sh.gyorgy.keepresso.stale-trash"
+
+    /// Tell the user about a copy the app may not remove. Called after the app
     /// model exists: the notification-center delegate must already be in
     /// place, or a banner posted while the app is frontmost (which it is,
-    /// during launch) gets silently dropped. A stable identifier keeps
-    /// repeat launches updating one notice instead of stacking them.
+    /// during launch) gets silently dropped.
     static func notifyIfSweepNeedsUser() {
         guard unremovableTrashPath != nil else { return }
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
             guard granted else { return }
             let content = UNMutableNotificationContent()
-            content.title = "Old copy stuck in the Trash"
-            content.body = "An old copy of Keepresso in the Trash keeps the background helper from working. Please delete it from the Trash, or empty the Trash."
+            content.title = L("Old copy stuck in the Trash")
+            content.body = L("An old copy of Keepresso in the Trash keeps the background helper from working. Please delete it from the Trash, or empty the Trash.")
             center.add(UNNotificationRequest(
-                identifier: "sh.gyorgy.keepresso.stale-trash",
+                identifier: notificationIdentifier,
                 content: content,
                 trigger: nil
             ))
@@ -171,23 +175,15 @@ enum StaleBundleCleaner {
                 try FileManager.default.removeItem(at: url)
                 NSLog("Keepresso: deleted stale copy at %@", path)
             } catch let error as NSError {
-                // The Trash is TCC-protected: without Full Disk Access the
-                // app's own delete fails with Cocoa 513 no matter what. The
-                // root helper daemon is the fallback; it re-validates the
-                // path itself and refuses anything that isn't a trashed copy
-                // of this app.
+                // The Trash is TCC-protected: unless the user granted Full
+                // Disk Access, the delete fails with Cocoa 513, and there is
+                // no fallback worth trying (tested live: the root daemon
+                // can't bypass TCC either, and Finder scripting proxies the
+                // caller's file rights, error -5000). Only the user can
+                // delete it; tell them.
                 if error.domain == NSCocoaErrorDomain, error.code == NSFileWriteNoPermissionError {
-                    if XPCHelperClient().removeTrashedBundle(path) {
-                        NSLog("Keepresso: helper deleted stale copy at %@ (Trash is TCC-protected for the app)", path)
-                    } else {
-                        // Nothing left to try: the Trash is TCC-sealed against
-                        // the app, the root daemon (tested live: root doesn't
-                        // bypass it), and even Finder scripting (Finder
-                        // proxies the caller's file rights, error -5000).
-                        // Only the user can delete it; tell them.
-                        unremovableTrashPath = path
-                        NSLog("Keepresso: couldn't delete stale copy at %@ (no permission), and the helper couldn't either", path)
-                    }
+                    unremovableTrashPath = path
+                    NSLog("Keepresso: couldn't delete stale copy at %@ (the Trash is TCC-protected); asking the user", path)
                 } else {
                     NSLog("Keepresso: couldn't delete stale copy at %@: %@ (domain %@ code %ld)",
                           path, error.localizedDescription, error.domain, error.code)
