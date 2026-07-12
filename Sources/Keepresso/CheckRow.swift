@@ -2,21 +2,16 @@ import SwiftUI
 import AppKit
 import KeepressoCore
 
-/// One readiness check: status glyph, title, current-state detail, and (when not
-/// OK) its remediation affordances.
+/// One readiness check: topic icon (tinted by status, with a small status
+/// badge), title, current-state detail, and (when not OK) its remediation
+/// affordances.
 struct CheckRow: View {
     let check: ReadinessCheck
     @State private var copied = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: glyph)
-                .foregroundStyle(tint)
-                .font(.title3)
-                .frame(width: 22)
-                .contentTransition(.symbolEffect(.replace))
-                .animation(.snappy(duration: 0.25), value: check.status)
-                .accessibilityLabel(statusLabel)
+            icon
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(check.title)
@@ -56,6 +51,86 @@ struct CheckRow: View {
                 }
             }
             Spacer(minLength: 0)
+        }
+    }
+
+    /// The leading icon: the row's subject (Wi-Fi, Ethernet, a game
+    /// controller) tinted by status, with a small status badge in the corner
+    /// so ok/tip/warning still reads by shape, not color alone. Rows without
+    /// a topic mapping fall back to the bare status glyph.
+    private var icon: some View {
+        Group {
+            if isBluetoothRow {
+                BluetoothRune()
+                    .stroke(tint, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                    .frame(width: 11, height: 17)
+            } else if let symbol = Self.topicSymbols[check.id] {
+                Image(systemName: symbol)
+                    .foregroundStyle(tint)
+                    .font(.title3)
+            } else {
+                Image(systemName: glyph)
+                    .foregroundStyle(tint)
+                    .font(.title3)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+        }
+        .frame(width: 22, height: 20)
+        .overlay(alignment: .bottomTrailing) {
+            if hasTopicIcon {
+                Image(systemName: badgeGlyph)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.white, tint)
+                    .contentTransition(.symbolEffect(.replace))
+                    .offset(x: 3, y: 3)
+            }
+        }
+        .animation(.snappy(duration: 0.25), value: check.status)
+        .accessibilityLabel(statusLabel)
+    }
+
+    /// SF Symbol per check id, keyed by the checks' stable ids. Bluetooth is
+    /// missing on purpose: SF Symbols has no Bluetooth glyph (the mark is
+    /// licensed), so those rows draw ``BluetoothRune`` instead.
+    private static let topicSymbols: [String: String] = [
+        // Setup screen
+        "wake-for-network": "network",
+        "auto-restart": "powerplug.fill",
+        "system-sleep": "moon.zzz.fill",
+        "filevault": "lock.fill",
+        "auto-login": "person.fill",
+        "remote-login": "apple.terminal.fill",
+        "screen-sharing": "display",
+        "tip-myagens": "sparkles",
+        "perm-login-item": "power",
+        "perm-location": "location.fill",
+        "perm-calendar": "calendar",
+        "perm-notifications": "bell.badge.fill",
+        // Gaming & Streaming screen
+        "stream-ethernet": "cable.connector.horizontal",
+        "stream-wifi-channel": "wifi",
+        "stream-game-mode": "gamecontroller.fill",
+        "stream-browser-gaming": "globe",
+        "stream-location-note": "location.fill",
+        "stream-read-more": "book.fill",
+    ]
+
+    private var isBluetoothRow: Bool {
+        check.id == "perm-bluetooth" || check.id == "stream-bluetooth"
+    }
+
+    private var hasTopicIcon: Bool {
+        isBluetoothRow || Self.topicSymbols[check.id] != nil
+    }
+
+    /// The corner badge: filled shapes that stay legible at 9 pt (the row's
+    /// lightbulb tip glyph would turn to mush that small).
+    private var badgeGlyph: String {
+        switch check.status {
+        case .ok: "checkmark.circle.fill"
+        case .warning: "exclamationmark.triangle.fill"
+        case .tip: "info.circle.fill"
+        case .unknown: "questionmark.circle.fill"
         }
     }
 
@@ -105,5 +180,25 @@ struct CheckRow: View {
             try? await Task.sleep(for: .seconds(1.5))
             copied = false
         }
+    }
+}
+
+/// The Bluetooth rune as a single stroked polyline, hand-drawn because SF
+/// Symbols doesn't include the (licensed) Bluetooth mark. The classic figure:
+/// a vertical stem, arrowhead vertices on the right at quarter heights, and
+/// two diagonals crossing the stem's center to the left edge.
+struct BluetoothRune: Shape {
+    func path(in rect: CGRect) -> Path {
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: rect.minX + x * rect.width, y: rect.minY + y * rect.height)
+        }
+        var path = Path()
+        path.move(to: point(0, 0.75))
+        path.addLine(to: point(1, 0.25))
+        path.addLine(to: point(0.5, 0))
+        path.addLine(to: point(0.5, 1))
+        path.addLine(to: point(1, 0.75))
+        path.addLine(to: point(0, 0.25))
+        return path
     }
 }
