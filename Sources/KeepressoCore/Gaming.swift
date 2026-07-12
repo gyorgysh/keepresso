@@ -99,7 +99,7 @@ public final class GamingTrigger: Trigger {
         self.monitor = monitor
     }
 
-    public var label: String { "Playing a game" }
+    public var label: String { L("Playing a game") }
 
     public func isSatisfied() -> Bool {
         Self.isGame(monitor.current)

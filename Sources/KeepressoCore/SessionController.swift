@@ -158,7 +158,7 @@ public final class SessionController {
         if pausedByBattery {
             log.record(
                 began: false,
-                reason: "Not started, battery below \(pauseBelowBatteryPercent ?? 0)%",
+                reason: L("Not started, battery below %d%%", pauseBelowBatteryPercent ?? 0),
                 at: now()
             )
             return
@@ -176,7 +176,7 @@ public final class SessionController {
 
     /// End the current session and release all assertions.
     public func stop(cause: SessionCause = .manual) {
-        stop(reason: cause == .manual ? "Stopped manually" : "Stopped by a command")
+        stop(reason: cause == .manual ? L("Stopped manually") : L("Stopped by a command"))
     }
 
     /// The shared teardown: logs `reason` when a session was actually running
@@ -207,8 +207,8 @@ public final class SessionController {
             reminder?.notify(title: notice.title, body: notice.body, sound: reminderSound)
         } else if notifyOnEnd {
             reminder?.notify(
-                title: "Keepresso stopped",
-                body: "Your keep-awake session has ended.",
+                title: L("Keepresso stopped"),
+                body: L("Your keep-awake session has ended."),
                 sound: reminderSound
             )
         }
@@ -217,8 +217,8 @@ public final class SessionController {
 
     static func startReason(cause: SessionCause, restarted: Bool) -> String {
         switch cause {
-        case .manual:  return restarted ? "Restarted manually" : "Started manually"
-        case .command: return restarted ? "Restarted by a command" : "Started by a command"
+        case .manual:  return restarted ? L("Restarted manually") : L("Started manually")
+        case .command: return restarted ? L("Restarted by a command") : L("Started by a command")
         }
     }
 
@@ -296,11 +296,11 @@ public final class SessionController {
                 pausedByBattery = true
                 if isActive {
                     stop(
-                        reason: "Paused, battery below \(threshold)%",
+                        reason: L("Paused, battery below %d%%", threshold),
                         endedNaturally: true,
                         notice: (
-                            title: "Paused on low battery",
-                            body: "Battery is at \(percent)%. Keepresso is letting the Mac sleep until you plug in to charge."
+                            title: L("Paused on low battery"),
+                            body: L("Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge.", percent)
                         )
                     )
                 }
@@ -322,7 +322,7 @@ public final class SessionController {
             setActive(triggerGate.isSatisfied(), at: instant)
         } else if isActive, let total = mode.duration, let startedAt,
                   instant.timeIntervalSince(startedAt) >= total {
-            stop(reason: "Timed session ended", endedNaturally: true)
+            stop(reason: L("Timed session ended"), endedNaturally: true)
             return
         }
 
@@ -370,20 +370,22 @@ public final class SessionController {
 
         let elapsed = Self.humanDuration(TimeInterval(target) * after)
         let body = reminderRepeats
-            ? "Your Mac is still awake. It's been \(elapsed)."
-            : "Your Mac has been kept awake for \(elapsed)."
-        reminder?.notify(title: "Keepresso is still brewing", body: body, sound: reminderSound)
+            ? L("Your Mac is still awake. It's been %@.", elapsed)
+            : L("Your Mac has been kept awake for %@.", elapsed)
+        reminder?.notify(title: L("Keepresso is still brewing"), body: body, sound: reminderSound)
     }
 
-    /// A short human duration like "30 minutes", "1 hour", or "2 hours 15 min".
+    /// A short, localized human duration like "30 minutes", "1 hour", or
+    /// "2 hours, 15 minutes". `DateComponentsFormatter` follows the app's
+    /// language and each language's plural rules, so no per-unit strings table.
     static func humanDuration(_ seconds: TimeInterval) -> String {
         let total = Int(seconds.rounded())
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        func plural(_ n: Int, _ unit: String) -> String { "\(n) \(unit)\(n == 1 ? "" : "s")" }
-        if hours > 0 && minutes > 0 { return "\(plural(hours, "hour")) \(minutes) min" }
-        if hours > 0 { return plural(hours, "hour") }
-        return plural(max(1, minutes), "minute")
+        let formatter = DateComponentsFormatter()
+        formatter.unitsStyle = .full
+        formatter.allowedUnits = total >= 3600 ? [.hour, .minute] : [.minute]
+        formatter.maximumUnitCount = 2
+        // At least a minute, so a just-crossed one-shot never reads "0 minutes".
+        return formatter.string(from: TimeInterval(max(60, total))) ?? ""
     }
 
     /// Drive `isActive` toward `want` without disturbing it when already there,
@@ -394,10 +396,10 @@ public final class SessionController {
             startedAt = instant
             remindersFired = 0
             lastActivityPokeAt = nil
-            let detail = triggerDescriber?().map { "Triggers: \($0)" }
-            log.record(began: true, reason: detail ?? "Trigger conditions met", at: instant)
+            let detail = triggerDescriber?().map { L("Triggers: %@", $0) }
+            log.record(began: true, reason: detail ?? L("Trigger conditions met"), at: instant)
         } else if !want, isActive {
-            stop(reason: "Trigger conditions ended", endedNaturally: true)
+            stop(reason: L("Trigger conditions ended"), endedNaturally: true)
         }
     }
 

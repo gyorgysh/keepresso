@@ -80,7 +80,7 @@ public struct PowerAssertionInfo: Equatable, Identifiable, Sendable {
     /// A friendly description of what this assertion does to sleep, or `nil`
     /// for bookkeeping types that don't hold the Mac awake (those are hidden
     /// by the UI).
-    public var effect: String? { Self.effects[type] }
+    public var effect: String? { Self.effects[type].map(L) }
 
     static let effects: [String: String] = [
         "PreventUserIdleSystemSleep": "Preventing system sleep",

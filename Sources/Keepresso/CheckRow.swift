@@ -42,7 +42,7 @@ struct CheckRow: View {
                                 .buttonStyle(.link)
                         }
                         if let command = remediation.command {
-                            Button(copied ? "Copied!" : "Copy command") { copy(command) }
+                            Button(copied ? L("Copied!") : L("Copy command")) { copy(command) }
                                 .buttonStyle(.link)
                                 .contentTransition(.opacity)
                                 .animation(.easeInOut(duration: 0.2), value: copied)
@@ -81,17 +81,17 @@ struct CheckRow: View {
     /// carried only by shape and color.
     private var statusLabel: String {
         switch check.status {
-        case .ok: "OK"
-        case .warning: "Needs attention"
-        case .tip: "Tip"
-        case .unknown: "Unknown"
+        case .ok: L("OK")
+        case .warning: L("Needs attention")
+        case .tip: L("Tip")
+        case .unknown: L("Unknown")
         }
     }
 
     /// "Open Settings" for a System Settings deep link, otherwise a neutral
     /// "Learn more" (e.g. the MyAgens tip points at a web page).
     private func linkLabel(for url: URL) -> String {
-        url.scheme?.hasPrefix("x-apple") == true ? "Open Settings" : "Learn more"
+        url.scheme?.hasPrefix("x-apple") == true ? L("Open Settings") : L("Learn more")
     }
 
     private func copy(_ command: String) {

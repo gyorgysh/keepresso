@@ -5,6 +5,7 @@ options:
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
+  developmentRegion: en
 
 packages:
   KeepressoCore:
@@ -64,6 +65,9 @@ targets:
         CFBundleVersion: "22"
         LSUIElement: true            # menu-bar agent: no Dock icon
         LSMinimumSystemVersion: "14.0"
+        # The shipped localizations (Localizable.strings under *.lproj); keep
+        # in sync with tools/localization/gen_strings.py.
+        CFBundleLocalizations: [en, de, es, fr, hu, zh-Hans]
         NSHumanReadableCopyright: "© 2026 Keepresso contributors. GNU GPL v3.0."
         # keepresso://start[?duration=<minutes>] / stop / toggle, so scripts and
         # launchers (Shortcuts, Raycast, Alfred) can drive a session.
@@ -190,6 +194,9 @@ targets:
         CFBundleDisplayName: Keepresso
         CFBundleShortVersionString: "1.12.0"
         CFBundleVersion: "22"
+        # Same six localizations as the app; keep in sync with
+        # tools/localization/gen_strings.py.
+        CFBundleLocalizations: [en, de, es, fr, hu, zh-Hans]
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:

@@ -79,7 +79,7 @@ public final class BluetoothDeviceTrigger: Trigger {
         self.monitor = monitor
     }
 
-    public var label: String { "Bluetooth \u{201C}\(deviceName)\u{201D} connected" }
+    public var label: String { L("Bluetooth \u{201C}%@\u{201D} connected", deviceName) }
 
     public func isSatisfied() -> Bool {
         monitor.current.connectedDeviceNames.contains {

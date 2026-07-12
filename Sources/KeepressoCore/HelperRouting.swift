@@ -46,11 +46,11 @@ public final class HelperDaemonSleepWatchdog: SleepWatchdogLaunching, @unchecked
     }
 
     public func startHelper(appPID: Int32) -> SleepSettingResult {
-        helper.ping() ? .applied : .failed("The Keepresso helper isn't responding.")
+        helper.ping() ? .applied : .failed(L("The Keepresso helper isn't responding."))
     }
 
     public var engageFailureMessage: String {
-        "The Keepresso helper isn't responding."
+        L("The Keepresso helper isn't responding.")
     }
 }
 
@@ -87,11 +87,11 @@ public final class HelperDaemonAWDLWatchdog: AWDLWatchdogLaunching, @unchecked S
     }
 
     public func startHelper(appPID: Int32) -> AWDLWatchdogStartResult {
-        helper.ping() ? .started : .failed("The Keepresso helper isn't responding.")
+        helper.ping() ? .started : .failed(L("The Keepresso helper isn't responding."))
     }
 
     public var engageFailureMessage: String {
-        "The Keepresso helper isn't responding."
+        L("The Keepresso helper isn't responding.")
     }
 }
 
@@ -213,6 +213,6 @@ public final class RoutedSleepControl: SleepSettingControlling, @unchecked Senda
         }
         return helper.setSleepDisabled(disabled)
             ? .applied
-            : .failed("The Keepresso helper couldn't change the setting.")
+            : .failed(L("The Keepresso helper couldn't change the setting."))
     }
 }

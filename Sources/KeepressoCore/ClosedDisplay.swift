@@ -165,7 +165,7 @@ public final class PMSetSleepControl: SleepSettingControlling {
         let script = "do shell script \"\(command)\" with administrator privileges"
         let result = runForResult("/usr/bin/osascript", ["-e", script])
         guard let result else {
-            return .failed("Couldn't run the sleep setting command.")
+            return .failed(L("Couldn't run the sleep setting command."))
         }
         if result.status == 0 { return .applied }
         // osascript reports a user-cancelled auth prompt as error -128.
@@ -173,7 +173,7 @@ public final class PMSetSleepControl: SleepSettingControlling {
             return .cancelled
         }
         let message = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-        return .failed(message.isEmpty ? "The sleep setting couldn't be changed." : message)
+        return .failed(message.isEmpty ? L("The sleep setting couldn't be changed.") : message)
     }
 
     // MARK: - Shelling out

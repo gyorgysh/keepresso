@@ -50,9 +50,7 @@ struct StreamingSetupView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Gaming & Streaming")
                     .font(.title2.bold())
-                Text("macOS hops the Wi-Fi radio off-channel for AWDL about once a second, "
-                     + "which shows up as ping spikes mid-game or mid-stream. Diagnose it here, "
-                     + "and pause AWDL for the session if it's the culprit.")
+                Text("macOS hops the Wi-Fi radio off-channel for AWDL about once a second, which shows up as ping spikes mid-game or mid-stream. Diagnose it here, and pause AWDL for the session if it's the culprit.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -135,10 +133,10 @@ struct StreamingSetupView: View {
 
     private func verdictHeadline(_ verdict: JitterVerdict) -> String {
         switch verdict {
-        case .clean: "Latency looks clean."
-        case .looksLikeAWDL: "Once-a-second spikes: this looks like AWDL."
-        case .jittery: "Spiky, but not on AWDL's cadence (congestion or a weak signal)."
-        case .inconclusive: "Not enough replies to judge."
+        case .clean: L("Latency looks clean.")
+        case .looksLikeAWDL: L("Once-a-second spikes: this looks like AWDL.")
+        case .jittery: L("Spiky, but not on AWDL's cadence (congestion or a weak signal).")
+        case .inconclusive: L("Not enough replies to judge.")
         }
     }
 
@@ -183,7 +181,7 @@ struct StreamingSetupView: View {
             .disabled(model.awdl.isBusy)
 
             if model.awdl.isBusy && !model.helperInstalled {
-                AdminAuthNote(purpose: "pause AWDL (turn off the Wi-Fi AirDrop/Handoff radio hops)")
+                AdminAuthNote(purpose: L("pause AWDL (turn off the Wi-Fi AirDrop/Handoff radio hops)"))
             }
             if let error = model.awdl.lastError {
                 Text(error)
@@ -268,9 +266,9 @@ struct StreamingSetupView: View {
 
     private var interfaceStateLabel: String {
         switch model.awdl.isInterfaceUp {
-        case true: "AWDL is on right now"
-        case false: "AWDL is off right now"
-        case nil: "AWDL state unknown"
+        case true: L("AWDL is on right now")
+        case false: L("AWDL is off right now")
+        case nil: L("AWDL state unknown")
         }
     }
 }

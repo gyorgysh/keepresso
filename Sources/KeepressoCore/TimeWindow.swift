@@ -29,11 +29,13 @@ public struct TimeWindowRule: Codable, Equatable, Hashable, Sendable {
 
     static func daysSummary(_ weekdays: Set<Int>) -> String {
         switch weekdays {
-        case [], Set(1...7):       return "Every day"
-        case Set(2...6):           return "Weekdays"
-        case [1, 7]:               return "Weekends"
+        case [], Set(1...7):       return L("Every day")
+        case Set(2...6):           return L("Weekdays")
+        case [1, 7]:               return L("Weekends")
         default:
-            let names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+            // The system's short weekday symbols, so day names follow the app's
+            // language (index 0 = Sunday, matching Calendar's 1...7 numbering).
+            let names = Calendar.current.shortStandaloneWeekdaySymbols
             return weekdays.sorted().map { names[$0 - 1] }.joined(separator: ", ")
         }
     }

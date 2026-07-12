@@ -142,7 +142,7 @@ struct RulesView: View {
                     bundleID: appRule.bundleID, name: appRule.name, match: appRule.match, grace: $0))) }
             )) {
                 ForEach(Self.gracePresets, id: \.seconds) { preset in
-                    Text(preset.label).tag(preset.seconds)
+                    Text(L(preset.label)).tag(preset.seconds)
                 }
             }
         } label: {
@@ -161,7 +161,7 @@ struct RulesView: View {
                 set: { model.updateRule(at: index, to: .cpuLoad(thresholdPercent: $0)) }
             )) {
                 ForEach(Self.cpuThresholds, id: \.self) { percent in
-                    Text("Above \(percent)%").tag(percent)
+                    Text(L("Above %d%%", percent)).tag(percent)
                 }
             }
         } label: {
@@ -180,7 +180,7 @@ struct RulesView: View {
                 set: { model.updateRule(at: index, to: .throughput(kilobytesPerSecond: $0)) }
             )) {
                 ForEach(Self.throughputThresholds, id: \.self) { kb in
-                    Text("Above \(NetworkThroughput.rateLabel(kilobytesPerSecond: kb))").tag(kb)
+                    Text(L("Above %@", NetworkThroughput.rateLabel(kilobytesPerSecond: kb))).tag(kb)
                 }
             }
         } label: {
@@ -195,18 +195,38 @@ struct RulesView: View {
     /// thinking about, not by API. One flat menu held eleven scrolling
     /// sections by v1.6, which had become a chore to navigate.
     private var addConditionMenus: some View {
-        HStack(spacing: 4) {
-            Label("Add:", systemImage: "plus.circle")
-                .foregroundStyle(.secondary)
-            HStack(spacing: 14) {
-                Menu { powerDisplayItems } label: { Text("Power & Display") }
-                Menu { networkDevicesItems } label: { Text("Network & Devices") }
-                Menu { appsActivityItems } label: { Text("Apps & Activity") }
+        // The three menu titles run long in some languages (Hungarian roughly
+        // doubles them), and .fixedSize() means an overflowing row widens the
+        // whole tab past the fixed window. Fall back to stacked menus when
+        // one line doesn't fit.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 4) {
+                addConditionLabel
+                HStack(spacing: 14) { addConditionTrio }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
+            VStack(alignment: .leading, spacing: 6) {
+                addConditionLabel
+                VStack(alignment: .leading, spacing: 6) { addConditionTrio }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .padding(.leading, 22)
+            }
         }
         .font(.callout)
+    }
+
+    private var addConditionLabel: some View {
+        Label("Add:", systemImage: "plus.circle")
+            .foregroundStyle(.secondary)
+    }
+
+    @ViewBuilder
+    private var addConditionTrio: some View {
+        Menu { powerDisplayItems } label: { Text("Power & Display") }
+        Menu { networkDevicesItems } label: { Text("Network & Devices") }
+        Menu { appsActivityItems } label: { Text("Apps & Activity") }
     }
 
     @ViewBuilder
@@ -230,7 +250,7 @@ struct RulesView: View {
             Button("VPN connected") { model.addRule(.vpnConnected) }
             if location.isAuthorized {
                 if let ssid = model.currentSSID() {
-                    Button("On current Wi-Fi (\(ssid))") { model.addRule(.wifiSSID(ssid)) }
+                    Button(L("On current Wi-Fi (%@)", ssid)) { model.addRule(.wifiSSID(ssid)) }
                 } else {
                     Text("No Wi-Fi network joined").foregroundStyle(.secondary)
                 }
@@ -270,7 +290,7 @@ struct RulesView: View {
         }
         Section("Network activity") {
             ForEach(Self.throughputThresholds, id: \.self) { kb in
-                Button("Above \(NetworkThroughput.rateLabel(kilobytesPerSecond: kb))") {
+                Button(L("Above %@", NetworkThroughput.rateLabel(kilobytesPerSecond: kb))) {
                     model.addRule(.throughput(kilobytesPerSecond: kb))
                 }
             }
@@ -305,7 +325,7 @@ struct RulesView: View {
         }
         Section("CPU load") {
             ForEach(Self.cpuThresholds, id: \.self) { percent in
-                Button("Above \(percent)%") { model.addRule(.cpuLoad(thresholdPercent: percent)) }
+                Button(L("Above %d%%", percent)) { model.addRule(.cpuLoad(thresholdPercent: percent)) }
             }
         }
         Section("Schedule") {
@@ -390,9 +410,17 @@ private struct TimeWindowEditor: View {
     let rule: TimeWindowRule
     let update: (TimeWindowRule) -> Void
 
-    /// Day numbers in `Calendar` order (1 = Sunday) with display initials.
-    private static let days: [(number: Int, initial: String)] =
-        [(1, "S"), (2, "M"), (3, "T"), (4, "W"), (5, "T"), (6, "F"), (7, "S")]
+    /// Day numbers in `Calendar` order (1 = Sunday) with the locale's own
+    /// one-letter initials, rotated so the row starts on the locale's first
+    /// weekday (Monday in most of Europe, Sunday in the US).
+    private static let days: [(number: Int, initial: String)] = {
+        let calendar = Calendar.current
+        let initials = calendar.veryShortStandaloneWeekdaySymbols
+        return (0..<7).map { offset in
+            let index = (calendar.firstWeekday - 1 + offset) % 7
+            return (index + 1, initials[index])
+        }
+    }()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {

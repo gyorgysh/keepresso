@@ -185,6 +185,7 @@ struct WelcomeView: View {
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                languagePicker
             }
             .entrance(0, revealed: revealed, animated: !reduceMotion)
 
@@ -316,6 +317,37 @@ struct WelcomeView: View {
         }
     }
 
+    /// A quiet globe-and-menu row under the hero, so someone landed in the
+    /// wrong language can fix it before reading anything else. Switching
+    /// relaunches the app (the override resolves at process start); clearing
+    /// `hasOnboarded` first makes the fresh instance reopen this window in
+    /// the picked language, so the relaunch reads as a live switch.
+    private var languagePicker: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "globe")
+                .font(type.caption)
+                .foregroundStyle(.secondary)
+            Picker("App language", selection: Binding(
+                get: { AppLanguage.current },
+                set: { switchLanguage(to: $0) }
+            )) {
+                ForEach(AppLanguage.allCases) { language in
+                    Text(language.label).tag(language)
+                }
+            }
+            .labelsHidden()
+            .fixedSize()
+            .accessibilityLabel(Text("App language"))
+        }
+    }
+
+    private func switchLanguage(to language: AppLanguage) {
+        guard language != AppLanguage.current else { return }
+        language.apply()
+        model.hasOnboarded = false
+        AppLanguage.relaunch()
+    }
+
     private func openNotificationSettings() {
         guard let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") else { return }
         NSWorkspace.shared.open(url)
@@ -376,8 +408,8 @@ struct WelcomeView: View {
                     .foregroundStyle(Color.keepressoBrew)
                     .frame(width: 26 * type.scale)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(useCase.title).font(type.callout.weight(.medium))
-                    Text(useCase.detail)
+                    Text(LocalizedStringKey(useCase.title)).font(type.callout.weight(.medium))
+                    Text(LocalizedStringKey(useCase.detail))
                         .font(type.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -410,8 +442,8 @@ struct WelcomeView: View {
                 .foregroundStyle(Color.keepressoBrew)
                 .frame(width: 26 * type.scale)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(type.callout.weight(.medium))
-                Text(detail)
+                Text(LocalizedStringKey(title)).font(type.callout.weight(.medium))
+                Text(LocalizedStringKey(detail))
                     .font(type.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

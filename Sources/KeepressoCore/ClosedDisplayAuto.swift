@@ -31,7 +31,7 @@ public protocol SleepWatchdogLaunching: AnyObject, Sendable {
 
 extension SleepWatchdogLaunching {
     public var engageFailureMessage: String {
-        "Couldn't create the sleep watchdog flag file."
+        L("Couldn't create the sleep watchdog flag file.")
     }
 }
 
@@ -78,7 +78,7 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
         let command = Self.watchdogCommand(flagPath: flagURL.path, appPID: appPID)
         let script = "do shell script \"\(OsascriptAWDLWatchdog.appleScriptEscaped(command))\" with administrator privileges"
         guard let result = runForResult("/usr/bin/osascript", ["-e", script]) else {
-            return .failed("Couldn't run the sleep watchdog command.")
+            return .failed(L("Couldn't run the sleep watchdog command."))
         }
         if result.status == 0 { return .applied }
         // osascript reports a user-cancelled auth prompt as error -128.
@@ -86,7 +86,7 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
             return .cancelled
         }
         let message = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-        return .failed(message.isEmpty ? "The sleep watchdog couldn't be started." : message)
+        return .failed(message.isEmpty ? L("The sleep watchdog couldn't be started.") : message)
     }
 
     /// The root helper, backgrounded so `do shell script` returns immediately.

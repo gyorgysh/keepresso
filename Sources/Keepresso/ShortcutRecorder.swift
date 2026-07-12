@@ -13,11 +13,11 @@ struct ShortcutRecorder: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(shortcut?.displayString ?? "None")
+            Text(shortcut?.displayString ?? L("None"))
                 .foregroundStyle(shortcut == nil ? .secondary : .primary)
                 .frame(minWidth: 60, alignment: .leading)
             Spacer()
-            Button(recording ? "Press keys…" : "Record") {
+            Button(recording ? L("Press keys…") : L("Record")) {
                 recording ? stop() : start()
             }
             if shortcut != nil && !recording {

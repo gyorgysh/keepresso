@@ -42,8 +42,7 @@ struct SetupView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Headless Setup")
                     .font(.title2.bold())
-                Text("Checks an always-on Mac (e.g. a headless Mac mini) needs. "
-                     + "Keepresso can read these but can't change the system ones, so use the links and commands below.")
+                Text("Checks an always-on Mac (e.g. a headless Mac mini) needs. Keepresso can read these but can't change the system ones, so use the links and commands below.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

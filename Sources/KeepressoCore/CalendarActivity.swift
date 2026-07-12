@@ -124,7 +124,7 @@ public final class CalendarEventTrigger: Trigger {
         self.monitor = monitor
     }
 
-    public var label: String { "Calendar event in progress" }
+    public var label: String { L("Calendar event in progress") }
 
     public func isSatisfied() -> Bool { monitor.isEventInProgress }
 }

@@ -17,6 +17,17 @@ public struct Preset: Codable, Equatable, Identifiable, Sendable {
         self.name = name
         self.ruleSet = ruleSet
     }
+
+    /// The name to show in the UI. For a built-in preset the user hasn't renamed,
+    /// this is the localized default name (so it follows the app's language and
+    /// survives a language switch); the stored ``name`` stays the English key.
+    /// A renamed built-in or a user-created preset shows its stored name as-is.
+    public var displayName: String {
+        if let english = Self.builtIns.first(where: { $0.id == id })?.name, english == name {
+            return L(english)
+        }
+        return name
+    }
 }
 
 extension Preset {

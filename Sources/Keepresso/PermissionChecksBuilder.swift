@@ -57,11 +57,11 @@ final class PermissionChecksBuilder {
     private func loginItemCheck() -> ReadinessCheck {
         makeCheck(
             id: "perm-login-item",
-            title: "Launch at login",
+            title: L("Launch at login"),
             authorized: LoginItem.isEnabled,
-            okDetail: "Keepresso launches at login, so it returns after a reboot.",
-            warnDetail: "Keepresso isn't set to launch at login, so it won't run after an unattended reboot.",
-            hint: "Turn on “Launch at login” in Keepresso's settings.",
+            okDetail: L("Keepresso launches at login, so it returns after a reboot."),
+            warnDetail: L("Keepresso isn't set to launch at login, so it won't run after an unattended reboot."),
+            hint: L("Turn on “Launch at login” in Keepresso's settings."),
             settingsURL: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension"
         )
     }
@@ -70,11 +70,11 @@ final class PermissionChecksBuilder {
         let status = CLLocationManager().authorizationStatus
         return makeCheck(
             id: "perm-location",
-            title: "Location access (Wi-Fi rules)",
+            title: L("Location access (Wi-Fi rules)"),
             authorized: status == .authorizedAlways || status == .authorized,
-            okDetail: "Keepresso can read the current Wi-Fi network name for your Wi-Fi triggers.",
-            warnDetail: "Without Location access Keepresso can't read the Wi-Fi network name, so Wi-Fi triggers won't match.",
-            hint: "Allow Location access for Keepresso.",
+            okDetail: L("Keepresso can read the current Wi-Fi network name for your Wi-Fi triggers."),
+            warnDetail: L("Without Location access Keepresso can't read the Wi-Fi network name, so Wi-Fi triggers won't match."),
+            hint: L("Allow Location access for Keepresso."),
             settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices"
         )
     }
@@ -82,11 +82,11 @@ final class PermissionChecksBuilder {
     private func bluetoothCheck() -> ReadinessCheck {
         makeCheck(
             id: "perm-bluetooth",
-            title: "Bluetooth access (device rules)",
+            title: L("Bluetooth access (device rules)"),
             authorized: CBManager.authorization == .allowedAlways,
-            okDetail: "Keepresso can see which paired devices are connected for your Bluetooth triggers.",
-            warnDetail: "Without Bluetooth access Keepresso can't see paired devices, so Bluetooth triggers won't match.",
-            hint: "Allow Bluetooth access for Keepresso.",
+            okDetail: L("Keepresso can see which paired devices are connected for your Bluetooth triggers."),
+            warnDetail: L("Without Bluetooth access Keepresso can't see paired devices, so Bluetooth triggers won't match."),
+            hint: L("Allow Bluetooth access for Keepresso."),
             settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth"
         )
     }
@@ -94,11 +94,11 @@ final class PermissionChecksBuilder {
     private func calendarCheck() -> ReadinessCheck {
         makeCheck(
             id: "perm-calendar",
-            title: "Calendar access (event rule)",
+            title: L("Calendar access (event rule)"),
             authorized: EKEventStore.authorizationStatus(for: .event) == .fullAccess,
-            okDetail: "Keepresso can see when a calendar event is in progress for your calendar trigger.",
-            warnDetail: "Without full calendar access Keepresso can't see events, so the calendar trigger won't match.",
-            hint: "Allow full calendar access for Keepresso.",
+            okDetail: L("Keepresso can see when a calendar event is in progress for your calendar trigger."),
+            warnDetail: L("Without full calendar access Keepresso can't see events, so the calendar trigger won't match."),
+            hint: L("Allow full calendar access for Keepresso."),
             settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars"
         )
     }
@@ -106,11 +106,11 @@ final class PermissionChecksBuilder {
     private func notificationCheck(_ status: UNAuthorizationStatus) -> ReadinessCheck {
         makeCheck(
             id: "perm-notifications",
-            title: "Notifications",
+            title: L("Notifications"),
             authorized: status == .authorized || status == .provisional,
-            okDetail: "Keepresso can post the “still brewing” reminder.",
-            warnDetail: "Notifications are off, so the “still brewing” reminder can't appear.",
-            hint: "Allow notifications for Keepresso.",
+            okDetail: L("Keepresso can post the “still brewing” reminder."),
+            warnDetail: L("Notifications are off, so the “still brewing” reminder can't appear."),
+            hint: L("Allow notifications for Keepresso."),
             settingsURL: "x-apple.systempreferences:com.apple.preference.notifications"
         )
     }

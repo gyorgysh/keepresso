@@ -59,3 +59,4 @@ docs/V1.9-FINDINGS.md
 # Icon Composer's rendered preview exports (local; Sources/Keepresso/AppIcon.icon
 # is the source of truth, and docs/assets/icon-layers holds the layer sources).
 docs/assets/AppIcon Exports/
+__pycache__/

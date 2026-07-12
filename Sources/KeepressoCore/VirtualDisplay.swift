@@ -85,9 +85,9 @@ public final class VirtualDisplayController {
             return
         }
         guard backend.isSupported else {
-            lastError = "Virtual displays aren't available on this macOS version."
+            lastError = L("Virtual displays aren't available on this macOS version.")
             return
         }
-        lastError = backend.start(config) ? nil : "Couldn't create the virtual display."
+        lastError = backend.start(config) ? nil : L("Couldn't create the virtual display.")
     }
 }

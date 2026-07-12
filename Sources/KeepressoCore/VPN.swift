@@ -106,7 +106,7 @@ public final class VPNConnectedTrigger: Trigger {
         self.monitor = monitor
     }
 
-    public var label: String { "VPN connected" }
+    public var label: String { L("VPN connected") }
 
     public func isSatisfied() -> Bool { monitor.isConnected }
 }

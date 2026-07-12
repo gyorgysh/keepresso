@@ -167,8 +167,8 @@ public final class MediaInUseTrigger: Trigger {
 
         var label: String {
             switch self {
-            case .camera:     return "Camera in use"
-            case .microphone: return "Microphone in use"
+            case .camera:     return L("Camera in use")
+            case .microphone: return L("Microphone in use")
             }
         }
     }
@@ -210,7 +210,7 @@ public final class AudioPlayingTrigger: Trigger {
         self.monitor = monitor
     }
 
-    public var label: String { "Audio playing" }
+    public var label: String { L("Audio playing") }
 
     public func isSatisfied() -> Bool {
         monitor.current.audioPlaying

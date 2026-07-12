@@ -5,12 +5,12 @@ import Foundation
 enum AppInfo {
     /// Marketing version, e.g. "0.5.0".
     static var version: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? L("Unknown")
     }
 
     /// Build number, e.g. "3".
     static var build: String {
-        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? L("Unknown")
     }
 
     /// "0.5.0 (3)".

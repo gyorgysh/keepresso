@@ -13,7 +13,7 @@ struct AboutView: View {
             VStack(spacing: 4) {
                 Text("Keepresso")
                     .font(.title.bold())
-                Text("Version \(AppInfo.versionString)")
+                Text(L("Version %@", AppInfo.versionString))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

@@ -109,7 +109,7 @@ public final class CPULoadTrigger: Trigger {
         self.reader = reader
     }
 
-    public var label: String { "CPU above \(thresholdPercent)%" }
+    public var label: String { L("CPU above %d%%", thresholdPercent) }
 
     /// Advance the smoothing average by one reading. Done here (not in
     /// ``isSatisfied()``) so the EMA steps exactly once per reconcile: the menu's

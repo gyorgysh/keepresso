@@ -38,20 +38,20 @@ struct MenuBarContent: View {
     /// The menu label for the current mode: a preset's name when it matches,
     /// otherwise the custom duration spelled out ("2 h 30 min").
     static func modeLabel(_ mode: SessionMode) -> String {
-        if let preset = durationOptions.first(where: { $0.mode == mode }) { return preset.label }
-        guard let duration = mode.duration else { return "Indefinitely" }
+        if let preset = durationOptions.first(where: { $0.mode == mode }) { return L(preset.label) }
+        guard let duration = mode.duration else { return L("Indefinitely") }
         let totalMinutes = Int((duration / 60).rounded())
         let hours = totalMinutes / 60, minutes = totalMinutes % 60
-        if hours > 0 && minutes > 0 { return "\(hours) h \(minutes) min" }
-        if hours > 0 { return "\(hours) hour\(hours == 1 ? "" : "s")" }
-        return "\(max(1, minutes)) min"
+        if hours > 0 && minutes > 0 { return L("%d h %d min", hours, minutes) }
+        if hours > 0 { return L("%d h", hours) }
+        return L("%d min", max(1, minutes))
     }
 
     /// A compact "M:SS" (or "Ns" under a minute) countdown for a grace window.
     static func graceCountdown(_ seconds: TimeInterval) -> String {
         let s = Int(seconds.rounded(.up))
-        if s >= 60 { return String(format: "%d:%02d", s / 60, s % 60) }
-        return "\(s)s"
+        if s >= 60 { return L("%d:%02d", s / 60, s % 60) }
+        return L("%ds", s)
     }
 
     var body: some View {
@@ -97,7 +97,7 @@ struct MenuBarContent: View {
                 LabeledContent("For") {
                     Menu(Self.modeLabel(model.mode)) {
                         ForEach(Array(Self.durationOptions.enumerated()), id: \.offset) { _, option in
-                            Button(option.label) { model.mode = option.mode }
+                            Button(L(option.label)) { model.mode = option.mode }
                         }
                         Divider()
                         Button("Custom Duration\u{2026}") { showCustomDuration = true }
@@ -132,7 +132,7 @@ struct MenuBarContent: View {
             .toggleStyle(.switch)
             .disabled(model.closedDisplayBusy)
             if model.closedDisplayBusy {
-                AdminAuthNote(purpose: "keep the Mac awake with the lid closed")
+                AdminAuthNote(purpose: L("keep the Mac awake with the lid closed"))
             }
             if model.closedDisplayEnabled {
                 Text("Stays awake on battery too; the display turns off when the lid closes. Turn it off before putting it in a bag.")
@@ -216,7 +216,7 @@ struct MenuBarContent: View {
                 scale: type.scale
             )
             VStack(alignment: .leading, spacing: 2) {
-                Text(session.pausedByBattery ? "Paused" : (session.isActive ? "Brewing" : "Idle"))
+                Text(session.pausedByBattery ? L("Paused") : (session.isActive ? L("Brewing") : L("Idle")))
                     .font(type.headline)
                     .contentTransition(.opacity)
                 Text(statusDetail)
@@ -255,8 +255,8 @@ struct MenuBarContent: View {
                 Text("The helper needs attention")
                     .font(type.callout.weight(.medium))
                 Text(model.helperAttention == .needsApproval
-                    ? "Approve Keepresso again in System Settings."
-                    : "The helper isn't responding; reinstall it.")
+                    ? L("Approve Keepresso again in System Settings.")
+                    : L("The helper isn't responding; reinstall it."))
                     .font(type.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -324,7 +324,7 @@ struct MenuBarContent: View {
                     .font(type.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Button(isActive ? "Update Session" : "Start") {
+                Button(isActive ? L("Update Session") : L("Start")) {
                     let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
                     start(parts.hour ?? 0, parts.minute ?? 0)
                     dismiss()
@@ -342,16 +342,16 @@ struct MenuBarContent: View {
         // Battery auto-pause overrides everything else: say so, or an otherwise
         // satisfied session looks stuck for no visible reason.
         if session.pausedByBattery {
-            return "Battery below \(model.pauseBelowBatteryPercent)%, letting the Mac sleep"
+            return L("Battery below %d%%, letting the Mac sleep", model.pauseBelowBatteryPercent)
         }
         if model.triggersEnabled && !model.triggersPaused {
-            return model.triggerSummary() ?? "No conditions yet"
+            return model.triggerSummary() ?? L("No conditions yet")
         }
-        guard session.isActive else { return "System can sleep" }
+        guard session.isActive else { return L("System can sleep") }
         if let remaining = session.remaining {
-            return "Stops in \(MenuBarLabel.format(remaining))"
+            return L("Stops in %@", MenuBarLabel.format(remaining))
         }
-        return "Awake for \(MenuBarLabel.format(displayedElapsed))"
+        return L("Awake for %@", MenuBarLabel.format(displayedElapsed))
     }
 
     /// A compact line naming another process that's holding the Mac awake, so an
@@ -415,7 +415,7 @@ struct MenuBarContent: View {
                             .contentTransition(.symbolEffect(.replace))
                             .animation(.snappy(duration: 0.25), value: state.satisfied)
                             .animation(.snappy(duration: 0.25), value: state.inGrace)
-                            .accessibilityLabel(state.inGrace ? "Met, in grace period" : (state.satisfied ? "Met" : "Not met"))
+                            .accessibilityLabel(state.inGrace ? L("Met, in grace period") : (state.satisfied ? L("Met") : L("Not met")))
                         Text(state.rule.label)
                             .font(type.caption)
                             .foregroundStyle(state.satisfied ? .primary : .secondary)

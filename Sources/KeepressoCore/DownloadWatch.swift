@@ -70,7 +70,7 @@ public final class DownloadInFolderTrigger: Trigger {
         self.scanner = scanner
     }
 
-    public var label: String { "Downloading in \u{201C}\(folder.lastPathComponent)\u{201D}" }
+    public var label: String { L("Downloading in \u{201C}%@\u{201D}", folder.lastPathComponent) }
 
     public func tick() { active = scanner.hasPartialDownloads(in: folder) }
 

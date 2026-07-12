@@ -51,7 +51,7 @@ public final class VolumeMountedTrigger: Trigger {
         self.monitor = monitor
     }
 
-    public var label: String { "Volume \u{201C}\(volumeName)\u{201D} mounted" }
+    public var label: String { L("Volume \u{201C}%@\u{201D} mounted", volumeName) }
 
     public func isSatisfied() -> Bool {
         monitor.current.volumeNames.contains(volumeName)

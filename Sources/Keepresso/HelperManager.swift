@@ -132,7 +132,7 @@ final class HelperManager {
     /// they've decided.
     func install() {
         guard managesDaemon else {
-            lastError = "This copy of Keepresso isn't in the Applications folder, so it leaves the helper alone. Install from /Applications."
+            lastError = L("This copy of Keepresso isn't in the Applications folder, so it leaves the helper alone. Install from /Applications.")
             return
         }
         lastError = nil
@@ -150,12 +150,12 @@ final class HelperManager {
         case .enabled, .notRegistered:
             break
         case .notFound:
-            lastError = "The helper wasn't found inside the app. Reinstall Keepresso and try again."
+            lastError = L("The helper wasn't found inside the app. Reinstall Keepresso and try again.")
         @unknown default:
             break
         }
         if status == .notRegistered {
-            lastError = "The helper couldn't be registered."
+            lastError = L("The helper couldn't be registered.")
         }
     }
 
@@ -170,11 +170,11 @@ final class HelperManager {
         do {
             try await service.unregister()
         } catch {
-            lastError = "The helper couldn't be removed: \(error.localizedDescription)"
+            lastError = L("The helper couldn't be removed: %@", error.localizedDescription)
         }
         refresh()
         if status == .enabled, lastError == nil {
-            lastError = "macOS still reports the helper as registered. Try again, or restart the Mac."
+            lastError = L("macOS still reports the helper as registered. Try again, or restart the Mac.")
         }
         // A clean unregister often leaves a disabled tombstone in BTM's
         // records, and System Settings keeps showing the app's row off it.
@@ -185,7 +185,7 @@ final class HelperManager {
         // letting the lingering row read as a failed removal.
         if status != .enabled, lastError == nil,
            let findings = await inspectRecords(), findings.daemonState != .missing {
-            lastError = "Removed. System Settings may keep showing Keepresso under App Background Activity until macOS refreshes its list; restarting the Mac clears the leftover row."
+            lastError = L("Removed. System Settings may keep showing Keepresso under App Background Activity until macOS refreshes its list; restarting the Mac clears the leftover row.")
         }
     }
 
@@ -263,9 +263,9 @@ final class HelperManager {
         }
         lastError = switch findings?.daemonState {
         case .disallowed:
-            "macOS is refusing the helper's registration outright. Reinstall the helper; if that doesn't take, restart the Mac and try once more."
+            L("macOS is refusing the helper's registration outright. Reinstall the helper; if that doesn't take, restart the Mac and try once more.")
         default:
-            "The helper isn't responding. If an old copy of Keepresso is in the Trash, empty the Trash first: macOS keeps disabling the helper while one is there. Then reinstall the helper."
+            L("The helper isn't responding. If an old copy of Keepresso is in the Trash, empty the Trash first: macOS keeps disabling the helper while one is there. Then reinstall the helper.")
         }
         return .broken
     }

@@ -47,24 +47,24 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
     public var label: String {
         switch self {
         case .powerSource(let match): return match.label
-        case .externalDisplay:        return "External display connected"
-        case .wifiSSID(let ssid):     return "On Wi-Fi \u{201C}\(ssid)\u{201D}"
+        case .externalDisplay:        return L("External display connected")
+        case .wifiSSID(let ssid):     return L("On Wi-Fi \u{201C}%@\u{201D}", ssid)
         case .app(let rule):          return rule.label
-        case .process(let query):     return "Process \u{201C}\(query)\u{201D} running"
+        case .process(let query):     return L("Process \u{201C}%@\u{201D} running", query)
         case .timeWindow(let rule):   return rule.label
-        case .volumeMounted(let name): return "Volume \u{201C}\(name)\u{201D} mounted"
-        case .cpuLoad(let threshold): return "CPU above \(threshold)%"
+        case .volumeMounted(let name): return L("Volume \u{201C}%@\u{201D} mounted", name)
+        case .cpuLoad(let threshold): return L("CPU above %d%%", threshold)
         case .mediaInUse(let device): return device.label
-        case .audioPlaying:           return "Audio playing"
-        case .vpnConnected:           return "VPN connected"
+        case .audioPlaying:           return L("Audio playing")
+        case .vpnConnected:           return L("VPN connected")
         case .bluetoothDevice(let name):
-            return "Bluetooth \u{201C}\(name)\u{201D} connected"
-        case .calendarEvent:          return "Calendar event in progress"
-        case .gaming:                 return "Playing a game"
+            return L("Bluetooth \u{201C}%@\u{201D} connected", name)
+        case .calendarEvent:          return L("Calendar event in progress")
+        case .gaming:                 return L("Playing a game")
         case .throughput(let kb):
-            return "Network above \(NetworkThroughput.rateLabel(kilobytesPerSecond: kb))"
+            return L("Network above %@", NetworkThroughput.rateLabel(kilobytesPerSecond: kb))
         case .downloadInFolder(let url):
-            return "Downloading in \u{201C}\(url.lastPathComponent)\u{201D}"
+            return L("Downloading in \u{201C}%@\u{201D}", url.lastPathComponent)
         }
     }
 
@@ -117,9 +117,9 @@ public struct AppRule: Codable, Equatable, Hashable, Sendable {
     public var label: String {
         // A bundle id reads as machine noise in the UI, so prefer the friendly
         // name when we have it; keep the "App " prefix only as the bare-id fallback.
-        let subject = name ?? "App \(bundleID)"
+        let subject = name ?? L("App %@", bundleID)
         let base = "\(subject) \(match.label)"
-        return grace > 0 ? base + " (+\(Int(grace))s)" : base
+        return grace > 0 ? L("%@ (+%ds)", base, Int(grace)) : base
     }
 }
 

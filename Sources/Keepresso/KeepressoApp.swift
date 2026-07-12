@@ -106,6 +106,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let updater: any Updating = SparkleUpdater()
 
     override init() {
+        // Keep the AppleLanguages override consistent with the recorded
+        // language choice (repairs a defaults edit from outside the app;
+        // affects the next launch, this process already resolved its locale).
+        AppLanguage.syncAtLaunch()
         // Order matters: constructing AppModel builds HelperManager, whose
         // first SMAppService status read is already a BTM contact, and BTM
         // revalidates the helper's record on contact. Any old copy of the app

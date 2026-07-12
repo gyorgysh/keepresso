@@ -14,9 +14,9 @@ public enum SessionEndAction: String, Codable, CaseIterable, Sendable {
     /// A menu label for the Preferences picker.
     public var label: String {
         switch self {
-        case .none:            return "Do nothing"
-        case .sleepDisplay:    return "Sleep the display"
-        case .startScreensaver: return "Start the screen saver"
+        case .none:            return L("Do nothing")
+        case .sleepDisplay:    return L("Sleep the display")
+        case .startScreensaver: return L("Start the screen saver")
         }
     }
 }

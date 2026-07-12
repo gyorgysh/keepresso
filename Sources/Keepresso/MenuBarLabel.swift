@@ -50,8 +50,8 @@ struct MenuBarLabel: View {
     }
 
     private var accessibilityText: String {
-        if session.pausedByBattery { return "Keepresso: paused, battery low" }
-        return session.isActive ? "Keepresso: brewing" : "Keepresso: idle"
+        if session.pausedByBattery { return L("Keepresso: paused, battery low") }
+        return session.isActive ? L("Keepresso: brewing") : L("Keepresso: idle")
     }
 
     /// "12:03" for under an hour, "1:02:03" once it reaches an hour.
@@ -61,7 +61,7 @@ struct MenuBarLabel: View {
         let minutes = (total % 3600) / 60
         let seconds = total % 60
         return hours > 0
-            ? String(format: "%d:%02d:%02d", hours, minutes, seconds)
-            : String(format: "%d:%02d", minutes, seconds)
+            ? L("%d:%02d:%02d", hours, minutes, seconds)
+            : L("%d:%02d", minutes, seconds)
     }
 }

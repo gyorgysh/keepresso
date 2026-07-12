@@ -16,19 +16,19 @@ struct AWDLStatusStyle {
         case .watchingForGame:
             icon = "binoculars"
             color = .secondary
-            text = "Waiting for a game to come to the front"
+            text = L("Waiting for a game to come to the front")
         case .pausedManually:
             icon = "dot.radiowaves.left.and.right"
             color = .secondary
-            text = "AWDL paused"
+            text = L("AWDL paused")
         case .pausedForGame:
             icon = "gamecontroller.fill"
             color = .green
-            text = "AWDL paused for gaming"
+            text = L("AWDL paused for gaming")
         case .resumingAfterGame(let seconds):
             icon = "hourglass"
             color = .orange
-            text = "Game closed, AWDL back in \(seconds)s"
+            text = L("Game closed, AWDL back in %ds", seconds)
         }
     }
 }

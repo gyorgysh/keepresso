@@ -66,34 +66,34 @@ public extension ReadinessCheck {
 
     static func ethernet(_ snapshot: StreamingSnapshot) -> ReadinessCheck {
         let id = "stream-ethernet"
-        let title = "Wired network"
+        let title = L("Wired network")
         guard let ports = snapshot.hardwarePorts, let ifconfig = snapshot.ifconfig else {
             return ReadinessCheck(
                 id: id, title: title, status: .unknown,
-                detail: "Couldn't read the network interfaces."
+                detail: L("Couldn't read the network interfaces.")
             )
         }
         let wired = wiredPortDevices(fromHardwarePorts: ports)
         if let active = wired.first(where: { isActive(device: $0, inIfconfig: ifconfig) }) {
             return ReadinessCheck(
                 id: id, title: title, status: .ok,
-                detail: "Ethernet is connected (\(active)). A wired link sidesteps Wi-Fi jitter entirely, the most reliable fix."
+                detail: L("Ethernet is connected (%@). A wired link sidesteps Wi-Fi jitter entirely, the most reliable fix.", active)
             )
         }
         if !wired.isEmpty {
             return ReadinessCheck(
                 id: id, title: title, status: .tip,
-                detail: "An Ethernet adapter is available but no cable is connected.",
+                detail: L("An Ethernet adapter is available but no cable is connected."),
                 remediation: Remediation(
-                    hint: "For gaming or streaming, a wired connection beats any Wi-Fi tuning."
+                    hint: L("For gaming or streaming, a wired connection beats any Wi-Fi tuning.")
                 )
             )
         }
         return ReadinessCheck(
             id: id, title: title, status: .tip,
-            detail: "No wired network adapter found.",
+            detail: L("No wired network adapter found."),
             remediation: Remediation(
-                hint: "A USB-C or Thunderbolt Ethernet adapter sidesteps Wi-Fi jitter entirely."
+                hint: L("A USB-C or Thunderbolt Ethernet adapter sidesteps Wi-Fi jitter entirely.")
             )
         )
     }
@@ -148,47 +148,55 @@ public extension ReadinessCheck {
     /// hop on-channel, so it stops costing a retune. 6 GHz has no social channel.
     static func wifiChannel(_ snapshot: StreamingSnapshot) -> ReadinessCheck {
         let id = "stream-wifi-channel"
-        let title = "Wi-Fi channel"
+        let title = L("Wi-Fi channel")
         guard let channel = snapshot.wifiChannel, let band = snapshot.wifiBand else {
             return ReadinessCheck(
                 id: id, title: title, status: .unknown,
-                detail: "Not connected to Wi-Fi, or its details are unreadable.",
+                detail: L("Not connected to Wi-Fi, or its details are unreadable."),
                 remediation: Remediation(
-                    hint: "If you game or stream over Wi-Fi, re-check while connected."
+                    hint: L("If you game or stream over Wi-Fi, re-check while connected.")
                 )
             )
         }
-        let width = snapshot.wifiWidthMHz.map { " at \($0) MHz" } ?? ""
+        // "channel 6" or "channel 6 at 80 MHz", the shared clause every
+        // sentence below builds on.
+        let channelClause: String = snapshot.wifiWidthMHz.map {
+            L("channel %d at %d MHz", channel, $0)
+        } ?? L("channel %d", channel)
 
         let five = Self.social5GHzChannel(countryCode: snapshot.wifiCountryCode)
         switch band {
         case .ghz2:
             return ReadinessCheck(
                 id: id, title: title, status: .warning,
-                detail: "On 2.4 GHz (channel \(channel)\(width)), the slowest band, where every AWDL hop costs the most.",
+                detail: L("On 2.4 GHz (%@), the slowest band, where every AWDL hop costs the most.", channelClause),
                 remediation: Remediation(
-                    hint: "Prefer a 5 GHz network on \(five.description) at 80 MHz. If 2.4 GHz is unavoidable, set the router to channel 6, AWDL's 2.4 GHz social channel."
+                    hint: L("Prefer a 5 GHz network on %@ at 80 MHz. If 2.4 GHz is unavoidable, set the router to channel 6, AWDL's 2.4 GHz social channel.", five.description)
                 )
             )
         case .ghz6:
             return ReadinessCheck(
                 id: id, title: title, status: .ok,
-                detail: "On 6 GHz (channel \(channel)\(width)). AWDL's social channels live on 2.4 and 5 GHz, so there's nothing to align here. If stutter persists, a 5 GHz network on \(five.description) keeps AWDL's hops on-channel."
+                detail: L("On 6 GHz (%@). AWDL's social channels live on 2.4 and 5 GHz, so there's nothing to align here. If stutter persists, a 5 GHz network on %@ keeps AWDL's hops on-channel.", channelClause, five.description)
             )
         case .ghz5:
             if let target = five.channel, channel == target {
-                let widthNote = (snapshot.wifiWidthMHz ?? 80) >= 80
-                    ? "" : " Raising the router to 80 MHz width completes the alignment."
+                let detail: String
+                if (snapshot.wifiWidthMHz ?? 80) >= 80 {
+                    detail = L("On %@, aligned with AWDL's 5 GHz social channel, so its hops stay on-channel.", channelClause)
+                } else {
+                    detail = L("On %@, aligned with AWDL's 5 GHz social channel, so its hops stay on-channel. Raising the router to 80 MHz width completes the alignment.", channelClause)
+                }
                 return ReadinessCheck(
                     id: id, title: title, status: .ok,
-                    detail: "On channel \(channel)\(width), aligned with AWDL's 5 GHz social channel, so its hops stay on-channel.\(widthNote)"
+                    detail: detail
                 )
             }
             return ReadinessCheck(
                 id: id, title: title, status: .tip,
-                detail: "On 5 GHz channel \(channel)\(width). AWDL's off-channel hops leave this channel roughly every second.",
+                detail: L("On 5 GHz %@. AWDL's off-channel hops leave this channel roughly every second.", channelClause),
                 remediation: Remediation(
-                    hint: "Set the router to \(five.description) at 80 MHz so AWDL's hops stay on-channel."
+                    hint: L("Set the router to %@ at 80 MHz so AWDL's hops stay on-channel.", five.description)
                 )
             )
         }
@@ -202,12 +210,12 @@ public extension ReadinessCheck {
     /// unavailable both channels are named and no alignment is claimed.
     static func social5GHzChannel(countryCode: String?) -> (channel: Int?, description: String) {
         guard let code = countryCode?.uppercased() else {
-            return (nil, "channel 44 (the EU social channel) or 149 (the US and Canada social channel), whichever your region allows")
+            return (nil, L("channel 44 (the EU social channel) or 149 (the US and Canada social channel), whichever your region allows"))
         }
         if euCountryCodes.contains(code) {
-            return (44, "channel 44, AWDL's 5 GHz social channel in the EU")
+            return (44, L("channel 44, AWDL's 5 GHz social channel in the EU"))
         }
-        return (149, "channel 149, AWDL's 5 GHz social channel where UNII-3 is allowed (the US, Canada, and most of the world)")
+        return (149, L("channel 149, AWDL's 5 GHz social channel where UNII-3 is allowed (the US, Canada, and most of the world)"))
     }
 
     /// EU / EEA / UK regulatory regions, where UNII-3 (channels 149+) is not
@@ -222,25 +230,25 @@ public extension ReadinessCheck {
 
     static func bluetoothRadio(_ snapshot: StreamingSnapshot) -> ReadinessCheck {
         let id = "stream-bluetooth"
-        let title = "Bluetooth during play"
+        let title = L("Bluetooth during play")
         switch snapshot.bluetoothOn {
         case true:
             return ReadinessCheck(
                 id: id, title: title, status: .tip,
-                detail: "Bluetooth is on. It shares the radio chip with Wi-Fi, so heavy Bluetooth traffic (audio, controllers) can add its own blips.",
+                detail: L("Bluetooth is on. It shares the radio chip with Wi-Fi, so heavy Bluetooth traffic (audio, controllers) can add its own blips."),
                 remediation: Remediation(
-                    hint: "Nothing to fix: just a variable to know about if stutter persists on a clean channel."
+                    hint: L("Nothing to fix: just a variable to know about if stutter persists on a clean channel.")
                 )
             )
         case false:
             return ReadinessCheck(
                 id: id, title: title, status: .ok,
-                detail: "Bluetooth is off, so it isn't competing with Wi-Fi for the radio."
+                detail: L("Bluetooth is off, so it isn't competing with Wi-Fi for the radio.")
             )
         case nil:
             return ReadinessCheck(
                 id: id, title: title, status: .unknown,
-                detail: "Couldn't read the Bluetooth radio state."
+                detail: L("Couldn't read the Bluetooth radio state.")
             )
         }
     }
@@ -254,14 +262,14 @@ public extension ReadinessCheck {
     static func gameModeTip() -> ReadinessCheck {
         ReadinessCheck(
             id: "stream-game-mode",
-            title: "Game Mode",
+            title: L("Game Mode"),
             status: .tip,
-            detail: "macOS turns on Game Mode by itself when a game runs full screen: the game gets CPU and GPU priority, and Bluetooth controllers and audio get faster sampling. If the game-controller icon doesn't appear in the menu bar while playing, put the game into full screen.",
+            detail: L("macOS turns on Game Mode by itself when a game runs full screen: the game gets CPU and GPU priority, and Bluetooth controllers and audio get faster sampling. If the game-controller icon doesn't appear in the menu bar while playing, put the game into full screen."),
             remediation: Remediation(
-                hint: "How Game Mode works:",
+                hint: L("How Game Mode works:"),
                 links: [
                     ReadinessLink(
-                        label: "Learn more",
+                        label: L("Learn more"),
                         url: URL(string: "https://support.apple.com/105118")!
                     ),
                 ]
@@ -274,11 +282,11 @@ public extension ReadinessCheck {
     static func browserCloudGamingTip() -> ReadinessCheck {
         ReadinessCheck(
             id: "stream-browser-gaming",
-            title: "Cloud gaming in the browser",
+            title: L("Cloud gaming in the browser"),
             status: .tip,
-            detail: "Xbox Cloud Gaming and the web versions of GeForce NOW run in a browser tab, so there's no app for the gaming condition to spot. The \u{201C}Audio playing\u{201D} condition covers them: game sound keeps the session brewing.",
+            detail: L("Xbox Cloud Gaming and the web versions of GeForce NOW run in a browser tab, so there's no app for the gaming condition to spot. The \u{201C}Audio playing\u{201D} condition covers them: game sound keeps the session brewing."),
             remediation: Remediation(
-                hint: "Add it under Preferences \u{25B8} Triggers \u{25B8} Add \u{25B8} Apps & Activity \u{25B8} Media."
+                hint: L("Add it under Preferences \u{25B8} Triggers \u{25B8} Add \u{25B8} Apps & Activity \u{25B8} Media.")
             )
         )
     }
@@ -289,11 +297,11 @@ public extension ReadinessCheck {
     static func locationScansNote() -> ReadinessCheck {
         ReadinessCheck(
             id: "stream-location-note",
-            title: "Location Services and Wi-Fi scans",
+            title: L("Location Services and Wi-Fi scans"),
             status: .tip,
-            detail: "Location Services triggers independent Wi-Fi scans, another source of occasional blips. Keepresso itself uses Location to read Wi-Fi network names for triggers, so weigh that before turning anything off.",
+            detail: L("Location Services triggers independent Wi-Fi scans, another source of occasional blips. Keepresso itself uses Location to read Wi-Fi network names for triggers, so weigh that before turning anything off."),
             remediation: Remediation(
-                hint: "Review which apps use Location:",
+                hint: L("Review which apps use Location:"),
                 settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices")
             )
         )
@@ -303,14 +311,14 @@ public extension ReadinessCheck {
     static func awdlReadMore() -> ReadinessCheck {
         ReadinessCheck(
             id: "stream-read-more",
-            title: "Why streams stutter once a second",
+            title: L("Why streams stutter once a second"),
             status: .tip,
-            detail: "The Wi-Fi radio hops off-channel for AWDL (AirDrop, Handoff, Sidecar, Continuity) roughly every second, which shows up as 50-100 ms ping spikes. The jitter test reproduces the diagnosis; the AWDL watchdog is the session-scoped fix.",
+            detail: L("The Wi-Fi radio hops off-channel for AWDL (AirDrop, Handoff, Sidecar, Continuity) roughly every second, which shows up as 50-100 ms ping spikes. The jitter test reproduces the diagnosis; the AWDL watchdog is the session-scoped fix."),
             remediation: Remediation(
-                hint: "The full story:",
+                hint: L("The full story:"),
                 links: [
                     ReadinessLink(
-                        label: "Read more",
+                        label: L("Read more"),
                         url: URL(string: "https://gyorgy.sh/blog/macos-awdl-network-jitter")!
                     ),
                 ]

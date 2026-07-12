@@ -37,7 +37,7 @@ struct PreferencesView: View {
         VStack(spacing: 0) {
             Picker("Section", selection: $section) {
                 ForEach(Section.allCases) { section in
-                    Label(section.rawValue, systemImage: section.symbol).tag(section)
+                    Label(LocalizedStringKey(section.rawValue), systemImage: section.symbol).tag(section)
                 }
             }
             .pickerStyle(.segmented)
@@ -253,7 +253,7 @@ private struct GeneralTab: View {
                 ))
                 .disabled(model.closedDisplayBusy)
                 if model.closedDisplayBusy && !model.helperInstalled {
-                    AdminAuthNote(purpose: "keep the Mac awake with the lid closed")
+                    AdminAuthNote(purpose: L("keep the Mac awake with the lid closed"))
                 }
                 if let error = model.closedDisplayError {
                     Label(error, systemImage: "exclamationmark.triangle")
@@ -266,7 +266,7 @@ private struct GeneralTab: View {
                 ))
                 .disabled(model.closedDisplayAutoBusy)
                 if model.closedDisplayAutoBusy && !model.helperInstalled {
-                    AdminAuthNote(purpose: "switch closed-display mode with the session")
+                    AdminAuthNote(purpose: L("switch closed-display mode with the session"))
                 }
                 if let error = model.closedDisplayAutoError {
                     Label(error, systemImage: "exclamationmark.triangle")
@@ -291,6 +291,22 @@ private struct GeneralTab: View {
                 Text("Global shortcut")
             } footer: {
                 Text("A system-wide keyboard shortcut that starts or stops keep-awake from any app. Needs at least one modifier key.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                Picker("App language", selection: Binding(
+                    get: { AppLanguage.current },
+                    set: { switchLanguage(to: $0) }
+                )) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(language.label).tag(language)
+                    }
+                }
+            } header: {
+                Text("Language")
+            } footer: {
+                Text("Keepresso follows your system language by default. Changing this relaunches Keepresso so menus, windows, and notifications all switch together.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -351,46 +367,54 @@ private struct GeneralTab: View {
         .onAppear { model.refreshClosedDisplay() }
     }
 
+    /// Persist a new language choice and relaunch so every surface switches
+    /// at once (the `AppleLanguages` override only resolves at process start).
+    private func switchLanguage(to language: AppLanguage) {
+        guard language != AppLanguage.current else { return }
+        language.apply()
+        AppLanguage.relaunch()
+    }
+
     // MARK: - Settings backup
 
     private func exportSettings() {
         let panel = NSSavePanel()
-        panel.title = "Export Keepresso Settings"
+        panel.title = L("Export Keepresso Settings")
         panel.nameFieldStringValue = "Keepresso Settings.json"
         panel.allowedContentTypes = [.json]
         panel.isExtensionHidden = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try model.exportSettingsData().write(to: url)
-            transferNote = TransferNote(message: "Exported to \(url.lastPathComponent).", isError: false)
+            transferNote = TransferNote(message: L("Exported to %@.", url.lastPathComponent), isError: false)
         } catch {
-            transferNote = TransferNote(message: "Couldn't export settings: \(error.localizedDescription)", isError: true)
+            transferNote = TransferNote(message: L("Couldn't export settings: %@", error.localizedDescription), isError: true)
         }
     }
 
     private func importSettings() {
         let panel = NSOpenPanel()
-        panel.title = "Import Keepresso Settings"
+        panel.title = L("Import Keepresso Settings")
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try model.importSettings(from: Data(contentsOf: url))
-            transferNote = TransferNote(message: "Settings imported.", isError: false)
+            transferNote = TransferNote(message: L("Settings imported."), isError: false)
         } catch let error as SettingsTransferError {
             transferNote = TransferNote(message: Self.message(for: error), isError: true)
         } catch {
-            transferNote = TransferNote(message: "Couldn't read the file: \(error.localizedDescription)", isError: true)
+            transferNote = TransferNote(message: L("Couldn't read the file: %@", error.localizedDescription), isError: true)
         }
     }
 
     private static func message(for error: SettingsTransferError) -> String {
         switch error {
         case .unrecognizedFile:
-            return "That file isn't a Keepresso settings export."
+            return L("That file isn't a Keepresso settings export.")
         case .unsupportedVersion:
-            return "That export was made by a newer version of Keepresso."
+            return L("That export was made by a newer version of Keepresso.")
         }
     }
 
@@ -450,11 +474,11 @@ private struct TriggersTab: View {
                 Spacer()
                 Menu {
                     ForEach(model.presets) { preset in
-                        Button(preset.name) { model.applyPreset(preset) }
+                        Button(preset.displayName) { model.applyPreset(preset) }
                     }
                     if !model.presets.isEmpty { Divider() }
                     ForEach(model.presets) { preset in
-                        Button("Remove \u{201C}\(preset.name)\u{201D}", role: .destructive) {
+                        Button(L("Remove \u{201C}%@\u{201D}", preset.displayName), role: .destructive) {
                             model.removePreset(preset)
                         }
                     }
@@ -507,12 +531,12 @@ private struct ReminderTab: View {
                     set: { model.reminderEnabled = $0 }
                 ))
                 if model.reminderEnabled {
-                    Picker(model.reminderRepeats ? "Every" : "After", selection: Binding(
+                    Picker(model.reminderRepeats ? L("Every") : L("After"), selection: Binding(
                         get: { model.reminderAfter },
                         set: { model.reminderAfter = $0 }
                     )) {
                         ForEach(Self.options, id: \.interval) { option in
-                            Text(option.label).tag(option.interval)
+                            Text(L(option.label)).tag(option.interval)
                         }
                     }
                     Toggle("Repeat the reminder", isOn: Binding(
@@ -526,8 +550,8 @@ private struct ReminderTab: View {
                 }
             } footer: {
                 Text(model.reminderRepeats
-                     ? "A recurring notification every interval while a session runs, so a Mac left awake keeps reminding you."
-                     : "A one-time notification once a session has run this long, in case you forget the Mac is awake.")
+                     ? L("A recurring notification every interval while a session runs, so a Mac left awake keeps reminding you.")
+                     : L("A one-time notification once a session has run this long, in case you forget the Mac is awake."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .contentTransition(.opacity)
@@ -599,7 +623,7 @@ private struct DisplayTab: View {
                         }
                     )) {
                         ForEach(Self.resolutions, id: \.label) { r in
-                            Text(r.label).tag(Self.key(r.width, r.height))
+                            Text(L(r.label)).tag(Self.key(r.width, r.height))
                         }
                     }
                     Toggle("HiDPI (Retina)", isOn: Binding(
@@ -649,7 +673,7 @@ private struct DiskTab: View {
                 if model.diskKeepAliveEnabled {
                     LabeledContent("Folder") {
                         HStack(spacing: 6) {
-                            Text(model.diskKeepAliveDirectory?.lastPathComponent ?? "None")
+                            Text(model.diskKeepAliveDirectory?.lastPathComponent ?? L("None"))
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                             Button("Change…") { model.chooseDiskFolder() }
@@ -661,7 +685,7 @@ private struct DiskTab: View {
                         set: { model.diskKeepAliveInterval = $0 }
                     )) {
                         ForEach(Self.intervals, id: \.interval) { option in
-                            Text(option.label).tag(option.interval)
+                            Text(L(option.label)).tag(option.interval)
                         }
                     }
                 }

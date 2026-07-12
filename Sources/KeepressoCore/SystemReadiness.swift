@@ -146,22 +146,22 @@ public extension ReadinessCheck {
     static func remoteLogin(_ snapshot: SystemSnapshot) -> ReadinessCheck {
         remoteAccess(
             id: "remote-login",
-            title: "Remote Login (SSH)",
+            title: L("Remote Login (SSH)"),
             enabled: snapshot.remoteLogin,
-            on: "Remote Login is on, so you can reach this Mac over SSH.",
-            off: "Remote Login is off. You might want to enable it for SSH access to a headless Mac.",
-            unknown: "Couldn't confirm Remote Login. If you want SSH access, enable it in System Settings."
+            on: L("Remote Login is on, so you can reach this Mac over SSH."),
+            off: L("Remote Login is off. You might want to enable it for SSH access to a headless Mac."),
+            unknown: L("Couldn't confirm Remote Login. If you want SSH access, enable it in System Settings.")
         )
     }
 
     static func screenSharing(_ snapshot: SystemSnapshot) -> ReadinessCheck {
         remoteAccess(
             id: "screen-sharing",
-            title: "Screen Sharing",
+            title: L("Screen Sharing"),
             enabled: snapshot.screenSharing,
-            on: "Screen Sharing is on, so you can connect with the Screen Sharing app or VNC.",
-            off: "Screen Sharing is off. You might want to enable it to view a headless Mac's screen.",
-            unknown: "Couldn't confirm Screen Sharing. If you want remote viewing, enable it in System Settings."
+            on: L("Screen Sharing is on, so you can connect with the Screen Sharing app or VNC."),
+            off: L("Screen Sharing is off. You might want to enable it to view a headless Mac's screen."),
+            unknown: L("Couldn't confirm Screen Sharing. If you want remote viewing, enable it in System Settings.")
         )
     }
 
@@ -184,7 +184,7 @@ public extension ReadinessCheck {
             status: status,
             detail: enabled == true ? on : (enabled == false ? off : unknown),
             remediation: status == .ok ? nil : Remediation(
-                hint: "Enable it in System Settings ▸ General ▸ Sharing.",
+                hint: L("Enable it in System Settings ▸ General ▸ Sharing."),
                 settingsURL: sharingDeepLink
             )
         )
@@ -199,14 +199,14 @@ public extension ReadinessCheck {
     static func myAgensSuggestion() -> ReadinessCheck {
         ReadinessCheck(
             id: "tip-myagens",
-            title: "Run AI agents on this Mac with MyAgens",
+            title: L("Run AI agents on this Mac with MyAgens"),
             status: .tip,
-            detail: "MyAgens lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely.",
+            detail: L("MyAgens lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely."),
             remediation: Remediation(
-                hint: "Learn more about MyAgens:",
+                hint: L("Learn more about MyAgens:"),
                 links: [
-                    ReadinessLink(label: "GitHub", url: URL(string: "https://github.com/gyorgysh/myagens")!),
-                    ReadinessLink(label: "Read more", url: URL(string: "https://gyorgy.sh/blog/myagens")!),
+                    ReadinessLink(label: L("GitHub"), url: URL(string: "https://github.com/gyorgysh/myagens")!),
+                    ReadinessLink(label: L("Read more"), url: URL(string: "https://gyorgy.sh/blog/myagens")!),
                 ]
             )
         )
@@ -222,16 +222,16 @@ public extension ReadinessCheck {
         let value = PMSet.value(forKey: "womp", in: snapshot.pmset)
         return ReadinessCheck(
             id: "wake-for-network",
-            title: "Wake for network access",
+            title: L("Wake for network access"),
             status: value.map { $0 == 1 ? .ok : .warning } ?? .unknown,
             detail: detail(
                 value,
-                on: "The Mac wakes when accessed over the network.",
-                off: "The Mac won't wake for network access, so remote logins may fail.",
-                unknown: "Couldn't read the power settings."
+                on: L("The Mac wakes when accessed over the network."),
+                off: L("The Mac won't wake for network access, so remote logins may fail."),
+                unknown: L("Couldn't read the power settings.")
             ),
             remediation: value == 1 ? nil : Remediation(
-                hint: "Enable “Wake for network access”.",
+                hint: L("Enable “Wake for network access”."),
                 settingsURL: energyDeepLink,
                 command: "sudo pmset -a womp 1"
             )
@@ -242,16 +242,16 @@ public extension ReadinessCheck {
         let value = PMSet.value(forKey: "autorestart", in: snapshot.pmset)
         return ReadinessCheck(
             id: "auto-restart",
-            title: "Restart after power failure",
+            title: L("Restart after power failure"),
             status: value.map { $0 == 1 ? .ok : .warning } ?? .unknown,
             detail: detail(
                 value,
-                on: "The Mac restarts automatically after a power failure.",
-                off: "The Mac stays off after a power cut, so it won't come back headless.",
-                unknown: "Couldn't read the power settings."
+                on: L("The Mac restarts automatically after a power failure."),
+                off: L("The Mac stays off after a power cut, so it won't come back headless."),
+                unknown: L("Couldn't read the power settings.")
             ),
             remediation: value == 1 ? nil : Remediation(
-                hint: "Enable automatic restart after a power failure.",
+                hint: L("Enable automatic restart after a power failure."),
                 settingsURL: energyDeepLink,
                 command: "sudo pmset -a autorestart 1"
             )
@@ -263,17 +263,17 @@ public extension ReadinessCheck {
         // `sleep 0` disables idle system sleep, the headless-friendly setting.
         return ReadinessCheck(
             id: "system-sleep",
-            title: "System sleep disabled",
+            title: L("System sleep disabled"),
             status: value.map { $0 == 0 ? .ok : .warning } ?? .unknown,
             detail: detail(
                 value,
-                on: "Idle system sleep is disabled, so the Mac stays reachable.",
-                off: "The Mac sleeps when idle; Keepresso prevents this while a session runs, but a global setting is safer headless.",
-                unknown: "Couldn't read the power settings.",
+                on: L("Idle system sleep is disabled, so the Mac stays reachable."),
+                off: L("The Mac sleeps when idle; Keepresso prevents this while a session runs, but a global setting is safer headless."),
+                unknown: L("Couldn't read the power settings."),
                 onWhen: { $0 == 0 }
             ),
             remediation: value == 0 ? nil : Remediation(
-                hint: "Disable idle system sleep.",
+                hint: L("Disable idle system sleep."),
                 settingsURL: energyDeepLink,
                 command: "sudo pmset -a sleep 0"
             )
@@ -288,25 +288,25 @@ public extension ReadinessCheck {
         if let output = snapshot.fileVault?.lowercased() {
             if output.contains("off") {
                 status = .ok
-                detail = "FileVault is off, so the Mac can reboot unattended to the login window."
+                detail = L("FileVault is off, so the Mac can reboot unattended to the login window.")
             } else if output.contains("on") {
                 status = .warning
-                detail = "FileVault is on, so a reboot blocks at the disk-unlock screen until someone types the password, defeating headless restart."
+                detail = L("FileVault is on, so a reboot blocks at the disk-unlock screen until someone types the password, defeating headless restart.")
             } else {
                 status = .unknown
-                detail = "Couldn't determine the FileVault status."
+                detail = L("Couldn't determine the FileVault status.")
             }
         } else {
             status = .unknown
-            detail = "Couldn't determine the FileVault status."
+            detail = L("Couldn't determine the FileVault status.")
         }
         return ReadinessCheck(
             id: "filevault",
-            title: "FileVault disabled",
+            title: L("FileVault disabled"),
             status: status,
             detail: detail,
             remediation: status == .ok ? nil : Remediation(
-                hint: "For an unattended Mac, consider turning FileVault off (weigh the security trade-off).",
+                hint: L("For an unattended Mac, consider turning FileVault off (weigh the security trade-off)."),
                 settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?FileVault")
             )
         )
@@ -319,13 +319,13 @@ public extension ReadinessCheck {
         let enabled = !(user?.isEmpty ?? true)
         return ReadinessCheck(
             id: "auto-login",
-            title: "Automatic login",
+            title: L("Automatic login"),
             status: enabled ? .ok : .warning,
             detail: enabled
-                ? "Automatic login is on (\(user!)), so the Mac reaches the desktop after a reboot without a keyboard."
-                : "Automatic login is off. After a reboot the Mac waits at the login window for a password.",
+                ? L("Automatic login is on (%@), so the Mac reaches the desktop after a reboot without a keyboard.", user!)
+                : L("Automatic login is off. After a reboot the Mac waits at the login window for a password."),
             remediation: enabled ? nil : Remediation(
-                hint: "Turn on automatic login for this account.",
+                hint: L("Turn on automatic login for this account."),
                 settingsURL: URL(string: "x-apple.systempreferences:com.apple.Users-Groups-Settings.extension")
             )
         )

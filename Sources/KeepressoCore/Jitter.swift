@@ -62,16 +62,19 @@ public struct JitterReport: Equatable, Sendable {
     /// "Baseline 12 ms, 8 spikes up to 96 ms, 1 lost".
     public var summary: String {
         guard let baselineMs, let maxMs else {
-            return "Not enough replies to measure."
+            return L("Not enough replies to measure.")
         }
-        var parts = ["Baseline \(Int(baselineMs.rounded())) ms"]
+        var parts = [L("Baseline %d ms", Int(baselineMs.rounded()))]
         if spikeCount > 0 {
-            parts.append("\(spikeCount) spike\(spikeCount == 1 ? "" : "s") up to \(Int(maxMs.rounded())) ms")
+            let spikeText = spikeCount == 1
+                ? L("%d spike up to %d ms", spikeCount, Int(maxMs.rounded()))
+                : L("%d spikes up to %d ms", spikeCount, Int(maxMs.rounded()))
+            parts.append(spikeText)
         } else {
-            parts.append("max \(Int(maxMs.rounded())) ms")
+            parts.append(L("max %d ms", Int(maxMs.rounded())))
         }
         if lostCount > 0 {
-            parts.append("\(lostCount) lost")
+            parts.append(L("%d lost", lostCount))
         }
         return parts.joined(separator: ", ")
     }

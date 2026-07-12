@@ -130,7 +130,7 @@ public final class NetworkThroughputTrigger: Trigger {
     }
 
     public var label: String {
-        "Network above \(NetworkThroughput.rateLabel(kilobytesPerSecond: thresholdKilobytesPerSecond))"
+        L("Network above %@", NetworkThroughput.rateLabel(kilobytesPerSecond: thresholdKilobytesPerSecond))
     }
 
     /// Advance the smoothing average by one reading. Done here (not in

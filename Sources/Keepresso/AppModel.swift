@@ -303,8 +303,8 @@ final class AppModel {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
-        panel.prompt = "Watch"
-        panel.message = "Keep awake while downloads are in progress in this folder."
+        panel.prompt = L("Watch")
+        panel.message = L("Keep awake while downloads are in progress in this folder.")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         addRule(.downloadInFolder(url))
     }
@@ -335,19 +335,21 @@ final class AppModel {
     /// session on, or what it's waiting for. `nil` when not gated or no rules.
     func triggerSummary() -> String? {
         guard let states = ruleStates(), !states.isEmpty else { return nil }
-        func conditions(_ count: Int) -> String { "\(count) condition\(count == 1 ? "" : "s")" }
+        func conditions(_ count: Int) -> String {
+            L(count == 1 ? "%d condition" : "%d conditions", count)
+        }
         if session.isActive {
             // The per-condition list is shown right below, so summarize by count
             // instead of repeating each label.
             let held = states.filter(\.satisfied).count
-            return held == 0 ? "Active" : "Held by \(conditions(held))"
+            return held == 0 ? L("Active") : L("Held by %@", conditions(held))
         }
         switch settings.ruleSet.combine {
         case .any:
-            return "Waiting for any condition"
+            return L("Waiting for any condition")
         case .all:
             let pending = states.filter { !$0.satisfied }.count
-            return "Waiting on \(conditions(pending))"
+            return L("Waiting on %@", conditions(pending))
         }
     }
 
@@ -738,8 +740,8 @@ final class AppModel {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
-        panel.prompt = "Keep Awake"
-        panel.message = "Choose a folder on the disk you want to keep spun up."
+        panel.prompt = L("Keep Awake")
+        panel.message = L("Choose a folder on the disk you want to keep spun up.")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         setDiskConfig(DiskKeepAliveConfig(directory: url, interval: diskKeepAliveInterval))
     }
@@ -854,8 +856,8 @@ final class AppModel {
             // Also say so in a notification: the attention window can land
             // behind whatever the user is doing at login.
             notifier.notify(
-                title: "Keepresso needs a new approval",
-                body: "macOS turned Keepresso's background switch off. Turn it back on under Login Items & Extensions in System Settings to keep the password-free helper.",
+                title: L("Keepresso needs a new approval"),
+                body: L("macOS turned Keepresso's background switch off. Turn it back on under Login Items & Extensions in System Settings to keep the password-free helper."),
                 sound: true
             )
         case .broken:
@@ -985,8 +987,8 @@ final class AppModel {
         if brewing, !wasBrewingForClosedDisplay, !closedDisplayAuto.isAuthorized, !helperInstalled {
             NSApp.activate(ignoringOtherApps: true)
             notifier.notify(
-                title: "Keepresso needs your password",
-                body: "Enter your administrator password to switch closed-display mode on for this session.",
+                title: L("Keepresso needs your password"),
+                body: L("Enter your administrator password to switch closed-display mode on for this session."),
                 sound: true
             )
         }
@@ -1182,23 +1184,23 @@ final class AppModel {
         if gameInFront, !wasGameInFront {
             if !awdl.isAuthorized, !awdl.isRunning, !helperInstalled {
                 notifier.notify(
-                    title: "Keepresso needs your password",
-                    body: "Enter your administrator password to pause AWDL for this game.",
+                    title: L("Keepresso needs your password"),
+                    body: L("Enter your administrator password to pause AWDL for this game."),
                     sound: true
                 )
             }
             if settings.awdlNotifications {
                 notifier.notify(
-                    title: "Game detected",
-                    body: "Pausing AWDL to steady your connection.",
+                    title: L("Game detected"),
+                    body: L("Pausing AWDL to steady your connection."),
                     sound: false
                 )
             }
         }
         if !gamingActive, wasGamingActive, settings.awdlNotifications {
             notifier.notify(
-                title: "AWDL resumed",
-                body: "The game closed; AirDrop, Handoff and Continuity are back.",
+                title: L("AWDL resumed"),
+                body: L("The game closed; AirDrop, Handoff and Continuity are back."),
                 sound: false
             )
         }

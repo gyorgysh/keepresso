@@ -61,9 +61,9 @@ public final class PowerSourceTrigger: Trigger {
 
         var label: String {
             switch self {
-            case .onACPower: return "On AC power"
-            case .onBattery: return "On battery"
-            case .charging:  return "Charging"
+            case .onACPower: return L("On AC power")
+            case .onBattery: return L("On battery")
+            case .charging:  return L("Charging")
             }
         }
     }
@@ -102,7 +102,7 @@ public final class ExternalDisplayTrigger: Trigger {
         self.monitor = monitor
     }
 
-    public var label: String { "External display connected" }
+    public var label: String { L("External display connected") }
 
     public func isSatisfied() -> Bool { monitor.current.hasExternalDisplay }
 }
@@ -119,7 +119,7 @@ public final class WiFiSSIDTrigger: Trigger {
         self.monitor = monitor
     }
 
-    public var label: String { "On Wi-Fi \u{201C}\(ssid)\u{201D}" }
+    public var label: String { L("On Wi-Fi \u{201C}%@\u{201D}", ssid) }
 
     public func isSatisfied() -> Bool {
         guard let current = monitor.current.ssid else { return false }
@@ -136,8 +136,8 @@ public enum AppMatch: String, Codable, Sendable, CaseIterable {
 
     var label: String {
         switch self {
-        case .running:   return "is running"
-        case .frontmost: return "is frontmost"
+        case .running:   return L("is running")
+        case .frontmost: return L("is frontmost")
         }
     }
 }
@@ -162,7 +162,7 @@ public final class AppTrigger: Trigger {
         self.monitor = monitor
     }
 
-    public var label: String { "App \(bundleID) \(match.label)" }
+    public var label: String { "\(L("App %@", bundleID)) \(match.label)" }
 
     public func isSatisfied() -> Bool {
         let snapshot = monitor.current
@@ -187,7 +187,7 @@ public final class ProcessTrigger: Trigger {
         self.monitor = monitor
     }
 
-    public var label: String { "Process \u{201C}\(query)\u{201D} running" }
+    public var label: String { L("Process \u{201C}%@\u{201D} running", query) }
 
     public func isSatisfied() -> Bool {
         Self.matches(query, in: monitor.current)

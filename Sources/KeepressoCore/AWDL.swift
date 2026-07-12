@@ -90,7 +90,7 @@ public protocol AWDLWatchdogLaunching: AnyObject, Sendable {
 
 extension AWDLWatchdogLaunching {
     public var engageFailureMessage: String {
-        "Couldn't create the watchdog flag file."
+        L("Couldn't create the watchdog flag file.")
     }
 }
 
@@ -137,7 +137,7 @@ public final class OsascriptAWDLWatchdog: AWDLWatchdogLaunching {
         let command = Self.watchdogCommand(flagPath: flagURL.path, appPID: appPID)
         let script = "do shell script \"\(Self.appleScriptEscaped(command))\" with administrator privileges"
         guard let result = runForResult("/usr/bin/osascript", ["-e", script]) else {
-            return .failed("Couldn't run the watchdog command.")
+            return .failed(L("Couldn't run the watchdog command."))
         }
         if result.status == 0 { return .started }
         // osascript reports a user-cancelled auth prompt as error -128.
@@ -145,7 +145,7 @@ public final class OsascriptAWDLWatchdog: AWDLWatchdogLaunching {
             return .cancelled
         }
         let message = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-        return .failed(message.isEmpty ? "The watchdog couldn't be started." : message)
+        return .failed(message.isEmpty ? L("The watchdog couldn't be started.") : message)
     }
 
     /// The root helper, backgrounded so `do shell script` returns immediately.

@@ -24,7 +24,7 @@ struct AdminAuthNote: View {
                     Image(systemName: "lock.fill")
                         .foregroundStyle(.orange)
                         .accessibilityHidden(true)
-                    Text("macOS is asking for your administrator password to \(purpose). The dialog may be titled “osascript”: that's Keepresso running the command, and nothing else is changed. To stop these prompts for good, install the administrator helper (Preferences ▸ General).")
+                    Text(L("macOS is asking for your administrator password to %@. The dialog may be titled “osascript”: that's Keepresso running the command, and nothing else is changed. To stop these prompts for good, install the administrator helper (Preferences ▸ General).", purpose))
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)

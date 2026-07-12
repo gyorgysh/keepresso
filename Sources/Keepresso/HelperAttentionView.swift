@@ -81,23 +81,23 @@ struct HelperAttentionView: View {
 
     private var title: String {
         switch stage {
-        case .checking: "Checking the helper"
-        case .needsApproval: "One approval needed"
-        case .broken: "The helper needs a reinstall"
-        case .allSet: "All set"
+        case .checking: L("Checking the helper")
+        case .needsApproval: L("One approval needed")
+        case .broken: L("The helper needs a reinstall")
+        case .allSet: L("All set")
         }
     }
 
     private var message: String {
         switch stage {
         case .checking:
-            "Making sure Keepresso's helper is awake and answering."
+            L("Making sure Keepresso's helper is awake and answering.")
         case .needsApproval:
-            "macOS turned the helper's background switch off, so it needs your approval again: in System Settings, under Login Items & Extensions, find Keepresso in App Background Activity and turn it on. Everything is password-free again right after."
+            L("macOS turned the helper's background switch off, so it needs your approval again: in System Settings, under Login Items & Extensions, find Keepresso in App Background Activity and turn it on. Everything is password-free again right after.")
         case .broken:
-            "Keepresso repaired the helper's registration, but macOS keeps disabling it. An old copy of Keepresso in the Trash is the usual cause: empty the Trash, then reinstall the helper below. Nothing else about your setup changes."
+            L("Keepresso repaired the helper's registration, but macOS keeps disabling it. An old copy of Keepresso in the Trash is the usual cause: empty the Trash, then reinstall the helper below. Nothing else about your setup changes.")
         case .allSet:
-            "The helper is back. Closed-display mode and AWDL pausing work without password prompts again."
+            L("The helper is back. Closed-display mode and AWDL pausing work without password prompts again.")
         }
     }
 
@@ -114,7 +114,7 @@ struct HelperAttentionView: View {
             }
             .padding(.vertical, 2)
         case .needsApproval:
-            statusBadge(icon: "hourglass", text: "Waiting for the switch in System Settings; this updates by itself.")
+            statusBadge(icon: "hourglass", text: L("Waiting for the switch in System Settings; this updates by itself."))
         case .broken:
             if let error = model.helper.lastError {
                 statusBadge(icon: "exclamationmark.triangle", text: error)
