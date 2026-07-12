@@ -137,8 +137,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
     /// Listens for the Control Center toggle's Darwin doorbell.
     private var widgetObserver: WidgetCommandObserver?
+    /// Set when this launch is a duplicate handing over to an already running
+    /// copy (see ``yieldIfDuplicateInstance()``). The terminate that follows
+    /// must not run the usual quit chores, they belong to the copy staying up.
+    private var yieldingToPeer = false
+
+    /// macOS normally refuses to launch a second instance of a running bundle,
+    /// but a click on one of our notifications can make Launch Services spawn
+    /// one anyway (seen after launching from Xcode): two menu-bar cups, each
+    /// with its own assertions. Detect that here, before the ticker or any
+    /// assertion starts, and hand back to the original instead.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        yieldIfDuplicateInstance()
+    }
+
+    private func yieldIfDuplicateInstance() {
+        guard let bundleID = Bundle.main.bundleIdentifier else { return }
+        let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+        let describe: (NSRunningApplication) -> SingleInstanceGuard.Instance = {
+            .init(pid: $0.processIdentifier, bundleURL: $0.bundleURL, launchDate: $0.launchDate)
+        }
+        let current = NSRunningApplication.current
+        guard let senior = SingleInstanceGuard.peerToYieldTo(
+            current: describe(current),
+            peers: running.filter { $0 != current }.map(describe)
+        ),
+        let peer = running.first(where: { $0.processIdentifier == senior.pid })
+        else { return }
+        yieldingToPeer = true
+        peer.activate()
+        NSApp.terminate(nil)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // A duplicate instance is on its way out (see applicationWillFinishLaunching);
+        // don't start any of the running machinery it would have to tear down.
+        if yieldingToPeer { return }
         // If launched from the DMG / Downloads, move into /Applications and
         // relaunch from there (this instance quits if it relocates).
         AppRelocator.relocateIfNeeded()
@@ -170,6 +204,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // A duplicate handing over to the copy that stays up must not write
+        // "stopped" into the shared widget state: that copy owns it and may be
+        // keeping the Mac awake right now.
+        if yieldingToPeer { return }
         // The session dies with this process; don't leave the widgets lying.
         model.writeWidgetStateStopped()
     }
