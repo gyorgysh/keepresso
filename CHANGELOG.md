@@ -1,13 +1,13 @@
 # Changelog
 
-All notable changes to Keepresso are documented here. Versions follow
-[Semantic Versioning](https://semver.org).
+All notable changes to Keepresso are documented here, grouped by release.
+Versions follow [Semantic Versioning](https://semver.org).
 
-## 1.13.0
+## [1.13.0] - 2026-07-12
 
 Theme: Keepresso now speaks fifteen languages.
 
-### New
+### Added
 
 - **Keepresso speaks fifteen languages.** English, German, Spanish, French,
   Hungarian, Italian, Japanese, Korean, Russian, Brazilian Portuguese, Turkish,
@@ -43,11 +43,11 @@ Theme: Keepresso now speaks fifteen languages.
   it yourself, instead of letting the leftover copy quietly disable the
   background helper.
 
-## 1.12.0
+## [1.12.0] - 2026-07-09
 
 Theme: a livelier cup, and updates that clean up after themselves.
 
-### New
+### Added
 
 - **The cup now pours.** Starting a session fills the menu panel's cup with
   a short pour animation, the steam rising once the pour lands, and stopping
@@ -87,7 +87,7 @@ Theme: a livelier cup, and updates that clean up after themselves.
 - **The Triggers tab sits left like every other tab** instead of floating
   centered while the trigger switch is off.
 
-## 1.11.2
+## [1.11.2] - 2026-07-09
 
 Theme: the helper stays on.
 
@@ -115,7 +115,7 @@ Theme: the helper stays on.
   registration at all; even a status check from one could hand the
   registration to the wrong copy and get the helper disabled.
 
-## 1.11.1
+## [1.11.1] - 2026-07-08
 
 Theme: the helper heals itself.
 
@@ -138,7 +138,7 @@ Theme: the helper heals itself.
   resolved, and a failed engage retries in the same session once the helper
   is back.
 
-### New
+### Added
 
 - **Pick the AWDL resume delay.** Gaming & Streaming now has a "Resume AWDL
   after leaving the game" picker (10 seconds to 5 minutes, 1 minute as
@@ -146,11 +146,11 @@ Theme: the helper heals itself.
   can come back as fast as you like. Changes apply immediately, even to a
   countdown already running.
 
-## 1.11.0
+## [1.11.0] - 2026-07-07
 
 Theme: one password, ever.
 
-### New
+### Added
 
 - **The administrator helper: one password, ever.** A small privileged helper
   service (Preferences > General > Administrator helper) now handles
@@ -180,12 +180,12 @@ Theme: one password, ever.
   the prompts for good, and no longer flash under a toggle during quick,
   prompt-free operations.
 
-## 1.10.0
+## [1.10.0] - 2026-07-07
 
 Theme: closed-display mode that follows the session, and the website's copper
 inside the app.
 
-### New
+### Added
 
 - **Closed-display mode, only while brewing.** A new "Only while brewing"
   option (Preferences > General > Closed-display mode) ties the lid-closed
@@ -203,11 +203,11 @@ inside the app.
   light mode, soft copper in dark), across the menu, Preferences, the setup
   windows, and the widgets.
 
-## 1.9.0
+## [1.9.0] - 2026-07-06
 
 Theme: a command-line tool, and reliability fixes from a full-history review.
 
-### New
+### Added
 
 - **The `keepresso` command-line tool.** A caffeinate-style CLI, shipped inside
   the app bundle and linked onto PATH by the Homebrew cask. `keepresso start /
@@ -236,7 +236,7 @@ Theme: a command-line tool, and reliability fixes from a full-history review.
   moves itself to Applications, not in the copy that is about to quit (which
   lost it forever).
 
-## 1.8.0
+## [1.8.0] - 2026-07-06
 
 Theme: onboarding, portability, and two new triggers.
 
@@ -252,7 +252,7 @@ Theme: onboarding, portability, and two new triggers.
   menu's Pause Triggers), so the toggle sticks and the menu shows "Resume
   Triggers", instead of the gate turning the session back on a second later.
 
-### New
+### Added
 
 - **Export and import settings.** Back up your settings, triggers, and presets
   to a JSON file, or move them to another Mac, from Preferences > General. The
@@ -276,11 +276,11 @@ Theme: onboarding, portability, and two new triggers.
 - **Liquid Glass app icon.** A new macOS 26 app icon built with Icon Composer,
   with light, dark, and tinted appearances and the Liquid Glass material.
 
-## 1.7.0
+## [1.7.0] - 2026-07-06
 
 Theme: remote-work presence and everyday control.
 
-### New
+### Added
 
 - **Keep me active (defeat idle detectors).** A plain power assertion keeps the
   Mac awake but doesn't reset app-level or enterprise idle detection, so
@@ -338,7 +338,7 @@ Theme: remote-work presence and everyday control.
 - Fewer per-second system reads on the common configuration, and a leaner
   internal structure (no behavior change).
 
-## 1.6.0
+## [1.6.0] - 2026-07-05
 
 - **Gaming trigger.** A "Playing a game" condition: stay awake while a game
   is in front. Detects apps that declare a games category, anything running
@@ -377,7 +377,7 @@ Theme: remote-work presence and everyday control.
   menus (Power & Display, Network & Devices, Apps & Activity) instead of one
   long scrolling list.
 
-## 1.5.0
+## [1.5.0] - 2026-07-04
 
 - **Desktop widgets.** Keepresso on the desktop (and in Notification Center),
   in the brand's caramel-on-roast look with the real cup mark. The small
@@ -402,7 +402,7 @@ Theme: remote-work presence and everyday control.
   new "Restore default presets" brings back the missing ones, leaving your
   own and renamed presets untouched.
 
-## 1.4.0
+## [1.4.0] - 2026-07-03
 
 - **Camera and microphone triggers, with a Meetings preset.** Stay awake
   while anything is using the camera or the mic: the same device state that
@@ -433,7 +433,7 @@ Theme: remote-work presence and everyday control.
   their content, so text stays sharp over very dark or busy desktops while
   the surfaces still read as Liquid Glass.
 
-## 1.3.0
+## [1.3.0] - 2026-07-03
 
 - **Shortcuts actions.** Keepresso now shows up in the Shortcuts app (and
   Spotlight/Siri) with Start Keeping Awake (optionally for N minutes), Stop
@@ -498,7 +498,7 @@ Theme: remote-work presence and everyday control.
   live state across edits.
 - The Headless Setup tip now points at MyAgens.
 
-## 1.2.0
+## [1.2.0] - 2026-07-01
 
 - **Pause Triggers.** A one-click "Pause Triggers" / "Resume Triggers" button
   in the menu bar, for when you want to stop brewing without going into
@@ -517,12 +517,12 @@ Theme: remote-work presence and everyday control.
   Headless Setup, About, Check for Updates, Quit) read as quiet menu rows
   instead of competing boxed buttons. Minor copy fixes to some captions.
 
-## 1.1.1
+## [1.1.1] - 2026-07-01
 
 - Fixed a crash in the headless-readiness Setup screen.
 - Corrected stale distribution docs.
 
-## 1.1.0
+## [1.1.0] - 2026-07-01
 
 - **Battery-aware auto-pause.** Let the Mac sleep once charge drops below a
   threshold you choose, even mid-session, so it never runs the battery flat.
@@ -533,7 +533,7 @@ Theme: remote-work presence and everyday control.
 - **Presets.** Apply a named trigger bundle in one click, built-in (AI Agent,
   On AC Power, External Display Connected) or your own saved rule sets.
 
-## 1.0.0
+## [1.0.0] - 2026-07-01
 
 Initial public release.
 
