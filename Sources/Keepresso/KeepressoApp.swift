@@ -65,9 +65,10 @@ struct KeepressoApp: App {
 /// the very first launch. The label view is alive from launch (the icon shows
 /// immediately), unlike the dropdown content, which is built lazily on first
 /// click, so a launch-time open belongs here. Guarded by ``AppModel/hasOnboarded``,
-/// which `WelcomeView.onAppear` flips: consuming the one-shot only once the
-/// window is really on screen means a launch that never shows it (a failed
-/// open, or the relocation hand-off below) doesn't burn the first run.
+/// which only the welcome's Get Started button flips: a launch that never
+/// shows the window (a failed open, or the relocation hand-off below), or one
+/// where the user closes it without confirming (a language-switch relaunch),
+/// doesn't burn the first run.
 private struct MenuBarLabelView: View {
     @Bindable var model: AppModel
     @Environment(\.openWindow) private var openWindow

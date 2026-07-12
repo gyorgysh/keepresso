@@ -7,10 +7,10 @@ import KeepressoCore
 /// The first-run welcome window: a short intro to a menu-bar app that has no
 /// Dock icon or main window, then a one-click "how do you use your Mac" setup
 /// that applies a matching trigger preset, plus a couple of general options.
-/// Shown once on the first launch (gated by ``AppModel/hasOnboarded``) and
-/// reopenable from Preferences > General. Every step here acts only when its
-/// control is used; nothing prompts for a permission just because the window
-/// opened.
+/// Shown on launch until Get Started is pressed (the press is what sets
+/// ``AppModel/hasOnboarded``) and reopenable from Preferences > General.
+/// Every step here acts only when its control is used; nothing prompts for a
+/// permission just because the window opened.
 struct WelcomeView: View {
     @Bindable var model: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -150,11 +150,7 @@ struct WelcomeView: View {
         .font(type.body)
         .glassWindowBackground()
         .centersAndFrontsWindow()
-        // The one-shot is consumed by actually being seen, not by the attempt
-        // to open the window (see `MenuBarLabelView`): if launch is cut short
-        // (DMG relocation hand-off) the flag stays false for the real run.
         .onAppear {
-            model.hasOnboarded = true
             // Status reads only; showing the window never prompts for anything.
             model.helper.refresh()
             revealed = true
@@ -244,7 +240,10 @@ struct WelcomeView: View {
     }
 
     /// Pinned under the scroll area, so Get Started is always on screen no
-    /// matter how small the display is.
+    /// matter how small the display is. Get Started is what consumes the
+    /// first-run one-shot: not opening the window, not seeing it. Anything
+    /// short of that press (a language-switch relaunch, closing the window,
+    /// quitting) brings the welcome back on the next launch.
     private var footer: some View {
         VStack(spacing: 14) {
             Divider()
@@ -252,9 +251,12 @@ struct WelcomeView: View {
                 Link("Learn more", destination: AppInfo.repository)
                     .font(type.callout)
                 Spacer()
-                Button("Get Started") { dismiss() }
-                    .prominentActionStyle()
-                    .keyboardShortcut(.defaultAction)
+                Button("Get Started") {
+                    model.hasOnboarded = true
+                    dismiss()
+                }
+                .prominentActionStyle()
+                .keyboardShortcut(.defaultAction)
             }
         }
         .entrance(3, revealed: revealed, animated: !reduceMotion)
@@ -321,7 +323,9 @@ struct WelcomeView: View {
     /// wrong language can fix it before reading anything else. Switching
     /// relaunches the app (the override resolves at process start); clearing
     /// `hasOnboarded` first makes the fresh instance reopen this window in
-    /// the picked language, so the relaunch reads as a live switch.
+    /// the picked language, so the relaunch reads as a live switch. And since
+    /// only Get Started sets the flag back, the welcome keeps returning on
+    /// launch until the user confirms in the language they ended up with.
     private var languagePicker: some View {
         HStack(spacing: 4) {
             Image(systemName: "globe")
