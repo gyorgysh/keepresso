@@ -151,6 +151,11 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   live summary of what's holding the session on, a Liquid Glass app icon (Icon
   Composer, with light, dark, and tinted appearances), and Liquid Glass window
   styling on macOS 26+.
+- 🌍 **Fifteen languages.** English, German, Spanish, French, Hungarian, Italian,
+  Japanese, Korean, Russian, Brazilian Portuguese, Turkish, Polish, Ukrainian,
+  Simplified Chinese, and Traditional Chinese, across the menu, every window,
+  notifications, VoiceOver labels, and the widgets. Pick one in Preferences or on
+  the Welcome screen, or follow the system language (the default).
 - ⬆️ **Self-updating.** Built-in auto-updates via [Sparkle](https://sparkle-project.org),
   with an EdDSA-signed appcast on GitHub Releases.
 

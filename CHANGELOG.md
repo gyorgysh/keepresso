@@ -3,6 +3,46 @@
 All notable changes to Keepresso are documented here. Versions follow
 [Semantic Versioning](https://semver.org).
 
+## 1.13.0
+
+Theme: Keepresso now speaks fifteen languages.
+
+### New
+
+- **Keepresso speaks fifteen languages.** English, German, Spanish, French,
+  Hungarian, Italian, Japanese, Korean, Russian, Brazilian Portuguese, Turkish,
+  Polish, Ukrainian, Simplified Chinese, and Traditional Chinese. A Language
+  picker in Preferences and on the Welcome screen switches between them, or
+  follow the system language (the default). Everything is translated: the menu,
+  the Setup and Gaming & Streaming screens, notifications, VoiceOver labels, and
+  the desktop widgets.
+- **The battery pause explains itself.** When Keepresso pauses a session because
+  the battery ran low, it now says so in a notification (the charge level, and
+  that plugging in resumes it) instead of just going quiet. The menu-bar cup
+  shows the pause as a last sip of coffee in the system's low-power yellow, and
+  the dropdown's cup matches. Desktops with no battery hide the battery controls
+  entirely.
+- **Readiness rows lead with their subject.** Each row on the Setup and Gaming &
+  Streaming screens now opens with its own icon (Wi-Fi, Ethernet, game
+  controller, lock, bell) tinted by its status, with a small corner badge so ok,
+  tip, and warning still read by shape.
+
+### Fixed
+
+- **Clicking a notification no longer opens a second Keepresso.** A click on one
+  of Keepresso's notifications could make macOS launch a duplicate copy that ran
+  alongside the first, each holding its own power assertions. A launch that finds
+  an older copy of itself already running now hands back to it and quits.
+- **The welcome window comes back until you press Get Started.** Switching your
+  language on the Welcome screen (which relaunches the app) no longer counts as
+  finishing onboarding, so the welcome returns on each launch until you confirm
+  in the language you settled on.
+- **Old copies stuck in the Trash are handled properly.** When an update leaves a
+  previous copy in the Trash and macOS blocks Keepresso from removing it,
+  Keepresso now posts a notification you can click to open the Trash and delete
+  it yourself, instead of letting the leftover copy quietly disable the
+  background helper.
+
 ## 1.12.0
 
 Theme: a livelier cup, and updates that clean up after themselves.
