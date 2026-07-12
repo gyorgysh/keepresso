@@ -67,7 +67,7 @@ targets:
         LSMinimumSystemVersion: "14.0"
         # The shipped localizations (Localizable.strings under *.lproj); keep
         # in sync with tools/localization/gen_strings.py.
-        CFBundleLocalizations: [en, de, es, fr, hu, zh-Hans]
+        CFBundleLocalizations: [en, de, es, fr, it, hu, pt-BR, tr, ru, ja, ko, pl, uk, zh-Hans, zh-Hant]
         NSHumanReadableCopyright: "© 2026 Keepresso contributors. GNU GPL v3.0."
         # keepresso://start[?duration=<minutes>] / stop / toggle, so scripts and
         # launchers (Shortcuts, Raycast, Alfred) can drive a session.
@@ -196,7 +196,7 @@ targets:
         CFBundleVersion: "22"
         # Same six localizations as the app; keep in sync with
         # tools/localization/gen_strings.py.
-        CFBundleLocalizations: [en, de, es, fr, hu, zh-Hans]
+        CFBundleLocalizations: [en, de, es, fr, it, hu, pt-BR, tr, ru, ja, ko, pl, uk, zh-Hans, zh-Hant]
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:

@@ -18,8 +18,17 @@
 		<string>de</string>
 		<string>es</string>
 		<string>fr</string>
+		<string>it</string>
 		<string>hu</string>
+		<string>pt-BR</string>
+		<string>tr</string>
+		<string>ru</string>
+		<string>ja</string>
+		<string>ko</string>
+		<string>pl</string>
+		<string>uk</string>
 		<string>zh-Hans</string>
+		<string>zh-Hant</string>
 	</array>
 	<key>CFBundleName</key>
 	<string>KeepressoWidget</string>

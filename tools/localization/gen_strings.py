@@ -10,7 +10,13 @@ en.lproj with identity values for clarity and for `String(localized:)` lookups.
 """
 import os
 
-LANGS = ["hu", "es", "fr", "de", "zh-Hans"]
+LANGS = ["hu", "es", "fr", "de", "zh-Hans", "it", "ja", "ko", "ru", "pt-BR", "tr", "pl", "uk", "zh-Hant"]
+
+# Languages whose translations live in per-language overlay files
+# (extra/<stem>_app.py with APP, extra/<stem>_core.py with CORE and WIDGET)
+# instead of inline in the catalogs. Merged into the catalogs before emitting;
+# validate an overlay on its own with check_extra.py.
+EXTRA_LANGS = ["it", "ja", "ko", "ru", "pt-BR", "tr", "pl", "uk", "zh-Hant"]
 
 APP_DIR = "Sources/Keepresso"
 CORE_DIR = "Sources/KeepressoCore"
@@ -49,7 +55,33 @@ from catalog_app import APP
 from catalog_core import CORE
 from catalog_widget import WIDGET
 
+
+def merge_overlay(catalog: dict, lang: str, table: dict, name: str):
+    missing = [k for k in catalog if k not in table]
+    unknown = [k for k in table if k not in catalog]
+    if missing or unknown:
+        raise SystemExit(
+            f"{lang} {name}: {len(missing)} missing / {len(unknown)} unknown keys, "
+            f"e.g. {(missing + unknown)[:3]!r}"
+        )
+    for k, v in table.items():
+        catalog[k][lang] = v
+
+
+def merge_extra_langs():
+    import importlib
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "extra"))
+    for lang in EXTRA_LANGS:
+        stem = lang.replace("-", "_")
+        merge_overlay(APP, lang, importlib.import_module(f"{stem}_app").APP, "APP")
+        core_mod = importlib.import_module(f"{stem}_core")
+        merge_overlay(CORE, lang, core_mod.CORE, "CORE")
+        merge_overlay(WIDGET, lang, core_mod.WIDGET, "WIDGET")
+
+
 if __name__ == "__main__":
+    merge_extra_langs()
     emit(APP_DIR, APP)
     emit(CORE_DIR, CORE)
     emit(WIDGET_DIR, WIDGET)

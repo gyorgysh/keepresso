@@ -1,0 +1,467 @@
+# -*- coding: utf-8 -*-
+# Italian overlay for catalog_app.py: English source -> Italian.
+APP = {
+    "Add": "Aggiungi",
+    "Add:": "Aggiungi:",
+    "Clear": "Cancella",
+    "Close": "Chiudi",
+    "Done": "Fine",
+    "Save": "Salva",
+    "Enable": "Attiva",
+    "Enabled": "Attivato",
+    "Installed": "Installato",
+    "Remove": "Rimuovi",
+    "Remove condition": "Rimuovi condizione",
+    "Resume": "Riprendi",
+    "Later": "Più tardi",
+    "Learn more": "Scopri di più",
+    "Re-check": "Ricontrolla",
+    "Run Test": "Esegui test",
+    "Match": "Corrispondenza",
+    "Threshold": "Soglia",
+    "Grace period": "Periodo di tolleranza",
+    "Section": "Sezione",
+    "Schedule": "Programmazione",
+    "Set Duration": "Imposta durata",
+    "For": "Per",
+    "From": "Dalle",
+    "To": "Alle",
+    "Until": "Fino a",
+    "When": "Quando",
+    "Below": "Sotto",
+    "Power": "Alimentazione",
+    "Display": "Display",
+    "Network": "Rete",
+    "Media": "Multimedia",
+    "Backup": "Backup",
+    "Folder": "Cartella",
+    "Downloads": "Download",
+    "Touch": "Aggiorna",
+    "Resolution": "Risoluzione",
+    "Startup": "Avvio",
+    "Gaming": "Gaming",
+    "None": "Nessuno",
+    "any": "una qualsiasi",
+    "all": "tutte",
+    "of these are true:": "di queste condizioni sono vere:",
+    "1 minute": "1 minuto",
+    "2 minutes": "2 minuti",
+    "5 minutes": "5 minuti",
+    "10 seconds": "10 secondi",
+    "30 seconds": "30 secondi",
+    "15 minutes": "15 minuti",
+    "30 minutes": "30 minuti",
+    "1 hour": "1 ora",
+    "2 hours": "2 ore",
+    "4 hours": "4 ore",
+    "8 hours": "8 ore",
+    "No grace": "Nessuna tolleranza",
+    "Every 1 minute": "Ogni minuto",
+    "Every 5 minutes": "Ogni 5 minuti",
+    "Every 10 minutes": "Ogni 10 minuti",
+    "Every 30 minutes": "Ogni 30 minuti",
+    "Every": "Ogni",
+    "After": "Dopo",
+    "Keepresso": "Keepresso",
+    "About Keepresso": "Informazioni su Keepresso",
+    "Welcome to Keepresso": "Benvenuto in Keepresso",
+    "Keepresso Setup": "Configurazione di Keepresso",
+    "Keepresso Helper": "Assistente di Keepresso",
+    "Preferences": "Impostazioni",
+    "Preferences…": "Impostazioni…",
+    "A menu-bar app that keeps your Mac awake on your terms.":
+        "Un’app della barra dei menu che tiene sveglio il tuo Mac alle tue condizioni.",
+    "AWDL watchdog": "Sorveglianza AWDL",
+    "Activate by triggers": "Attiva tramite attivatori",
+    "Administrator helper": "Assistente amministratore",
+    "Allow Bluetooth access…": "Consenti l’accesso al Bluetooth…",
+    "Allow Wi-Fi access…": "Consenti l’accesso al Wi-Fi…",
+    "Allow calendar access…": "Consenti l’accesso al calendario…",
+    "App is frontmost": "L’app è in primo piano",
+    "App is running": "L’app è in esecuzione",
+    "App match & grace period": "Corrispondenza dell’app e periodo di tolleranza",
+    "Apply or remove": "Applica o rimuovi",
+    "Approve…": "Approva…",
+    "Apps & Activity": "App e attività",
+    "Bluetooth device connected": "Dispositivo Bluetooth connesso",
+    "Bluetooth rules need Bluetooth access (System Settings ▸ Privacy)":
+        "Le regole Bluetooth richiedono l’accesso al Bluetooth (Impostazioni di Sistema ▸ Privacy)",
+    "CPU load": "Carico della CPU",
+    "CPU threshold": "Soglia della CPU",
+    "Camera in use": "Fotocamera in uso",
+    "Change…": "Modifica…",
+    "Charging": "In carica",
+    "Check for Updates…": "Verifica aggiornamenti…",
+    "Closed-display mode": "Modalità a schermo chiuso",
+    "Contacting the helper…": "Contatto dell’assistente in corso…",
+    "Create a virtual display": "Crea un display virtuale",
+    "Currently paused from the menu bar.": "Attualmente in pausa dalla barra dei menu.",
+    "Custom Duration…": "Durata personalizzata…",
+    "During calendar events": "Durante gli eventi del calendario",
+    "Export Settings…": "Esporta impostazioni…",
+    "Import Settings…": "Importa impostazioni…",
+    "External display connected": "Display esterno collegato",
+    "Fix…": "Correggi…",
+    "GNU GPL v3.0": "GNU GPL v3.0",
+    "Gaming & Streaming": "Gaming e streaming",
+    "Gaming & Streaming…": "Gaming e streaming…",
+    "Get Started": "Inizia",
+    "Global shortcut": "Abbreviazione globale",
+    "Headless Setup": "Configurazione senza monitor",
+    "Headless Setup…": "Configurazione senza monitor…",
+    "Headless virtual display (experimental)": "Display virtuale senza monitor (sperimentale)",
+    "Helper installed and responding": "Assistente installato e funzionante",
+    "HiDPI (Retina)": "HiDPI (Retina)",
+    "How do you use your Mac?": "Come usi il tuo Mac?",
+    "Install Helper…": "Installa assistente…",
+    "Install…": "Installa…",
+    "Jitter test": "Test del jitter",
+    "Keep a disk spinning": "Mantieni un disco in rotazione",
+    "Keep awake with lid closed": "Tieni sveglio con il coperchio chiuso",
+    "Keep awake with the lid closed": "Tieni sveglio con il coperchio chiuso",
+    "Keep awake": "Tieni sveglio",
+    "Keep me active": "Mantienimi attivo",
+    "Keeping the Mac awake now": "Il Mac è tenuto sveglio ora",
+    "Keepresso decisions": "Decisioni di Keepresso",
+    "Measuring, about 10 seconds…": "Misurazione in corso, circa 10 secondi…",
+    "Microphone in use": "Microfono in uso",
+    "Network & Devices": "Rete e dispositivi",
+    "Network activity": "Attività di rete",
+    "Network threshold": "Soglia di rete",
+    "No Wi-Fi network joined": "Nessuna rete Wi-Fi connessa",
+    "No apps running": "Nessuna app in esecuzione",
+    "No conditions yet, so the Mac can sleep.":
+        "Ancora nessuna condizione, quindi il Mac può andare in stop.",
+    "No conditions yet. Add some in Preferences ▸ Triggers.":
+        "Ancora nessuna condizione. Aggiungine qualcuna in Impostazioni ▸ Attivatori.",
+    "No days selected means every day.": "Nessun giorno selezionato equivale a tutti i giorni.",
+    "No paired devices": "Nessun dispositivo abbinato",
+    "No session activity yet.": "Ancora nessuna attività di sessione.",
+    "No volumes mounted": "Nessun volume montato",
+    "Not available on this macOS version.": "Non disponibile in questa versione di macOS.",
+    "Nothing is holding the Mac awake right now.": "Al momento nulla tiene sveglio il Mac.",
+    "Notify when a session ends": "Avvisa quando una sessione termina",
+    "Notify when auto-pausing and resuming": "Avvisa alla pausa e alla ripresa automatiche",
+    "On AC power": "Collegato alla corrente",
+    "On battery": "A batteria",
+    "On session end": "Al termine della sessione",
+    "Only while brewing": "Solo durante l’infusione",
+    "Open Login Items": "Apri Elementi di login",
+    "Open Settings": "Apri Impostazioni",
+    "Overnight (22:00-6:00)": "Di notte (22:00-6:00)",
+    "Pause AWDL automatically while gaming": "Sospendi AWDL automaticamente durante il gioco",
+    "Pause AWDL now": "Sospendi AWDL ora",
+    "Pause Triggers": "Sospendi attivatori",
+    "Pause on low battery": "Sospendi con batteria scarica",
+    "Play a sound": "Riproduci un suono",
+    "Playing a game": "Gioco in corso",
+    "Power & Display": "Alimentazione e display",
+    "Presets": "Preset",
+    "Prevent display sleep": "Impedisci lo stop del display",
+    "Prevent system sleep": "Impedisci lo stop del sistema",
+    "Process is running": "Il processo è in esecuzione",
+    "Quit Keepresso": "Esci da Keepresso",
+    "Reduce lag and jitter": "Riduci lag e jitter",
+    "Reinstall Helper": "Reinstalla assistente",
+    "Remind me it's still on": "Ricordami che è ancora attivo",
+    "Repeat the reminder": "Ripeti il promemoria",
+    "Restore default presets": "Ripristina i preset predefiniti",
+    "Resume AWDL after leaving the game": "Riprendi AWDL dopo l’uscita dal gioco",
+    "Resume Triggers": "Riprendi attivatori",
+    "Session end": "Fine sessione",
+    "Set Up…": "Configura…",
+    "Show Welcome Screen…": "Mostra la schermata di benvenuto…",
+    "Show countdown in menu bar": "Mostra il conto alla rovescia nella barra dei menu",
+    "Start keep-awake on launch": "Avvia la veglia all’avvio",
+    "The helper needs attention": "L’assistente richiede attenzione",
+    "The test couldn't run. Check that you're online and try again.":
+        "Impossibile eseguire il test. Verifica di essere online e riprova.",
+    "The watchdog below should smooth this out; re-run the test with it on to confirm.":
+        "La sorveglianza qui sotto dovrebbe attenuare il problema; riesegui il test con la sorveglianza attiva per conferma.",
+    "Times & days": "Orari e giorni",
+    "Toggle shortcut": "Abbreviazione per attivare/disattivare",
+    "Triggers paused. Controlling manually for now.":
+        "Attivatori sospesi. Per ora il controllo è manuale.",
+    "Until a Time…": "Fino a un orario…",
+    "VPN connected": "VPN connessa",
+    "View on GitHub": "Vedi su GitHub",
+    "Volume is mounted": "Il volume è montato",
+    "Watch a folder for downloads…": "Monitora una cartella per i download…",
+    "While frontmost": "Mentre è in primo piano",
+    "While running": "Mentre è in esecuzione",
+    "Work hours (weekdays 9:00-18:00)": "Orario di lavoro (feriali 9:00-18:00)",
+    "Audio playing": "Audio in riproduzione",
+    "Paused": "In pausa",
+    "Brewing": "In infusione",
+    "Idle": "Inattivo",
+    "System can sleep": "Il sistema può andare in stop",
+    "No conditions yet": "Ancora nessuna condizione",
+    "Battery below %d%%, letting the Mac sleep":
+        "Batteria sotto il %d%%, il Mac può andare in stop",
+    "Stops in %@": "Si ferma tra %@",
+    "Awake for %@": "Sveglio da %@",
+    "Active": "Attivo",
+    "Held by %@": "Mantenuto da %@",
+    "Waiting for any condition": "In attesa di una condizione qualsiasi",
+    "Waiting on %@": "In attesa di %@",
+    "%d condition": "%d condizione",
+    "%d conditions": "%d condizioni",
+    "Approve Keepresso again in System Settings.":
+        "Approva di nuovo Keepresso in Impostazioni di Sistema.",
+    "The helper isn't responding; reinstall it.": "L’assistente non risponde; reinstallalo.",
+    "Waiting for a game to come to the front": "In attesa che un gioco passi in primo piano",
+    "AWDL paused": "AWDL in pausa",
+    "AWDL paused for gaming": "AWDL in pausa per il gioco",
+    "Game closed, AWDL back in %ds": "Gioco chiuso, AWDL torna tra %d s",
+    "Latency looks clean.": "La latenza sembra pulita.",
+    "Once-a-second spikes: this looks like AWDL.":
+        "Picchi una volta al secondo: sembra AWDL.",
+    "Spiky, but not on AWDL's cadence (congestion or a weak signal).":
+        "Picchi irregolari, ma non alla cadenza di AWDL (congestione o segnale debole).",
+    "Not enough replies to judge.": "Risposte insufficienti per giudicare.",
+    "AWDL is on right now": "AWDL è attivo in questo momento",
+    "AWDL is off right now": "AWDL è disattivato in questo momento",
+    "AWDL state unknown": "Stato di AWDL sconosciuto",
+    "Agentic coding": "Programmazione con agenti",
+    "Stay awake while Claude, Codex, or Grok is running.":
+        "Resta sveglio mentre Claude, Codex o Grok è in esecuzione.",
+    "Gaming & streaming": "Gaming e streaming",
+    "Stay awake while a game or cloud-gaming app is in front.":
+        "Resta sveglio mentre un gioco o un’app di cloud gaming è in primo piano.",
+    "Meetings & calls": "Riunioni e chiamate",
+    "Stay awake whenever the camera or microphone is in use.":
+        "Resta sveglio quando la fotocamera o il microfono è in uso.",
+    "Remote access": "Accesso remoto",
+    "Stay awake while someone is connected over SSH.":
+        "Resta sveglio mentre qualcuno è connesso via SSH.",
+    "Keep it manual for now": "Per ora resta in manuale",
+    "Just toggle keep-awake yourself, and set up your own triggers later in Preferences.":
+        "Attiva e disattiva la veglia da solo, e configura i tuoi attivatori più avanti in Impostazioni.",
+    "Launch at login": "Apri al login",
+    "Start Keepresso automatically when you log in.":
+        "Avvia Keepresso automaticamente quando esegui il login.",
+    "Notifications": "Notifiche",
+    "Let Keepresso remind you when a long session is still keeping the Mac awake.":
+        "Lascia che Keepresso ti ricordi quando una lunga sessione sta ancora tenendo sveglio il Mac.",
+    "Approve a small helper once and the privileged extras (lid-closed mode, AWDL pausing) never ask for your password again. Set and forget; removable in Preferences.":
+        "Approva una volta un piccolo assistente e le funzioni con privilegi (modalità a schermo chiuso, pausa di AWDL) non chiederanno mai più la password. Imposta e dimentica; rimovibile dalle Impostazioni.",
+    "Location access (Wi-Fi rules)": "Accesso alla posizione (regole Wi-Fi)",
+    "Bluetooth access (device rules)": "Accesso al Bluetooth (regole dei dispositivi)",
+    "Calendar access (event rule)": "Accesso al calendario (regola degli eventi)",
+    "Keepresso launches at login, so it returns after a reboot.":
+        "Keepresso si apre al login, quindi torna dopo un riavvio.",
+    "Keepresso isn't set to launch at login, so it won't run after an unattended reboot.":
+        "Keepresso non è impostato per aprirsi al login, quindi non sarà in esecuzione dopo un riavvio non presidiato.",
+    "Turn on “Launch at login” in Keepresso's settings.":
+        "Attiva “Apri al login” nelle impostazioni di Keepresso.",
+    "Keepresso can read the current Wi-Fi network name for your Wi-Fi triggers.":
+        "Keepresso può leggere il nome della rete Wi-Fi attuale per i tuoi attivatori Wi-Fi.",
+    "Without Location access Keepresso can't read the Wi-Fi network name, so Wi-Fi triggers won't match.":
+        "Senza l’accesso alla posizione Keepresso non può leggere il nome della rete Wi-Fi, quindi gli attivatori Wi-Fi non troveranno corrispondenza.",
+    "Allow Location access for Keepresso.": "Consenti a Keepresso l’accesso alla posizione.",
+    "Keepresso can see which paired devices are connected for your Bluetooth triggers.":
+        "Keepresso può vedere quali dispositivi abbinati sono connessi per i tuoi attivatori Bluetooth.",
+    "Without Bluetooth access Keepresso can't see paired devices, so Bluetooth triggers won't match.":
+        "Senza l’accesso al Bluetooth Keepresso non può vedere i dispositivi abbinati, quindi gli attivatori Bluetooth non troveranno corrispondenza.",
+    "Allow Bluetooth access for Keepresso.": "Consenti a Keepresso l’accesso al Bluetooth.",
+    "Keepresso can see when a calendar event is in progress for your calendar trigger.":
+        "Keepresso può vedere quando un evento del calendario è in corso per il tuo attivatore del calendario.",
+    "Without full calendar access Keepresso can't see events, so the calendar trigger won't match.":
+        "Senza l’accesso completo al calendario Keepresso non può vedere gli eventi, quindi l’attivatore del calendario non troverà corrispondenza.",
+    "Allow full calendar access for Keepresso.":
+        "Consenti a Keepresso l’accesso completo al calendario.",
+    "Keepresso can post the “still brewing” reminder.":
+        "Keepresso può inviare il promemoria “ancora in infusione”.",
+    "Notifications are off, so the “still brewing” reminder can't appear.":
+        "Le notifiche sono disattivate, quindi il promemoria “ancora in infusione” non può comparire.",
+    "Allow notifications for Keepresso.": "Consenti le notifiche per Keepresso.",
+    "Above %d%%": "Sopra il %d%%",
+    "Above %@": "Sopra %@",
+    "Version %@": "Versione %@",
+    "Remove “%@”": "Rimuovi “%@”",
+    "On current Wi-Fi (%@)": "Sulla rete Wi-Fi attuale (%@)",
+    "keep the Mac awake with the lid closed":
+        "tenere sveglio il Mac con il coperchio chiuso",
+    "switch closed-display mode with the session":
+        "attivare e disattivare la modalità a schermo chiuso con la sessione",
+    "pause AWDL (turn off the Wi-Fi AirDrop/Handoff radio hops)":
+        "sospendere AWDL (disattivare i salti radio Wi-Fi di AirDrop/Handoff)",
+    "macOS is asking for your administrator password to %@. The dialog may be titled “osascript”: that's Keepresso running the command, and nothing else is changed. To stop these prompts for good, install the administrator helper (Preferences ▸ General).":
+        "macOS sta chiedendo la password di amministratore per %@. La finestra di dialogo potrebbe intitolarsi “osascript”: è Keepresso che esegue il comando, e nient’altro viene modificato. Per eliminare per sempre queste richieste, installa l’assistente amministratore (Impostazioni ▸ Generali).",
+    "Keepresso keeps your Mac awake on your terms. It lives in the menu bar near the clock, with no Dock icon. Click its cup any time to start or stop.":
+        "Keepresso tiene sveglio il tuo Mac alle tue condizioni. Vive nella barra dei menu vicino all’orologio, senza icona nel Dock. Fai clic sulla sua tazzina in qualsiasi momento per avviare o fermare.",
+    "Pick one to set up matching triggers, or keep it manual and add your own later. You can change this any time in Preferences.":
+        "Scegline uno per configurare gli attivatori adatti, oppure resta in manuale e aggiungi i tuoi più avanti. Puoi cambiare in qualsiasi momento dalle Impostazioni.",
+    "When on, the listed conditions control the session instead of the manual switch.":
+        "Quando è attivo, le condizioni elencate controllano la sessione al posto dell’interruttore manuale.",
+    "Activation is controlled by triggers.\nEdit them in Preferences.":
+        "L’attivazione è controllata dagli attivatori.\nModificali nelle Impostazioni.",
+    "Why each session started or stopped, newest first. Kept in memory; clears on relaunch.":
+        "Perché ogni sessione è iniziata o terminata, dalla più recente. Conservato in memoria; si azzera al riavvio dell’app.",
+    "Every app's live power assertions, not just Keepresso's, the same data pmset -g assertions prints.":
+        "Le asserzioni di energia attive di ogni app, non solo quelle di Keepresso, gli stessi dati che stampa pmset -g assertions.",
+    "A system-wide keyboard shortcut that starts or stops keep-awake from any app. Needs at least one modifier key.":
+        "Un’abbreviazione da tastiera valida in tutto il sistema che avvia o ferma la veglia da qualsiasi app. Richiede almeno un tasto modificatore.",
+    "Lets the Mac sleep once battery charge drops below this level, even mid-session, so it doesn't run flat.":
+        "Lascia che il Mac vada in stop quando la carica della batteria scende sotto questo livello, anche a metà sessione, così non si scarica del tutto.",
+    "Shows the remaining time next to the menu-bar icon during a timed session.":
+        "Mostra il tempo rimanente accanto all’icona nella barra dei menu durante una sessione a tempo.",
+    "Starts a session as soon as Keepresso launches, using the default duration. Ignored while triggers are controlling activation.":
+        "Avvia una sessione all’apertura di Keepresso, con la durata predefinita. Ignorato mentre gli attivatori controllano l’attivazione.",
+    "Reopen the first-run welcome, with quick one-click setup for how you use your Mac.":
+        "Riapre il benvenuto del primo avvio, con la configurazione rapida in un clic in base a come usi il Mac.",
+    "Fires when a timed session expires, trigger conditions drop, or a low-battery pause kicks in, not when you stop it yourself. The action is off by default so a timed session never surprises you.":
+        "Scatta quando una sessione a tempo scade, le condizioni degli attivatori vengono meno o interviene la pausa per batteria scarica, non quando la fermi tu. L’azione è disattivata per impostazione predefinita, così una sessione a tempo non ti sorprende mai.",
+    "If that time already passed today, it means tomorrow.":
+        "Se quell’orario è già passato oggi, si intende domani.",
+    "Runs past midnight into the next day.":
+        "Prosegue oltre la mezzanotte fino al giorno successivo.",
+    "Save your settings, triggers, and presets to a JSON file to back them up or move them to another Mac. Importing replaces your current configuration and ends any running session.":
+        "Salva impostazioni, attivatori e preset in un file JSON per farne il backup o portarli su un altro Mac. L’importazione sostituisce la configurazione attuale e termina qualsiasi sessione in corso.",
+    "Keeps the Mac awake while a partial-download file (.crdownload, .download, .part, and the like) exists in the chosen folder, then lets it sleep once the download finishes. Holds for 30 seconds between files in a batch.":
+        "Tiene sveglio il Mac finché nella cartella scelta esiste un file di download parziale (.crdownload, .download, .part e simili), poi lo lascia andare in stop quando il download termina. Mantiene per 30 secondi tra un file e l’altro di una serie.",
+    "Writes a tiny marker file on the chosen volume periodically to stop an external drive or NAS from spinning down.":
+        "Scrive periodicamente un minuscolo file marcatore sul volume scelto per impedire a un disco esterno o a un NAS di fermarsi.",
+    "For a Mac with no monitor: creates a higher-resolution display so Screen Sharing and VNC look crisp instead of a fuzzy 1920 × 1080. It uses a private macOS API, so treat it as experimental and expect it may break on a macOS update. A hardware HDMI or DisplayPort dummy plug is a no-software alternative.":
+        "Per un Mac senza monitor: crea un display a risoluzione più alta, così Condivisione Schermo e VNC appaiono nitidi invece di uno sfocato 1920 × 1080. Usa un’API privata di macOS, quindi consideralo sperimentale e aspettati che un aggiornamento di macOS possa romperlo. Un dummy plug hardware HDMI o DisplayPort è un’alternativa senza software.",
+    "Stays awake on battery too; the display turns off when the lid closes. Turn it off before putting it in a bag.":
+        "Resta sveglio anche a batteria; il display si spegne quando chiudi il coperchio. Disattivalo prima di metterlo in una borsa.",
+    "The calendar rule needs Calendar access (System Settings ▸ Privacy)":
+        "La regola del calendario richiede l’accesso al Calendario (Impostazioni di Sistema ▸ Privacy)",
+    "Wi-Fi rules need Location access (System Settings ▸ Privacy)":
+        "Le regole Wi-Fi richiedono l’accesso alla posizione (Impostazioni di Sistema ▸ Privacy)",
+    "Checks an always-on Mac (e.g. a headless Mac mini) needs. Keepresso can read these but can't change the system ones, so use the links and commands below.":
+        "I controlli che servono a un Mac sempre acceso (ad es. un Mac mini senza monitor). Keepresso può leggerli ma non può modificare quelli di sistema, quindi usa i link e i comandi qui sotto.",
+    "macOS hops the Wi-Fi radio off-channel for AWDL about once a second, which shows up as ping spikes mid-game or mid-stream. Diagnose it here, and pause AWDL for the session if it's the culprit.":
+        "macOS sposta la radio Wi-Fi fuori canale per AWDL circa una volta al secondo, il che si manifesta come picchi di ping in piena partita o in pieno streaming. Diagnostica il problema qui e, se il colpevole è AWDL, sospendilo per la sessione.",
+    "Pings 1.1.1.1 five times a second for 10 seconds and checks whether latency spikes on AWDL's once-a-second cadence.":
+        "Esegue il ping di 1.1.1.1 cinque volte al secondo per 10 secondi e verifica se la latenza mostra picchi alla cadenza di una volta al secondo di AWDL.",
+    "Counts only while a game (or a cloud-gaming app) is the active window, not just running in the background. Keeps holding for 5 minutes after you switch away.":
+        "Conta solo mentre un gioco (o un’app di cloud gaming) è la finestra attiva, non se è semplicemente in esecuzione in background. Continua a mantenere per 5 minuti dopo che passi ad altro.",
+    "How long the pause lingers after the game stops being the active window, so a quick alt-tab doesn't flap the radios. Shorter brings AirDrop and Handoff back faster; longer rides out launchers and loading screens.":
+        "Per quanto tempo la pausa persiste dopo che il gioco smette di essere la finestra attiva, così un rapido alt-tab non fa oscillare le radio. Più breve riporta prima AirDrop e Handoff; più lunga supera launcher e schermate di caricamento.",
+    "Posts a notification when a game is detected and AWDL pauses, and again when it resumes. A notice that your administrator password is needed is always sent (even behind a fullscreen game), regardless of this switch.":
+        "Invia una notifica quando viene rilevato un gioco e AWDL va in pausa, e di nuovo quando riprende. L’avviso che serve la password di amministratore viene sempre inviato (anche dietro un gioco a tutto schermo), indipendentemente da questo interruttore.",
+    "Also tells macOS you're active while a session runs, so remote-desktop sessions, meeting presence (Teams, Slack), and corporate idle-logout don't mark you away. A plain keep-awake doesn't reach those. It only steps in once you've been idle a few seconds, so it never nudges the pointer while you're using the Mac or gaming. Off by default; some managed Macs flag simulated activity.":
+        "Mentre una sessione è attiva comunica anche a macOS che sei attivo, così le sessioni di desktop remoto, la presenza nelle riunioni (Teams, Slack) e il logout aziendale per inattività non ti segnano come assente. Una semplice veglia non arriva fin lì. Interviene solo dopo qualche secondo di inattività, quindi non muove mai il puntatore mentre usi il Mac o giochi. Disattivato per impostazione predefinita; alcuni Mac gestiti segnalano l’attività simulata.",
+    "Install a small helper service so closed-display mode and AWDL pausing never ask for your password again. macOS will ask you to allow it in System Settings, once; nothing else changes.":
+        "Installa un piccolo servizio assistente così la modalità a schermo chiuso e la pausa di AWDL non chiederanno mai più la password. macOS ti chiederà di consentirlo in Impostazioni di Sistema, una sola volta; nient’altro cambia.",
+    "One step left, in System Settings: under General ▸ Login Items & Extensions (“Login Items” on older macOS), find Keepresso in the “Allow in the Background” list and turn its switch ON. macOS asks for your administrator password once; this updates by itself when you're done.":
+        "Manca un passaggio, in Impostazioni di Sistema: in Generali ▸ Elementi di login ed estensioni (“Elementi di login” sui macOS meno recenti), trova Keepresso nell’elenco “Consenti in background” e attiva il suo interruttore. macOS chiede la password di amministratore una volta; questa voce si aggiorna da sola quando hai finito.",
+    "Keeps running with the lid shut and no external display, on power or battery. The display itself still turns off when the lid closes (unless an external display is attached), so it's not lighting up uselessly inside the closed lid. Changing this flips a system setting (pmset disablesleep), so it stays in effect until you turn it off. On battery and closed it can still drain the battery over time, so don't leave it on in a bag. With “Only while brewing” on, Keepresso instead switches it on when a keep-awake session starts and back off when it ends or the app quits. Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password (once per app run for “Only while brewing”).":
+        "Continua a funzionare con il coperchio chiuso e senza display esterno, ad alimentazione o a batteria. Il display si spegne comunque quando il coperchio si chiude (a meno che non sia collegato un display esterno), così non resta acceso inutilmente dentro il coperchio chiuso. Modificare questa opzione cambia un’impostazione di sistema (pmset disablesleep), quindi resta in vigore finché non la disattivi. A batteria e con il coperchio chiuso può comunque scaricare la batteria col tempo, quindi non lasciarla attiva in una borsa. Con “Solo durante l’infusione” attivo, Keepresso la attiva invece quando inizia una sessione di veglia e la disattiva quando la sessione termina o l’app viene chiusa. Entrambe richiedono i privilegi di amministratore: in silenzio con l’assistente amministratore installato (vedi in cima a questa scheda), altrimenti macOS chiede la password (una volta per esecuzione dell’app per “Solo durante l’infusione”).",
+    "Turns the pause on right now and keeps it on until you turn it off or quit Keepresso (it isn't tied to whether a keep-awake session is brewing). While it's on, AirDrop, Handoff, Sidecar, and Continuity Camera take a break, and the once-a-second lag spikes stop. Everything comes back the moment you turn it off or quit Keepresso; even if the app crashes, macOS is restored automatically. With the administrator helper installed the switch is always instant and silent; without it, macOS asks for your password once per launch (the system dialog may show “osascript”, which is Keepresso running the command).":
+        "Attiva subito la pausa e la mantiene finché non la disattivi o esci da Keepresso (non è legata al fatto che una sessione di veglia sia in corso). Mentre è attiva, AirDrop, Handoff, Sidecar e Fotocamera Continuity si prendono una pausa, e i picchi di lag una volta al secondo cessano. Tutto torna nel momento in cui la disattivi o esci da Keepresso; anche se l’app va in crash, macOS viene ripristinato automaticamente. Con l’assistente amministratore installato l’interruttore è sempre istantaneo e silenzioso; senza, macOS chiede la password una volta per avvio (la finestra di sistema potrebbe mostrare “osascript”, cioè Keepresso che esegue il comando).",
+    "Watches for a game (or a cloud-gaming app like GeForce NOW) as the active window and pauses AWDL on its own, then lifts the pause a little after you switch away (the delay below). It only counts while the game is in front and in use, not just running in the background. Without the administrator helper, turning this on asks for your password once per app run, right now rather than mid-game; with the helper it never asks at all. No trigger setup needed: leave this on and forget it.":
+        "Controlla se un gioco (o un’app di cloud gaming come GeForce NOW) è la finestra attiva e sospende AWDL da solo, poi rimuove la pausa poco dopo che passi ad altro (il ritardo qui sotto). Conta solo mentre il gioco è in primo piano e in uso, non se è semplicemente in esecuzione in background. Senza l’assistente amministratore, attivare questa opzione chiede la password una volta per esecuzione dell’app, subito anziché a metà partita; con l’assistente non la chiede mai. Nessun attivatore da configurare: lascialo attivo e dimenticatene.",
+    "Helper installed. Closed-display mode and AWDL pausing work without password prompts.":
+        "Assistente installato. La modalità a schermo chiuso e la pausa di AWDL funzionano senza richieste di password.",
+    "Pause AWDL to steady your connection, and test your jitter, in Gaming & Streaming.":
+        "Sospendi AWDL per stabilizzare la connessione e misura il jitter in Gaming e streaming.",
+    "A small system service that handles the privileged switches (closed-display mode below, AWDL pausing in Gaming & Streaming) for Keepresso, so no password prompts ever again: macOS asks once when you approve it under Login Items, and the approval survives restarts and updates. It can only flip those specific switches, everything it changes is restored if the app quits or crashes, and you can remove it here at any time. It also puts the keepresso command-line tool on your PATH (Homebrew installs already have it). After removal, System Settings can keep showing a stale Login Items row until macOS refreshes its list; the status shown here is the real one.":
+        "Un piccolo servizio di sistema che gestisce per Keepresso gli interruttori con privilegi (la modalità a schermo chiuso qui sotto, la pausa di AWDL in Gaming e streaming), così le richieste di password spariscono per sempre: macOS chiede una volta quando lo approvi negli Elementi di login, e l’approvazione sopravvive a riavvii e aggiornamenti. Può azionare solo quegli interruttori specifici, tutto ciò che modifica viene ripristinato se l’app esce o va in crash, e puoi rimuoverlo da qui in qualsiasi momento. Aggiunge inoltre lo strumento a riga di comando keepresso al tuo PATH (le installazioni via Homebrew lo hanno già). Dopo la rimozione, Impostazioni di Sistema può continuare a mostrare una riga obsoleta negli Elementi di login finché macOS non aggiorna l’elenco; lo stato mostrato qui è quello reale.",
+    "General": "Generali",
+    "Triggers": "Attivatori",
+    "Reminder": "Promemoria",
+    "Disk": "Disco",
+    "Activity": "Attività",
+    "Indefinitely": "Indefinitamente",
+    "Update Session": "Aggiorna sessione",
+    "Start": "Avvia",
+    "Met, in grace period": "Soddisfatta, in tolleranza",
+    "Met": "Soddisfatta",
+    "Not met": "Non soddisfatta",
+    "Copied!": "Copiato!",
+    "Copy command": "Copia comando",
+    "OK": "OK",
+    "Needs attention": "Richiede attenzione",
+    "Tip": "Suggerimento",
+    "Unknown": "Sconosciuto",
+    "Checking the helper": "Verifica dell’assistente",
+    "One approval needed": "Serve un’approvazione",
+    "The helper needs a reinstall": "L’assistente va reinstallato",
+    "All set": "Tutto pronto",
+    "Making sure Keepresso's helper is awake and answering.":
+        "Verifica che l’assistente di Keepresso sia attivo e risponda.",
+    "macOS turned the helper's background switch off, so it needs your approval again: in System Settings, under Login Items & Extensions, find Keepresso in App Background Activity and turn it on. Everything is password-free again right after.":
+        "macOS ha disattivato l’interruttore in background dell’assistente, quindi serve di nuovo la tua approvazione: in Impostazioni di Sistema, in Elementi di login ed estensioni, trova Keepresso in Attività in background delle app e attivalo. Subito dopo tutto torna a funzionare senza password.",
+    "Keepresso repaired the helper's registration, but macOS keeps disabling it. An old copy of Keepresso in the Trash is the usual cause: empty the Trash, then reinstall the helper below. Nothing else about your setup changes.":
+        "Keepresso ha riparato la registrazione dell’assistente, ma macOS continua a disattivarlo. La causa abituale è una vecchia copia di Keepresso nel Cestino: svuota il Cestino, poi reinstalla l’assistente qui sotto. Nient’altro della tua configurazione cambia.",
+    "The helper is back. Closed-display mode and AWDL pausing work without password prompts again.":
+        "L’assistente è tornato. La modalità a schermo chiuso e la pausa di AWDL funzionano di nuovo senza richieste di password.",
+    "Waiting for the switch in System Settings; this updates by itself.":
+        "In attesa dell’interruttore in Impostazioni di Sistema; questa voce si aggiorna da sola.",
+    "Record": "Registra",
+    "Press keys…": "Premi i tasti…",
+    "Other process, e.g. rsync": "Altro processo, ad es. rsync",
+    "Export Keepresso Settings": "Esporta impostazioni di Keepresso",
+    "Import Keepresso Settings": "Importa impostazioni di Keepresso",
+    "Exported to %@.": "Esportato in %@.",
+    "Settings imported.": "Impostazioni importate.",
+    "Couldn't export settings: %@": "Impossibile esportare le impostazioni: %@",
+    "Couldn't read the file: %@": "Impossibile leggere il file: %@",
+    "That file isn't a Keepresso settings export.":
+        "Quel file non è un’esportazione di impostazioni di Keepresso.",
+    "That export was made by a newer version of Keepresso.":
+        "Quell’esportazione è stata creata da una versione più recente di Keepresso.",
+    "Save current rules as…": "Salva le regole attuali come…",
+    "A recurring notification every interval while a session runs, so a Mac left awake keeps reminding you.":
+        "Una notifica ricorrente a ogni intervallo mentre una sessione è attiva, così un Mac lasciato sveglio continua a ricordartelo.",
+    "A one-time notification once a session has run this long, in case you forget the Mac is awake.":
+        "Una notifica singola quando una sessione dura da così tanto, nel caso ti dimentichi che il Mac è sveglio.",
+    "Watch": "Monitora",
+    "Keep awake while downloads are in progress in this folder.":
+        "Tieni sveglio mentre ci sono download in corso in questa cartella.",
+    "Keep Awake": "Tieni sveglio",
+    "Choose a folder on the disk you want to keep spun up.":
+        "Scegli una cartella sul disco che vuoi mantenere in rotazione.",
+    "Keepresso needs a new approval": "Keepresso richiede una nuova approvazione",
+    "macOS turned Keepresso's background switch off. Turn it back on under Login Items & Extensions in System Settings to keep the password-free helper.":
+        "macOS ha disattivato l’interruttore in background di Keepresso. Riattivalo in Elementi di login ed estensioni in Impostazioni di Sistema per conservare l’assistente senza password.",
+    "Keepresso needs your password": "Keepresso richiede la tua password",
+    "Enter your administrator password to switch closed-display mode on for this session.":
+        "Inserisci la password di amministratore per attivare la modalità a schermo chiuso per questa sessione.",
+    "Enter your administrator password to pause AWDL for this game.":
+        "Inserisci la password di amministratore per sospendere AWDL per questo gioco.",
+    "Game detected": "Gioco rilevato",
+    "Pausing AWDL to steady your connection.":
+        "Sospensione di AWDL per stabilizzare la connessione.",
+    "AWDL resumed": "AWDL ripristinato",
+    "The game closed; AirDrop, Handoff and Continuity are back.":
+        "Il gioco è stato chiuso; AirDrop, Handoff e Continuity sono di nuovo attivi.",
+    "This copy of Keepresso isn't in the Applications folder, so it leaves the helper alone. Install from /Applications.":
+        "Questa copia di Keepresso non è nella cartella Applicazioni, quindi non tocca l’assistente. Installa da /Applications.",
+    "The helper wasn't found inside the app. Reinstall Keepresso and try again.":
+        "L’assistente non è stato trovato dentro l’app. Reinstalla Keepresso e riprova.",
+    "The helper couldn't be registered.": "Impossibile registrare l’assistente.",
+    "The helper couldn't be removed: %@": "Impossibile rimuovere l’assistente: %@",
+    "macOS still reports the helper as registered. Try again, or restart the Mac.":
+        "macOS segnala ancora l’assistente come registrato. Riprova, oppure riavvia il Mac.",
+    "Removed. System Settings may keep showing Keepresso under App Background Activity until macOS refreshes its list; restarting the Mac clears the leftover row.":
+        "Rimosso. Impostazioni di Sistema può continuare a mostrare Keepresso in Attività in background delle app finché macOS non aggiorna l’elenco; riavviare il Mac elimina la riga residua.",
+    "macOS is refusing the helper's registration outright. Reinstall the helper; if that doesn't take, restart the Mac and try once more.":
+        "macOS rifiuta del tutto la registrazione dell’assistente. Reinstalla l’assistente; se non basta, riavvia il Mac e riprova ancora una volta.",
+    "The helper isn't responding. If an old copy of Keepresso is in the Trash, empty the Trash first: macOS keeps disabling the helper while one is there. Then reinstall the helper.":
+        "L’assistente non risponde. Se una vecchia copia di Keepresso è nel Cestino, svuota prima il Cestino: macOS continua a disattivare l’assistente finché ce n’è una. Poi reinstalla l’assistente.",
+    "Old copy stuck in the Trash": "Vecchia copia bloccata nel Cestino",
+    "An old copy of Keepresso in the Trash keeps the background helper from working. Please delete it from the Trash, or empty the Trash.":
+        "Una vecchia copia di Keepresso nel Cestino impedisce all’assistente in background di funzionare. Eliminala dal Cestino, oppure svuota il Cestino.",
+    "Language": "Lingua",
+    "App language": "Lingua dell’app",
+    "Follow System": "Come il sistema",
+    "Keepresso follows your system language by default. Changing this relaunches Keepresso so menus, windows, and notifications all switch together.":
+        "Per impostazione predefinita Keepresso segue la lingua di sistema. Cambiarla riavvia Keepresso, così menu, finestre e notifiche cambiano tutti insieme.",
+    "%d h %d min": "%d h %d min",
+    "%d h": "%d h",
+    "%d min": "%d min",
+    "%d:%02d": "%d:%02d",
+    "%ds": "%d s",
+    "%d:%02d:%02d": "%d:%02d:%02d",
+    "Keepresso: paused, battery low": "Keepresso: in pausa, batteria scarica",
+    "Keepresso: brewing": "Keepresso: in infusione",
+    "Keepresso: idle": "Keepresso: inattivo",
+    "1920 × 1080": "1920 × 1080",
+    "2560 × 1440": "2560 × 1440",
+    "2880 × 1620": "2880 × 1620",
+    "3840 × 2160 (4K)": "3840 × 2160 (4K)",
+}

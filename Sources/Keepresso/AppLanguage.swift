@@ -13,8 +13,17 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     case german = "de"
     case spanish = "es"
     case french = "fr"
+    case italian = "it"
     case hungarian = "hu"
+    case brazilianPortuguese = "pt-BR"
+    case turkish = "tr"
+    case russian = "ru"
+    case japanese = "ja"
+    case korean = "ko"
+    case polish = "pl"
+    case ukrainian = "uk"
     case simplifiedChinese = "zh-Hans"
+    case traditionalChinese = "zh-Hant"
 
     var id: String { rawValue }
 
@@ -28,8 +37,17 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         case .german: "Deutsch"
         case .spanish: "Español"
         case .french: "Français"
+        case .italian: "Italiano"
         case .hungarian: "Magyar"
+        case .brazilianPortuguese: "Português (Brasil)"
+        case .turkish: "Türkçe"
+        case .russian: "Русский"
+        case .japanese: "日本語"
+        case .korean: "한국어"
+        case .polish: "Polski"
+        case .ukrainian: "Українська"
         case .simplifiedChinese: "简体中文"
+        case .traditionalChinese: "繁體中文"
         }
     }
 
