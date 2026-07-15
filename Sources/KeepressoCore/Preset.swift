@@ -36,23 +36,14 @@ extension Preset {
     /// a user can remove one and have it stay gone; new built-ins reach
     /// existing users via ``KeepressoSettings/seedNewBuiltInPresets()``.
     public static let builtIns: [Preset] = [
-        // The working rule rides along with the process rules: while any of
-        // the OR-combined process rules matches, it doesn't change gating,
-        // but it puts the live per-session working/idle list in the menu.
+        // The working rule alone: it detects every known agent CLI by itself
+        // (transcript evidence where available, adaptive CPU otherwise),
+        // holds only while one is actually working, and lists each session
+        // in the menu. The per-process rules it replaced held the Mac awake
+        // for as long as an agent merely sat open.
         Preset(
             id: "ai-agent",
             name: "AI Agent",
-            ruleSet: RuleSet(combine: .any, rules: [
-                .process("claude"), .process("codex"), .process("grok"),
-                .agentActivity(AgentRule(grace: 60)),
-            ])
-        ),
-        // Working, not merely running: releases once every agent session goes
-        // idle (plus a minute of grace), unlike "AI Agent" above, which
-        // holds as long as an agent process exists at all.
-        Preset(
-            id: "agent-working",
-            name: "AI Agent Working",
             ruleSet: RuleSet(combine: .any, rules: [.agentActivity(AgentRule(grace: 60))])
         ),
         Preset(

@@ -94,27 +94,93 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     #expect(session(pid: 812, tty: nil, cpu: 0).label == "claude (pid 812)")
 }
 
+// MARK: - Transcript evidence
+
+@Test func transcriptDirectoryNamesMatchEachAgentsEncoding() {
+    #expect(PSAgentActivityMonitor.claudeProjectDirName(forCwd: "/Users/x/git/pueev_web")
+            == "-Users-x-git-pueev-web")
+    #expect(PSAgentActivityMonitor.claudeProjectDirName(forCwd: "/private/tmp")
+            == "-private-tmp")
+    #expect(PSAgentActivityMonitor.grokSessionDirName(forCwd: "/Users/x/git/demo")
+            == "%2FUsers%2Fx%2Fgit%2Fdemo")
+    #expect(PSAgentActivityMonitor.grokSessionDirName(forCwd: "/Users/x/git/pueev_web")
+            == "%2FUsers%2Fx%2Fgit%2Fpueev_web")
+}
+
+@Test func monitorMarksSessionsWithFreshTranscriptsAsEvidence() async throws {
+    var now = Date(timeIntervalSince1970: 100_000)
+    let monitor = PSAgentActivityMonitor(
+        ttl: 3,
+        now: { now },
+        fetch: { "  100     1  0.1 ttys003  claude\n  200     1  0.1 ttys004  aider" },
+        evidence: { agent, _ in
+            // claude's transcript was written 5s ago; aider has none.
+            agent == "claude" ? Date(timeIntervalSince1970: 100_000 - 5) : nil
+        }
+    )
+    _ = monitor.current // kick the refresh
+    try await Task.sleep(for: .milliseconds(200))
+    let sessions = monitor.current.sessions
+    #expect(sessions.map(\.hasFreshEvidence) == [true, false])
+
+    // Past the freshness window the same write no longer counts.
+    now = now.addingTimeInterval(60)
+    _ = monitor.current
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(monitor.current.sessions.map(\.hasFreshEvidence) == [false, false])
+}
+
 // MARK: - Working/idle smoothing
 
-@Test func stepTurnsOnAboveOnThresholdAndOffBelowOffThreshold() {
+@Test func stepJudgesWorkRelativeToTheSessionsOwnBaseline() {
+    // A hot-idle TUI (agy-style: animates at 6-12% while doing nothing)
+    // settles as idle: its baseline is learned at its own level.
+    var hot = AgentActivityTrigger.State()
+    for sample in [7.1, 11.4, 7.1, 6.2, 11.7, 6.8, 8.0, 9.0, 7.5, 8.5] {
+        hot = AgentActivityTrigger.step(hot, sample: sample)
+    }
+    #expect(hot.isWorking == false)
+
+    // Real work lifts it clearly above its own baseline.
+    for _ in 0..<6 { hot = AgentActivityTrigger.step(hot, sample: 30) }
+    #expect(hot.isWorking)
+
+    // Back to its hot idle: releases, even though it still idles above the
+    // level at which a quiet agent would count as working.
+    for _ in 0..<40 { hot = AgentActivityTrigger.step(hot, sample: 8) }
+    #expect(hot.isWorking == false)
+
+    // A quiet agent (grok-style, idle ~2.5%) flips on a small absolute rise
+    // that a fixed global threshold would have missed.
+    var quiet = AgentActivityTrigger.State()
+    for _ in 0..<10 { quiet = AgentActivityTrigger.step(quiet, sample: 2.5) }
+    #expect(quiet.isWorking == false)
+    for _ in 0..<10 { quiet = AgentActivityTrigger.step(quiet, sample: 9) }
+    #expect(quiet.isWorking)
+}
+
+@Test func stepHardFloorCatchesASessionFirstSeenMidTask() {
+    // First sample arrives mid-task: the baseline is learned at the working
+    // level, so the relative test can't fire, but the absolute floor does.
     var state = AgentActivityTrigger.State()
-    state = AgentActivityTrigger.step(state, sample: 5.0) // below on: stays idle
-    #expect(state.isWorking == false)
-
-    // Sustained high CPU crosses the on threshold after a few samples.
-    for _ in 0..<5 { state = AgentActivityTrigger.step(state, sample: 30.0) }
+    state = AgentActivityTrigger.step(state, sample: 60)
     #expect(state.isWorking)
 
-    // Hovering in the dead-band (between 3 and 8) holds the verdict.
-    for _ in 0..<20 { state = AgentActivityTrigger.step(state, sample: 5.0) }
+    // The task ends: the average decays below the floor and it releases,
+    // after which the true idle level becomes the new baseline.
+    for _ in 0..<20 { state = AgentActivityTrigger.step(state, sample: 1) }
+    #expect(state.isWorking == false)
+    #expect((state.baseline ?? 99) < 3)
+}
+
+@Test func stepFreshTranscriptEvidenceWinsOverQuietCPU() {
+    // A long network wait: near-zero CPU, but the transcript is streaming.
+    var state = AgentActivityTrigger.State()
+    for _ in 0..<5 { state = AgentActivityTrigger.step(state, sample: 0.3, freshEvidence: true) }
     #expect(state.isWorking)
 
-    // A clear drop below the off threshold releases it.
-    for _ in 0..<20 { state = AgentActivityTrigger.step(state, sample: 0.0) }
-    #expect(state.isWorking == false)
-
-    // And hovering in the dead-band from idle stays idle (hysteresis).
-    for _ in 0..<20 { state = AgentActivityTrigger.step(state, sample: 5.0) }
+    // Evidence goes stale and CPU stays flat: back to idle.
+    for _ in 0..<5 { state = AgentActivityTrigger.step(state, sample: 0.3, freshEvidence: false) }
     #expect(state.isWorking == false)
 }
 

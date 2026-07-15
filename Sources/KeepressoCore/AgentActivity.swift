@@ -12,12 +12,17 @@ public struct AgentSession: Equatable, Hashable, Sendable {
     /// The `pcpu` sum over the agent process and all its descendants, as a
     /// percentage of one core (can exceed 100 on multi-core work).
     public var cpuPercent: Double
+    /// Whether the agent's session transcript on disk was written to within
+    /// the freshness window: direct evidence it is working right now, no CPU
+    /// guessing involved. Always false for agents without a known transcript.
+    public var hasFreshEvidence: Bool
 
-    public init(pid: Int32, agent: String, tty: String?, cpuPercent: Double) {
+    public init(pid: Int32, agent: String, tty: String?, cpuPercent: Double, hasFreshEvidence: Bool = false) {
         self.pid = pid
         self.agent = agent
         self.tty = tty
         self.cpuPercent = cpuPercent
+        self.hasFreshEvidence = hasFreshEvidence
     }
 
     /// A short display label: the agent plus its terminal ("claude (s003)"),
@@ -80,11 +85,19 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         var command: String
     }
 
+    /// How recently a session transcript must have been written to count as
+    /// live evidence of work. Transcripts stream continuously during
+    /// generation and tool turns, so a short window keeps the idle flip snappy.
+    public static let evidenceFreshWindow: TimeInterval = 15
+
     private let ttl: TimeInterval
     private let now: () -> Date
     /// Produces the raw `ps` output (`nil` on failure). Injectable so the
     /// cache/refresh logic can be unit-tested without spawning processes.
     private let fetch: @Sendable () -> String?
+    /// Latest transcript write for (agent, cwd), or `nil` when the agent has
+    /// no known transcript. Injectable so evidence logic is unit-testable.
+    private let evidence: @Sendable (_ agent: String, _ cwd: String?) -> Date?
     private let lock = NSLock()
     private var cached: AgentSnapshot = .empty
     private var lastFetch: Date?
@@ -93,11 +106,13 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     public init(
         ttl: TimeInterval = 3,
         now: @escaping () -> Date = Date.init,
-        fetch: @escaping @Sendable () -> String? = PSAgentActivityMonitor.runPS
+        fetch: @escaping @Sendable () -> String? = PSAgentActivityMonitor.runPS,
+        evidence: @escaping @Sendable (_ agent: String, _ cwd: String?) -> Date? = PSAgentActivityMonitor.transcriptActivity
     ) {
         self.ttl = ttl
         self.now = now
         self.fetch = fetch
+        self.evidence = evidence
     }
 
     public var current: AgentSnapshot {
@@ -112,7 +127,17 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             Task.detached { [weak self] in
                 guard let self else { return }
                 let samples = self.fetch().map(Self.parse) ?? []
-                let sessions = Self.sessions(from: samples)
+                var sessions = Self.sessions(from: samples)
+                // Decorate with transcript evidence: a session whose
+                // transcript was written within the freshness window is
+                // working, no matter what its CPU says.
+                let cutoff = self.now().addingTimeInterval(-Self.evidenceFreshWindow)
+                for index in sessions.indices {
+                    let session = sessions[index]
+                    if let written = self.evidence(session.agent, Self.processCwd(session.pid)) {
+                        sessions[index].hasFreshEvidence = written >= cutoff
+                    }
+                }
                 self.withLock {
                     self.cached = AgentSnapshot(sessions: sessions)
                     self.lastFetch = self.now()
@@ -121,6 +146,71 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             }
         }
         return snapshot
+    }
+
+    /// The working directory of a (same-user) process, or `nil`.
+    static func processCwd(_ pid: Int32) -> String? {
+        var info = proc_vnodepathinfo()
+        let size = Int32(MemoryLayout<proc_vnodepathinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, &info, size) == size else { return nil }
+        return withUnsafeBytes(of: info.pvi_cdir.vip_path) { raw in
+            raw.bindMemory(to: CChar.self).baseAddress.map { String(cString: $0) }
+        }
+    }
+
+    /// When this agent last wrote to its on-disk session data for `cwd`, or
+    /// `nil` for agents whose transcripts we don't know how to find. This is
+    /// the "real work" signal: claude, grok, and codex all stream session
+    /// files continuously while working.
+    @Sendable public static func transcriptActivity(agent: String, cwd: String?) -> Date? {
+        let home = NSHomeDirectory()
+        switch agent {
+        case "claude":
+            // ~/.claude/projects/<cwd with every non-alphanumeric as "-">/*.jsonl
+            guard let cwd else { return nil }
+            return newestModification(in: "\(home)/.claude/projects/\(claudeProjectDirName(forCwd: cwd))")
+        case "grok":
+            // ~/.grok/sessions/<percent-encoded cwd>/ per-project session files.
+            guard let cwd else { return nil }
+            return newestModification(in: "\(home)/.grok/sessions/\(grokSessionDirName(forCwd: cwd))")
+        case "codex":
+            // ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl: date-keyed, not
+            // cwd-keyed, so today's directory stands in for every session.
+            let day = DateFormatter()
+            day.dateFormat = "yyyy/MM/dd"
+            day.timeZone = .current
+            return newestModification(in: "\(home)/.codex/sessions/\(day.string(from: Date()))")
+        default:
+            return nil
+        }
+    }
+
+    /// Claude Code's per-project transcript folder name: the working
+    /// directory with every non-alphanumeric character flattened to "-"
+    /// (`/Users/x/git/pueev_web` becomes `-Users-x-git-pueev-web`).
+    static func claudeProjectDirName(forCwd cwd: String) -> String {
+        String(cwd.map { $0.isLetter || $0.isNumber ? $0 : "-" })
+    }
+
+    /// Grok's per-project session folder name: the working directory
+    /// percent-encoded with only RFC 3986 unreserved characters kept
+    /// (`/Users/x/git/demo` becomes `%2FUsers%2Fx%2Fgit%2Fdemo`).
+    static func grokSessionDirName(forCwd cwd: String) -> String {
+        let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        return cwd.addingPercentEncoding(withAllowedCharacters: unreserved) ?? cwd
+    }
+
+    /// The newest modification date among the files directly inside `path`,
+    /// or `nil` when the directory doesn't exist or is empty.
+    private static func newestModification(in path: String) -> Date? {
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: path) else { return nil }
+        var newest: Date?
+        for name in names {
+            guard let date = (try? manager.attributesOfItem(atPath: "\(path)/\(name)"))?[.modificationDate] as? Date else { continue }
+            if newest.map({ date > $0 }) ?? true { newest = date }
+        }
+        return newest
     }
 
     /// Wraps ``lock`` in a synchronous call so the lock/unlock pair is never
@@ -258,31 +348,46 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
 }
 
 /// Fires while any detected agent session is actively working, judged by its
-/// subtree's smoothed CPU share.
+/// subtree's smoothed CPU share relative to that session's own idle level.
 ///
-/// The decision runs per session on an exponential moving average with
-/// hysteresis, mirroring ``CPULoadTrigger``: an idle agent TUI sits around
-/// 0-2% of a core (spinner redraws, heartbeats) while generation, tool calls,
-/// and their child processes run well above 10%, so on at 8% and off at 3%
-/// leaves a wide dead-band that doesn't flap. A genuinely zero-CPU stretch (a
-/// long network wait) still reads as idle by design; the release grace the
-/// factory wraps this trigger in is what bridges those, not the threshold.
+/// Fixed thresholds don't generalize across agents: an idle claude sits near
+/// 0-2% of a core, an idle grok near 2-3%, and an idle agy animates at 6-12%,
+/// while their working levels differ just as much. So each session learns a
+/// baseline (a decaying minimum of its smoothed CPU) and "working" means the
+/// average has risen a dead-band above that baseline, with hysteresis so a
+/// level hovering at the boundary doesn't flap. An absolute floor catches a
+/// session that is born busy (its baseline is first learned at the working
+/// level, so the relative test alone would miss it). A genuinely zero-CPU
+/// stretch (a long network wait) still reads as idle by design; the release
+/// grace the factory wraps this trigger in is what bridges those, not the
+/// thresholds.
 public final class AgentActivityTrigger: Trigger {
-    /// Smoothed subtree CPU (percent of one core) at which a session turns
-    /// "working".
-    public static let onThresholdPercent = 8.0
-    /// The level the average must fall below before a working session turns
-    /// "idle" again.
-    public static let offThresholdPercent = 3.0
-    /// Smoothing weight of each new sample; 0.3 at one sample per second
-    /// settles a sustained change in a few seconds.
-    static let alpha = 0.3
+    /// How far (percent of one core) the average must rise above the
+    /// session's baseline to turn "working".
+    public static let onDeltaPercent = 4.0
+    /// How far above the baseline the average must stay to remain "working";
+    /// below it the session turns idle again (the hysteresis dead-band).
+    public static let offDeltaPercent = 1.5
+    /// Smoothed CPU at which a session is working no matter its baseline: no
+    /// agent idles this hot, and it covers a session first seen mid-task.
+    public static let hardWorkingFloorPercent = 20.0
+    /// How fast the learned baseline drifts upward per tick while idle, so it
+    /// tracks a TUI whose idle level shifts. It snaps *down* instantly, and
+    /// is frozen while working so a long task can't erode its own headroom.
+    static let baselineCreepPerTick = 0.05
+    /// Smoothing weight of each new sample; 0.25 at one sample per second
+    /// settles a sustained change in a few seconds while damping the sizable
+    /// tick-to-tick noise of animated TUIs.
+    static let alpha = 0.25
     /// The release grace the factory applies unless the rule overrides it.
     public static let defaultGrace: TimeInterval = 60
 
-    /// Per-session EMA + hysteresis state.
+    /// Per-session EMA + learned-baseline + hysteresis state.
     public struct State: Equatable, Sendable {
         public var average: Double?
+        /// The session's learned idle CPU level (a decaying minimum of
+        /// ``average``), or `nil` before the first sample.
+        public var baseline: Double?
         public var isWorking = false
         public init() {}
     }
@@ -315,7 +420,11 @@ public final class AgentActivityTrigger: Trigger {
         var next: [Int32: State] = [:]
         next.reserveCapacity(sessions.count)
         sessionStates = sessions.map { session in
-            let stepped = Self.step(smoothing[session.pid] ?? State(), sample: session.cpuPercent)
+            let stepped = Self.step(
+                smoothing[session.pid] ?? State(),
+                sample: session.cpuPercent,
+                freshEvidence: session.hasFreshEvidence
+            )
             next[session.pid] = stepped
             return SessionState(session: session, isWorking: stepped.isWorking)
         }
@@ -326,18 +435,31 @@ public final class AgentActivityTrigger: Trigger {
         sessionStates.contains { $0.isWorking }
     }
 
-    /// Pure decision step, exposed for direct unit testing.
-    static func step(_ state: State, sample: Double) -> State {
+    /// Pure decision step, exposed for direct unit testing. `freshEvidence`
+    /// (a transcript written moments ago) is proof of work and wins outright;
+    /// the CPU heuristic decides for agents that leave no transcript.
+    static func step(_ state: State, sample: Double, freshEvidence: Bool = false) -> State {
         var next = state
         let clamped = max(sample, 0)
-        next.average = state.average.map { $0 + alpha * (clamped - $0) } ?? clamped
-        guard let average = next.average else {
-            next.isWorking = false
-            return next
+        let average = state.average.map { $0 + alpha * (clamped - $0) } ?? clamped
+        next.average = average
+
+        // Learn the idle level while idle: snap down to any new minimum,
+        // drift upward slowly toward the observed average. Frozen entirely
+        // while working: a working session must neither raise the bar it is
+        // measured against nor drag the bar down with it as it winds down
+        // (a mid-task dip would otherwise read as "new idle level" and flip
+        // the verdict while the task is still running).
+        var baseline = state.baseline ?? average
+        if !state.isWorking {
+            baseline = average < baseline ? average : min(baseline + Self.baselineCreepPerTick, average)
         }
-        next.isWorking = state.isWorking
-            ? average >= Self.offThresholdPercent
-            : average >= Self.onThresholdPercent
+        next.baseline = baseline
+
+        let delta = state.isWorking ? Self.offDeltaPercent : Self.onDeltaPercent
+        next.isWorking = freshEvidence
+            || average >= baseline + delta
+            || average >= Self.hardWorkingFloorPercent
         return next
     }
 }

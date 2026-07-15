@@ -18,14 +18,19 @@ Versions follow [Semantic Versioning](https://semver.org).
 - **A trigger that knows when your AI agent is actually working.** The new
   "AI agent is working" condition (Preferences ▸ Triggers ▸ Add ▸ Apps &
   Activity) detects coding-agent sessions (claude, codex, gemini, grok, agy,
-  aider, goose, and friends) in your terminals and keeps the Mac awake only while one is
-  actively working, judged by the CPU its processes and their tool calls use.
-  Once every session goes idle, the Mac may sleep after a configurable grace
-  (instantly, 1, 5, or 10 minutes), gaming-mode style. The menu lists each
-  detected session with a live working / idle state, and a new built-in
-  "AI Agent Working" preset applies the rule in one click; the existing
-  "AI Agent" preset still covers "any agent process exists at all" and now
-  carries the working rule too, so it shows the session list as well.
+  aider, goose, and friends) in your terminals and keeps the Mac awake only
+  while one is actually working. Where an agent streams a session transcript
+  to disk (claude, grok, codex), a fresh write counts as direct proof of
+  work, even through long zero-CPU network waits; everywhere else the
+  decision uses the CPU of the agent's processes and tool calls, measured
+  against each session's own learned idle level, so a TUI that animates
+  while idle and a near-silent one are both judged fairly. Once every
+  session goes idle, the Mac may sleep after a configurable grace
+  (instantly, 1, 5, or 10 minutes) with a gaming-style countdown in the
+  menu. The menu lists each detected session with a live working / idle
+  state, and the built-in "AI Agent" preset now applies this rule instead
+  of its old process-name rules, so an agent left open no longer pins the
+  Mac awake around the clock.
 
 ## [1.13.0] - 2026-07-12
 
