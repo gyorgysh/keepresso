@@ -411,3 +411,56 @@ private final class FakeReminder: ReminderNotifying {
     #expect(controller.pausedByBattery)
     #expect(reminder.notices.isEmpty)
 }
+
+// MARK: - Stop in N
+
+@MainActor
+@Test func stopInConvertsIndefiniteSessionKeepingStartedAt() {
+    let (controller, fake, clock) = makeController()
+    controller.start() // indefinite
+    let started = controller.startedAt
+    clock.advance(10 * 60)
+
+    controller.stopIn(15 * 60)
+    #expect(controller.startedAt == started) // continues, not restarted
+    #expect(abs((controller.remaining ?? -1) - 15 * 60) < 0.001)
+
+    clock.advance(15 * 60 - 1)
+    controller.reconcile()
+    #expect(controller.isActive) // just before the deadline
+
+    clock.advance(2)
+    controller.reconcile()
+    #expect(controller.isActive == false) // ended on its own
+    #expect(fake.held.isEmpty)
+}
+
+@MainActor
+@Test func stopInShortensAndExtendsATimedSession() {
+    let (controller, _, clock) = makeController()
+    controller.start(mode: .timed(duration: 60 * 60))
+    clock.advance(60)
+
+    controller.stopIn(5 * 60) // shorten
+    #expect(abs((controller.remaining ?? -1) - 5 * 60) < 0.001)
+
+    controller.stopIn(30 * 60) // extend, replacing the countdown
+    #expect(abs((controller.remaining ?? -1) - 30 * 60) < 0.001)
+}
+
+@MainActor
+@Test func stopInIsIgnoredWhileIdleGatedOrNonPositive() {
+    let (controller, _, _) = makeController()
+    controller.stopIn(15 * 60) // idle: nothing to convert
+    #expect(controller.isActive == false)
+    #expect(controller.mode == .indefinite)
+
+    controller.start()
+    controller.stopIn(0) // non-positive: ignored
+    #expect(controller.remaining == nil)
+
+    controller.triggerGate = StubGate(true)
+    controller.reconcile()
+    controller.stopIn(15 * 60) // gated sessions aren't time-boxed
+    #expect(controller.mode == .indefinite)
+}

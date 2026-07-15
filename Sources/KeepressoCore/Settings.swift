@@ -19,6 +19,12 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     public var reminderSound: Bool
     /// Post a notification when a session ends on its own. Off by default.
     public var notifyOnEnd: Bool
+    /// Post a heads-up this many seconds before a timed session stops on its
+    /// own, or `nil` (the default) for none.
+    public var endingSoonNoticeSeconds: TimeInterval?
+    /// The menu's quick "stop in N" shortcut durations, in seconds, sorted
+    /// ascending. Always normalized (see ``normalizedQuickStopDurations(_:)``).
+    public var quickStopDurations: [TimeInterval]
     /// What to do to the Mac when a session ends on its own. None by default.
     public var endAction: SessionEndAction
     /// Keep a chosen disk/volume spun up, or `nil` (the default) for off.
@@ -73,6 +79,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         reminderRepeats: Bool = false,
         reminderSound: Bool = true,
         notifyOnEnd: Bool = false,
+        endingSoonNoticeSeconds: TimeInterval? = nil,
+        quickStopDurations: [TimeInterval] = KeepressoSettings.defaultQuickStopDurations,
         endAction: SessionEndAction = .none,
         diskKeepAlive: DiskKeepAliveConfig? = nil,
         virtualDisplay: VirtualDisplayConfig? = nil,
@@ -96,6 +104,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.reminderRepeats = reminderRepeats
         self.reminderSound = reminderSound
         self.notifyOnEnd = notifyOnEnd
+        self.endingSoonNoticeSeconds = endingSoonNoticeSeconds
+        self.quickStopDurations = Self.normalizedQuickStopDurations(quickStopDurations)
         self.endAction = endAction
         self.diskKeepAlive = diskKeepAlive
         self.virtualDisplay = virtualDisplay
@@ -160,6 +170,11 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         reminderRepeats = try c.decodeIfPresent(Bool.self, forKey: .reminderRepeats) ?? false
         reminderSound = try c.decodeIfPresent(Bool.self, forKey: .reminderSound) ?? true
         notifyOnEnd = try c.decodeIfPresent(Bool.self, forKey: .notifyOnEnd) ?? false
+        endingSoonNoticeSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .endingSoonNoticeSeconds)
+        quickStopDurations = Self.normalizedQuickStopDurations(
+            try c.decodeIfPresent([TimeInterval].self, forKey: .quickStopDurations)
+                ?? Self.defaultQuickStopDurations
+        )
         endAction = try c.decodeIfPresent(SessionEndAction.self, forKey: .endAction) ?? .none
         diskKeepAlive = try c.decodeIfPresent(DiskKeepAliveConfig.self, forKey: .diskKeepAlive)
         virtualDisplay = try c.decodeIfPresent(VirtualDisplayConfig.self, forKey: .virtualDisplay)
@@ -182,6 +197,21 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         // them with the welcome window. Only a genuinely fresh install (the
         // memberwise default) starts false and sees it.
         hasOnboarded = try c.decodeIfPresent(Bool.self, forKey: .hasOnboarded) ?? true
+    }
+
+    /// The out-of-the-box quick "stop in N" shortcuts: 15 and 30 minutes, 1 hour.
+    public static let defaultQuickStopDurations: [TimeInterval] = [15 * 60, 30 * 60, 60 * 60]
+
+    /// The most quick-stop shortcuts the menu row holds before it overflows.
+    public static let maxQuickStopDurations = 4
+
+    /// Sanitize a quick-stop duration list from any source (the editor, an
+    /// imported blob, a hand-edited file): drop non-positive entries, dedupe,
+    /// sort ascending, and cap at ``maxQuickStopDurations``.
+    public static func normalizedQuickStopDurations(_ raw: [TimeInterval]) -> [TimeInterval] {
+        var seen = Set<TimeInterval>()
+        let cleaned = raw.filter { $0 > 0 && seen.insert($0).inserted }
+        return Array(cleaned.sorted().prefix(maxQuickStopDurations))
     }
 
     /// First-launch defaults: keep system awake, no triggers.

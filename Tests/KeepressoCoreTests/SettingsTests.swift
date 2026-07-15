@@ -49,3 +49,42 @@ import Foundation
     #expect(decoded.simulateUserActivity == false)
     #expect(decoded.preventDisplaySleep == true)
 }
+
+@Test func quickStopAndEndingSoonRoundTripAndDefault() throws {
+    var settings = KeepressoSettings.default
+    let defaults: [TimeInterval] = [900, 1800, 3600]
+    #expect(settings.quickStopDurations == defaults)
+    #expect(settings.endingSoonNoticeSeconds == nil)
+
+    let custom: [TimeInterval] = [300, 2700]
+    settings.quickStopDurations = custom
+    settings.endingSoonNoticeSeconds = 120
+    let data = try JSONEncoder().encode(settings)
+    let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: data)
+    #expect(decoded.quickStopDurations == custom)
+    #expect(decoded.endingSoonNoticeSeconds == 120)
+
+    // A blob from before the fields existed decodes to the defaults.
+    let json = """
+    { "triggersEnabled": true }
+    """
+    let old = try JSONDecoder().decode(KeepressoSettings.self, from: Data(json.utf8))
+    #expect(old.quickStopDurations == KeepressoSettings.defaultQuickStopDurations)
+    #expect(old.endingSoonNoticeSeconds == nil)
+}
+
+@Test func quickStopDurationsAreNormalizedFromAnySource() throws {
+    // Drops non-positive entries, dedupes, sorts, and caps at the maximum.
+    let raw: [TimeInterval] = [1800, -60, 900, 0, 1800, 7200, 3600, 5400]
+    let normalized = KeepressoSettings.normalizedQuickStopDurations(raw)
+    let expected: [TimeInterval] = [900, 1800, 3600, 5400]
+    #expect(normalized == expected)
+
+    // The decoder applies the same cleanup to hand-edited or imported blobs.
+    let json = """
+    { "quickStopDurations": [1800, 900, -5, 900] }
+    """
+    let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: Data(json.utf8))
+    let cleaned: [TimeInterval] = [900, 1800]
+    #expect(decoded.quickStopDurations == cleaned)
+}

@@ -48,6 +48,13 @@ public final class SessionController {
     /// drop, low-battery pause), not on a manual stop. Default false.
     public var notifyOnEnd = false
 
+    /// Post a heads-up this many seconds before a timed session stops on its
+    /// own, or `nil` (the default) for no heads-up. One-shot per session:
+    /// ``start(mode:options:cause:)`` and ``stopIn(_:)`` arm it, and a session
+    /// that begins already inside the window suppresses it (an instant "ends
+    /// soon" right after picking a short duration would be noise).
+    public var endingSoonNotice: TimeInterval?
+
     /// What to do to the Mac when a session ends on its own. Default none.
     public var endAction: SessionEndAction = .none
 
@@ -111,6 +118,11 @@ public final class SessionController {
     /// once (and a recurring reminder advances one nudge per interval crossed).
     private var remindersFired = 0
 
+    /// True once the ``endingSoonNotice`` heads-up has fired for the current
+    /// countdown (or was suppressed at arming), so the per-second reconcile
+    /// posts it at most once per arming.
+    private var endingSoonFired = false
+
     /// True once ``pauseBelowBatteryPercent`` has force-stopped the session, so
     /// reactivation waits for a clear recovery instead of the exact cutoff. See
     /// ``batteryResumeMargin``. Public so the UI can explain why an otherwise
@@ -170,8 +182,23 @@ public final class SessionController {
         self.isActive = true
         remindersFired = 0
         lastActivityPokeAt = nil
+        armEndingSoon(remaining: mode.duration)
         log.record(began: true, reason: Self.startReason(cause: cause, restarted: restarted), at: now())
         reconcile(now: now())
+    }
+
+    /// Convert the running manual session to end `interval` from now, keeping
+    /// `startedAt` and the reminder counters so the session continues rather
+    /// than restarting. Works on indefinite and timed sessions alike:
+    /// re-invoking replaces the countdown, shortening or extending it to
+    /// exactly `interval` ahead. Ignored while idle or while triggers own
+    /// activation (a gated session isn't time-boxed).
+    public func stopIn(_ interval: TimeInterval) {
+        guard isActive, triggerGate == nil, interval > 0, let startedAt else { return }
+        let instant = now()
+        mode = .timed(duration: instant.timeIntervalSince(startedAt) + interval)
+        armEndingSoon(remaining: interval)
+        reconcile(now: instant)
     }
 
     /// End the current session and release all assertions.
@@ -194,6 +221,7 @@ public final class SessionController {
         isActive = false
         startedAt = nil
         remindersFired = 0
+        endingSoonFired = false
         lastActivityPokeAt = nil
         assertions.releaseAll()
         reminder?.cancelPending()
@@ -332,6 +360,7 @@ public final class SessionController {
         )
 
         maybeRemind(at: instant)
+        maybeNotifyEndingSoon(at: instant)
         maybePokeActivity(at: instant, systemIdleSeconds: systemIdleSeconds)
     }
 
@@ -373,6 +402,36 @@ public final class SessionController {
             ? L("Your Mac is still awake. It's been %@.", elapsed)
             : L("Your Mac has been kept awake for %@.", elapsed)
         reminder?.notify(title: L("Keepresso is still brewing"), body: body, sound: reminderSound)
+    }
+
+    /// Arm the one-shot ``endingSoonNotice`` for a countdown with this much
+    /// time on it: starting already inside the window marks it fired, so the
+    /// user isn't pinged moments after choosing a duration shorter than the
+    /// notice. `nil` remaining (an indefinite session) simply re-arms.
+    private func armEndingSoon(remaining: TimeInterval?) {
+        guard let notice = endingSoonNotice, notice > 0, let remaining else {
+            endingSoonFired = false
+            return
+        }
+        endingSoonFired = remaining <= notice
+    }
+
+    /// Post the "ending soon" heads-up once a timed session's remaining time
+    /// drops inside ``endingSoonNotice``. One-shot per arming (see
+    /// ``armEndingSoon(remaining:)``); never fires for indefinite or
+    /// trigger-gated sessions.
+    private func maybeNotifyEndingSoon(at instant: Date) {
+        guard isActive, triggerGate == nil, !endingSoonFired,
+              let notice = endingSoonNotice, notice > 0,
+              let total = mode.duration, let startedAt else { return }
+        let remaining = total - instant.timeIntervalSince(startedAt)
+        guard remaining <= notice else { return }
+        endingSoonFired = true
+        reminder?.notify(
+            title: L("Keepresso stops soon"),
+            body: L("Your keep-awake session ends in about %@.", Self.humanDuration(remaining)),
+            sound: reminderSound
+        )
     }
 
     /// A short, localized human duration like "30 minutes", "1 hour", or

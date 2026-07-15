@@ -231,3 +231,84 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
     #expect(reminder.notices.isEmpty)
     #expect(endActor.performed.isEmpty)
 }
+
+// MARK: - Ending soon
+
+@MainActor
+@Test func endingSoonFiresOnceInsideTheNoticeWindow() {
+    let (controller, reminder, clock) = makeController()
+    controller.endingSoonNotice = 5 * 60
+    controller.start()
+    controller.stopIn(15 * 60)
+
+    clock.advance(9 * 60)
+    controller.reconcile()
+    #expect(reminder.notices.isEmpty) // 6 min left: outside the window
+
+    clock.advance(90)
+    controller.reconcile()
+    #expect(reminder.notices.count == 1) // 4.5 min left: fired
+    #expect(reminder.notices.first?.title == "Keepresso stops soon")
+
+    clock.advance(60)
+    controller.reconcile()
+    #expect(reminder.notices.count == 1) // one-shot per arming
+}
+
+@MainActor
+@Test func endingSoonSuppressedWhenTheCountdownStartsInsideTheWindow() {
+    let (controller, reminder, clock) = makeController()
+    controller.endingSoonNotice = 5 * 60
+    controller.start(mode: .timed(duration: 3 * 60)) // already inside
+    clock.advance(60)
+    controller.reconcile()
+    #expect(reminder.notices.isEmpty)
+
+    controller.stop()
+    controller.start()
+    controller.stopIn(2 * 60) // quick stop shorter than the notice
+    clock.advance(60)
+    controller.reconcile()
+    #expect(reminder.notices.isEmpty)
+}
+
+@MainActor
+@Test func endingSoonReArmsWhenTheCountdownIsExtended() {
+    let (controller, reminder, clock) = makeController()
+    controller.endingSoonNotice = 5 * 60
+    controller.start()
+    controller.stopIn(6 * 60)
+    clock.advance(2 * 60)
+    controller.reconcile()
+    #expect(reminder.notices.count == 1) // 4 min left: fired
+
+    controller.stopIn(20 * 60) // extend: re-arms
+    clock.advance(16 * 60)
+    controller.reconcile()
+    #expect(reminder.notices.count == 2) // fired again at the new crossing
+}
+
+@MainActor
+@Test func endingSoonNeverFiresForAnIndefiniteSession() {
+    let (controller, reminder, clock) = makeController()
+    controller.endingSoonNotice = 5 * 60
+    controller.start()
+    clock.advance(60 * 60)
+    controller.reconcile()
+    #expect(reminder.notices.isEmpty)
+}
+
+@MainActor
+@Test func stopInDoesNotResetTheReminderCounter() {
+    let (controller, reminder, clock) = makeController()
+    controller.reminderAfter = 30 * 60
+    controller.start()
+    clock.advance(31 * 60)
+    controller.reconcile()
+    #expect(reminder.notices.count == 1) // mid-session reminder fired
+
+    controller.stopIn(60 * 60) // continue, don't restart
+    clock.advance(10 * 60)
+    controller.reconcile()
+    #expect(reminder.notices.count == 1) // same interval, no duplicate
+}
