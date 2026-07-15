@@ -94,7 +94,16 @@ public final class TriggerGateController {
             // how long is left so the UI can count it down and then go grey.
             let grace = trigger as? GracePeriodTrigger
             let inGrace = satisfied && grace?.wrappedIsSatisfied == false
-            return RuleState(rule: rule, satisfied: satisfied, inGrace: inGrace, graceRemaining: grace?.graceRemaining)
+            // Per-instance rows (agent sessions) live on the wrapped trigger.
+            let inner = grace?.wrappedTrigger ?? trigger
+            let details = (inner as? TriggerDetailProviding)?.detailRows ?? []
+            return RuleState(
+                rule: rule,
+                satisfied: satisfied,
+                inGrace: inGrace,
+                graceRemaining: grace?.graceRemaining,
+                details: details
+            )
         }
         cachedStates = states
         cachedAt = now()
@@ -114,11 +123,15 @@ public struct RuleState: Equatable {
     /// Seconds left in the grace window, when the rule has one and it's running,
     /// so the UI can show a countdown that resolves to grey at zero.
     public let graceRemaining: TimeInterval?
+    /// Per-instance sub-rows for a multi-instance rule (the agent sessions an
+    /// agent-activity rule detected), empty for every other rule.
+    public let details: [RuleDetail]
 
-    public init(rule: TriggerRule, satisfied: Bool, inGrace: Bool, graceRemaining: TimeInterval? = nil) {
+    public init(rule: TriggerRule, satisfied: Bool, inGrace: Bool, graceRemaining: TimeInterval? = nil, details: [RuleDetail] = []) {
         self.rule = rule
         self.satisfied = satisfied
         self.inGrace = inGrace
         self.graceRemaining = graceRemaining
+        self.details = details
     }
 }

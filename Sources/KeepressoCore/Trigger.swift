@@ -256,6 +256,30 @@ public final class GracePeriodTrigger: Trigger {
     /// condition until it next holds. Lets a caller cancel an in-flight grace,
     /// e.g. the user manually overriding an auto-pause that's still counting down.
     public func resetGrace() { lastSatisfiedAt = nil }
+
+    /// The trigger inside the grace wrapper, so a host can reach capabilities
+    /// the wrapper doesn't forward (per-instance detail rows).
+    public var wrappedTrigger: Trigger { wrapped }
+}
+
+/// One live sub-row under a rule in the menu's condition list: an instance the
+/// rule detected (an agent session) and whether it's currently active.
+public struct RuleDetail: Equatable {
+    public let label: String
+    public let active: Bool
+
+    public init(label: String, active: Bool) {
+        self.label = label
+        self.active = active
+    }
+}
+
+/// A trigger that can break its verdict down into per-instance rows, so the
+/// menu can list what was detected ("claude (s003), working") under the rule.
+public protocol TriggerDetailProviding {
+    /// The instances behind the current verdict, in display order. A pure read
+    /// of already-ticked state, like ``Trigger/isSatisfied()``.
+    var detailRows: [RuleDetail] { get }
 }
 
 /// How a rule set combines its triggers into a single on/off decision.

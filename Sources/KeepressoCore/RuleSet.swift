@@ -42,6 +42,10 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
     /// An in-progress download exists in this folder (a partial-download file,
     /// with a release grace bridging the gap between files in a batch).
     case downloadInFolder(URL)
+    /// Any detected AI-agent session (claude, codex, ...) is actively working,
+    /// judged by its process subtree's smoothed CPU, with a release grace once
+    /// every session goes idle.
+    case agentActivity(AgentRule)
 
     /// A human-readable summary for the rules UI.
     public var label: String {
@@ -65,6 +69,7 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
             return L("Network above %@", NetworkThroughput.rateLabel(kilobytesPerSecond: kb))
         case .downloadInFolder(let url):
             return L("Downloading in \u{201C}%@\u{201D}", url.lastPathComponent)
+        case .agentActivity(let rule): return rule.label
         }
     }
 
@@ -123,6 +128,24 @@ public struct AppRule: Codable, Equatable, Hashable, Sendable {
     }
 }
 
+/// A persisted "AI agent working" rule: keep awake while any detected agent
+/// session is actively working, lingering ``grace`` seconds once all go idle.
+public struct AgentRule: Codable, Equatable, Hashable, Sendable {
+    /// Seconds to stay active after every agent session goes idle (0 = none).
+    /// A minute by default: a genuinely zero-CPU stretch (a long network wait)
+    /// reads as idle, and the grace is what bridges it.
+    public var grace: TimeInterval
+
+    public init(grace: TimeInterval = AgentActivityTrigger.defaultGrace) {
+        self.grace = grace
+    }
+
+    public var label: String {
+        let base = L("AI agent working")
+        return grace > 0 ? L("%@ (+%ds)", base, Int(grace)) : base
+    }
+}
+
 /// A named set of trigger rules plus how they combine, the persisted shape of
 /// a trigger configuration.
 public struct RuleSet: Codable, Equatable, Sendable {
@@ -161,6 +184,7 @@ public struct TriggerFactory {
     private let gaming: GamingMonitoring
     private let throughput: NetworkThroughputReading
     private let downloads: DownloadFolderScanning
+    private let agents: AgentActivityMonitoring
     private let now: () -> Date
 
     public init(
@@ -178,6 +202,7 @@ public struct TriggerFactory {
         gaming: GamingMonitoring = WorkspaceGamingMonitor(),
         throughput: NetworkThroughputReading = GetifaddrsThroughputReader(),
         downloads: DownloadFolderScanning = FileManagerDownloadScanner(),
+        agents: AgentActivityMonitoring = PSAgentActivityMonitor(),
         now: @escaping () -> Date = Date.init
     ) {
         self.powerSource = powerSource
@@ -194,6 +219,7 @@ public struct TriggerFactory {
         self.gaming = gaming
         self.throughput = throughput
         self.downloads = downloads
+        self.agents = agents
         self.now = now
     }
 
@@ -251,6 +277,11 @@ public struct TriggerFactory {
                 grace: DownloadInFolderTrigger.releaseGrace,
                 now: now
             )
+        case .agentActivity(let rule):
+            let trigger = AgentActivityTrigger(monitor: agents)
+            return rule.grace > 0
+                ? GracePeriodTrigger(wrapping: trigger, grace: rule.grace, now: now)
+                : trigger
         }
     }
 

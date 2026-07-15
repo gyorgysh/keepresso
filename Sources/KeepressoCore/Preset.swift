@@ -41,6 +41,14 @@ extension Preset {
             name: "AI Agent",
             ruleSet: RuleSet(combine: .any, rules: [.process("claude"), .process("codex"), .process("grok")])
         ),
+        // Working, not merely running: releases once every agent session goes
+        // idle (plus five minutes of grace), unlike "AI Agent" above, which
+        // holds as long as an agent process exists at all.
+        Preset(
+            id: "agent-working",
+            name: "AI Agent Working",
+            ruleSet: RuleSet(combine: .any, rules: [.agentActivity(AgentRule(grace: 300))])
+        ),
         Preset(
             id: "on-ac-power",
             name: "On AC Power",
