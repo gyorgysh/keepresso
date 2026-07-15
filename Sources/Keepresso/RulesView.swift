@@ -35,6 +35,15 @@ struct RulesView: View {
         ("5 minutes", 300),
     ]
 
+    /// Idle-grace presets offered for the agent-activity rule: how long to keep
+    /// holding after every agent session goes idle.
+    private static let agentGracePresets: [(label: String, seconds: TimeInterval)] = [
+        ("Instantly", 0),
+        ("1 minute", 60),
+        ("5 minutes", 300),
+        ("10 minutes", 600),
+    ]
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -92,6 +101,9 @@ struct RulesView: View {
             }
             if case .throughput(let kb) = rule {
                 throughputOptionsMenu(index: index, kilobytesPerSecond: kb)
+            }
+            if case .agentActivity(let agentRule) = rule {
+                agentOptionsMenu(index: index, agentRule: agentRule)
             }
 
             Button {
@@ -151,6 +163,25 @@ struct RulesView: View {
         .menuStyle(.borderlessButton)
         .fixedSize()
         .help("App match & grace period")
+    }
+
+    /// In-place editor for an agent rule's idle grace.
+    private func agentOptionsMenu(index: Int, agentRule: AgentRule) -> some View {
+        Menu {
+            Picker("Grace period", selection: Binding(
+                get: { agentRule.grace },
+                set: { model.updateRule(at: index, to: .agentActivity(AgentRule(grace: $0))) }
+            )) {
+                ForEach(Self.agentGracePresets, id: \.seconds) { preset in
+                    Text(L(preset.label)).tag(preset.seconds)
+                }
+            }
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Idle grace period")
     }
 
     /// In-place editor for a CPU rule's threshold.
@@ -314,6 +345,10 @@ struct RulesView: View {
             Button("Playing a game") { model.addRule(.gaming) }
                 .help("Counts only while a game (or a cloud-gaming app) is the active window, not just running in the background. Keeps holding for 5 minutes after you switch away.")
         }
+        Section("AI agents") {
+            Button("AI agent is working") { model.addRule(.agentActivity(AgentRule())) }
+                .help("Keeps the Mac awake while a coding-agent session (claude, codex, gemini, aider, and the like) is actively working, judged by its CPU use, and lets it sleep once every session has gone idle for the grace period. The menu lists each detected session. A freshly started session can take a few seconds to read as working.")
+        }
         Section("Process is running") {
             ForEach(Self.processPresets, id: \.self) { name in
                 Button(name) { model.addRule(.process(name)) }
@@ -400,6 +435,7 @@ struct RulesView: View {
         case .gaming:                  return "gamecontroller"
         case .throughput:              return "arrow.up.arrow.down"
         case .downloadInFolder:        return "arrow.down.circle"
+        case .agentActivity:           return "sparkles"
         }
     }
 }

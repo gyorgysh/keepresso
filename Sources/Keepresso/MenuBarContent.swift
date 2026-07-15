@@ -40,6 +40,12 @@ struct MenuBarContent: View {
     static func modeLabel(_ mode: SessionMode) -> String {
         if let preset = durationOptions.first(where: { $0.mode == mode }) { return L(preset.label) }
         guard let duration = mode.duration else { return L("Indefinitely") }
+        return shortDuration(duration)
+    }
+
+    /// A compact duration like "15 min", "1 h", or "2 h 30 min", shared by the
+    /// mode label and the quick-stop buttons.
+    static func shortDuration(_ duration: TimeInterval) -> String {
         let totalMinutes = Int((duration / 60).rounded())
         let hours = totalMinutes / 60, minutes = totalMinutes % 60
         if hours > 0 && minutes > 0 { return L("%d h %d min", hours, minutes) }
@@ -113,6 +119,20 @@ struct MenuBarContent: View {
                 .popover(isPresented: $showUntilTime) {
                     UntilTimeEditor(isActive: session.isActive) { hour, minute in
                         model.startUntil(hour: hour, minute: minute)
+                    }
+                }
+
+                if session.isActive && !model.quickStopDurations.isEmpty {
+                    LabeledContent("Stop in") {
+                        HStack(spacing: 6) {
+                            ForEach(model.quickStopDurations, id: \.self) { duration in
+                                Button(Self.shortDuration(duration)) {
+                                    model.stopSessionIn(duration)
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
+                        }
                     }
                 }
 
@@ -430,6 +450,9 @@ struct MenuBarContent: View {
                                 .animation(.linear(duration: 0.2), value: remaining)
                         }
                     }
+                    if !state.details.isEmpty {
+                        ruleDetailRows(state.details)
+                    }
                 }
             }
         } else {
@@ -438,6 +461,39 @@ struct MenuBarContent: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    /// How many per-instance sub-rows a rule may show before collapsing into a
+    /// "+N more" line, so a wall of terminals can't swamp the menu.
+    private static let maxDetailRows = 5
+
+    /// Indented per-instance rows under a rule: one detected agent session per
+    /// line with a working/idle dot and verdict.
+    private func ruleDetailRows(_ details: [RuleDetail]) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            ForEach(Array(details.prefix(Self.maxDetailRows).enumerated()), id: \.offset) { _, detail in
+                HStack(spacing: 6) {
+                    Image(systemName: detail.active ? "circle.fill" : "circle")
+                        .foregroundStyle(detail.active ? Color.green : Color.secondary)
+                        .font(type.caption2)
+                    Text(detail.label)
+                        .font(type.caption)
+                        .foregroundStyle(detail.active ? .primary : .secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 4)
+                    Text(detail.active ? L("working") : L("idle"))
+                        .font(type.caption2)
+                        .foregroundStyle(detail.active ? Color.green : Color.secondary)
+                }
+            }
+            if details.count > Self.maxDetailRows {
+                Text(L("+%d more", details.count - Self.maxDetailRows))
+                    .font(type.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.leading, 22)
     }
 
 }

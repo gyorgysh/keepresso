@@ -51,6 +51,9 @@ final class AppModel {
     /// The default reminder interval used when the feature is first enabled.
     static let defaultReminderAfter: TimeInterval = 30 * 60
 
+    /// The default "ending soon" lead time used when the feature is first enabled.
+    static let defaultEndingSoonNotice: TimeInterval = 5 * 60
+
     init(
         store: SettingsStore = UserDefaultsSettingsStore(),
         factory: TriggerFactory = TriggerFactory(),
@@ -104,6 +107,7 @@ final class AppModel {
         self.session.reminderRepeats = loaded.reminderRepeats
         self.session.reminderSound = loaded.reminderSound
         self.session.notifyOnEnd = loaded.notifyOnEnd
+        self.session.endingSoonNotice = loaded.endingSoonNoticeSeconds
         self.session.endAction = loaded.endAction
         self.session.pauseBelowBatteryPercent = loaded.pauseBelowBatteryPercent
         self.disk = DiskKeepAliveController()
@@ -422,6 +426,49 @@ final class AppModel {
         }
     }
 
+    // MARK: - Quick stop
+
+    /// Convert the running manual session to end this long from now (the
+    /// menu's quick "stop in N" shortcuts). Deliberately not persisted: it
+    /// changes only the live session, never the default duration.
+    func stopSessionIn(_ interval: TimeInterval) {
+        session.stopIn(interval)
+    }
+
+    /// The menu's quick-stop shortcut durations, kept normalized.
+    var quickStopDurations: [TimeInterval] {
+        get { settings.quickStopDurations }
+        set {
+            settings.quickStopDurations = KeepressoSettings.normalizedQuickStopDurations(newValue)
+            persist()
+        }
+    }
+
+    /// Whether the "ending soon" heads-up is on. Enabling it requests
+    /// notification permission and seeds a default lead time.
+    var endingSoonEnabled: Bool {
+        get { settings.endingSoonNoticeSeconds != nil }
+        set {
+            settings.endingSoonNoticeSeconds = newValue
+                ? (settings.endingSoonNoticeSeconds ?? Self.defaultEndingSoonNotice)
+                : nil
+            if newValue { notifier.requestAuthorization() }
+            session.endingSoonNotice = settings.endingSoonNoticeSeconds
+            persist()
+        }
+    }
+
+    /// The heads-up lead time shown in the picker. Reads the default while the
+    /// feature is off so the picker has a sensible selection before enabling.
+    var endingSoonNotice: TimeInterval {
+        get { settings.endingSoonNoticeSeconds ?? Self.defaultEndingSoonNotice }
+        set {
+            settings.endingSoonNoticeSeconds = newValue
+            session.endingSoonNotice = newValue
+            persist()
+        }
+    }
+
     // MARK: - Battery-aware auto-pause
 
     /// The default cutoff used when the feature is first enabled.
@@ -613,6 +660,7 @@ final class AppModel {
         session.reminderRepeats = newSettings.reminderRepeats
         session.reminderSound = newSettings.reminderSound
         session.notifyOnEnd = newSettings.notifyOnEnd
+        session.endingSoonNotice = newSettings.endingSoonNoticeSeconds
         session.endAction = newSettings.endAction
         session.pauseBelowBatteryPercent = newSettings.pauseBelowBatteryPercent
         disk.config = newSettings.diskKeepAlive

@@ -187,6 +187,26 @@ private struct GeneralTab: View {
 
     private var session: SessionController { model.session }
 
+    /// The duration presets offered by the quick-stop shortcut pickers.
+    private static let quickStopOptions: [TimeInterval] = [
+        5 * 60, 10 * 60, 15 * 60, 20 * 60, 30 * 60, 45 * 60,
+        60 * 60, 90 * 60, 2 * 60 * 60, 3 * 60 * 60, 4 * 60 * 60,
+    ]
+
+    /// The picker choices for one shortcut row: the shared presets plus the
+    /// row's current value when it isn't one of them (an imported custom
+    /// duration must not render as an empty selection).
+    private func quickStopChoices(including current: TimeInterval) -> [TimeInterval] {
+        Self.quickStopOptions.contains(current)
+            ? Self.quickStopOptions
+            : (Self.quickStopOptions + [current]).sorted()
+    }
+
+    /// The first preset not already used, seeding "Add Shortcut".
+    private var nextFreeQuickStop: TimeInterval? {
+        Self.quickStopOptions.first { !model.quickStopDurations.contains($0) }
+    }
+
     var body: some View {
         Form {
             Section("Keep awake") {
@@ -221,6 +241,46 @@ private struct GeneralTab: View {
                 ))
             } footer: {
                 Text("Shows the remaining time next to the menu-bar icon during a timed session.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                ForEach(Array(model.quickStopDurations.enumerated()), id: \.offset) { index, duration in
+                    HStack {
+                        Picker(L("Shortcut %d", index + 1), selection: Binding(
+                            get: { duration },
+                            set: { newValue in
+                                var durations = model.quickStopDurations
+                                durations[index] = newValue
+                                model.quickStopDurations = durations
+                            }
+                        )) {
+                            ForEach(quickStopChoices(including: duration), id: \.self) { option in
+                                Text(MenuBarContent.shortDuration(option)).tag(option)
+                            }
+                        }
+                        Button {
+                            var durations = model.quickStopDurations
+                            durations.remove(at: index)
+                            model.quickStopDurations = durations
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel(L("Remove shortcut"))
+                    }
+                }
+                Button("Add Shortcut") {
+                    guard let next = nextFreeQuickStop else { return }
+                    model.quickStopDurations = model.quickStopDurations + [next]
+                }
+                .disabled(model.quickStopDurations.count >= KeepressoSettings.maxQuickStopDurations
+                          || nextFreeQuickStop == nil)
+            } header: {
+                Text("Quick stop shortcuts")
+            } footer: {
+                Text("One-click \u{201C}Stop in\u{201D} buttons shown in the menu while a session runs, so the Mac goes back to sleeping on its own that much later. Up to four; the list stays sorted.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -523,6 +583,14 @@ private struct ReminderTab: View {
         ("8 hours", 8 * 60 * 60),
     ]
 
+    /// Lead times for the "ending soon" heads-up.
+    private static let noticeOptions: [(label: String, interval: TimeInterval)] = [
+        ("1 minute before", 60),
+        ("2 minutes before", 2 * 60),
+        ("5 minutes before", 5 * 60),
+        ("10 minutes before", 10 * 60),
+    ]
+
     var body: some View {
         Form {
             Section {
@@ -561,6 +629,20 @@ private struct ReminderTab: View {
                     get: { model.notifyOnEnd },
                     set: { model.notifyOnEnd = $0 }
                 ))
+                Toggle("Warn before a timed session ends", isOn: Binding(
+                    get: { model.endingSoonEnabled },
+                    set: { model.endingSoonEnabled = $0 }
+                ))
+                if model.endingSoonEnabled {
+                    Picker("Warn", selection: Binding(
+                        get: { model.endingSoonNotice },
+                        set: { model.endingSoonNotice = $0 }
+                    )) {
+                        ForEach(Self.noticeOptions, id: \.interval) { option in
+                            Text(L(option.label)).tag(option.interval)
+                        }
+                    }
+                }
                 Picker("On session end", selection: Binding(
                     get: { model.endAction },
                     set: { model.endAction = $0 }
@@ -581,6 +663,7 @@ private struct ReminderTab: View {
         .scrollContentBackground(.hidden)
         .animation(.snappy(duration: 0.25), value: model.reminderEnabled)
         .animation(.snappy(duration: 0.25), value: model.reminderRepeats)
+        .animation(.snappy(duration: 0.25), value: model.endingSoonEnabled)
     }
 }
 
