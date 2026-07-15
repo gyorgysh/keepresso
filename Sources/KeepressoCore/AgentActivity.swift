@@ -58,10 +58,13 @@ public protocol AgentActivityMonitoring: AnyObject {
 public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// The agent CLIs detected out of the box, matched against the root
     /// command's basename (never as a substring, so `grep claude` or a file
-    /// name mentioning an agent can't count as a session).
+    /// name mentioning an agent can't count as a session). CLI binaries only:
+    /// a bare "cursor" or "antigravity" would match the whole IDE app, whose
+    /// process tree burns CPU constantly, so their terminal agents are listed
+    /// by their actual command names instead (cursor-agent, agy).
     public static let agentCommands = [
-        "claude", "codex", "gemini", "aider", "goose",
-        "cursor-agent", "opencode", "amp", "copilot",
+        "claude", "codex", "gemini", "grok", "agy", "aider", "goose",
+        "cursor-agent", "opencode", "amp", "copilot", "droid", "auggie", "qwen",
     ]
 
     /// Interpreter/runtime launchers whose first non-flag argument is the

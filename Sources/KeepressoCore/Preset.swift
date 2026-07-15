@@ -36,18 +36,24 @@ extension Preset {
     /// a user can remove one and have it stay gone; new built-ins reach
     /// existing users via ``KeepressoSettings/seedNewBuiltInPresets()``.
     public static let builtIns: [Preset] = [
+        // The working rule rides along with the process rules: while any of
+        // the OR-combined process rules matches, it doesn't change gating,
+        // but it puts the live per-session working/idle list in the menu.
         Preset(
             id: "ai-agent",
             name: "AI Agent",
-            ruleSet: RuleSet(combine: .any, rules: [.process("claude"), .process("codex"), .process("grok")])
+            ruleSet: RuleSet(combine: .any, rules: [
+                .process("claude"), .process("codex"), .process("grok"),
+                .agentActivity(AgentRule(grace: 60)),
+            ])
         ),
         // Working, not merely running: releases once every agent session goes
-        // idle (plus five minutes of grace), unlike "AI Agent" above, which
+        // idle (plus a minute of grace), unlike "AI Agent" above, which
         // holds as long as an agent process exists at all.
         Preset(
             id: "agent-working",
             name: "AI Agent Working",
-            ruleSet: RuleSet(combine: .any, rules: [.agentActivity(AgentRule(grace: 300))])
+            ruleSet: RuleSet(combine: .any, rules: [.agentActivity(AgentRule(grace: 60))])
         ),
         Preset(
             id: "on-ac-power",
