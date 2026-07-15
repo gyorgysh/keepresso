@@ -200,6 +200,7 @@ struct MenuBarContent: View {
         .animation(.snappy(duration: 0.25), value: model.closedDisplayError)
         .animation(.snappy(duration: 0.25), value: model.helperAttention)
         .glassPanelBackground()
+        .keepsPanelKey()
         .tint(.keepressoBrew)
         // Cascades to every text that sets no font of its own (toggles,
         // buttons, menu rows), so the whole panel scales together.
@@ -211,19 +212,21 @@ struct MenuBarContent: View {
         }
     }
 
-    /// Opens a window scene and brings the app forward, then dismisses the
-    /// dropdown. Keepresso is an `LSUIElement` agent, so opening a sibling
+    /// Dismisses the dropdown, then opens a window scene with the app brought
+    /// forward. Keepresso is an `LSUIElement` agent, so opening a sibling
     /// `Window` scene doesn't deactivate it: the `.window`-style panel keeps key
     /// status and the new window orders behind it (the user-reported "menu stays
     /// open behind Preferences" bug). Capture the panel (it's the key window
-    /// while a menu Button is being tapped) and close it after opening.
-    /// `@Environment(\.dismiss)` isn't reliable for this panel across macOS
-    /// versions, so target the `NSWindow` directly.
+    /// while a menu Button is being tapped) and close it *before* opening:
+    /// a panel closed afterwards is still holding key status during the
+    /// handoff, which is one way the new window ends up drawn inactive (gray
+    /// controls) until the app is refocused by hand. `@Environment(\.dismiss)`
+    /// isn't reliable for this panel across macOS versions, so target the
+    /// `NSWindow` directly.
     private func open(_ id: String) {
-        let panel = NSApp.keyWindow
+        NSApp.keyWindow?.close()
         NSApp.activate(ignoringOtherApps: true)
         openWindow(id: id)
-        panel?.close()
     }
 
     // MARK: - Header

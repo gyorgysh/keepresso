@@ -106,11 +106,12 @@ struct ScaledType {
     var title3: Font { .system(size: size(.title3)) }
 }
 
-/// Places the hosting window when it appears: centered on its screen and
-/// ordered front. Keepresso is a background agent (LSUIElement), so a plain
-/// window open can land behind the active app and wherever macOS last left
-/// the frame. One shot, at open only; the window level stays normal unless
-/// `floating`, so nothing keeps blocking other windows afterwards.
+/// Places the hosting window when it appears: centered on its screen,
+/// ordered front, and made key with the app activated. Keepresso is a
+/// background agent (LSUIElement), so a plain window open can land behind
+/// the active app and wherever macOS last left the frame. One shot, at open
+/// only; the window level stays normal unless `floating`, so nothing keeps
+/// blocking other windows afterwards.
 struct WindowPlacement: NSViewRepresentable {
     var floating = false
 
@@ -120,13 +121,39 @@ struct WindowPlacement: NSViewRepresentable {
             guard let window = view.window else { return }
             if floating { window.level = .floating }
             window.center()
-            window.orderFrontRegardless()
-            window.makeKey()
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            Self.repairIfWedged(window, attempts: 3)
         }
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {}
+
+    /// Cooperative activation (macOS 14+) can leave a window opened from the
+    /// menu in a wedged half-active state: AppKit reports the app active
+    /// (`NSApp.isActive`) and may even report the window key, but the system
+    /// never actually made the app frontmost (the workspace's
+    /// `NSRunningApplication` view disagrees), so every control and material
+    /// draws in the inactive gray style, and clicking inside the window
+    /// restores nothing because AppKit sees no activation left to perform.
+    /// Check a beat after opening and do programmatically what the user
+    /// otherwise must do by hand: drop active status, take it again, re-key
+    /// the window.
+    static func repairIfWedged(_ window: NSWindow?, attempts: Int) {
+        guard attempts > 0 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak window] in
+            guard let window, window.isVisible else { return }
+            let trulyActive = NSRunningApplication.current.isActive
+            guard !trulyActive || !window.isKeyWindow else { return }
+            if NSApp.isActive && !trulyActive {
+                NSApp.deactivate()
+            }
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            repairIfWedged(window, attempts: attempts - 1)
+        }
+    }
 }
 
 extension View {
@@ -135,6 +162,30 @@ extension View {
     func centersAndFrontsWindow() -> some View {
         background(WindowPlacement())
     }
+
+    /// Re-asserts key status on the menu-bar panel shortly after it opens.
+    /// When the app is stuck in the half-active state (see
+    /// ``WindowPlacement/repairIfWedged(_:attempts:)``), the panel can come
+    /// up without key status and draw its whole surface in the inactive gray
+    /// style. A plain `makeKey()` is enough here and never dismisses the
+    /// panel, unlike a full deactivate/activate cycle.
+    func keepsPanelKey() -> some View {
+        background(PanelKeyAssert())
+    }
+}
+
+/// The panel-side repair behind ``View/keepsPanelKey()``.
+private struct PanelKeyAssert: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak view] in
+            guard let window = view?.window, window.isVisible, !window.isKeyWindow else { return }
+            window.makeKey()
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
 /// The backing that keeps text readable over glass on any wallpaper: a material
