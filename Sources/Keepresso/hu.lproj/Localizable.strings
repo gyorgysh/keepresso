@@ -389,3 +389,8 @@
 "working" = "dolgozik";
 "idle" = "tétlen";
 "+%d more" = "+%d további";
+"Claude Code connected: sessions report working and waiting exactly." = "Claude Code csatlakoztatva: a munkamenetek pontosan jelzik a munkát és a várakozást.";
+"Connect Claude Code for exact session tracking (adds hooks to its settings)." = "Csatlakoztassa a Claude Code-ot a munkamenetek pontos követéséhez (hookokat ad a beállításaihoz).";
+"Connect Claude Code" = "Claude Code csatlakoztatása";
+"Claude Code's settings file couldn't be read, so it was left untouched." = "A Claude Code beállításfájlja nem olvasható, ezért érintetlen maradt.";
+"Couldn't update Claude Code's settings file." = "A Claude Code beállításfájlját nem sikerült frissíteni.";

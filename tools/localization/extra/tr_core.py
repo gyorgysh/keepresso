@@ -175,3 +175,20 @@ WIDGET = {
     "Resume Triggers": "Tetikleyicileri Sürdür",
     "Pause Triggers": "Tetikleyicileri Duraklat",
 }
+
+
+# --- Agent hooks (Claude Code connection) ---
+CORE.update({
+    "running command": "komut çalıştırıyor",
+    "editing": "düzenliyor",
+    "reading": "okuyor",
+    "searching": "arıyor",
+    "running subagent": "alt ajanı çalıştırıyor",
+    "browsing": "web'de geziniyor",
+    "using %@": "%@ kullanıyor",
+    "waiting for approval": "onay bekliyor",
+    "waiting": "bekliyor",
+    "terminal": "terminal",
+    "Claude app": "Claude uygulaması",
+    "IDE": "IDE",
+})

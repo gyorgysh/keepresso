@@ -389,3 +389,8 @@
 "working" = "au travail";
 "idle" = "inactif";
 "+%d more" = "+%d autres";
+"Claude Code connected: sessions report working and waiting exactly." = "Claude Code connecté : les sessions signalent précisément le travail et l’attente.";
+"Connect Claude Code for exact session tracking (adds hooks to its settings)." = "Connectez Claude Code pour un suivi exact des sessions (ajoute des hooks à ses réglages).";
+"Connect Claude Code" = "Connecter Claude Code";
+"Claude Code's settings file couldn't be read, so it was left untouched." = "Le fichier de réglages de Claude Code n’a pas pu être lu ; il a été laissé intact.";
+"Couldn't update Claude Code's settings file." = "Impossible de mettre à jour le fichier de réglages de Claude Code.";

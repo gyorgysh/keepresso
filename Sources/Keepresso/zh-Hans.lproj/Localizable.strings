@@ -389,3 +389,8 @@
 "working" = "工作中";
 "idle" = "空闲";
 "+%d more" = "还有 %d 个";
+"Claude Code connected: sessions report working and waiting exactly." = "已连接 Claude Code：会话可精确报告工作与等待状态。";
+"Connect Claude Code for exact session tracking (adds hooks to its settings)." = "连接 Claude Code 以精确跟踪会话（将在其设置中添加钩子）。";
+"Connect Claude Code" = "连接 Claude Code";
+"Claude Code's settings file couldn't be read, so it was left untouched." = "无法读取 Claude Code 的设置文件，因此未作改动。";
+"Couldn't update Claude Code's settings file." = "无法更新 Claude Code 的设置文件。";

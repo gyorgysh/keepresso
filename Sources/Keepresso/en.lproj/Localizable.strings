@@ -389,3 +389,8 @@
 "working" = "working";
 "idle" = "idle";
 "+%d more" = "+%d more";
+"Claude Code connected: sessions report working and waiting exactly." = "Claude Code connected: sessions report working and waiting exactly.";
+"Connect Claude Code for exact session tracking (adds hooks to its settings)." = "Connect Claude Code for exact session tracking (adds hooks to its settings).";
+"Connect Claude Code" = "Connect Claude Code";
+"Claude Code's settings file couldn't be read, so it was left untouched." = "Claude Code's settings file couldn't be read, so it was left untouched.";
+"Couldn't update Claude Code's settings file." = "Couldn't update Claude Code's settings file.";

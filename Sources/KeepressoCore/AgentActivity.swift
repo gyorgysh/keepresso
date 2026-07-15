@@ -16,20 +16,45 @@ public struct AgentSession: Equatable, Hashable, Sendable {
     /// the freshness window: direct evidence it is working right now, no CPU
     /// guessing involved. Always false for agents without a known transcript.
     public var hasFreshEvidence: Bool
+    /// Exact state reported by installed lifecycle hooks, or `nil` when this
+    /// session has no live hook record; then transcript + CPU decide.
+    public var hookState: AgentHooks.HookSessionState?
+    /// Semantic activity token from the hook record ("running-command", ...).
+    public var hookDetail: String?
+    /// Where the session runs, classified by the hook's ancestor walk.
+    public var origin: AgentHooks.HookSessionOrigin?
 
-    public init(pid: Int32, agent: String, tty: String?, cpuPercent: Double, hasFreshEvidence: Bool = false) {
+    public init(
+        pid: Int32,
+        agent: String,
+        tty: String?,
+        cpuPercent: Double,
+        hasFreshEvidence: Bool = false,
+        hookState: AgentHooks.HookSessionState? = nil,
+        hookDetail: String? = nil,
+        origin: AgentHooks.HookSessionOrigin? = nil
+    ) {
         self.pid = pid
         self.agent = agent
         self.tty = tty
         self.cpuPercent = cpuPercent
         self.hasFreshEvidence = hasFreshEvidence
+        self.hookState = hookState
+        self.hookDetail = hookDetail
+        self.origin = origin
     }
 
     /// A short display label: the agent plus its terminal ("claude (s003)"),
-    /// falling back to the pid when there is no controlling terminal.
+    /// then the hook-classified origin for terminal-less sessions ("claude
+    /// (Claude app)"), falling back to the pid.
     public var label: String {
         if let tty { return "\(agent) (\(tty))" }
-        return "\(agent) (pid \(pid))"
+        switch origin {
+        case .terminal: return "\(agent) (\(L("terminal")))"
+        case .claudeApp: return "\(agent) (\(L("Claude app")))"
+        case .ide: return "\(agent) (\(L("IDE")))"
+        case nil: return "\(agent) (pid \(pid))"
+        }
     }
 }
 
@@ -98,6 +123,9 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// Latest transcript write for (agent, cwd), or `nil` when the agent has
     /// no known transcript. Injectable so evidence logic is unit-testable.
     private let evidence: @Sendable (_ agent: String, _ cwd: String?) -> Date?
+    /// The live hook records to join onto sessions. Injectable so the join
+    /// and precedence logic is unit-testable without touching the disk.
+    private let hookRecords: @Sendable (_ now: Date) -> [AgentHooks.HookRecord]
     private let lock = NSLock()
     private var cached: AgentSnapshot = .empty
     private var lastFetch: Date?
@@ -107,12 +135,14 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         ttl: TimeInterval = 3,
         now: @escaping () -> Date = Date.init,
         fetch: @escaping @Sendable () -> String? = PSAgentActivityMonitor.runPS,
-        evidence: @escaping @Sendable (_ agent: String, _ cwd: String?) -> Date? = PSAgentActivityMonitor.transcriptActivity
+        evidence: @escaping @Sendable (_ agent: String, _ cwd: String?) -> Date? = PSAgentActivityMonitor.transcriptActivity,
+        hookRecords: @escaping @Sendable (_ now: Date) -> [AgentHooks.HookRecord] = { AgentHooks.readHookRecords(now: $0) }
     ) {
         self.ttl = ttl
         self.now = now
         self.fetch = fetch
         self.evidence = evidence
+        self.hookRecords = hookRecords
     }
 
     public var current: AgentSnapshot {
@@ -131,13 +161,20 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
                 // Decorate with transcript evidence: a session whose
                 // transcript was written within the freshness window is
                 // working, no matter what its CPU says.
-                let cutoff = self.now().addingTimeInterval(-Self.evidenceFreshWindow)
+                let scanTime = self.now()
+                let cutoff = scanTime.addingTimeInterval(-Self.evidenceFreshWindow)
+                var cwds: [Int32: String] = [:]
                 for index in sessions.indices {
                     let session = sessions[index]
-                    if let written = self.evidence(session.agent, Self.processCwd(session.pid)) {
+                    let cwd = Self.processCwd(session.pid)
+                    if let cwd { cwds[session.pid] = cwd }
+                    if let written = self.evidence(session.agent, cwd) {
                         sessions[index].hasFreshEvidence = written >= cutoff
                     }
                 }
+                // Stamp hook evidence: exact state edges beat both heuristics.
+                sessions = Self.applyHookRecords(
+                    self.hookRecords(scanTime), to: sessions, cwdOf: { cwds[$0] })
                 self.withLock {
                     self.cached = AgentSnapshot(sessions: sessions)
                     self.lastFetch = self.now()
@@ -146,6 +183,46 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             }
         }
         return snapshot
+    }
+
+    /// Joins hook records onto detected sessions: by the record's agent pid
+    /// first (exact, survives two sessions sharing a directory), by working
+    /// directory as the fallback, and only when that fallback is unambiguous
+    /// (exactly one unclaimed session in that directory). Newest records win
+    /// contested sessions. Pure, so tests script both sides.
+    static func applyHookRecords(
+        _ records: [AgentHooks.HookRecord],
+        to sessions: [AgentSession],
+        cwdOf: (Int32) -> String?
+    ) -> [AgentSession] {
+        guard !records.isEmpty, !sessions.isEmpty else { return sessions }
+        var result = sessions
+        var claimed: Set<Int> = []
+        var unmatchedByPid: [AgentHooks.HookRecord] = []
+        for record in records.sorted(by: { $0.updatedAt > $1.updatedAt }) {
+            if let pid = record.agentPid,
+               let index = result.firstIndex(where: { $0.pid == pid }) {
+                if claimed.insert(index).inserted { stamp(&result[index], with: record) }
+            } else {
+                unmatchedByPid.append(record)
+            }
+        }
+        for record in unmatchedByPid {
+            guard let cwd = record.cwd else { continue }
+            let candidates = result.indices.filter {
+                !claimed.contains($0) && cwdOf(result[$0].pid) == cwd
+            }
+            guard candidates.count == 1, let index = candidates.first else { continue }
+            claimed.insert(index)
+            stamp(&result[index], with: record)
+        }
+        return result
+    }
+
+    private static func stamp(_ session: inout AgentSession, with record: AgentHooks.HookRecord) {
+        session.hookState = record.state
+        session.hookDetail = record.detail
+        session.origin = record.origin
     }
 
     /// The working directory of a (same-user) process, or `nil`.
@@ -423,7 +500,8 @@ public final class AgentActivityTrigger: Trigger {
             let stepped = Self.step(
                 smoothing[session.pid] ?? State(),
                 sample: session.cpuPercent,
-                freshEvidence: session.hasFreshEvidence
+                freshEvidence: session.hasFreshEvidence,
+                hookState: session.hookState
             )
             next[session.pid] = stepped
             return SessionState(session: session, isWorking: stepped.isWorking)
@@ -435,10 +513,19 @@ public final class AgentActivityTrigger: Trigger {
         sessionStates.contains { $0.isWorking }
     }
 
-    /// Pure decision step, exposed for direct unit testing. `freshEvidence`
-    /// (a transcript written moments ago) is proof of work and wins outright;
-    /// the CPU heuristic decides for agents that leave no transcript.
-    static func step(_ state: State, sample: Double, freshEvidence: Bool = false) -> State {
+    /// Pure decision step, exposed for direct unit testing. A live hook state
+    /// is an exact edge and decides outright (`working` on, `idle` off,
+    /// `waiting` off: the human is away, and the release grace bridges short
+    /// waits). Otherwise `freshEvidence` (a transcript written moments ago)
+    /// is proof of work and wins; the CPU heuristic decides for agents that
+    /// leave no transcript. The EMA and baseline advance on every tick
+    /// regardless, so the CPU fallback stays warm if hooks disappear.
+    static func step(
+        _ state: State,
+        sample: Double,
+        freshEvidence: Bool = false,
+        hookState: AgentHooks.HookSessionState? = nil
+    ) -> State {
         var next = state
         let clamped = max(sample, 0)
         let average = state.average.map { $0 + alpha * (clamped - $0) } ?? clamped
@@ -456,16 +543,55 @@ public final class AgentActivityTrigger: Trigger {
         }
         next.baseline = baseline
 
-        let delta = state.isWorking ? Self.offDeltaPercent : Self.onDeltaPercent
-        next.isWorking = freshEvidence
-            || average >= baseline + delta
-            || average >= Self.hardWorkingFloorPercent
+        if let hookState {
+            next.isWorking = hookState == .working
+        } else {
+            let delta = state.isWorking ? Self.offDeltaPercent : Self.onDeltaPercent
+            next.isWorking = freshEvidence
+                || average >= baseline + delta
+                || average >= Self.hardWorkingFloorPercent
+        }
         return next
     }
 }
 
 extension AgentActivityTrigger: TriggerDetailProviding {
     public var detailRows: [RuleDetail] {
-        sessionStates.map { RuleDetail(label: $0.session.label, active: $0.isWorking) }
+        sessionStates.map {
+            RuleDetail(label: Self.rowLabel(for: $0), active: $0.isWorking, animated: $0.isWorking)
+        }
+    }
+
+    /// "claude (s003) - running command": the session label plus, when hooks
+    /// report one, what it is doing (or waiting on) right now.
+    static func rowLabel(for state: SessionState) -> String {
+        let detail: String?
+        if state.session.hookState == .waiting {
+            detail = Self.detailText(forToken: state.session.hookDetail ?? "waiting")
+        } else if state.isWorking {
+            detail = state.session.hookDetail.flatMap(Self.detailText(forToken:))
+        } else {
+            detail = nil
+        }
+        guard let detail else { return state.session.label }
+        return "\(state.session.label) - \(detail)"
+    }
+
+    /// Localizes a semantic detail token written by the hook CLI. Tokens stay
+    /// language-neutral on disk so every UI language renders its own text.
+    static func detailText(forToken token: String) -> String? {
+        switch token {
+        case "running-command": return L("running command")
+        case "editing": return L("editing")
+        case "reading": return L("reading")
+        case "searching": return L("searching")
+        case "subagent": return L("running subagent")
+        case "browsing": return L("browsing")
+        case "waiting-approval": return L("waiting for approval")
+        case "waiting": return L("waiting")
+        default:
+            guard token.hasPrefix("tool:") else { return nil }
+            return L("using %@", String(token.dropFirst("tool:".count)))
+        }
     }
 }

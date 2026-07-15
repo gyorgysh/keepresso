@@ -71,6 +71,9 @@ struct RulesView: View {
                 ForEach(Array(model.rules.enumerated()), id: \.offset) { index, rule in
                     ruleRow(index: index, rule: rule)
                 }
+                if model.rules.contains(where: isAgentRule) {
+                    claudeCodeRows
+                }
             }
 
             addConditionMenus
@@ -163,6 +166,52 @@ struct RulesView: View {
         .menuStyle(.borderlessButton)
         .fixedSize()
         .help("App match & grace period")
+    }
+
+    private func isAgentRule(_ rule: TriggerRule) -> Bool {
+        if case .agentActivity = rule { return true }
+        return false
+    }
+
+    /// Status row + action for the Claude Code hook connection, shown with
+    /// the agent rule. Mirrors the three-state ``HelperStatusRows`` pattern.
+    /// The status refresh on appear is a plain read of one small file; the
+    /// settings merge itself runs only on the explicit click.
+    @ViewBuilder
+    private var claudeCodeRows: some View {
+        Group {
+            switch model.claudeHooks {
+            case .installed:
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                        .accessibilityHidden(true)
+                    Text("Claude Code connected: sessions report working and waiting exactly.")
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Button("Remove") { model.removeClaudeHooks() }
+                }
+            case .notInstalled:
+                HStack(alignment: .top, spacing: 6) {
+                    Text("Connect Claude Code for exact session tracking (adds hooks to its settings).")
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Button("Connect Claude Code") { model.installClaudeHooks() }
+                }
+            case .unreadable:
+                Label(
+                    "Claude Code's settings file couldn't be read, so it was left untouched.",
+                    systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
+            if let error = model.claudeHooksError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
+        }
+        .font(.caption)
+        .padding(.leading, 22)
+        .onAppear { model.refreshClaudeHooksStatus() }
     }
 
     /// In-place editor for an agent rule's idle grace.

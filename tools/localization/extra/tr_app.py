@@ -391,3 +391,13 @@ APP = {
     "idle": "boşta",
     "+%d more": "+%d daha",
 }
+
+
+# --- Agent hooks (Claude Code connection) ---
+APP.update({
+    "Claude Code connected: sessions report working and waiting exactly.": "Claude Code bağlandı: oturumlar çalışma ve bekleme durumunu tam olarak bildirir.",
+    "Connect Claude Code for exact session tracking (adds hooks to its settings).": "Tam oturum takibi için Claude Code'u bağlayın (ayarlarına kancalar ekler).",
+    "Connect Claude Code": "Claude Code'u bağla",
+    "Claude Code's settings file couldn't be read, so it was left untouched.": "Claude Code'un ayar dosyası okunamadı, bu yüzden dokunulmadı.",
+    "Couldn't update Claude Code's settings file.": "Claude Code'un ayar dosyası güncellenemedi.",
+})

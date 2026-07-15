@@ -2,7 +2,7 @@ import Foundation
 
 /// The parsed intent of a `keepresso` command-line invocation.
 ///
-/// The CLI binary ships inside the app bundle (`Contents/MacOS/keepresso`,
+/// The CLI binary ships inside the app bundle (`Contents/Helpers/keepresso`,
 /// symlinked onto PATH by the Homebrew cask) and covers what the
 /// `keepresso://` URL scheme cannot: blocking holds in a pipeline, waiting on
 /// a process, and scriptable status. Parsing and URL building live here in
@@ -17,6 +17,10 @@ public enum CLIRequest: Equatable, Sendable {
     case remote(RemoteCommand)
     /// Hold this process's own power assertion, caffeinate-style.
     case hold(Hold)
+    /// Record an agent-hook event delivered on stdin (Claude Code hooks).
+    /// Hidden from the help text: installed hook commands are its only
+    /// intended caller.
+    case agentHook(event: String)
 
     /// A command delivered to the app (launching it if needed) via
     /// `open <url>`. Mirrors what ``URLCommand/parse(_:)`` accepts on the
@@ -104,6 +108,11 @@ public enum CLIRequest: Equatable, Sendable {
                 throw CLIUsageError("'\(first)' takes no options")
             }
             return .remote(first == "stop" ? .stop : .toggle)
+        case "agent-hook":
+            guard arguments.count == 2 else {
+                throw CLIUsageError("agent-hook takes exactly one event name")
+            }
+            return .agentHook(event: arguments[1])
         default:
             guard first.hasPrefix("-") else {
                 throw CLIUsageError("unknown command '\(first)' (run 'keepresso help')")

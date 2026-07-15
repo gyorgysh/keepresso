@@ -175,3 +175,20 @@ WIDGET = {
     "Resume Triggers": "Riprendi attivatori",
     "Pause Triggers": "Sospendi attivatori",
 }
+
+
+# --- Agent hooks (Claude Code connection) ---
+CORE.update({
+    "running command": "esegue un comando",
+    "editing": "modifica",
+    "reading": "legge",
+    "searching": "cerca",
+    "running subagent": "esegue un subagente",
+    "browsing": "naviga sul web",
+    "using %@": "usa %@",
+    "waiting for approval": "in attesa di approvazione",
+    "waiting": "in attesa",
+    "terminal": "terminale",
+    "Claude app": "app Claude",
+    "IDE": "IDE",
+})

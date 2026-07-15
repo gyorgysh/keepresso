@@ -473,9 +473,14 @@ struct MenuBarContent: View {
         VStack(alignment: .leading, spacing: 3) {
             ForEach(Array(details.prefix(Self.maxDetailRows).enumerated()), id: \.offset) { _, detail in
                 HStack(spacing: 6) {
-                    Image(systemName: detail.active ? "circle.fill" : "circle")
-                        .foregroundStyle(detail.active ? Color.green : Color.secondary)
-                        .font(type.caption2)
+                    if detail.animated, !SparkFrames.images.isEmpty {
+                        SparkView()
+                            .foregroundStyle(Color.green)
+                    } else {
+                        Image(systemName: detail.active ? "circle.fill" : "circle")
+                            .foregroundStyle(detail.active ? Color.green : Color.secondary)
+                            .font(type.caption2)
+                    }
                     Text(detail.label)
                         .font(type.caption)
                         .foregroundStyle(detail.active ? .primary : .secondary)

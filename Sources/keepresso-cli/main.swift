@@ -2,7 +2,7 @@ import Foundation
 import KeepressoCore
 
 // The `keepresso` command-line tool. Ships inside the app bundle
-// (Contents/MacOS/keepresso) and is symlinked onto PATH by the Homebrew cask.
+// (Contents/Helpers/keepresso) and is symlinked onto PATH by the Homebrew cask.
 // Deliberately AppKit-free so `swift build` works with Command Line Tools only.
 //
 // Exit codes: 0 success (for `status`: keeping awake), 1 failure (for
@@ -175,6 +175,17 @@ func runHold(_ hold: CLIRequest.Hold) -> Never {
     dispatchMain()
 }
 
+// MARK: - Agent hooks
+
+/// `keepresso agent-hook <event>`: reduce the JSON payload on stdin to a
+/// per-session state file. Exits 0 no matter what and prints nothing: a
+/// broken hook must never disturb or slow an agent session.
+func runAgentHook(event: String) -> Never {
+    let payload = FileHandle.standardInput.readDataToEndOfFile()
+    AgentHooks.handle(event: event, payloadData: payload, parentPid: getppid())
+    exit(0)
+}
+
 // MARK: - Entry
 
 let request: CLIRequest
@@ -195,4 +206,6 @@ case .remote(let command):
     runRemote(command)
 case .hold(let hold):
     runHold(hold)
+case .agentHook(let event):
+    runAgentHook(event: event)
 }

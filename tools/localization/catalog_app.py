@@ -515,3 +515,14 @@ _AGENT_TRIGGER = {
     "+%d more": {"hu": "+%d további", "es": "+%d más", "fr": "+%d autres", "de": "+%d weitere", "zh-Hans": "还有 %d 个"},
 }
 APP.update(_AGENT_TRIGGER)
+
+
+# --- Agent hooks (Claude Code connection) ---
+_AGENT_HOOKS_APP = {
+    "Claude Code connected: sessions report working and waiting exactly.": {"hu": "Claude Code csatlakoztatva: a munkamenetek pontosan jelzik a munkát és a várakozást.", "es": "Claude Code conectado: las sesiones informan con exactitud cuándo trabajan y cuándo esperan.", "fr": "Claude Code connecté : les sessions signalent précisément le travail et l’attente.", "de": "Claude Code verbunden: Sitzungen melden Arbeiten und Warten exakt.", "zh-Hans": "已连接 Claude Code：会话可精确报告工作与等待状态。"},
+    "Connect Claude Code for exact session tracking (adds hooks to its settings).": {"hu": "Csatlakoztassa a Claude Code-ot a munkamenetek pontos követéséhez (hookokat ad a beállításaihoz).", "es": "Conecta Claude Code para un seguimiento exacto de las sesiones (añade hooks a su configuración).", "fr": "Connectez Claude Code pour un suivi exact des sessions (ajoute des hooks à ses réglages).", "de": "Verbinde Claude Code für exaktes Sitzungs-Tracking (fügt Hooks zu dessen Einstellungen hinzu).", "zh-Hans": "连接 Claude Code 以精确跟踪会话（将在其设置中添加钩子）。"},
+    "Connect Claude Code": {"hu": "Claude Code csatlakoztatása", "es": "Conectar Claude Code", "fr": "Connecter Claude Code", "de": "Claude Code verbinden", "zh-Hans": "连接 Claude Code"},
+    "Claude Code's settings file couldn't be read, so it was left untouched.": {"hu": "A Claude Code beállításfájlja nem olvasható, ezért érintetlen maradt.", "es": "No se pudo leer el archivo de configuración de Claude Code, así que se dejó intacto.", "fr": "Le fichier de réglages de Claude Code n’a pas pu être lu ; il a été laissé intact.", "de": "Die Einstellungsdatei von Claude Code konnte nicht gelesen werden und blieb unangetastet.", "zh-Hans": "无法读取 Claude Code 的设置文件，因此未作改动。"},
+    "Couldn't update Claude Code's settings file.": {"hu": "A Claude Code beállításfájlját nem sikerült frissíteni.", "es": "No se pudo actualizar el archivo de configuración de Claude Code.", "fr": "Impossible de mettre à jour le fichier de réglages de Claude Code.", "de": "Die Einstellungsdatei von Claude Code konnte nicht aktualisiert werden.", "zh-Hans": "无法更新 Claude Code 的设置文件。"},
+}
+APP.update(_AGENT_HOOKS_APP)

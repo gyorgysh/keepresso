@@ -158,3 +158,15 @@
 "Why streams stutter once a second" = "ストリームが 1 秒ごとにカクつく理由";
 "The Wi-Fi radio hops off-channel for AWDL (AirDrop, Handoff, Sidecar, Continuity) roughly every second, which shows up as 50-100 ms ping spikes. The jitter test reproduces the diagnosis; the AWDL watchdog is the session-scoped fix." = "Wi-Fi 無線は約 1 秒ごとに AWDL（AirDrop、Handoff、Sidecar、連係）のためにオフチャンネルにホップし、これが 50〜100 ms の ping スパイクとして現れます。ジッターテストはこの診断を再現します。AWDL 監視はセッション単位の解決策です。";
 "The full story:" = "詳しい説明：";
+"running command" = "コマンドを実行中";
+"editing" = "編集中";
+"reading" = "読み取り中";
+"searching" = "検索中";
+"running subagent" = "サブエージェントを実行中";
+"browsing" = "ウェブ閲覧中";
+"using %@" = "%@ を使用中";
+"waiting for approval" = "承認待ち";
+"waiting" = "待機中";
+"terminal" = "ターミナル";
+"Claude app" = "Claude アプリ";
+"IDE" = "IDE";

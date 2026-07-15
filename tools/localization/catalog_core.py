@@ -196,3 +196,21 @@ CORE = {
     "The Wi-Fi radio hops off-channel for AWDL (AirDrop, Handoff, Sidecar, Continuity) roughly every second, which shows up as 50-100 ms ping spikes. The jitter test reproduces the diagnosis; the AWDL watchdog is the session-scoped fix.": {"hu": "A Wi-Fi rádió körülbelül másodpercenként lekapcsol a csatornáról az AWDL (AirDrop, Handoff, Sidecar, Continuity) miatt, ami 50–100 ms-os ping-kiugrásokként jelentkezik. A jitterteszt reprodukálja a diagnózist; az AWDL-figyelő a munkamenetre szabott megoldás.", "es": "La radio Wi-Fi salta fuera de canal para AWDL (AirDrop, Handoff, Sidecar, Continuity) aproximadamente cada segundo, lo que se manifiesta como picos de ping de 50-100 ms. La prueba de jitter reproduce el diagnóstico; el vigilante de AWDL es la solución acotada a la sesión.", "fr": "La radio Wi-Fi saute hors canal pour AWDL (AirDrop, Handoff, Sidecar, Continuity) environ chaque seconde, ce qui se traduit par des pics de ping de 50 à 100 ms. Le test de gigue reproduit le diagnostic ; la surveillance AWDL est le correctif limité à la session.", "de": "Der WLAN-Funk wechselt für AWDL (AirDrop, Handoff, Sidecar, Continuity) etwa jede Sekunde vom Kanal weg, was sich als Ping-Spitzen von 50 bis 100 ms zeigt. Der Jitter-Test reproduziert die Diagnose; die AWDL-Überwachung ist die auf die Sitzung begrenzte Lösung.", "zh-Hans": "Wi-Fi 无线电大约每秒一次为 AWDL（AirDrop、Handoff、随航、连续互通）切换到其他信道，这表现为 50-100 ms 的 ping 尖峰。抖动测试可重现该诊断；AWDL 看守是限于本次会话的修复方法。"},
     "The full story:": {"hu": "A teljes történet:", "es": "La historia completa:", "fr": "L’histoire complète :", "de": "Die ganze Geschichte:", "zh-Hans": "完整说明："},
 }
+
+
+# --- Agent hooks (Claude Code connection) ---
+_AGENT_HOOKS = {
+    "running command": {"hu": "parancsot futtat", "es": "ejecutando un comando", "fr": "exécute une commande", "de": "führt Befehl aus", "zh-Hans": "正在运行命令"},
+    "editing": {"hu": "szerkeszt", "es": "editando", "fr": "édite", "de": "bearbeitet", "zh-Hans": "正在编辑"},
+    "reading": {"hu": "olvas", "es": "leyendo", "fr": "lit", "de": "liest", "zh-Hans": "正在读取"},
+    "searching": {"hu": "keres", "es": "buscando", "fr": "recherche", "de": "sucht", "zh-Hans": "正在搜索"},
+    "running subagent": {"hu": "alügynököt futtat", "es": "ejecutando un subagente", "fr": "exécute un sous-agent", "de": "führt Subagenten aus", "zh-Hans": "正在运行子代理"},
+    "browsing": {"hu": "böngészik", "es": "navegando", "fr": "navigue sur le web", "de": "durchsucht das Web", "zh-Hans": "正在浏览网页"},
+    "using %@": {"hu": "%@ használata", "es": "usando %@", "fr": "utilise %@", "de": "verwendet %@", "zh-Hans": "正在使用 %@"},
+    "waiting for approval": {"hu": "jóváhagyásra vár", "es": "esperando aprobación", "fr": "attend une approbation", "de": "wartet auf Freigabe", "zh-Hans": "等待批准"},
+    "waiting": {"hu": "várakozik", "es": "esperando", "fr": "en attente", "de": "wartet", "zh-Hans": "等待中"},
+    "terminal": {"hu": "terminál", "es": "terminal", "fr": "terminal", "de": "Terminal", "zh-Hans": "终端"},
+    "Claude app": {"hu": "Claude app", "es": "app Claude", "fr": "app Claude", "de": "Claude-App", "zh-Hans": "Claude 应用"},
+    "IDE": {"hu": "IDE", "es": "IDE", "fr": "IDE", "de": "IDE", "zh-Hans": "IDE"},
+}
+CORE.update(_AGENT_HOOKS)

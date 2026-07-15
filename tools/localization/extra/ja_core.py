@@ -175,3 +175,20 @@ WIDGET = {
     "Resume Triggers": "トリガーを再開",
     "Pause Triggers": "トリガーを一時停止",
 }
+
+
+# --- Agent hooks (Claude Code connection) ---
+CORE.update({
+    "running command": "コマンドを実行中",
+    "editing": "編集中",
+    "reading": "読み取り中",
+    "searching": "検索中",
+    "running subagent": "サブエージェントを実行中",
+    "browsing": "ウェブ閲覧中",
+    "using %@": "%@ を使用中",
+    "waiting for approval": "承認待ち",
+    "waiting": "待機中",
+    "terminal": "ターミナル",
+    "Claude app": "Claude アプリ",
+    "IDE": "IDE",
+})

@@ -158,3 +158,15 @@
 "Why streams stutter once a second" = "Warum Streams jede Sekunde ruckeln";
 "The Wi-Fi radio hops off-channel for AWDL (AirDrop, Handoff, Sidecar, Continuity) roughly every second, which shows up as 50-100 ms ping spikes. The jitter test reproduces the diagnosis; the AWDL watchdog is the session-scoped fix." = "Der WLAN-Funk wechselt für AWDL (AirDrop, Handoff, Sidecar, Continuity) etwa jede Sekunde vom Kanal weg, was sich als Ping-Spitzen von 50 bis 100 ms zeigt. Der Jitter-Test reproduziert die Diagnose; die AWDL-Überwachung ist die auf die Sitzung begrenzte Lösung.";
 "The full story:" = "Die ganze Geschichte:";
+"running command" = "führt Befehl aus";
+"editing" = "bearbeitet";
+"reading" = "liest";
+"searching" = "sucht";
+"running subagent" = "führt Subagenten aus";
+"browsing" = "durchsucht das Web";
+"using %@" = "verwendet %@";
+"waiting for approval" = "wartet auf Freigabe";
+"waiting" = "wartet";
+"terminal" = "Terminal";
+"Claude app" = "Claude-App";
+"IDE" = "IDE";

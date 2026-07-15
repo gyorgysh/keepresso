@@ -158,3 +158,15 @@
 "Why streams stutter once a second" = "스트림이 1초에 한 번씩 끊기는 이유";
 "The Wi-Fi radio hops off-channel for AWDL (AirDrop, Handoff, Sidecar, Continuity) roughly every second, which shows up as 50-100 ms ping spikes. The jitter test reproduces the diagnosis; the AWDL watchdog is the session-scoped fix." = "Wi-Fi 무선은 약 1초마다 AWDL(AirDrop, Handoff, Sidecar, 연속성)을 위해 채널 밖으로 홉하며, 이는 50-100 ms의 ping 스파이크로 나타납니다. 지터 테스트로 진단을 재현하고, AWDL 워치독이 세션 범위의 해결책입니다.";
 "The full story:" = "전체 이야기:";
+"running command" = "명령 실행 중";
+"editing" = "편집 중";
+"reading" = "읽는 중";
+"searching" = "검색 중";
+"running subagent" = "하위 에이전트 실행 중";
+"browsing" = "웹 탐색 중";
+"using %@" = "%@ 사용 중";
+"waiting for approval" = "승인 대기 중";
+"waiting" = "대기 중";
+"terminal" = "터미널";
+"Claude app" = "Claude 앱";
+"IDE" = "IDE";

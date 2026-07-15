@@ -50,6 +50,13 @@ import Foundation
     #expect(throws: CLIUsageError.self) { try CLIRequest.parse(["brew"]) }
 }
 
+@Test func parsesAgentHook() throws {
+    #expect(try CLIRequest.parse(["agent-hook", "PreToolUse"]) == .agentHook(event: "PreToolUse"))
+    #expect(try CLIRequest.parse(["agent-hook", "SessionEnd"]) == .agentHook(event: "SessionEnd"))
+    #expect(throws: CLIUsageError.self) { try CLIRequest.parse(["agent-hook"]) }
+    #expect(throws: CLIUsageError.self) { try CLIRequest.parse(["agent-hook", "A", "B"]) }
+}
+
 // MARK: - URL building round-trips through the app-side parser
 
 @Test func startURLRoundTripsThroughURLCommand() {

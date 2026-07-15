@@ -391,3 +391,13 @@ APP = {
     "idle": "유휴",
     "+%d more": "외 %d개",
 }
+
+
+# --- Agent hooks (Claude Code connection) ---
+APP.update({
+    "Claude Code connected: sessions report working and waiting exactly.": "Claude Code 연결됨: 세션이 작업과 대기를 정확하게 보고합니다.",
+    "Connect Claude Code for exact session tracking (adds hooks to its settings).": "정확한 세션 추적을 위해 Claude Code를 연결하세요(설정에 후크를 추가합니다).",
+    "Connect Claude Code": "Claude Code 연결",
+    "Claude Code's settings file couldn't be read, so it was left untouched.": "Claude Code 설정 파일을 읽을 수 없어 그대로 두었습니다.",
+    "Couldn't update Claude Code's settings file.": "Claude Code 설정 파일을 업데이트할 수 없습니다.",
+})

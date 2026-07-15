@@ -158,3 +158,15 @@
 "Why streams stutter once a second" = "Miért akadoznak a streamek másodpercenként";
 "The Wi-Fi radio hops off-channel for AWDL (AirDrop, Handoff, Sidecar, Continuity) roughly every second, which shows up as 50-100 ms ping spikes. The jitter test reproduces the diagnosis; the AWDL watchdog is the session-scoped fix." = "A Wi-Fi rádió körülbelül másodpercenként lekapcsol a csatornáról az AWDL (AirDrop, Handoff, Sidecar, Continuity) miatt, ami 50–100 ms-os ping-kiugrásokként jelentkezik. A jitterteszt reprodukálja a diagnózist; az AWDL-figyelő a munkamenetre szabott megoldás.";
 "The full story:" = "A teljes történet:";
+"running command" = "parancsot futtat";
+"editing" = "szerkeszt";
+"reading" = "olvas";
+"searching" = "keres";
+"running subagent" = "alügynököt futtat";
+"browsing" = "böngészik";
+"using %@" = "%@ használata";
+"waiting for approval" = "jóváhagyásra vár";
+"waiting" = "várakozik";
+"terminal" = "terminál";
+"Claude app" = "Claude app";
+"IDE" = "IDE";

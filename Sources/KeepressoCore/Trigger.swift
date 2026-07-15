@@ -267,10 +267,14 @@ public final class GracePeriodTrigger: Trigger {
 public struct RuleDetail: Equatable {
     public let label: String
     public let active: Bool
+    /// Whether the row's status dot should animate (an agent session that is
+    /// actively working); plain conditions keep the static dot.
+    public let animated: Bool
 
-    public init(label: String, active: Bool) {
+    public init(label: String, active: Bool, animated: Bool = false) {
         self.label = label
         self.active = active
+        self.animated = animated
     }
 }
 

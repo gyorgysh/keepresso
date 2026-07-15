@@ -158,3 +158,15 @@
 "Why streams stutter once a second" = "Why streams stutter once a second";
 "The Wi-Fi radio hops off-channel for AWDL (AirDrop, Handoff, Sidecar, Continuity) roughly every second, which shows up as 50-100 ms ping spikes. The jitter test reproduces the diagnosis; the AWDL watchdog is the session-scoped fix." = "The Wi-Fi radio hops off-channel for AWDL (AirDrop, Handoff, Sidecar, Continuity) roughly every second, which shows up as 50-100 ms ping spikes. The jitter test reproduces the diagnosis; the AWDL watchdog is the session-scoped fix.";
 "The full story:" = "The full story:";
+"running command" = "running command";
+"editing" = "editing";
+"reading" = "reading";
+"searching" = "searching";
+"running subagent" = "running subagent";
+"browsing" = "browsing";
+"using %@" = "using %@";
+"waiting for approval" = "waiting for approval";
+"waiting" = "waiting";
+"terminal" = "terminal";
+"Claude app" = "Claude app";
+"IDE" = "IDE";

@@ -158,3 +158,15 @@
 "Why streams stutter once a second" = "为何串流每秒卡顿一次";
 "The Wi-Fi radio hops off-channel for AWDL (AirDrop, Handoff, Sidecar, Continuity) roughly every second, which shows up as 50-100 ms ping spikes. The jitter test reproduces the diagnosis; the AWDL watchdog is the session-scoped fix." = "Wi-Fi 无线电大约每秒一次为 AWDL（AirDrop、Handoff、随航、连续互通）切换到其他信道，这表现为 50-100 ms 的 ping 尖峰。抖动测试可重现该诊断；AWDL 看守是限于本次会话的修复方法。";
 "The full story:" = "完整说明：";
+"running command" = "正在运行命令";
+"editing" = "正在编辑";
+"reading" = "正在读取";
+"searching" = "正在搜索";
+"running subagent" = "正在运行子代理";
+"browsing" = "正在浏览网页";
+"using %@" = "正在使用 %@";
+"waiting for approval" = "等待批准";
+"waiting" = "等待中";
+"terminal" = "终端";
+"Claude app" = "Claude 应用";
+"IDE" = "IDE";

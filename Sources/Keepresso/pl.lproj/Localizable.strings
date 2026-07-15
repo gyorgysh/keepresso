@@ -389,3 +389,8 @@
 "working" = "pracuje";
 "idle" = "bezczynny";
 "+%d more" = "+%d więcej";
+"Claude Code connected: sessions report working and waiting exactly." = "Claude Code połączony: sesje dokładnie zgłaszają pracę i oczekiwanie.";
+"Connect Claude Code for exact session tracking (adds hooks to its settings)." = "Połącz Claude Code, aby dokładnie śledzić sesje (dodaje hooki do jego ustawień).";
+"Connect Claude Code" = "Połącz Claude Code";
+"Claude Code's settings file couldn't be read, so it was left untouched." = "Nie można odczytać pliku ustawień Claude Code, więc pozostawiono go bez zmian.";
+"Couldn't update Claude Code's settings file." = "Nie można zaktualizować pliku ustawień Claude Code.";

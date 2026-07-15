@@ -811,6 +811,60 @@ final class AppModel {
     /// Non-blocking: the underlying `pmset` read runs off the main thread.
     func refreshClosedDisplay() { Task { await closedDisplay.refresh() } }
 
+    // MARK: - Claude Code hooks
+
+    /// Where the Claude Code hook install stands. Refreshed by explicit
+    /// actions and when the Triggers pane appears; a cheap read of one file.
+    private(set) var claudeHooks: AgentHooks.HookInstallState = .notInstalled
+
+    /// The last hook install/remove failure, shown under the status row.
+    private(set) var claudeHooksError: String?
+
+    func refreshClaudeHooksStatus() {
+        claudeHooks = AgentHooks.hookInstallState(
+            of: try? Data(contentsOf: AgentHooks.claudeSettingsURL()))
+    }
+
+    /// Merge Keepresso's hook entries into `~/.claude/settings.json` so
+    /// Claude Code sessions report exact working/waiting/idle edges. Runs
+    /// only on an explicit click, never from merely opening a window.
+    func installClaudeHooks() {
+        mutateClaudeSettings { existing in
+            try AgentHooks.installHooks(into: existing, cliPath: Self.bundledCLIPath)
+        }
+    }
+
+    /// Remove exactly Keepresso's hook entries, leaving everything else in
+    /// the settings file untouched.
+    func removeClaudeHooks() {
+        mutateClaudeSettings { existing in
+            try AgentHooks.removeHooks(from: existing)
+        }
+    }
+
+    /// The bundled CLI's absolute path, baked into the installed hook
+    /// command so it works regardless of PATH (DMG installs put nothing on
+    /// PATH, and hook shells may run with launchd's minimal one).
+    private static var bundledCLIPath: String {
+        Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/keepresso").path
+    }
+
+    private func mutateClaudeSettings(_ transform: (Data?) throws -> Data) {
+        let url = AgentHooks.claudeSettingsURL()
+        do {
+            let updated = try transform(try? Data(contentsOf: url))
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try updated.write(to: url, options: .atomic)
+            claudeHooksError = nil
+        } catch is AgentHooks.SettingsUnreadableError {
+            claudeHooksError = L("Claude Code's settings file couldn't be read, so it was left untouched.")
+        } catch {
+            claudeHooksError = L("Couldn't update Claude Code's settings file.")
+        }
+        refreshClaudeHooksStatus()
+    }
+
     // MARK: - Privileged helper
 
     /// Whether the helper daemon is installed and approved, so the privileged
