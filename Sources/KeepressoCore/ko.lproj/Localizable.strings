@@ -10,6 +10,7 @@
 "VPN connected" = "VPN 연결됨";
 "Calendar event in progress" = "캘린더 이벤트 진행 중";
 "Playing a game" = "게임 플레이 중";
+"AI agent working" = "AI 에이전트 작업 중";
 "Camera in use" = "카메라 사용 중";
 "Microphone in use" = "마이크 사용 중";
 "On Wi-Fi “%@”" = "Wi-Fi “%@”에 연결됨";
@@ -27,6 +28,7 @@
 "Sleep the display" = "디스플레이 잠자기";
 "Start the screen saver" = "화면 보호기 시작";
 "AI Agent" = "AI 에이전트";
+"AI Agent Working" = "AI 에이전트 작업 중";
 "On AC Power" = "전원 연결";
 "External Display Connected" = "외부 디스플레이 연결됨";
 "Remote Session (SSH)" = "원격 세션 (SSH)";
@@ -73,6 +75,8 @@
 "Turn on automatic login for this account." = "이 계정에 대해 자동 로그인을 켜십시오.";
 "Keepresso stopped" = "Keepresso가 중지됨";
 "Your keep-awake session has ended." = "깨어 있게 유지 세션이 종료되었습니다.";
+"Keepresso stops soon" = "Keepresso가 곧 중지됩니다";
+"Your keep-awake session ends in about %@." = "깨어 있게 유지 세션이 약 %@ 후에 종료됩니다.";
 "Paused on low battery" = "배터리 부족으로 일시 정지됨";
 "Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge." = "배터리가 %d%%입니다. 충전기를 연결할 때까지 Keepresso가 Mac을 잠들도록 둡니다.";
 "Keepresso is still brewing" = "Keepresso가 아직 실행 중입니다";

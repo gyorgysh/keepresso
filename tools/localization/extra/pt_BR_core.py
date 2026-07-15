@@ -155,6 +155,10 @@ CORE = {
     "Why streams stutter once a second": "Por que as transmissões travam uma vez por segundo",
     "The Wi-Fi radio hops off-channel for AWDL (AirDrop, Handoff, Sidecar, Continuity) roughly every second, which shows up as 50-100 ms ping spikes. The jitter test reproduces the diagnosis; the AWDL watchdog is the session-scoped fix.": "O rádio Wi-Fi sai do canal para o AWDL (AirDrop, Handoff, Sidecar, Continuity) aproximadamente a cada segundo, o que aparece como picos de ping de 50 a 100 ms. O teste de jitter reproduz o diagnóstico; o monitoramento de AWDL é a solução limitada à sessão.",
     "The full story:": "A história completa:",
+    "Keepresso stops soon": "O Keepresso vai parar em breve",
+    "Your keep-awake session ends in about %@.": "A sua sessão de vigília termina em cerca de %@.",
+    "AI agent working": "Agente de IA trabalhando",
+    "AI Agent Working": "Agente de IA Trabalhando",
 }
 
 WIDGET = {

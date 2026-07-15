@@ -155,6 +155,10 @@ CORE = {
     "Why streams stutter once a second": "스트림이 1초에 한 번씩 끊기는 이유",
     "The Wi-Fi radio hops off-channel for AWDL (AirDrop, Handoff, Sidecar, Continuity) roughly every second, which shows up as 50-100 ms ping spikes. The jitter test reproduces the diagnosis; the AWDL watchdog is the session-scoped fix.": "Wi-Fi 무선은 약 1초마다 AWDL(AirDrop, Handoff, Sidecar, 연속성)을 위해 채널 밖으로 홉하며, 이는 50-100 ms의 ping 스파이크로 나타납니다. 지터 테스트로 진단을 재현하고, AWDL 워치독이 세션 범위의 해결책입니다.",
     "The full story:": "전체 이야기:",
+    "Keepresso stops soon": "Keepresso가 곧 중지됩니다",
+    "Your keep-awake session ends in about %@.": "깨어 있게 유지 세션이 약 %@ 후에 종료됩니다.",
+    "AI agent working": "AI 에이전트 작업 중",
+    "AI Agent Working": "AI 에이전트 작업 중",
 }
 
 # Korean overlay for catalog_widget.py: English source -> Korean.

@@ -10,6 +10,7 @@
 "VPN connected" = "VPN bağlı";
 "Calendar event in progress" = "Takvim etkinliği devam ediyor";
 "Playing a game" = "Oyun oynanıyor";
+"AI agent working" = "Yapay zeka aracısı çalışıyor";
 "Camera in use" = "Kamera kullanımda";
 "Microphone in use" = "Mikrofon kullanımda";
 "On Wi-Fi “%@”" = "“%@” Wi-Fi ağındayken";
@@ -27,6 +28,7 @@
 "Sleep the display" = "Ekranı uyut";
 "Start the screen saver" = "Ekran koruyucuyu başlat";
 "AI Agent" = "Yapay Zeka Aracısı";
+"AI Agent Working" = "Yapay Zeka Aracısı Çalışıyor";
 "On AC Power" = "Elektrik Gücündeyken";
 "External Display Connected" = "Harici Ekran Bağlı";
 "Remote Session (SSH)" = "Uzak Oturum (SSH)";
@@ -73,6 +75,8 @@
 "Turn on automatic login for this account." = "Bu hesap için otomatik oturum açmayı etkinleştirin.";
 "Keepresso stopped" = "Keepresso durdu";
 "Your keep-awake session has ended." = "Uyanık tutma oturumunuz sona erdi.";
+"Keepresso stops soon" = "Keepresso yakında duracak";
+"Your keep-awake session ends in about %@." = "Uyanık tutma oturumunuz yaklaşık %@ içinde sona erecek.";
 "Paused on low battery" = "Düşük pilde duraklatıldı";
 "Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge." = "Pil %d%%'de. Siz şarja takana kadar Keepresso, Mac'in uyumasına izin veriyor.";
 "Keepresso is still brewing" = "Keepresso hâlâ demleniyor";

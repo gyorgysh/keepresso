@@ -15,6 +15,7 @@ CORE = {
     "VPN connected": {"hu": "VPN csatlakoztatva", "es": "VPN conectada", "fr": "VPN connecté", "de": "VPN verbunden", "zh-Hans": "已连接 VPN"},
     "Calendar event in progress": {"hu": "Naptáresemény folyamatban", "es": "Evento de calendario en curso", "fr": "Événement de calendrier en cours", "de": "Kalenderereignis läuft", "zh-Hans": "日历事件进行中"},
     "Playing a game": {"hu": "Játék folyamatban", "es": "Jugando", "fr": "Jeu en cours", "de": "Ein Spiel läuft", "zh-Hans": "正在玩游戏"},
+    "AI agent working": {"hu": "AI-ügynök dolgozik", "es": "Agente de IA trabajando", "fr": "Agent IA au travail", "de": "KI-Agent arbeitet", "zh-Hans": "AI 代理工作中"},
     "Camera in use": {"hu": "Kamera használatban", "es": "Cámara en uso", "fr": "Caméra utilisée", "de": "Kamera in Benutzung", "zh-Hans": "摄像头使用中"},
     "Microphone in use": {"hu": "Mikrofon használatban", "es": "Micrófono en uso", "fr": "Micro utilisé", "de": "Mikrofon in Benutzung", "zh-Hans": "麦克风使用中"},
     "On Wi-Fi “%@”": {"hu": "A(z) „%@” Wi-Fi hálózaton", "es": "En la red Wi-Fi «%@»", "fr": "Sur le Wi-Fi « %@ »", "de": "Im WLAN „%@“", "zh-Hans": "在 Wi-Fi “%@” 上"},
@@ -38,6 +39,7 @@ CORE = {
 
     # --- Built-in preset names ---
     "AI Agent": {"hu": "AI-ügynök", "es": "Agente de IA", "fr": "Agent IA", "de": "KI-Agent", "zh-Hans": "AI 代理"},
+    "AI Agent Working": {"hu": "AI-ügynök dolgozik", "es": "Agente de IA trabajando", "fr": "Agent IA au travail", "de": "KI-Agent arbeitet", "zh-Hans": "AI 代理工作中"},
     "On AC Power": {"hu": "Hálózati tápon", "es": "Con corriente CA", "fr": "Sur secteur", "de": "Am Netzstrom", "zh-Hans": "接通电源"},
     "External Display Connected": {"hu": "Külső kijelző csatlakoztatva", "es": "Pantalla externa conectada", "fr": "Écran externe connecté", "de": "Externes Display verbunden", "zh-Hans": "已连接外接显示器"},
     "Remote Session (SSH)": {"hu": "Távoli munkamenet (SSH)", "es": "Sesión remota (SSH)", "fr": "Session distante (SSH)", "de": "Remote-Sitzung (SSH)", "zh-Hans": "远程会话 (SSH)"},
@@ -88,6 +90,8 @@ CORE = {
     # --- Notifications ---
     "Keepresso stopped": {"hu": "A Keepresso leállt", "es": "Keepresso se detuvo", "fr": "Keepresso s’est arrêté", "de": "Keepresso wurde gestoppt", "zh-Hans": "Keepresso 已停止"},
     "Your keep-awake session has ended.": {"hu": "Az ébrentartási munkamenet véget ért.", "es": "Tu sesión para mantener despierto ha terminado.", "fr": "Votre session de maintien en éveil est terminée.", "de": "Deine Wachhalte-Sitzung ist beendet.", "zh-Hans": "你的保持唤醒会话已结束。"},
+    "Keepresso stops soon": {"hu": "A Keepresso hamarosan leáll", "es": "Keepresso se detendrá pronto", "fr": "Keepresso s’arrête bientôt", "de": "Keepresso stoppt bald", "zh-Hans": "Keepresso 即将停止"},
+    "Your keep-awake session ends in about %@.": {"hu": "Az ébrentartási munkamenet körülbelül %@ múlva véget ér.", "es": "Tu sesión para mantener despierto termina en unos %@.", "fr": "Votre session de maintien en éveil se termine dans environ %@.", "de": "Deine Wachhalte-Sitzung endet in etwa %@.", "zh-Hans": "你的保持唤醒会话将在约 %@ 后结束。"},
     "Paused on low battery": {"hu": "Szüneteltetve alacsony töltöttség miatt", "es": "En pausa por batería baja", "fr": "En pause : batterie faible", "de": "Wegen niedrigem Akku pausiert", "zh-Hans": "因电量低已暂停"},
     "Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge.": {"hu": "Az akkumulátor %d%%-on áll. A Keepresso hagyja elaludni a Macet, amíg nem csatlakoztatja töltőre.", "es": "La batería está al %d%%. Keepresso deja que el Mac se suspenda hasta que lo conectes a cargar.", "fr": "La batterie est à %d%%. Keepresso laisse le Mac se mettre en veille jusqu’à ce que vous le branchiez.", "de": "Der Akku ist bei %d%%. Keepresso lässt den Mac schlafen, bis du ihn zum Laden anschließt.", "zh-Hans": "电量为 %d%%。Keepresso 将让 Mac 进入睡眠，直到你接通电源充电。"},
     "Keepresso is still brewing": {"hu": "A Keepresso még főz", "es": "Keepresso sigue en marcha", "fr": "Keepresso continue de veiller", "de": "Keepresso brüht noch", "zh-Hans": "Keepresso 仍在运行"},

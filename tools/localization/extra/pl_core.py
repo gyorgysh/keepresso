@@ -155,6 +155,10 @@ CORE = {
     'Why streams stutter once a second': 'Dlaczego streamy zacinają się raz na sekundę',
     'The Wi-Fi radio hops off-channel for AWDL (AirDrop, Handoff, Sidecar, Continuity) roughly every second, which shows up as 50-100 ms ping spikes. The jitter test reproduces the diagnosis; the AWDL watchdog is the session-scoped fix.': 'Radio Wi-Fi przełącza się poza kanał na potrzeby AWDL (AirDrop, Handoff, Sidecar, Continuity) mniej więcej co sekundę, co objawia się skokami pingu o 50-100 ms. Test jittera odtwarza tę diagnozę; strażnik AWDL to rozwiązanie ograniczone do danej sesji.',
     'The full story:': 'Pełne wyjaśnienie:',
+    'Keepresso stops soon': 'Keepresso wkrótce się zatrzyma',
+    'Your keep-awake session ends in about %@.': 'Twoja sesja czuwania zakończy się za około %@.',
+    'AI agent working': 'Agent AI pracuje',
+    'AI Agent Working': 'Agent AI pracuje',
 }
 
 WIDGET = {

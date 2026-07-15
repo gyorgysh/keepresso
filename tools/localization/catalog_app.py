@@ -479,3 +479,39 @@ _RESOLUTIONS = {
     "3840 × 2160 (4K)": {"hu": "3840 × 2160 (4K)", "es": "3840 × 2160 (4K)", "fr": "3840 × 2160 (4K)", "de": "3840 × 2160 (4K)", "zh-Hans": "3840 × 2160 (4K)"},
 }
 APP.update(_RESOLUTIONS)
+
+# ---------------------------------------------------------------------------
+# Quick "Stop in N" shortcuts + the ending-soon warning (menu row, Preferences
+# General editor, Preferences Reminder toggle).
+# ---------------------------------------------------------------------------
+_QUICK_STOP = {
+    "Stop in": {"hu": "Leállítás ennyi múlva", "es": "Detener en", "fr": "Arrêter dans", "de": "Stoppen in", "zh-Hans": "多久后停止"},
+    "Quick stop shortcuts": {"hu": "Gyorsleállító gombok", "es": "Atajos de detención rápida", "fr": "Raccourcis d’arrêt rapide", "de": "Schnellstopp-Kurzbefehle", "zh-Hans": "快速停止按钮"},
+    "Add Shortcut": {"hu": "Gomb hozzáadása", "es": "Añadir atajo", "fr": "Ajouter un raccourci", "de": "Kurzbefehl hinzufügen", "zh-Hans": "添加按钮"},
+    "Shortcut %d": {"hu": "%d. gomb", "es": "Atajo %d", "fr": "Raccourci %d", "de": "Kurzbefehl %d", "zh-Hans": "按钮 %d"},
+    "Remove shortcut": {"hu": "Gomb eltávolítása", "es": "Eliminar atajo", "fr": "Supprimer le raccourci", "de": "Kurzbefehl entfernen", "zh-Hans": "移除按钮"},
+    "One-click “Stop in” buttons shown in the menu while a session runs, so the Mac goes back to sleeping on its own that much later. Up to four; the list stays sorted.": {"hu": "Egykattintásos „Leállítás” gombok a menüben, amíg egy munkamenet fut, így a Mac ennyivel később magától újra elalszik. Legfeljebb négy; a lista rendezve marad.", "es": "Botones de un clic «Detener en» que aparecen en el menú mientras hay una sesión en marcha, para que el Mac vuelva a dormirse por sí solo pasado ese tiempo. Hasta cuatro; la lista se mantiene ordenada.", "fr": "Boutons « Arrêter dans » à un clic, affichés dans le menu pendant qu’une session est en cours, pour que le Mac se rendorme de lui-même ce temps plus tard. Quatre au maximum ; la liste reste triée.", "de": "Ein-Klick-Tasten „Stoppen in“ im Menü, während eine Sitzung läuft, damit der Mac so viel später wieder von selbst schlafen kann. Bis zu vier; die Liste bleibt sortiert.", "zh-Hans": "会话运行时菜单中显示的一键“多久后停止”按钮，让 Mac 在这段时间后自行恢复睡眠。最多四个；列表保持排序。"},
+    "Warn before a timed session ends": {"hu": "Figyelmeztetés az időzített munkamenet vége előtt", "es": "Avisar antes de que termine una sesión temporizada", "fr": "Prévenir avant la fin d’une session minutée", "de": "Vor dem Ende einer zeitgesteuerten Sitzung warnen", "zh-Hans": "定时会话结束前提醒"},
+    "Warn": {"hu": "Figyelmeztetés", "es": "Avisar", "fr": "Prévenir", "de": "Warnen", "zh-Hans": "提醒"},
+    "1 minute before": {"hu": "1 perccel előtte", "es": "1 minuto antes", "fr": "1 minute avant", "de": "1 Minute vorher", "zh-Hans": "提前 1 分钟"},
+    "2 minutes before": {"hu": "2 perccel előtte", "es": "2 minutos antes", "fr": "2 minutes avant", "de": "2 Minuten vorher", "zh-Hans": "提前 2 分钟"},
+    "5 minutes before": {"hu": "5 perccel előtte", "es": "5 minutos antes", "fr": "5 minutes avant", "de": "5 Minuten vorher", "zh-Hans": "提前 5 分钟"},
+    "10 minutes before": {"hu": "10 perccel előtte", "es": "10 minutos antes", "fr": "10 minutes avant", "de": "10 Minuten vorher", "zh-Hans": "提前 10 分钟"},
+}
+APP.update(_QUICK_STOP)
+
+# ---------------------------------------------------------------------------
+# Agent-activity trigger (rules editor entry + the menu's per-session rows).
+# ---------------------------------------------------------------------------
+_AGENT_TRIGGER = {
+    "AI agents": {"hu": "AI-ügynökök", "es": "Agentes de IA", "fr": "Agents IA", "de": "KI-Agenten", "zh-Hans": "AI 代理"},
+    "AI agent is working": {"hu": "AI-ügynök dolgozik", "es": "Un agente de IA está trabajando", "fr": "Un agent IA travaille", "de": "KI-Agent arbeitet", "zh-Hans": "AI 代理正在工作"},
+    "Keeps the Mac awake while a coding-agent session (claude, codex, gemini, aider, and the like) is actively working, judged by its CPU use, and lets it sleep once every session has gone idle for the grace period. The menu lists each detected session. A freshly started session can take a few seconds to read as working.": {"hu": "Ébren tartja a Macet, amíg egy kódoló-ügynök munkamenet (claude, codex, gemini, aider és hasonlók) ténylegesen dolgozik, a CPU-használata alapján megítélve, és hagyja aludni, amint minden munkamenet a türelmi időn át tétlen volt. A menü felsorol minden észlelt munkamenetet. Egy frissen indított munkamenetnél eltarthat néhány másodpercig, mire dolgozóként jelenik meg.", "es": "Mantiene el Mac despierto mientras una sesión de agente de programación (claude, codex, gemini, aider y similares) está trabajando activamente, según su uso de CPU, y lo deja dormir cuando todas las sesiones han estado inactivas durante el periodo de gracia. El menú lista cada sesión detectada. Una sesión recién iniciada puede tardar unos segundos en aparecer como trabajando.", "fr": "Garde le Mac éveillé pendant qu’une session d’agent de codage (claude, codex, gemini, aider et consorts) travaille réellement, d’après son utilisation du CPU, et le laisse dormir une fois que toutes les sessions sont restées inactives pendant le délai de grâce. Le menu liste chaque session détectée. Une session fraîchement lancée peut mettre quelques secondes à apparaître comme au travail.", "de": "Hält den Mac wach, während eine Coding-Agent-Sitzung (claude, codex, gemini, aider und ähnliche) tatsächlich arbeitet, beurteilt nach ihrer CPU-Nutzung, und lässt ihn schlafen, sobald jede Sitzung für die Nachlaufzeit untätig war. Das Menü listet jede erkannte Sitzung auf. Eine frisch gestartete Sitzung kann ein paar Sekunden brauchen, bis sie als arbeitend gilt.", "zh-Hans": "在编码代理会话（claude、codex、gemini、aider 等）根据其 CPU 使用情况判断为正在实际工作时保持 Mac 唤醒，并在所有会话空闲满宽限期后允许 Mac 睡眠。菜单会列出检测到的每个会话。刚启动的会话可能需要几秒钟才会显示为工作中。"},
+    "Idle grace period": {"hu": "Türelmi idő tétlenség után", "es": "Periodo de gracia tras inactividad", "fr": "Délai de grâce après inactivité", "de": "Nachlaufzeit nach Leerlauf", "zh-Hans": "空闲宽限期"},
+    "Instantly": {"hu": "Azonnal", "es": "Al instante", "fr": "Immédiatement", "de": "Sofort", "zh-Hans": "立即"},
+    "10 minutes": {"hu": "10 perc", "es": "10 minutos", "fr": "10 minutes", "de": "10 Minuten", "zh-Hans": "10 分钟"},
+    "working": {"hu": "dolgozik", "es": "trabajando", "fr": "au travail", "de": "arbeitet", "zh-Hans": "工作中"},
+    "idle": {"hu": "tétlen", "es": "inactivo", "fr": "inactif", "de": "inaktiv", "zh-Hans": "空闲"},
+    "+%d more": {"hu": "+%d további", "es": "+%d más", "fr": "+%d autres", "de": "+%d weitere", "zh-Hans": "还有 %d 个"},
+}
+APP.update(_AGENT_TRIGGER)

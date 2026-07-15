@@ -155,6 +155,10 @@ CORE = {
     'Why streams stutter once a second': '為何串流每秒會頓卡一次',
     'The Wi-Fi radio hops off-channel for AWDL (AirDrop, Handoff, Sidecar, Continuity) roughly every second, which shows up as 50-100 ms ping spikes. The jitter test reproduces the diagnosis; the AWDL watchdog is the session-scoped fix.': 'Wi-Fi 無線電大約每秒會為了 AWDL（AirDrop、Handoff、Sidecar、接續互通）而切換到其他頻道，這會表現為 50 至 100 毫秒的 ping 值突增。抖動測試可重現此診斷；AWDL 看門狗則是僅限本次工作階段的修正方式。',
     'The full story:': '完整說明：',
+    'Keepresso stops soon': 'Keepresso 即將停止',
+    'Your keep-awake session ends in about %@.': '您的保持喚醒工作階段將在約 %@ 後結束。',
+    'AI agent working': 'AI 代理工作中',
+    'AI Agent Working': 'AI 代理工作中',
 }
 
 WIDGET = {

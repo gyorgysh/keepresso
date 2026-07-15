@@ -3,6 +3,29 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+### Added
+
+- **Stop in 15, one click.** While a session runs, the menu shows a row of quick
+  "Stop in" buttons (15 min, 30 min, 1 h out of the box) that convert the running
+  session to end that much later, so the Mac goes back to sleeping on its own and
+  you don't have to remember to toggle it off. The countdown continues the
+  session rather than restarting it, clicking another button simply replaces the
+  countdown, and the durations are editable (up to four) in Preferences ▸
+  General. An optional heads-up in Preferences ▸ Reminder warns you a few minutes
+  before any timed session ends.
+- **A trigger that knows when your AI agent is actually working.** The new
+  "AI agent is working" condition (Preferences ▸ Triggers ▸ Add ▸ Apps &
+  Activity) detects coding-agent sessions (claude, codex, gemini, aider, goose,
+  and friends) in your terminals and keeps the Mac awake only while one is
+  actively working, judged by the CPU its processes and their tool calls use.
+  Once every session goes idle, the Mac may sleep after a configurable grace
+  (instantly, 1, 5, or 10 minutes), gaming-mode style. The menu lists each
+  detected session with a live working / idle state, and a new built-in
+  "AI Agent Working" preset applies the rule in one click; the existing
+  "AI Agent" preset still covers "any agent process exists at all".
+
 ## [1.13.0] - 2026-07-12
 
 Theme: Keepresso now speaks fifteen languages.

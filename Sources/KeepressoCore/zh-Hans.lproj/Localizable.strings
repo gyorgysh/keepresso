@@ -10,6 +10,7 @@
 "VPN connected" = "已连接 VPN";
 "Calendar event in progress" = "日历事件进行中";
 "Playing a game" = "正在玩游戏";
+"AI agent working" = "AI 代理工作中";
 "Camera in use" = "摄像头使用中";
 "Microphone in use" = "麦克风使用中";
 "On Wi-Fi “%@”" = "在 Wi-Fi “%@” 上";
@@ -27,6 +28,7 @@
 "Sleep the display" = "使显示器进入睡眠";
 "Start the screen saver" = "启动屏幕保护程序";
 "AI Agent" = "AI 代理";
+"AI Agent Working" = "AI 代理工作中";
 "On AC Power" = "接通电源";
 "External Display Connected" = "已连接外接显示器";
 "Remote Session (SSH)" = "远程会话 (SSH)";
@@ -73,6 +75,8 @@
 "Turn on automatic login for this account." = "为此账户开启自动登录。";
 "Keepresso stopped" = "Keepresso 已停止";
 "Your keep-awake session has ended." = "你的保持唤醒会话已结束。";
+"Keepresso stops soon" = "Keepresso 即将停止";
+"Your keep-awake session ends in about %@." = "你的保持唤醒会话将在约 %@ 后结束。";
 "Paused on low battery" = "因电量低已暂停";
 "Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge." = "电量为 %d%%。Keepresso 将让 Mac 进入睡眠，直到你接通电源充电。";
 "Keepresso is still brewing" = "Keepresso 仍在运行";

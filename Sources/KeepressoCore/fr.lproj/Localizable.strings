@@ -10,6 +10,7 @@
 "VPN connected" = "VPN connecté";
 "Calendar event in progress" = "Événement de calendrier en cours";
 "Playing a game" = "Jeu en cours";
+"AI agent working" = "Agent IA au travail";
 "Camera in use" = "Caméra utilisée";
 "Microphone in use" = "Micro utilisé";
 "On Wi-Fi “%@”" = "Sur le Wi-Fi « %@ »";
@@ -27,6 +28,7 @@
 "Sleep the display" = "Éteindre l’écran";
 "Start the screen saver" = "Lancer l’économiseur d’écran";
 "AI Agent" = "Agent IA";
+"AI Agent Working" = "Agent IA au travail";
 "On AC Power" = "Sur secteur";
 "External Display Connected" = "Écran externe connecté";
 "Remote Session (SSH)" = "Session distante (SSH)";
@@ -73,6 +75,8 @@
 "Turn on automatic login for this account." = "Activez la connexion automatique pour ce compte.";
 "Keepresso stopped" = "Keepresso s’est arrêté";
 "Your keep-awake session has ended." = "Votre session de maintien en éveil est terminée.";
+"Keepresso stops soon" = "Keepresso s’arrête bientôt";
+"Your keep-awake session ends in about %@." = "Votre session de maintien en éveil se termine dans environ %@.";
 "Paused on low battery" = "En pause : batterie faible";
 "Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge." = "La batterie est à %d%%. Keepresso laisse le Mac se mettre en veille jusqu’à ce que vous le branchiez.";
 "Keepresso is still brewing" = "Keepresso continue de veiller";

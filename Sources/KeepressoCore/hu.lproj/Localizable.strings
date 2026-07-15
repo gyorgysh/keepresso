@@ -10,6 +10,7 @@
 "VPN connected" = "VPN csatlakoztatva";
 "Calendar event in progress" = "Naptáresemény folyamatban";
 "Playing a game" = "Játék folyamatban";
+"AI agent working" = "AI-ügynök dolgozik";
 "Camera in use" = "Kamera használatban";
 "Microphone in use" = "Mikrofon használatban";
 "On Wi-Fi “%@”" = "A(z) „%@” Wi-Fi hálózaton";
@@ -27,6 +28,7 @@
 "Sleep the display" = "Kijelző altatása";
 "Start the screen saver" = "Képernyővédő indítása";
 "AI Agent" = "AI-ügynök";
+"AI Agent Working" = "AI-ügynök dolgozik";
 "On AC Power" = "Hálózati tápon";
 "External Display Connected" = "Külső kijelző csatlakoztatva";
 "Remote Session (SSH)" = "Távoli munkamenet (SSH)";
@@ -73,6 +75,8 @@
 "Turn on automatic login for this account." = "Kapcsolja be az automatikus bejelentkezést ehhez a fiókhoz.";
 "Keepresso stopped" = "A Keepresso leállt";
 "Your keep-awake session has ended." = "Az ébrentartási munkamenet véget ért.";
+"Keepresso stops soon" = "A Keepresso hamarosan leáll";
+"Your keep-awake session ends in about %@." = "Az ébrentartási munkamenet körülbelül %@ múlva véget ér.";
 "Paused on low battery" = "Szüneteltetve alacsony töltöttség miatt";
 "Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge." = "Az akkumulátor %d%%-on áll. A Keepresso hagyja elaludni a Macet, amíg nem csatlakoztatja töltőre.";
 "Keepresso is still brewing" = "A Keepresso még főz";

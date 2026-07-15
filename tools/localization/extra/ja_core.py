@@ -155,6 +155,10 @@ CORE = {
     "Why streams stutter once a second": "ストリームが 1 秒ごとにカクつく理由",
     "The Wi-Fi radio hops off-channel for AWDL (AirDrop, Handoff, Sidecar, Continuity) roughly every second, which shows up as 50-100 ms ping spikes. The jitter test reproduces the diagnosis; the AWDL watchdog is the session-scoped fix.": "Wi-Fi 無線は約 1 秒ごとに AWDL（AirDrop、Handoff、Sidecar、連係）のためにオフチャンネルにホップし、これが 50〜100 ms の ping スパイクとして現れます。ジッターテストはこの診断を再現します。AWDL 監視はセッション単位の解決策です。",
     "The full story:": "詳しい説明：",
+    "Keepresso stops soon": "Keepresso はまもなく停止します",
+    "Your keep-awake session ends in about %@.": "スリープ防止セッションは約 %@ で終了します。",
+    "AI agent working": "AI エージェントが作業中",
+    "AI Agent Working": "AI エージェント作業中",
 }
 
 WIDGET = {
