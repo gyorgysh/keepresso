@@ -88,3 +88,27 @@ import Foundation
     let cleaned: [TimeInterval] = [900, 1800]
     #expect(decoded.quickStopDurations == cleaned)
 }
+
+@Test func outOfRangeImportsAreNormalizedOnDecode() throws {
+    // A non-positive ending-soon lead would show the feature enabled while
+    // the notice can never fire; an out-of-range battery threshold would be
+    // live while the slider displays its clamp. Both are cleaned on decode.
+    let json = """
+    { "endingSoonNoticeSeconds": -30, "pauseBelowBatteryPercent": 95 }
+    """
+    let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: Data(json.utf8))
+    #expect(decoded.endingSoonNoticeSeconds == nil)
+    #expect(decoded.pauseBelowBatteryPercent == 90)
+
+    let low = try JSONDecoder().decode(
+        KeepressoSettings.self,
+        from: Data(#"{ "pauseBelowBatteryPercent": 3 }"#.utf8))
+    #expect(low.pauseBelowBatteryPercent == 10)
+
+    // In-range values pass through untouched.
+    let fine = try JSONDecoder().decode(
+        KeepressoSettings.self,
+        from: Data(#"{ "endingSoonNoticeSeconds": 120, "pauseBelowBatteryPercent": 40 }"#.utf8))
+    #expect(fine.endingSoonNoticeSeconds == 120)
+    #expect(fine.pauseBelowBatteryPercent == 40)
+}

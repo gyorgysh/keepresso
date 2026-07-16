@@ -289,6 +289,21 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
 }
 
 @MainActor
+@Test func endingSoonBodyRoundsUpToTheNoticeMinute() {
+    // The first tick inside the window sees remaining just under the lead
+    // time; the body must read "5 minutes", not the truncated "4 minutes".
+    let (controller, reminder, clock) = makeController()
+    controller.endingSoonNotice = 5 * 60
+    controller.start()
+    controller.stopIn(15 * 60)
+
+    clock.advance(10 * 60 + 1) // 4:59 left, one second into the window
+    controller.reconcile()
+    #expect(reminder.notices.count == 1)
+    #expect(reminder.notices.first?.body.contains("5 minutes") == true)
+}
+
+@MainActor
 @Test func endingSoonNeverFiresForAnIndefiniteSession() {
     let (controller, reminder, clock) = makeController()
     controller.endingSoonNotice = 5 * 60

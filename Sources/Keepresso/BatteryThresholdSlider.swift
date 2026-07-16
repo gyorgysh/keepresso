@@ -1,4 +1,5 @@
 import SwiftUI
+import KeepressoCore
 
 /// The "pause below this charge" control shared by the menu panel and
 /// Preferences: a battery glyph that tracks the chosen level, a 10-90% slider
@@ -15,7 +16,10 @@ struct BatteryThresholdSlider: View {
     /// (e.g. from keyboard adjustment) commit immediately.
     @State private var dragValue: Double?
 
-    private static let range = 10.0...90.0
+    /// Mirrors the range Core clamps the persisted value to, so the slider
+    /// can never display a value the setting can't hold.
+    private static let range = Double(KeepressoSettings.batteryPausePercentRange.lowerBound)
+        ... Double(KeepressoSettings.batteryPausePercentRange.upperBound)
 
     private var clamped: Double {
         Double(percent).clamped(to: Self.range)

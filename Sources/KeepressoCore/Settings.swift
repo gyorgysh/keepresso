@@ -104,12 +104,12 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.reminderRepeats = reminderRepeats
         self.reminderSound = reminderSound
         self.notifyOnEnd = notifyOnEnd
-        self.endingSoonNoticeSeconds = endingSoonNoticeSeconds
+        self.endingSoonNoticeSeconds = Self.normalizedEndingSoonNotice(endingSoonNoticeSeconds)
         self.quickStopDurations = Self.normalizedQuickStopDurations(quickStopDurations)
         self.endAction = endAction
         self.diskKeepAlive = diskKeepAlive
         self.virtualDisplay = virtualDisplay
-        self.pauseBelowBatteryPercent = pauseBelowBatteryPercent
+        self.pauseBelowBatteryPercent = pauseBelowBatteryPercent.map(Self.clampedBatteryPausePercent)
         self.showCountdownInMenuBar = showCountdownInMenuBar
         self.awdlAutoWithGaming = awdlAutoWithGaming
         self.awdlNotifications = awdlNotifications
@@ -185,7 +185,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         reminderRepeats = try c.decodeIfPresent(Bool.self, forKey: .reminderRepeats) ?? false
         reminderSound = try c.decodeIfPresent(Bool.self, forKey: .reminderSound) ?? true
         notifyOnEnd = try c.decodeIfPresent(Bool.self, forKey: .notifyOnEnd) ?? false
-        endingSoonNoticeSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .endingSoonNoticeSeconds)
+        endingSoonNoticeSeconds = Self.normalizedEndingSoonNotice(
+            try c.decodeIfPresent(TimeInterval.self, forKey: .endingSoonNoticeSeconds))
         quickStopDurations = Self.normalizedQuickStopDurations(
             try c.decodeIfPresent([TimeInterval].self, forKey: .quickStopDurations)
                 ?? Self.defaultQuickStopDurations
@@ -194,6 +195,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         diskKeepAlive = try c.decodeIfPresent(DiskKeepAliveConfig.self, forKey: .diskKeepAlive)
         virtualDisplay = try c.decodeIfPresent(VirtualDisplayConfig.self, forKey: .virtualDisplay)
         pauseBelowBatteryPercent = try c.decodeIfPresent(Int.self, forKey: .pauseBelowBatteryPercent)
+            .map(Self.clampedBatteryPausePercent)
         showCountdownInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showCountdownInMenuBar) ?? false
         awdlAutoWithGaming = try c.decodeIfPresent(Bool.self, forKey: .awdlAutoWithGaming) ?? false
         awdlNotifications = try c.decodeIfPresent(Bool.self, forKey: .awdlNotifications) ?? false
@@ -227,6 +229,22 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         var seen = Set<TimeInterval>()
         let cleaned = raw.filter { $0 > 0 && seen.insert($0).inserted }
         return Array(cleaned.sorted().prefix(maxQuickStopDurations))
+    }
+
+    /// The percentages the battery auto-pause threshold may take; the app's
+    /// slider offers exactly this range. Clamped on decode so an imported
+    /// out-of-range value can't be live while the slider displays its clamp.
+    public static let batteryPausePercentRange = 10...90
+
+    static func clampedBatteryPausePercent(_ raw: Int) -> Int {
+        min(max(raw, batteryPausePercentRange.lowerBound), batteryPausePercentRange.upperBound)
+    }
+
+    /// An ending-soon lead time from any source: positive, or `nil` (off).
+    /// A zero or negative lead would show the feature enabled while the
+    /// notice can never fire.
+    static func normalizedEndingSoonNotice(_ raw: TimeInterval?) -> TimeInterval? {
+        raw.flatMap { $0 > 0 ? $0 : nil }
     }
 
     /// First-launch defaults: keep system awake, no triggers.

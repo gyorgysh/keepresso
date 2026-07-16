@@ -427,9 +427,14 @@ public final class SessionController {
         let remaining = total - instant.timeIntervalSince(startedAt)
         guard remaining <= notice else { return }
         endingSoonFired = true
+        // Round up to a whole minute for display: the first tick inside the
+        // window sees remaining just under the lead time, and the formatter
+        // truncates, so a 5-minute notice would read "4 minutes" as often
+        // as not.
+        let display = (remaining / 60).rounded(.up) * 60
         reminder?.notify(
             title: L("Keepresso stops soon"),
-            body: L("Your keep-awake session ends in about %@.", Self.humanDuration(remaining)),
+            body: L("Your keep-awake session ends in about %@.", Self.humanDuration(display)),
             sound: reminderSound
         )
     }
