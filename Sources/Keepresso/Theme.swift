@@ -18,10 +18,66 @@ extension Color {
             ? NSColor(srgbRed: 208 / 255, green: 130 / 255, blue: 74 / 255, alpha: 1)
             : NSColor(srgbRed: 143 / 255, green: 63 / 255, blue: 28 / 255, alpha: 1)
     })
+
+    /// Claude's terracotta, used to tint claude session rows: #D97757 in dark
+    /// mode (the Claude Code console spinner), the deeper #C15F3C in light.
+    static let claudeAccent = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.isDarkAppearance
+            ? NSColor(srgbRed: 217 / 255, green: 119 / 255, blue: 87 / 255, alpha: 1)
+            : NSColor(srgbRed: 193 / 255, green: 95 / 255, blue: 60 / 255, alpha: 1)
+    })
 }
 
 private extension NSAppearance {
     var isDarkAppearance: Bool { bestMatch(from: [.darkAqua, .aqua]) == .darkAqua }
+}
+
+/// A small (i) button that pops an explanation over the control it sits next
+/// to: room for the "how and why" that would clutter a menu row as a caption
+/// (what a switch flips, when a password is needed, how the administrator
+/// helper makes it silent).
+struct InfoButton: View {
+    /// Already-localized popover text (compose with `L(...)`).
+    let text: String
+    @State private var shown = false
+
+    var body: some View {
+        Button {
+            shown.toggle()
+        } label: {
+            Image(systemName: "info.circle")
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(.secondary)
+        .accessibilityLabel(Text("Learn more"))
+        .popover(isPresented: $shown, arrowEdge: .bottom) {
+            Text(text)
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(12)
+                .frame(width: 280)
+        }
+    }
+}
+
+/// A switch row that pushes the control to the container's trailing edge, so
+/// stacked switches line up in one column instead of each trailing its own
+/// label width. For plain stacks; grouped Forms already align their controls.
+/// Sized small to match the switches in the grouped Preferences forms, so
+/// every switch in the app renders at one size. An optional `info` text adds
+/// an ``InfoButton`` after the label.
+func switchRow(_ title: LocalizedStringKey, isOn: Binding<Bool>, info: String? = nil) -> some View {
+    Toggle(isOn: isOn) {
+        HStack(spacing: 4) {
+            Text(title)
+            if let info {
+                InfoButton(text: info)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    .toggleStyle(.switch)
+    .controlSize(.small)
 }
 
 /// A plain, full-width menu row: no border, a subtle hover/press highlight, and

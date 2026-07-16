@@ -94,11 +94,10 @@ struct MenuBarContent: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Toggle("Keep awake", isOn: Binding(
+                switchRow("Keep awake", isOn: Binding(
                     get: { session.isActive },
                     set: { _ in model.toggleManual() }
                 ))
-                .toggleStyle(.switch)
 
                 LabeledContent("For") {
                     Menu(Self.modeLabel(model.mode)) {
@@ -145,26 +144,53 @@ struct MenuBarContent: View {
 
             Divider()
 
-            Toggle("Keep awake with lid closed", isOn: Binding(
-                get: { model.closedDisplayEnabled },
-                set: { model.setClosedDisplay($0) }
-            ))
-            .toggleStyle(.switch)
-            .disabled(model.closedDisplayBusy)
-            if model.closedDisplayBusy {
-                AdminAuthNote(purpose: L("keep the Mac awake with the lid closed"))
-            }
-            if model.closedDisplayEnabled {
-                Text("Stays awake on battery too; the display turns off when the lid closes. Turn it off before putting it in a bag.")
-                    .font(type.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if let error = model.closedDisplayError {
-                Text(error)
-                    .font(type.caption)
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
+            if model.machineHasBattery {
+                switchRow("Keep awake with lid closed", isOn: Binding(
+                    get: { model.closedDisplayEnabled },
+                    set: { model.setClosedDisplay($0) }
+                ), info: L("Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password."))
+                .disabled(model.closedDisplayBusy)
+                if model.closedDisplayBusy {
+                    AdminAuthNote(purpose: L("keep the Mac awake with the lid closed"))
+                }
+                if model.closedDisplayEnabled {
+                    Text("Stays awake on battery too; the display turns off when the lid closes. Turn it off before putting it in a bag.")
+                        .font(type.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let error = model.closedDisplayError {
+                    Text(error)
+                        .font(type.caption)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                switchRow("Only while brewing", isOn: Binding(
+                    get: { model.closedDisplayOnlyWhileBrewing },
+                    set: { model.closedDisplayOnlyWhileBrewing = $0 }
+                ), info: L("Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits."))
+                .disabled(model.closedDisplayAutoBusy)
+                if model.closedDisplayAutoBusy && !model.helperInstalled {
+                    AdminAuthNote(purpose: L("switch closed-display mode with the session"))
+                }
+                if let error = model.closedDisplayAutoError {
+                    Text(error)
+                        .font(type.caption)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                switchRow("Pause on low battery", isOn: Binding(
+                    get: { model.batteryAutoPauseEnabled },
+                    set: { model.batteryAutoPauseEnabled = $0 }
+                ), info: L("Lets the Mac sleep once battery charge drops below this level, even mid-session, so it doesn't run flat."))
+                if model.batteryAutoPauseEnabled {
+                    BatteryThresholdSlider(percent: Binding(
+                        get: { model.pauseBelowBatteryPercent },
+                        set: { model.pauseBelowBatteryPercent = $0 }
+                    ))
+                }
             }
 
             awdlStatusLine
@@ -197,6 +223,7 @@ struct MenuBarContent: View {
         .animation(.snappy(duration: 0.25), value: model.triggersEnabled)
         .animation(.snappy(duration: 0.25), value: model.triggersPaused)
         .animation(.snappy(duration: 0.25), value: model.closedDisplayEnabled)
+        .animation(.snappy(duration: 0.25), value: model.batteryAutoPauseEnabled)
         .animation(.snappy(duration: 0.25), value: model.closedDisplayError)
         .animation(.snappy(duration: 0.25), value: model.helperAttention)
         .glassPanelBackground()
@@ -470,20 +497,21 @@ struct MenuBarContent: View {
     /// "+N more" line, so a wall of terminals can't swamp the menu.
     private static let maxDetailRows = 5
 
+    /// The accent for one detail row: claude rows wear Claude's terracotta,
+    /// every other agent keeps the generic green.
+    private static func detailAccent(_ detail: RuleDetail) -> Color {
+        detail.agent == "claude" ? .claudeAccent : .green
+    }
+
     /// Indented per-instance rows under a rule: one detected agent session per
-    /// line with a working/idle dot and verdict.
+    /// line with a working/idle indicator and verdict.
     private func ruleDetailRows(_ details: [RuleDetail]) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             ForEach(Array(details.prefix(Self.maxDetailRows).enumerated()), id: \.offset) { _, detail in
+                let accent = Self.detailAccent(detail)
                 HStack(spacing: 6) {
-                    if detail.animated, !SparkFrames.images.isEmpty {
-                        SparkView()
-                            .foregroundStyle(Color.green)
-                    } else {
-                        Image(systemName: detail.active ? "circle.fill" : "circle")
-                            .foregroundStyle(detail.active ? Color.green : Color.secondary)
-                            .font(type.caption2)
-                    }
+                    SparkView(animated: detail.animated)
+                        .foregroundStyle(detail.active ? accent : Color.secondary)
                     Text(detail.label)
                         .font(type.caption)
                         .foregroundStyle(detail.active ? .primary : .secondary)
@@ -492,7 +520,7 @@ struct MenuBarContent: View {
                     Spacer(minLength: 4)
                     Text(detail.active ? L("working") : L("idle"))
                         .font(type.caption2)
-                        .foregroundStyle(detail.active ? Color.green : Color.secondary)
+                        .foregroundStyle(detail.active ? accent : Color.secondary)
                 }
             }
             if details.count > Self.maxDetailRows {

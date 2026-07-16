@@ -219,6 +219,7 @@ struct WelcomeView: View {
                     ))
                     .labelsHidden()
                     .toggleStyle(.switch)
+                    .controlSize(.small)
                 }
                 setupRow(
                     icon: "bell.badge",

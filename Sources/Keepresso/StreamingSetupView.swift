@@ -173,11 +173,10 @@ struct StreamingSetupView: View {
 
             awdlStatusRow
 
-            Toggle("Pause AWDL now", isOn: Binding(
+            switchRow("Pause AWDL now", isOn: Binding(
                 get: { model.awdl.isRunning },
                 set: { model.setAWDLWatchdog($0) }
             ))
-            .toggleStyle(.switch)
             .disabled(model.awdl.isBusy)
 
             if model.awdl.isBusy && !model.helperInstalled {
@@ -197,11 +196,10 @@ struct StreamingSetupView: View {
 
             Divider()
 
-            Toggle("Pause AWDL automatically while gaming", isOn: Binding(
+            switchRow("Pause AWDL automatically while gaming", isOn: Binding(
                 get: { model.awdlAutoWithGaming },
                 set: { model.awdlAutoWithGaming = $0 }
             ))
-            .toggleStyle(.switch)
             Text("Watches for a game (or a cloud-gaming app like GeForce NOW) as the active window and pauses AWDL on its own, then lifts the pause a little after you switch away (the delay below). It only counts while the game is in front and in use, not just running in the background. Without the administrator helper, turning this on asks for your password once per app run, right now rather than mid-game; with the helper it never asks at all. No trigger setup needed: leave this on and forget it.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -224,11 +222,10 @@ struct StreamingSetupView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Toggle("Notify when auto-pausing and resuming", isOn: Binding(
+            switchRow("Notify when auto-pausing and resuming", isOn: Binding(
                 get: { model.awdlNotifications },
                 set: { model.awdlNotifications = $0 }
             ))
-            .toggleStyle(.switch)
             Text("Posts a notification when a game is detected and AWDL pauses, and again when it resumes. A notice that your administrator password is needed is always sent (even behind a fullscreen game), regardless of this switch.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
