@@ -44,7 +44,9 @@ extension Preset {
         Preset(
             id: "ai-agent",
             name: "AI Agent",
-            ruleSet: RuleSet(combine: .any, rules: [.agentActivity(AgentRule(grace: 60))])
+            // The default grace, not a copy of it: the two drifting apart is
+            // how the preset and the Add menu end up disagreeing.
+            ruleSet: RuleSet(combine: .any, rules: [.agentActivity(AgentRule())])
         ),
         Preset(
             id: "on-ac-power",

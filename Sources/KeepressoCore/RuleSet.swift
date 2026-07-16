@@ -132,8 +132,8 @@ public struct AppRule: Codable, Equatable, Hashable, Sendable {
 /// session is actively working, lingering ``grace`` seconds once all go idle.
 public struct AgentRule: Codable, Equatable, Hashable, Sendable {
     /// Seconds to stay active after every agent session goes idle (0 = none).
-    /// A minute by default: a genuinely zero-CPU stretch (a long network wait)
-    /// reads as idle, and the grace is what bridges it.
+    /// Three minutes by default: a genuinely zero-CPU stretch (a long network
+    /// wait, a slow model turn) reads as idle, and the grace is what bridges it.
     public var grace: TimeInterval
 
     public init(grace: TimeInterval = AgentActivityTrigger.defaultGrace) {

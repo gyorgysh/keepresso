@@ -28,8 +28,8 @@ Theme: Keepresso learns when your AI agent is actually working.
   against each session's own learned idle level, so a TUI that animates
   while idle and a near-silent one are both judged fairly. Once every
   session goes idle, the Mac may sleep after a configurable grace
-  (instantly, 1, 5, or 10 minutes) with a gaming-style countdown in the
-  menu. The menu lists each detected session with a live working / idle
+  (instantly, 1, 3, 5, or 10 minutes, three by default) with a gaming-style
+  countdown in the menu. The menu lists each detected session with a live working / idle
   state, and the built-in "AI Agent" preset now applies this rule instead
   of its old process-name rules, so an agent left open no longer pins the
   Mac awake around the clock.

@@ -40,6 +40,7 @@ struct RulesView: View {
     private static let agentGracePresets: [(label: String, seconds: TimeInterval)] = [
         ("Instantly", 0),
         ("1 minute", 60),
+        ("3 minutes", 180),
         ("5 minutes", 300),
         ("10 minutes", 600),
     ]

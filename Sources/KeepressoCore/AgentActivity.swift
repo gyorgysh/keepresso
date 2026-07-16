@@ -528,7 +528,11 @@ public final class AgentActivityTrigger: Trigger {
     /// tick-to-tick noise of animated TUIs.
     static let alpha = 0.25
     /// The release grace the factory applies unless the rule overrides it.
-    public static let defaultGrace: TimeInterval = 60
+    /// Three minutes: a minute is enough to bridge a typical zero-CPU network
+    /// wait but not a slow model turn or a long-running tool call, and letting
+    /// the Mac sleep out from under a working agent costs far more than a few
+    /// idle minutes awake.
+    public static let defaultGrace: TimeInterval = 180
 
     /// Per-session EMA + learned-baseline + hysteresis state.
     public struct State: Equatable, Sendable {
