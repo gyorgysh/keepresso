@@ -514,3 +514,23 @@ APP.update({
     "Claude Code's settings file couldn't be read, so it was left untouched.": "Impossibile leggere il file delle impostazioni di Claude Code, quindi è rimasto intatto.",
     "Couldn't update Claude Code's settings file.": "Impossibile aggiornare il file delle impostazioni di Claude Code.",
 })
+
+
+# --- Desktop "disable sleep" naming ---
+APP.update({
+    "Disable system sleep": "Disattiva la sospensione del sistema",
+    "Disable sleep": "Disattiva la sospensione",
+    "disable system sleep": "disabilitare la sospensione del sistema",
+    "switch the sleep override with the session": "attivare e disattivare il blocco della sospensione con la sessione",
+    "The Mac won't sleep at all until you turn this off. The display still sleeps as usual.":
+        "Il Mac non andrà mai in stop finché non disattivi questa opzione. Il display si spegne comunque come al solito.",
+    "Turns the sleep override on when a keep-awake session starts and off when it ends or Keepresso quits.":
+        "Attiva il blocco della sospensione quando inizia una sessione di veglia e lo disattiva quando termina o Keepresso viene chiuso.",
+    "Stops the Mac from sleeping at all until you turn it off.":
+        "Impedisce al Mac di andare in stop finché non disattivi questa opzione.",
+    "Stops the Mac from sleeping at all, even with no session running. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.":
+        "Impedisce al Mac di andare in stop, anche senza una sessione in corso. Questo cambia un'impostazione di sistema che richiede i privilegi di amministratore: in silenzio con l'assistente amministratore installato (Impostazioni ▸ Generali), altrimenti macOS chiede la password.",
+    "Stops the Mac from sleeping at all, even with no session running. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off, even if Keepresso quits. The display still sleeps as usual. “Only while brewing” ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for “Only while brewing”.":
+        "Impedisce al Mac di andare in stop, anche senza una sessione in corso. Funziona modificando un’impostazione di sistema (pmset disablesleep), che quindi resta in vigore finché non la disattivi, anche se Keepresso viene chiuso. Il display si spegne comunque come al solito. “Solo durante l’infusione” lo collega invece alla sessione: attivo quando inizia una sessione di veglia, disattivato quando termina o Keepresso viene chiuso (anche dopo un crash). Entrambe richiedono i privilegi di amministratore: in silenzio con l’assistente amministratore installato (vedi in cima a questa scheda), altrimenti macOS chiede la password, una volta per esecuzione dell’app per “Solo durante l’infusione”.",
+    "%@ before": "%@ prima",
+})

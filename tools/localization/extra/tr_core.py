@@ -158,7 +158,6 @@ CORE = {
     "Keepresso stops soon": "Keepresso yakında duracak",
     "Your keep-awake session ends in about %@.": "Uyanık tutma oturumunuz yaklaşık %@ içinde sona erecek.",
     "AI agent working": "Yapay zeka aracısı çalışıyor",
-    "AI Agent Working": "Yapay Zeka Aracısı Çalışıyor",
 }
 
 WIDGET = {

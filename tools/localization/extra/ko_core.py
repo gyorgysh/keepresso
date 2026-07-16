@@ -158,7 +158,6 @@ CORE = {
     "Keepresso stops soon": "Keepresso가 곧 중지됩니다",
     "Your keep-awake session ends in about %@.": "깨어 있게 유지 세션이 약 %@ 후에 종료됩니다.",
     "AI agent working": "AI 에이전트 작업 중",
-    "AI Agent Working": "AI 에이전트 작업 중",
 }
 
 # Korean overlay for catalog_widget.py: English source -> Korean.

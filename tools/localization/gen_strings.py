@@ -18,9 +18,13 @@ LANGS = ["hu", "es", "fr", "de", "zh-Hans", "it", "ja", "ko", "ru", "pt-BR", "tr
 # validate an overlay on its own with check_extra.py.
 EXTRA_LANGS = ["it", "ja", "ko", "ru", "pt-BR", "tr", "pl", "uk", "zh-Hant"]
 
-APP_DIR = "Sources/Keepresso"
-CORE_DIR = "Sources/KeepressoCore"
-WIDGET_DIR = "Sources/KeepressoWidget"
+# Anchored to the repo root (two levels above this script), so running it
+# from any working directory writes to the real source trees instead of
+# silently creating a stray Sources/ next to the cwd.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+APP_DIR = os.path.join(_REPO_ROOT, "Sources/Keepresso")
+CORE_DIR = os.path.join(_REPO_ROOT, "Sources/KeepressoCore")
+WIDGET_DIR = os.path.join(_REPO_ROOT, "Sources/KeepressoWidget")
 
 
 def esc(s: str) -> str:

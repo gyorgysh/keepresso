@@ -423,3 +423,13 @@
 "Connect Claude Code" = "連接 Claude Code";
 "Claude Code's settings file couldn't be read, so it was left untouched." = "無法讀取 Claude Code 的設定檔，因此未作變動。";
 "Couldn't update Claude Code's settings file." = "無法更新 Claude Code 的設定檔。";
+"Disable system sleep" = "停用系統睡眠";
+"Disable sleep" = "停用睡眠";
+"disable system sleep" = "停用系統睡眠";
+"switch the sleep override with the session" = "隨工作階段切換睡眠停用開關";
+"The Mac won't sleep at all until you turn this off. The display still sleeps as usual." = "在您關閉這項設定之前，Mac 完全不會進入睡眠。螢幕仍會照常進入睡眠。";
+"Turns the sleep override on when a keep-awake session starts and off when it ends or Keepresso quits." = "在保持喚醒工作階段開始時開啟睡眠停用開關，並於工作階段結束或 Keepresso 結束時關閉。";
+"Stops the Mac from sleeping at all until you turn it off." = "在您將其關閉之前，讓 Mac 完全不會進入睡眠。";
+"Stops the Mac from sleeping at all, even with no session running. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "即使沒有工作階段正在執行，也會讓 Mac 完全不會進入睡眠。這會切換一項需要系統管理員權限的系統設定：已安裝系統管理員輔助程式時會靜默執行（偏好設定 ▸ 一般），否則 macOS 會要求輸入密碼。";
+"Stops the Mac from sleeping at all, even with no session running. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off, even if Keepresso quits. The display still sleeps as usual. “Only while brewing” ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for “Only while brewing”." = "即使沒有工作階段正在執行，也會讓 Mac 完全不會進入睡眠。其運作方式是切換一項系統設定（pmset disablesleep），因此在您將其關閉前都會持續生效，即使 Keepresso 結束也一樣。螢幕仍會照常進入睡眠。「僅在運作時」則改為將其與工作階段綁定：於保持喚醒工作階段開始時開啟，於工作階段結束或 Keepresso 結束時關閉（即使是當機之後）。兩者皆需要系統管理員權限：已安裝系統管理員輔助程式時會靜默執行（請參閱此分頁頂端），否則 macOS 會要求輸入密碼，「僅在運作時」為每次執行 App 時要求一次。";
+"%@ before" = "提前 %@";

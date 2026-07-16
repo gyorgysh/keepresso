@@ -430,3 +430,18 @@ APP.update({
     "Claude Code's settings file couldn't be read, so it was left untouched.": "Claude Code 설정 파일을 읽을 수 없어 그대로 두었습니다.",
     "Couldn't update Claude Code's settings file.": "Claude Code 설정 파일을 업데이트할 수 없습니다.",
 })
+
+
+# --- Desktop "disable sleep" naming ---
+APP.update({
+    "Disable system sleep": "시스템 잠자기 비활성화",
+    "Disable sleep": "잠자기 비활성화",
+    "disable system sleep": "시스템 잠자기 비활성화",
+    "switch the sleep override with the session": "세션에 따라 잠자기 비활성화 전환",
+    "The Mac won't sleep at all until you turn this off. The display still sleeps as usual.": "이 옵션을 끄기 전까지 Mac은 전혀 잠들지 않습니다. 디스플레이는 평소대로 계속 잠듭니다.",
+    "Turns the sleep override on when a keep-awake session starts and off when it ends or Keepresso quits.": "깨어 있게 유지 세션이 시작될 때 잠자기 비활성화를 켜고, 세션이 끝나거나 Keepresso가 종료될 때 끕니다.",
+    "Stops the Mac from sleeping at all until you turn it off.": "이 옵션을 끄기 전까지 Mac이 전혀 잠들지 않도록 합니다.",
+    "Stops the Mac from sleeping at all, even with no session running. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.": "세션이 실행 중이 아니어도 Mac이 전혀 잠들지 않도록 합니다. 이는 관리자 권한이 필요한 시스템 설정을 전환합니다. 관리자 도우미가 설치되어 있으면 조용히 처리되고 (환경설정 ▸ 일반), 그렇지 않으면 macOS가 암호를 요청합니다.",
+    "Stops the Mac from sleeping at all, even with no session running. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off, even if Keepresso quits. The display still sleeps as usual. “Only while brewing” ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for “Only while brewing”.": "세션이 실행 중이 아니어도 Mac이 전혀 잠들지 않도록 합니다. 시스템 설정(pmset disablesleep)을 전환하는 방식으로 작동하므로, Keepresso가 종료되더라도 끌 때까지 계속 적용됩니다. 디스플레이는 평소대로 계속 잠듭니다. “실행 중일 때만”은 대신 이를 세션에 연결하여, 깨어 있게 유지 세션이 시작될 때 켜지고 세션이 끝나거나 (충돌 후에도) Keepresso가 종료될 때 꺼집니다. 둘 다 관리자 권한이 필요합니다. 관리자 도우미가 설치되어 있으면 조용히 처리되고(이 탭 상단 참조), 그렇지 않으면 macOS가 암호를 요청하며, “실행 중일 때만”의 경우 앱 실행당 한 번입니다.",
+    "%@ before": "%@ 전",
+})

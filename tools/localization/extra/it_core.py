@@ -158,7 +158,6 @@ CORE = {
     "Keepresso stops soon": "Keepresso si fermerà a breve",
     "Your keep-awake session ends in about %@.": "La tua sessione di veglia termina tra circa %@.",
     "AI agent working": "Agente IA al lavoro",
-    "AI Agent Working": "Agente IA al lavoro",
 }
 
 WIDGET = {

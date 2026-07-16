@@ -39,7 +39,6 @@ CORE = {
 
     # --- Built-in preset names ---
     "AI Agent": {"hu": "AI-ügynök", "es": "Agente de IA", "fr": "Agent IA", "de": "KI-Agent", "zh-Hans": "AI 代理"},
-    "AI Agent Working": {"hu": "AI-ügynök dolgozik", "es": "Agente de IA trabajando", "fr": "Agent IA au travail", "de": "KI-Agent arbeitet", "zh-Hans": "AI 代理工作中"},
     "On AC Power": {"hu": "Hálózati tápon", "es": "Con corriente CA", "fr": "Sur secteur", "de": "Am Netzstrom", "zh-Hans": "接通电源"},
     "External Display Connected": {"hu": "Külső kijelző csatlakoztatva", "es": "Pantalla externa conectada", "fr": "Écran externe connecté", "de": "Externes Display verbunden", "zh-Hans": "已连接外接显示器"},
     "Remote Session (SSH)": {"hu": "Távoli munkamenet (SSH)", "es": "Sesión remota (SSH)", "fr": "Session distante (SSH)", "de": "Remote-Sitzung (SSH)", "zh-Hans": "远程会话 (SSH)"},

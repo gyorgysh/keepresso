@@ -158,7 +158,6 @@ CORE = {
     'Keepresso stops soon': 'Keepresso 即將停止',
     'Your keep-awake session ends in about %@.': '您的保持喚醒工作階段將在約 %@ 後結束。',
     'AI agent working': 'AI 代理工作中',
-    'AI Agent Working': 'AI 代理工作中',
 }
 
 WIDGET = {
