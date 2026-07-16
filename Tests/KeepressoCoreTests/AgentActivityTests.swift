@@ -348,6 +348,33 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     #expect(monitor.current.sessions.count == 1)
 }
 
+@Test func claudeTranscriptWriteSeesSubagentStreams() throws {
+    // Layout: <project>/<session>.jsonl (old) and
+    // <project>/<session>/subagents/agent-x.jsonl (fresh). Appends inside
+    // subagents never touch the parent mtimes, so the probe must descend.
+    let manager = FileManager.default
+    let project = manager.temporaryDirectory
+        .appendingPathComponent("keepresso-test-\(UUID().uuidString)")
+    let subagents = project.appendingPathComponent("session-1/subagents")
+    try manager.createDirectory(at: subagents, withIntermediateDirectories: true)
+    defer { try? manager.removeItem(at: project) }
+
+    let old = Date(timeIntervalSinceNow: -3600)
+    let fresh = Date(timeIntervalSinceNow: -5)
+    let main = project.appendingPathComponent("session-1.jsonl")
+    try Data("x".utf8).write(to: main)
+    try manager.setAttributes([.modificationDate: old], ofItemAtPath: main.path)
+    let agent = subagents.appendingPathComponent("agent-abc.jsonl")
+    try Data("y".utf8).write(to: agent)
+    try manager.setAttributes([.modificationDate: fresh], ofItemAtPath: agent.path)
+    // The session directory itself is listed too; age it so only the real
+    // transcript writes decide the result.
+    try manager.setAttributes([.modificationDate: old], ofItemAtPath: project.appendingPathComponent("session-1").path)
+
+    let written = try #require(PSAgentActivityMonitor.claudeTranscriptWrite(inProjectDir: project.path))
+    #expect(abs(written.timeIntervalSince(fresh)) < 1)
+}
+
 @Test func freshTranscriptOutranksAnOlderIdleVerdict() async throws {
     // The main turn's Stop hook writes idle while a background subagent works
     // on: its transcript keeps streaming but it emits no hook event until its

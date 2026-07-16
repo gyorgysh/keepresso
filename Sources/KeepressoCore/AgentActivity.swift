@@ -281,7 +281,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         case "claude":
             // ~/.claude/projects/<cwd with every non-alphanumeric as "-">/*.jsonl
             guard let cwd else { return nil }
-            return newestModification(in: "\(home)/.claude/projects/\(claudeProjectDirName(forCwd: cwd))")
+            return claudeTranscriptWrite(inProjectDir: "\(home)/.claude/projects/\(claudeProjectDirName(forCwd: cwd))")
         case "grok":
             // ~/.grok/sessions/<percent-encoded cwd>/ per-project session files.
             guard let cwd else { return nil }
@@ -296,6 +296,26 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         default:
             return nil
         }
+    }
+
+    /// The newest write in a Claude Code project folder. Session transcripts
+    /// sit directly in it, but a background subagent streams to
+    /// `<session-id>/subagents/agent-*.jsonl` one level down, and appends
+    /// there never touch the parent directories' mtimes; without descending,
+    /// a subagent working alone leaves no visible evidence.
+    static func claudeTranscriptWrite(inProjectDir path: String) -> Date? {
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: path) else { return nil }
+        var newest = newestModification(in: path)
+        for name in names {
+            let subagents = "\(path)/\(name)/subagents"
+            var isDirectory: ObjCBool = false
+            guard manager.fileExists(atPath: subagents, isDirectory: &isDirectory),
+                  isDirectory.boolValue,
+                  let written = newestModification(in: subagents) else { continue }
+            if newest.map({ written > $0 }) ?? true { newest = written }
+        }
+        return newest
     }
 
     /// Claude Code's per-project transcript folder name: the working
