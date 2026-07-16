@@ -40,7 +40,13 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     }
     #expect(match("claude --resume") == "claude")
     #expect(match("/opt/homebrew/bin/codex exec") == "codex")
-    #expect(match("CLAUDE") == "claude") // case-insensitive
+    // Case-sensitive on purpose: the Claude desktop app's Electron binary is
+    // "Claude", and matching it would root the session at the whole app.
+    #expect(match("CLAUDE") == nil)
+    #expect(match("/Applications/Claude.app/Contents/MacOS/Claude") == nil)
+    #expect(match("/Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer).app/Contents/MacOS/Claude Helper (Renderer)") == nil)
+    // The Claude Code copy embedded in the desktop app is lowercase and real.
+    #expect(match("/Users/x/Library/Application Support/Claude/claude-code/2.1.209/claude.app/Contents/MacOS/claude") == "claude")
     // A runtime wrapper is skipped to the script it runs, past its flags.
     #expect(match("node /Users/x/.volta/bin/claude") == "claude")
     #expect(match("node --max-old-space-size=4096 /usr/local/bin/claude chat") == "claude")
@@ -92,6 +98,42 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
 @Test func sessionLabelUsesTTYWithPidFallback() {
     #expect(session(pid: 812, cpu: 0).label == "claude (s003)")
     #expect(session(pid: 812, tty: nil, cpu: 0).label == "claude (pid 812)")
+}
+
+@Test func sessionLabelPrefersClassifiedOrigin() {
+    // An app or IDE session is named as such even when it holds a pty.
+    var app = session(pid: 13, cpu: 0)
+    app.origin = .claudeApp
+    #expect(app.label == "claude (Claude app)")
+    var ide = session(pid: 14, cpu: 0)
+    ide.origin = .ide
+    #expect(ide.label == "claude (IDE)")
+    // A terminal-classified session keeps the more specific tty when present.
+    var cli = session(pid: 15, cpu: 0)
+    cli.origin = .terminal
+    #expect(cli.label == "claude (s003)")
+    var detached = session(pid: 16, tty: nil, cpu: 0)
+    detached.origin = .terminal
+    #expect(detached.label == "claude (terminal)")
+}
+
+@Test func desktopAppTreeRootsAtTheEmbeddedCLI() {
+    typealias Sample = PSAgentActivityMonitor.ProcessSample
+    // The real shape of a Claude desktop app running Claude Code: the Electron
+    // main and its helpers must not match, so the session roots at the
+    // embedded lowercase claude and counts only that subtree's CPU.
+    let samples: [Sample] = [
+        Sample(pid: 10, ppid: 1, pcpu: 30.0, tty: nil, command: "/Applications/Claude.app/Contents/MacOS/Claude"),
+        Sample(pid: 11, ppid: 10, pcpu: 25.0, tty: nil, command: "/Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer).app/Contents/MacOS/Claude Helper (Renderer)"),
+        Sample(pid: 12, ppid: 10, pcpu: 0.1, tty: nil, command: "/Applications/Claude.app/Contents/Helpers/disclaimer"),
+        Sample(pid: 13, ppid: 12, pcpu: 4.0, tty: nil, command: "/Users/x/Library/Application Support/Claude/claude-code/2.1.209/claude.app/Contents/MacOS/claude"),
+        Sample(pid: 14, ppid: 13, pcpu: 6.0, tty: nil, command: "/bin/zsh -c swift build"),
+    ]
+    let sessions = PSAgentActivityMonitor.sessions(from: samples)
+    #expect(sessions.count == 1)
+    #expect(sessions[0].pid == 13)
+    #expect(sessions[0].agent == "claude")
+    #expect(abs(sessions[0].cpuPercent - 10.0) < 0.001)
 }
 
 // MARK: - Transcript evidence
@@ -304,4 +346,20 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     // Within the TTL the cached snapshot is served without another fetch.
     now = now.addingTimeInterval(1)
     #expect(monitor.current.sessions.count == 1)
+}
+
+@Test func monitorClassifiesTerminalLessSessionsByAncestry() async throws {
+    // A tty-less session is named by the ancestor walk even before any hook
+    // record exists; tty sessions are left alone.
+    let monitor = PSAgentActivityMonitor(
+        ttl: 3,
+        now: { Date(timeIntervalSince1970: 0) },
+        fetch: { "  100     1  0.1 ??       claude\n  200     1  0.1 ttys003  claude" },
+        classifyOrigin: { pid in pid == 100 ? .claudeApp : nil }
+    )
+    _ = monitor.current
+    try await Task.sleep(for: .milliseconds(200))
+    let sessions = monitor.current.sessions
+    #expect(sessions.map(\.origin) == [.claudeApp, nil])
+    #expect(sessions.map(\.label) == ["claude (Claude app)", "claude (s003)"])
 }

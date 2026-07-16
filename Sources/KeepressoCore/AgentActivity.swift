@@ -44,16 +44,18 @@ public struct AgentSession: Equatable, Hashable, Sendable {
         self.origin = origin
     }
 
-    /// A short display label: the agent plus its terminal ("claude (s003)"),
-    /// then the hook-classified origin for terminal-less sessions ("claude
-    /// (Claude app)"), falling back to the pid.
+    /// A short display label. The classified origin leads, so an app or IDE
+    /// session is named as such ("claude (Claude app)") even when it holds a
+    /// pty; terminal sessions show their tty ("claude (s003)"), and a session
+    /// with neither origin nor tty falls back to the pid.
     public var label: String {
-        if let tty { return "\(agent) (\(tty))" }
         switch origin {
-        case .terminal: return "\(agent) (\(L("terminal")))"
         case .claudeApp: return "\(agent) (\(L("Claude app")))"
         case .ide: return "\(agent) (\(L("IDE")))"
-        case nil: return "\(agent) (pid \(pid))"
+        case .terminal where tty == nil: return "\(agent) (\(L("terminal")))"
+        default:
+            if let tty { return "\(agent) (\(tty))" }
+            return "\(agent) (pid \(pid))"
         }
     }
 }
@@ -126,6 +128,10 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// The live hook records to join onto sessions. Injectable so the join
     /// and precedence logic is unit-testable without touching the disk.
     private let hookRecords: @Sendable (_ now: Date) -> [AgentHooks.HookRecord]
+    /// Classifies where a terminal-less session runs (Claude app, IDE) by
+    /// walking its ancestors, so app sessions are named even before any hook
+    /// record exists. Injectable so the decoration is unit-testable.
+    private let classifyOrigin: @Sendable (_ pid: Int32) -> AgentHooks.HookSessionOrigin?
     private let lock = NSLock()
     private var cached: AgentSnapshot = .empty
     private var lastFetch: Date?
@@ -136,13 +142,15 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         now: @escaping () -> Date = Date.init,
         fetch: @escaping @Sendable () -> String? = PSAgentActivityMonitor.runPS,
         evidence: @escaping @Sendable (_ agent: String, _ cwd: String?) -> Date? = PSAgentActivityMonitor.transcriptActivity,
-        hookRecords: @escaping @Sendable (_ now: Date) -> [AgentHooks.HookRecord] = { AgentHooks.readHookRecords(now: $0) }
+        hookRecords: @escaping @Sendable (_ now: Date) -> [AgentHooks.HookRecord] = { AgentHooks.readHookRecords(now: $0) },
+        classifyOrigin: @escaping @Sendable (_ pid: Int32) -> AgentHooks.HookSessionOrigin? = { AgentHooks.classifyOrigin(abovePid: $0) }
     ) {
         self.ttl = ttl
         self.now = now
         self.fetch = fetch
         self.evidence = evidence
         self.hookRecords = hookRecords
+        self.classifyOrigin = classifyOrigin
     }
 
     public var current: AgentSnapshot {
@@ -170,6 +178,11 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
                     if let cwd { cwds[session.pid] = cwd }
                     if let written = self.evidence(session.agent, cwd) {
                         sessions[index].hasFreshEvidence = written >= cutoff
+                    }
+                    // Name terminal-less sessions by their host (Claude app,
+                    // IDE) up front; a joined hook record can still refine it.
+                    if session.tty == nil {
+                        sessions[index].origin = self.classifyOrigin(session.pid)
                     }
                 }
                 // Stamp hook evidence: exact state edges beat both heuristics.
@@ -222,7 +235,9 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     private static func stamp(_ session: inout AgentSession, with record: AgentHooks.HookRecord) {
         session.hookState = record.state
         session.hookDetail = record.detail
-        session.origin = record.origin
+        // A record with no classified origin must not erase what the ps-scan
+        // ancestor walk already determined.
+        if let origin = record.origin { session.origin = origin }
     }
 
     /// The working directory of a (same-user) process, or `nil`.
@@ -381,7 +396,12 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
 
     /// The agent a command line launches, or `nil`. Matches the basename of
     /// the executable (skipping a runtime wrapper like `node` and its flags to
-    /// the script it runs), case-insensitively and exactly, never substring.
+    /// the script it runs) exactly and case-sensitively, never substring.
+    /// Case matters: the Claude desktop app's Electron binary is `Claude`
+    /// (as are its `Claude Helper` processes), while the CLI, including the
+    /// copy embedded in that app, is `claude`. A case-blind match would root
+    /// the session at the whole desktop app, whose process tree burns CPU
+    /// constantly and hides the real agent process from hook joins.
     static func agentName(for command: String, agents: [String]) -> String? {
         let tokens = command.split(separator: " ", omittingEmptySubsequences: true)
         guard let first = tokens.first else { return nil }
@@ -390,8 +410,18 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             guard let script = tokens.dropFirst().first(where: { !$0.hasPrefix("-") }) else { return nil }
             candidate = basename(script)
         }
-        let lower = candidate.lowercased()
-        return agents.first { $0.lowercased() == lower }
+        if let agent = agents.first(where: { $0 == candidate }) { return agent }
+        // An app-bundle binary's path can hold spaces anywhere before the
+        // bundle ("~/Library/Application Support/Claude/claude-code/…"), which
+        // the token split above mangles. The name after the last bundle marker
+        // is unambiguous; agent names hold no spaces, so its first word is the
+        // binary ("claude" for the Claude Code copy embedded in the desktop
+        // app, "Claude" for the app itself, which case-sensitivity rejects).
+        if let marker = command.range(of: "/Contents/MacOS/", options: .backwards) {
+            let name = command[marker.upperBound...].prefix(while: { $0 != " " })
+            return agents.first { $0 == name }
+        }
+        return nil
     }
 
     private static func basename(_ token: Substring) -> String {
@@ -501,7 +531,8 @@ public final class AgentActivityTrigger: Trigger {
                 smoothing[session.pid] ?? State(),
                 sample: session.cpuPercent,
                 freshEvidence: session.hasFreshEvidence,
-                hookState: session.hookState
+                hookState: session.hookState,
+                hookDetail: session.hookDetail
             )
             next[session.pid] = stepped
             return SessionState(session: session, isWorking: stepped.isWorking)
@@ -514,9 +545,11 @@ public final class AgentActivityTrigger: Trigger {
     }
 
     /// Pure decision step, exposed for direct unit testing. A live hook state
-    /// is an exact edge and decides outright (`working` on, `idle` off,
-    /// `waiting` off: the human is away, and the release grace bridges short
-    /// waits). Otherwise `freshEvidence` (a transcript written moments ago)
+    /// is an exact edge and decides outright: `working` is on; `waiting` is
+    /// on only for a pending approval (mid-task, and flipping through every
+    /// prompt would flap the trigger), not for the idle nudge a prompt left
+    /// unanswered fires; `idle` is off.
+    /// Otherwise `freshEvidence` (a transcript written moments ago)
     /// is proof of work and wins; the CPU heuristic decides for agents that
     /// leave no transcript. The EMA and baseline advance on every tick
     /// regardless, so the CPU fallback stays warm if hooks disappear.
@@ -524,7 +557,8 @@ public final class AgentActivityTrigger: Trigger {
         _ state: State,
         sample: Double,
         freshEvidence: Bool = false,
-        hookState: AgentHooks.HookSessionState? = nil
+        hookState: AgentHooks.HookSessionState? = nil,
+        hookDetail: String? = nil
     ) -> State {
         var next = state
         let clamped = max(sample, 0)
@@ -545,6 +579,7 @@ public final class AgentActivityTrigger: Trigger {
 
         if let hookState {
             next.isWorking = hookState == .working
+                || (hookState == .waiting && hookDetail == "waiting-approval")
         } else {
             let delta = state.isWorking ? Self.offDeltaPercent : Self.onDeltaPercent
             next.isWorking = freshEvidence
@@ -558,7 +593,9 @@ public final class AgentActivityTrigger: Trigger {
 extension AgentActivityTrigger: TriggerDetailProviding {
     public var detailRows: [RuleDetail] {
         sessionStates.map {
-            RuleDetail(label: Self.rowLabel(for: $0), active: $0.isWorking, animated: $0.isWorking)
+            RuleDetail(
+                label: Self.rowLabel(for: $0), active: $0.isWorking,
+                animated: $0.isWorking, agent: $0.session.agent)
         }
     }
 

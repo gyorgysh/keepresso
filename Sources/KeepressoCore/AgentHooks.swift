@@ -80,17 +80,22 @@ public enum AgentHooks {
     /// effect. Unknown events return `nil`: write nothing, exit 0, so a new
     /// Claude Code event name can never break anything. Details are semantic
     /// tokens, not English text; the app localizes them at render time.
-    public static func reduce(event: String, toolName: String?) -> HookEventEffect? {
+    public static func reduce(event: String, toolName: String?, message: String? = nil) -> HookEventEffect? {
         switch event {
         case "SessionStart", "UserPromptSubmit", "PostToolUse":
             return .set(.working, detail: nil)
         case "PreToolUse":
             return .set(.working, detail: toolName.flatMap(detailToken(forTool:)))
-        case "PermissionRequest", "Notification":
-            // Both surface "the human is needed": permission prompts fire
-            // PermissionRequest (and a Notification); idle nudges fire
-            // Notification alone.
-            return .set(.waiting, detail: event == "PermissionRequest" ? "waiting-approval" : nil)
+        case "PermissionRequest":
+            return .set(.waiting, detail: "waiting-approval")
+        case "Notification":
+            // A permission prompt fires PermissionRequest and a Notification
+            // in no guaranteed order, and the record keeps only the last
+            // event, so classify by the message to avoid overwriting the
+            // approval marker. Any other notification is the idle nudge
+            // ("waiting for your input"): a session at rest.
+            let approval = message?.range(of: "permission", options: .caseInsensitive) != nil
+            return .set(.waiting, detail: approval ? "waiting-approval" : nil)
         case "Stop":
             return .set(.idle, detail: nil)
         case "SessionEnd":
@@ -209,6 +214,20 @@ public enum AgentHooks {
         return nil
     }
 
+    /// Classifies where the process `pid` runs from its ancestry alone, for
+    /// sessions detected by the `ps` scan before any hook record exists.
+    public static func classifyOrigin(
+        abovePid pid: Int32,
+        depthLimit: Int = 20,
+        parentOf: (Int32) -> Int32? = defaultParentOf,
+        commandOf: (Int32) -> String? = defaultCommandOf
+    ) -> HookSessionOrigin? {
+        var visited: Set<Int32> = [pid]
+        return classifyOrigin(
+            above: pid, depthLimit: depthLimit, visited: &visited,
+            parentOf: parentOf, commandOf: commandOf)
+    }
+
     /// The first recognizable host above the agent process: a shell or
     /// terminal means a plain CLI session; a Claude-branded ancestor means
     /// the Claude desktop app; an editor helper means an IDE. Unrecognized
@@ -234,17 +253,17 @@ public enum AgentHooks {
     }
 
     /// Matches one process against the agent names: by its short comm, or by
-    /// any component of its executable path (exact, case-insensitive; a
-    /// versioned binary under `.../claude/versions/` matches through the
-    /// directory name).
+    /// any component of its executable path (exact and case-sensitive, like
+    /// ``PSAgentActivityMonitor/agentName(for:agents:)``: the Claude desktop
+    /// app's Electron binary is `Claude`, the CLI is `claude`; a versioned
+    /// binary under `.../claude/versions/` matches through the directory name).
     static func agentMatch(comm: String?, path: String?, agents: [String]) -> String? {
-        if let comm,
-           let agent = agents.first(where: { $0.caseInsensitiveCompare(comm) == .orderedSame }) {
+        if let comm, let agent = agents.first(where: { $0 == comm }) {
             return agent
         }
         guard let path else { return nil }
         for component in path.split(separator: "/") {
-            if let agent = agents.first(where: { $0.caseInsensitiveCompare(String(component)) == .orderedSame }) {
+            if let agent = agents.first(where: { $0 == component }) {
                 return agent
             }
         }
@@ -345,7 +364,7 @@ public enum AgentHooks {
     ) {
         let payload = (try? decoder.decode(HookPayload.self, from: payloadData)) ?? HookPayload()
         guard let sessionId = payload.sessionId, !sessionId.isEmpty else { return }
-        switch reduce(event: event, toolName: payload.toolName) {
+        switch reduce(event: event, toolName: payload.toolName, message: payload.message) {
         case .end:
             delete(sessionId: sessionId, in: directory)
         case .set(let state, let detail):
@@ -391,6 +410,12 @@ public enum AgentHooks {
             guard let data = try? Data(contentsOf: url),
                   let record = try? decoder.decode(HookRecord.self, from: data) else { continue }
             if now.timeIntervalSince(record.updatedAt) < staleAfter {
+                records.append(record)
+            } else if record.state == .waiting, record.detail == "waiting-approval",
+                      record.agentPid.map(isAlive) == true {
+                // An approval prompt emits no further hook events however
+                // long it sits, so age alone must not expire it: trust the
+                // record for as long as the agent process is alive.
                 records.append(record)
             } else if record.agentPid.map({ !isAlive($0) }) ?? true {
                 try? manager.removeItem(at: url)

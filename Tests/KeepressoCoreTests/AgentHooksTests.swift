@@ -11,6 +11,13 @@ import Foundation
     #expect(AgentHooks.reduce(event: "Stop", toolName: nil) == .set(.idle, detail: nil))
     #expect(AgentHooks.reduce(event: "SessionEnd", toolName: nil) == .end)
     #expect(AgentHooks.reduce(event: "PermissionRequest", toolName: nil) == .set(.waiting, detail: "waiting-approval"))
+    // A permission prompt fires PermissionRequest and a Notification in no
+    // guaranteed order; the message keeps the approval marker from being
+    // overwritten. Other notifications are the idle nudge.
+    #expect(AgentHooks.reduce(event: "Notification", toolName: nil, message: "Claude needs your permission to use Bash")
+            == .set(.waiting, detail: "waiting-approval"))
+    #expect(AgentHooks.reduce(event: "Notification", toolName: nil, message: "Claude is waiting for your input")
+            == .set(.waiting, detail: nil))
     #expect(AgentHooks.reduce(event: "Notification", toolName: nil) == .set(.waiting, detail: nil))
     // Unknown events write nothing: new Claude Code events can't break us.
     #expect(AgentHooks.reduce(event: "SubagentStop", toolName: nil) == nil)
@@ -253,15 +260,22 @@ private func tempHooksDir() -> URL {
         sessionId: "stale-dead", state: .working, agentPid: 33, updatedAt: now.addingTimeInterval(-600))
     let staleNoPid = AgentHooks.HookRecord(
         sessionId: "stale-nopid", state: .working, updatedAt: now.addingTimeInterval(-600))
-    for record in [fresh, staleLive, staleDead, staleNoPid] { AgentHooks.write(record, in: dir) }
+    // An approval prompt emits no further events however long it sits: an
+    // old waiting-approval record with a live agent stays trusted.
+    let staleApproval = AgentHooks.HookRecord(
+        sessionId: "stale-approval", state: .waiting, detail: "waiting-approval",
+        agentPid: 44, updatedAt: now.addingTimeInterval(-600))
+    for record in [fresh, staleLive, staleDead, staleNoPid, staleApproval] {
+        AgentHooks.write(record, in: dir)
+    }
 
     let records = AgentHooks.readHookRecords(now: now, in: dir, isAlive: { $0 != 33 })
-    #expect(records.map(\.sessionId) == ["fresh"])
+    #expect(records.map(\.sessionId).sorted() == ["fresh", "stale-approval"])
 
-    // The dead and pid-less stale files were cleaned up; the live one stays
+    // The dead and pid-less stale files were cleaned up; the live ones stay
     // (hooks may be broken mid-session, but the session still exists).
     let remaining = (try? FileManager.default.contentsOfDirectory(atPath: dir.path))?.sorted() ?? []
-    #expect(remaining == ["fresh.json", "stale-live.json"])
+    #expect(remaining == ["fresh.json", "stale-approval.json", "stale-live.json"])
 }
 
 // MARK: - Joining records onto sessions
@@ -295,6 +309,18 @@ private func hookRecord(
     #expect(joined[1].hookState == nil)
     #expect(joined[2].hookState == .waiting)
     #expect(joined[2].origin == .claudeApp)
+}
+
+@Test func recordWithoutOriginKeepsTheClassifiedOne() {
+    // The ps-scan ancestor walk already named this session; a joined hook
+    // record that carries no origin must not erase that.
+    var session = AgentSession(pid: 100, agent: "claude", tty: nil, cpuPercent: 1)
+    session.origin = .claudeApp
+    let records = [hookRecord("a", state: .working, agentPid: 100)]
+    let joined = PSAgentActivityMonitor.applyHookRecords(
+        records, to: [session], cwdOf: { _ in nil })
+    #expect(joined[0].hookState == .working)
+    #expect(joined[0].origin == .claudeApp)
 }
 
 @Test func ambiguousCwdFallbackJoinsNothing() {
@@ -334,10 +360,17 @@ private func hookRecord(
     hot = AgentActivityTrigger.step(hot, sample: 95, freshEvidence: true, hookState: .idle)
     #expect(!hot.isWorking)
 
-    // waiting is not working by default: the human is away.
-    var waiting = AgentActivityTrigger.State()
-    waiting = AgentActivityTrigger.step(waiting, sample: 95, hookState: .waiting)
-    #expect(!waiting.isWorking)
+    // A pending approval is mid-task and counts as working; letting it read
+    // as idle would flap the trigger through every permission prompt.
+    var approval = AgentActivityTrigger.State()
+    approval = AgentActivityTrigger.step(
+        approval, sample: 0.1, hookState: .waiting, hookDetail: "waiting-approval")
+    #expect(approval.isWorking)
+
+    // The idle nudge (a prompt left unanswered) is a session at rest.
+    var nudged = AgentActivityTrigger.State()
+    nudged = AgentActivityTrigger.step(nudged, sample: 0.1, hookState: .waiting)
+    #expect(!nudged.isWorking)
 }
 
 @Test func missingHookStateFallsBackToHeuristics() {
@@ -526,9 +559,11 @@ private func json(_ data: Data) throws -> [String: Any] {
     #expect(AgentSession(
         pid: 9, agent: "claude", tty: nil, cpuPercent: 0, origin: .claudeApp
     ).label == "claude (Claude app)")
+    // The origin wins even over a pty: the desktop app allocates one for its
+    // embedded session, and "s001" would misread as a plain CLI.
     #expect(AgentSession(
         pid: 9, agent: "claude", tty: "s001", cpuPercent: 0, origin: .claudeApp
-    ).label == "claude (s001)")
+    ).label == "claude (Claude app)")
     #expect(AgentSession(
         pid: 9, agent: "claude", tty: nil, cpuPercent: 0, origin: .ide
     ).label == "claude (IDE)")

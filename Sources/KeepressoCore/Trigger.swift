@@ -270,11 +270,15 @@ public struct RuleDetail: Equatable {
     /// Whether the row's status dot should animate (an agent session that is
     /// actively working); plain conditions keep the static dot.
     public let animated: Bool
+    /// The agent behind this row ("claude"), or `nil` for non-agent rows.
+    /// Lets the UI tint a row in the agent's own accent color.
+    public let agent: String?
 
-    public init(label: String, active: Bool, animated: Bool = false) {
+    public init(label: String, active: Bool, animated: Bool = false, agent: String? = nil) {
         self.label = label
         self.active = active
         self.animated = animated
+        self.agent = agent
     }
 }
 
