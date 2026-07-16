@@ -838,10 +838,12 @@ final class AppModel {
     }
 
     /// Remove exactly Keepresso's hook entries, leaving everything else in
-    /// the settings file untouched.
+    /// the settings file untouched. Clears the session records too: with no
+    /// hooks left to emit Stop or SessionEnd, a retained working record
+    /// would hold the trigger for as long as its agent runs.
     func removeClaudeHooks() {
-        mutateClaudeSettings { existing in
-            try AgentHooks.removeHooks(from: existing)
+        if mutateClaudeSettings({ try AgentHooks.removeHooks(from: $0) }) {
+            AgentHooks.purgeRecords()
         }
     }
 
@@ -852,20 +854,26 @@ final class AppModel {
         Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/keepresso").path
     }
 
-    private func mutateClaudeSettings(_ transform: (Data?) throws -> Data) {
+    /// Rewrites `~/.claude/settings.json` through `transform` and reports
+    /// whether the write landed, so callers can gate follow-up cleanup on it.
+    @discardableResult
+    private func mutateClaudeSettings(_ transform: (Data?) throws -> Data) -> Bool {
         let url = AgentHooks.claudeSettingsURL()
+        defer { refreshClaudeHooksStatus() }
         do {
             let updated = try transform(try? Data(contentsOf: url))
             try FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try updated.write(to: url, options: .atomic)
             claudeHooksError = nil
+            return true
         } catch is AgentHooks.SettingsUnreadableError {
             claudeHooksError = L("Claude Code's settings file couldn't be read, so it was left untouched.")
+            return false
         } catch {
             claudeHooksError = L("Couldn't update Claude Code's settings file.")
+            return false
         }
-        refreshClaudeHooksStatus()
     }
 
     // MARK: - Privileged helper

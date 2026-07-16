@@ -254,6 +254,8 @@ private func tempHooksDir() -> URL {
     let now = Date()
     let fresh = AgentHooks.HookRecord(
         sessionId: "fresh", state: .working, agentPid: 11, updatedAt: now.addingTimeInterval(-30))
+    // A long model turn emits no events for minutes: an old working record
+    // with a live agent stays trusted until Stop or the pid dying ends it.
     let staleLive = AgentHooks.HookRecord(
         sessionId: "stale-live", state: .working, agentPid: 22, updatedAt: now.addingTimeInterval(-600))
     let staleDead = AgentHooks.HookRecord(
@@ -265,17 +267,67 @@ private func tempHooksDir() -> URL {
     let staleApproval = AgentHooks.HookRecord(
         sessionId: "stale-approval", state: .waiting, detail: "waiting-approval",
         agentPid: 44, updatedAt: now.addingTimeInterval(-600))
-    for record in [fresh, staleLive, staleDead, staleNoPid, staleApproval] {
+    // Idle carries no promise of future events, so it does expire: the
+    // transcript + CPU fallbacks take over. The file stays while the agent
+    // lives (the session still exists).
+    let staleIdle = AgentHooks.HookRecord(
+        sessionId: "stale-idle", state: .idle, agentPid: 55, updatedAt: now.addingTimeInterval(-600))
+    for record in [fresh, staleLive, staleDead, staleNoPid, staleApproval, staleIdle] {
         AgentHooks.write(record, in: dir)
     }
 
     let records = AgentHooks.readHookRecords(now: now, in: dir, isAlive: { $0 != 33 })
-    #expect(records.map(\.sessionId).sorted() == ["fresh", "stale-approval"])
+    #expect(records.map(\.sessionId).sorted() == ["fresh", "stale-approval", "stale-live"])
 
-    // The dead and pid-less stale files were cleaned up; the live ones stay
-    // (hooks may be broken mid-session, but the session still exists).
+    // The dead and pid-less stale files were cleaned up; the live ones stay.
     let remaining = (try? FileManager.default.contentsOfDirectory(atPath: dir.path))?.sorted() ?? []
-    #expect(remaining == ["fresh.json", "stale-approval.json", "stale-live.json"])
+    #expect(remaining == ["fresh.json", "stale-approval.json", "stale-idle.json", "stale-live.json"])
+}
+
+@Test func longQuietTurnStaysWorkingWhileTheAgentLives() {
+    // The regression this pins: a model turn that thinks for minutes emits
+    // no hook events, writes no transcript, and burns no CPU. The last
+    // working record must keep the session working anyway, however old,
+    // as long as the agent process is alive.
+    let dir = tempHooksDir()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let now = Date()
+    AgentHooks.write(
+        AgentHooks.HookRecord(
+            sessionId: "s-1", state: .working, agentPid: 100,
+            updatedAt: now.addingTimeInterval(-600)),
+        in: dir)
+
+    let records = AgentHooks.readHookRecords(now: now, in: dir, isAlive: { $0 == 100 })
+    let sessions = [AgentSession(pid: 100, agent: "claude", tty: "s003", cpuPercent: 0)]
+    let joined = PSAgentActivityMonitor.applyHookRecords(records, to: sessions, cwdOf: { _ in nil })
+    #expect(joined[0].hookState == .working)
+
+    var state = AgentActivityTrigger.State()
+    state = AgentActivityTrigger.step(state, sample: 0, hookState: joined[0].hookState)
+    #expect(state.isWorking)
+}
+
+@Test func purgeRecordsRemovesEverythingAndWritesRecover() {
+    let dir = tempHooksDir()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let now = Date()
+    for id in ["a", "b"] {
+        AgentHooks.write(
+            AgentHooks.HookRecord(sessionId: id, state: .working, agentPid: 11, updatedAt: now),
+            in: dir)
+    }
+
+    AgentHooks.purgeRecords(in: dir)
+    #expect(AgentHooks.readHookRecords(now: now, in: dir, isAlive: { _ in true }).isEmpty)
+    #expect(!FileManager.default.fileExists(atPath: dir.path))
+
+    // A later install starts clean: write recreates the folder.
+    AgentHooks.write(
+        AgentHooks.HookRecord(sessionId: "c", state: .working, agentPid: 11, updatedAt: now),
+        in: dir)
+    let records = AgentHooks.readHookRecords(now: now, in: dir, isAlive: { _ in true })
+    #expect(records.map(\.sessionId) == ["c"])
 }
 
 // MARK: - Joining records onto sessions

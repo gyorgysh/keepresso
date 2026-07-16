@@ -349,6 +349,14 @@ public enum AgentHooks {
             at: directory.appendingPathComponent(fileName(forSessionId: sessionId)))
     }
 
+    /// Removes every session record, for when the user uninstalls the hooks:
+    /// with nothing left to emit Stop or SessionEnd, a retained working
+    /// record would otherwise hold the trigger for as long as its agent
+    /// runs. ``write(_:in:)`` recreates the folder on the next install.
+    public static func purgeRecords(in directory: URL = directoryURL()) {
+        try? FileManager.default.removeItem(at: directory)
+    }
+
     /// Applies one hook invocation end to end: decode the stdin payload,
     /// reduce the event, resolve the agent ancestor, write or delete the
     /// state file. Never throws, never prints; the caller exits 0 regardless.
@@ -390,13 +398,21 @@ public enum AgentHooks {
     // MARK: - Reading (monitor side)
 
     /// A record older than this is no longer trusted as live state: the
-    /// session silently falls back to transcript + CPU evidence.
+    /// session silently falls back to transcript + CPU evidence. Age only
+    /// governs records whose silence means nothing (`idle`, a plain
+    /// `waiting` nudge) and records whose agent can't be liveness-checked;
+    /// `working` and `waiting-approval` records with a live agent never
+    /// expire by age (see ``readHookRecords(now:in:isAlive:)``).
     public static let staleAfter: TimeInterval = 120
 
-    /// All usable records in the hooks folder. Stale records whose agent
-    /// process is gone are deleted during the scan (SessionEnd never fired,
-    /// e.g. a killed terminal); stale records with a live agent are skipped
-    /// but kept (hooks broken or uninstalled mid-session).
+    /// All usable records in the hooks folder. Hook state is edge-triggered,
+    /// so a stale `working` or `waiting-approval` record with a live agent
+    /// stays authoritative: a long model turn emits no events for minutes
+    /// (zero CPU, no transcript writes) and an approval prompt emits none
+    /// however long it sits. Stale `idle`/`waiting` records with a live
+    /// agent are skipped but kept, letting the transcript + CPU fallbacks
+    /// decide. Stale records whose agent is gone are deleted during the
+    /// scan (SessionEnd never fired, e.g. a killed terminal).
     public static func readHookRecords(
         now: Date,
         in directory: URL = directoryURL(),
@@ -411,11 +427,13 @@ public enum AgentHooks {
                   let record = try? decoder.decode(HookRecord.self, from: data) else { continue }
             if now.timeIntervalSince(record.updatedAt) < staleAfter {
                 records.append(record)
-            } else if record.state == .waiting, record.detail == "waiting-approval",
-                      record.agentPid.map(isAlive) == true {
-                // An approval prompt emits no further hook events however
-                // long it sits, so age alone must not expire it: trust the
-                // record for as long as the agent process is alive.
+            } else if record.agentPid.map(isAlive) == true,
+                      record.state == .working
+                          || (record.state == .waiting && record.detail == "waiting-approval") {
+                // Trust the edge for as long as the agent process is alive:
+                // Stop, Notification, SessionEnd, or the pid dying is what
+                // ends a working turn or a sitting approval prompt, never
+                // the record's age.
                 records.append(record)
             } else if record.agentPid.map({ !isAlive($0) }) ?? true {
                 try? manager.removeItem(at: url)
