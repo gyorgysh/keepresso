@@ -18,6 +18,13 @@
 "Run Test" = "테스트 실행";
 "Match" = "일치";
 "Threshold" = "임계값";
+"Battery threshold" = "배터리 임계값";
+"Presence" = "온라인 상태";
+"Menu bar" = "메뉴 막대";
+"Battery" = "배터리";
+"Welcome" = "환영";
+"Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "덮개를 닫고 외부 디스플레이가 없어도 Mac이 계속 실행되도록 유지합니다. 이는 관리자 권한이 필요한 시스템 설정을 전환합니다. 관리자 도우미가 설치되어 있으면 조용히 처리되고 (환경설정 ▸ 일반), 그렇지 않으면 macOS가 암호를 요청합니다.";
+"Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "깨어 있게 유지 세션이 시작될 때 디스플레이 닫힘 모드를 켜고, 세션이 끝나거나 Keepresso가 종료될 때 끕니다.";
 "Grace period" = "유예 시간";
 "Section" = "섹션";
 "Schedule" = "일정";

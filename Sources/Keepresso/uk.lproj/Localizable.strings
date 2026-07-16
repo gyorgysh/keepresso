@@ -18,6 +18,13 @@
 "Run Test" = "Запустити тест";
 "Match" = "Відповідність";
 "Threshold" = "Поріг";
+"Battery threshold" = "Поріг заряду батареї";
+"Presence" = "Присутність";
+"Menu bar" = "Смуга меню";
+"Battery" = "Акумулятор";
+"Welcome" = "Вітання";
+"Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Дозволяє Mac продовжувати працювати із закритою кришкою і без зовнішнього дисплея. Це перемикає системне налаштування, яке потребує прав адміністратора: без запитів, якщо встановлено помічник із правами адміністратора (Налаштування ▸ Загальні), інакше macOS запитує ваш пароль.";
+"Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "Вмикає режим закритої кришки, коли починається сеанс підтримки активності, і вимикає його, коли сеанс завершується або Keepresso закривається.";
 "Grace period" = "Період очікування";
 "Section" = "Розділ";
 "Schedule" = "Розклад";

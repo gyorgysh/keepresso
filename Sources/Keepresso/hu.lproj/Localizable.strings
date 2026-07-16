@@ -18,6 +18,13 @@
 "Run Test" = "Teszt futtatása";
 "Match" = "Egyezés";
 "Threshold" = "Küszöbérték";
+"Battery threshold" = "Töltöttségi küszöb";
+"Presence" = "Jelenlét";
+"Menu bar" = "Menüsor";
+"Battery" = "Akkumulátor";
+"Welcome" = "Üdvözlés";
+"Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "A Macet csukott fedéllel és külső kijelző nélkül is működésben tartja. Ez egy rendszergazdai jogokat igénylő rendszerbeállítást állít át: telepített rendszergazdai segéddel csendes (Beállítások ▸ Általános), egyébként a macOS bekéri a jelszavát.";
+"Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "Bekapcsolja a csukott fedél módot, amikor egy ébrentartási munkamenet elindul, és kikapcsolja, amikor véget ér, vagy a Keepresso kilép.";
 "Grace period" = "Türelmi idő";
 "Section" = "Szakasz";
 "Schedule" = "Ütemezés";

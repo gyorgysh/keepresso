@@ -18,6 +18,13 @@
 "Run Test" = "Test starten";
 "Match" = "Übereinstimmung";
 "Threshold" = "Schwellenwert";
+"Battery threshold" = "Akku-Schwellenwert";
+"Presence" = "Anwesenheit";
+"Menu bar" = "Menüleiste";
+"Battery" = "Akku";
+"Welcome" = "Willkommen";
+"Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Hält den Mac bei geschlossenem Deckel und ohne externes Display am Laufen. Dies ändert eine Systemeinstellung, die Administratorrechte erfordert: lautlos mit installiertem Administrator-Hilfsdienst (Einstellungen ▸ Allgemein), sonst fragt macOS nach deinem Passwort.";
+"Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "Schaltet den Modus bei geschlossenem Display ein, wenn eine Wachhalte-Sitzung startet, und wieder aus, wenn sie endet oder Keepresso beendet wird.";
 "Grace period" = "Nachlaufzeit";
 "Section" = "Abschnitt";
 "Schedule" = "Zeitplan";

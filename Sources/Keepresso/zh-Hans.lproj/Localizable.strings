@@ -18,6 +18,13 @@
 "Run Test" = "运行测试";
 "Match" = "匹配";
 "Threshold" = "阈值";
+"Battery threshold" = "电量阈值";
+"Presence" = "在线状态";
+"Menu bar" = "菜单栏";
+"Battery" = "电池";
+"Welcome" = "欢迎";
+"Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "即使合盖且无外接显示器，也能让 Mac 保持运行。这会切换一项需要管理员权限的系统设置：安装了管理员助理时为静默执行（偏好设置 ▸ 通用），否则 macOS 会索要你的密码。";
+"Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "在保持唤醒会话开始时打开合盖模式，并在会话结束或 Keepresso 退出时关闭。";
 "Grace period" = "宽限期";
 "Section" = "分区";
 "Schedule" = "计划";

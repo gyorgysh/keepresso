@@ -18,6 +18,13 @@
 "Run Test" = "Run Test";
 "Match" = "Match";
 "Threshold" = "Threshold";
+"Battery threshold" = "Battery threshold";
+"Presence" = "Presence";
+"Menu bar" = "Menu bar";
+"Battery" = "Battery";
+"Welcome" = "Welcome";
+"Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.";
+"Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.";
 "Grace period" = "Grace period";
 "Section" = "Section";
 "Schedule" = "Schedule";
