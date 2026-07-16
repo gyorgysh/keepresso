@@ -5,7 +5,11 @@ import Foundation
 // MARK: - Event reduction
 
 @Test func reduceMapsLifecycleEventsToStates() {
-    #expect(AgentHooks.reduce(event: "SessionStart", toolName: nil) == .set(.working, detail: nil))
+    // SessionStart is idle, not working: a freshly opened REPL is waiting
+    // for its first prompt and emits no further events until one arrives,
+    // so a working record here would hold the trigger for the process's
+    // whole lifetime.
+    #expect(AgentHooks.reduce(event: "SessionStart", toolName: nil) == .set(.idle, detail: nil))
     #expect(AgentHooks.reduce(event: "UserPromptSubmit", toolName: nil) == .set(.working, detail: nil))
     #expect(AgentHooks.reduce(event: "PostToolUse", toolName: "Bash") == .set(.working, detail: nil))
     #expect(AgentHooks.reduce(event: "Stop", toolName: nil) == .set(.idle, detail: nil))
@@ -591,6 +595,41 @@ private func json(_ data: Data) throws -> [String: Any] {
     let inner = try #require(stop[0]["hooks"] as? [[String: Any]])
     #expect(inner.count == 1)
     #expect(inner[0]["command"] as? String == "notify-me.sh")
+}
+
+@Test func hookCommandSingleQuotesTheBakedPath() {
+    // A quote or backtick in the install path must stay literal: an `sh -c`
+    // syntax error exits 2 before the trailing `:` can pin exit 0, and
+    // Claude Code treats hook exit 2 as a blocking failure on every tool
+    // call.
+    let hostile = "/Users/x/My \"Apps\"/`weird`/Keepresso.app/Contents/Helpers/keepresso"
+    let command = AgentHooks.hookCommand(event: "Stop", cliPath: hostile)
+    #expect(command.hasPrefix("c='/Users/x/My \"Apps\"/`weird`/"))
+    #expect(AgentHooks.shellSingleQuoted("it's") == #"'it'\''s'"#)
+    #expect(AgentHooks.shellSingleQuoted("/plain/path") == "'/plain/path'")
+}
+
+@Test func readSettingsTellsMissingFromUnreadable() throws {
+    let manager = FileManager.default
+    let dir = manager.temporaryDirectory
+        .appendingPathComponent("keepresso-settings-\(UUID().uuidString)", isDirectory: true)
+    try manager.createDirectory(at: dir, withIntermediateDirectories: true)
+    defer { try? manager.removeItem(at: dir) }
+
+    // No file yet: nil, safe to start from an empty object.
+    #expect(try AgentHooks.readSettings(at: dir.appendingPathComponent("settings.json")) == nil)
+
+    // A readable file comes back verbatim.
+    let real = dir.appendingPathComponent("real.json")
+    try Data("{}".utf8).write(to: real)
+    #expect(try AgentHooks.readSettings(at: real) == Data("{}".utf8))
+
+    // Exists but unreadable (a directory at the path stands in for a
+    // permission failure): must throw, never read as "missing", or an
+    // install would replace the user's whole settings file.
+    #expect(throws: AgentHooks.SettingsUnreadableError.self) {
+        try AgentHooks.readSettings(at: dir)
+    }
 }
 
 @Test func unreadableSettingsAreReportedAndNeverEdited() {

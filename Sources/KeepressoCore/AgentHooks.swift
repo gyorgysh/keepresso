@@ -82,7 +82,15 @@ public enum AgentHooks {
     /// tokens, not English text; the app localizes them at render time.
     public static func reduce(event: String, toolName: String?, message: String? = nil) -> HookEventEffect? {
         switch event {
-        case "SessionStart", "UserPromptSubmit", "PostToolUse":
+        case "SessionStart":
+            // A session that just started (or resumed) is waiting for its
+            // first prompt, not working. A never-prompted REPL emits no
+            // further events (no Stop, and the idle nudge only fires after
+            // message activity), so a `working` record here would hold the
+            // trigger for as long as the process lives. `idle` still writes
+            // the record, so the pid join and origin land immediately.
+            return .set(.idle, detail: nil)
+        case "UserPromptSubmit", "PostToolUse":
             return .set(.working, detail: nil)
         case "PreToolUse":
             return .set(.working, detail: toolName.flatMap(detailToken(forTool:)))
@@ -411,12 +419,13 @@ public enum AgentHooks {
     /// (zero CPU, no transcript writes) and an approval prompt emits none
     /// however long it sits. Stale `idle`/`waiting` records with a live
     /// agent are skipped but kept, letting the transcript + CPU fallbacks
-    /// decide. Stale records whose agent is gone are deleted during the
-    /// scan (SessionEnd never fired, e.g. a killed terminal).
+    /// decide. Stale records whose agent is gone, including a pid reused by
+    /// some non-agent process, are deleted during the scan (SessionEnd never
+    /// fired, e.g. a killed terminal).
     public static func readHookRecords(
         now: Date,
         in directory: URL = directoryURL(),
-        isAlive: (Int32) -> Bool = defaultIsAlive
+        isAlive: (Int32) -> Bool = defaultIsAgentAlive
     ) -> [HookRecord] {
         let manager = FileManager.default
         guard let names = try? manager.contentsOfDirectory(atPath: directory.path) else { return [] }
@@ -445,6 +454,18 @@ public enum AgentHooks {
     /// Liveness probe: EPERM still means "exists".
     public static func defaultIsAlive(_ pid: Int32) -> Bool {
         kill(pid, 0) == 0 || errno == EPERM
+    }
+
+    /// The record-trust probe: the pid must exist *and* still be an agent
+    /// process. Bare existence isn't enough, because an orphaned
+    /// `working` record (its terminal killed, SessionEnd never fired) whose
+    /// pid gets reused by any long-lived process would otherwise be trusted
+    /// forever, and could even stamp a different agent session as working.
+    public static func defaultIsAgentAlive(_ pid: Int32) -> Bool {
+        guard defaultIsAlive(pid) else { return false }
+        return agentMatch(
+            comm: defaultCommandOf(pid), path: defaultPathOf(pid),
+            agents: PSAgentActivityMonitor.agentCommands) != nil
     }
 
     // MARK: - settings.json install/remove
@@ -479,9 +500,18 @@ public enum AgentHooks {
     /// /Applications path is the last resort. The trailing `:` pins exit 0:
     /// a missing CLI must never disturb the session.
     static func hookCommand(event: String, cliPath: String) -> String {
-        "c=\"\(cliPath)\"; [ -x \"$c\" ] || c=\"$(command -v keepresso)\" || "
+        "c=\(shellSingleQuoted(cliPath)); [ -x \"$c\" ] || c=\"$(command -v keepresso)\" || "
             + "c=/Applications/Keepresso.app/Contents/Helpers/keepresso; "
             + "\"$c\" agent-hook \(event); : # \(hookMarker)"
+    }
+
+    /// POSIX single-quoting: everything inside is literal, an embedded single
+    /// quote becomes `'\''`. The baked path is user-controlled (the app can be
+    /// installed anywhere), and a quote or backtick in it would be an `sh -c`
+    /// syntax error, which exits 2 before the trailing `:` can pin exit 0 and
+    /// which Claude Code treats as a blocking hook failure on every tool call.
+    static func shellSingleQuoted(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     /// Where a `keepresso agent-hook` install stands in a settings file.
@@ -495,6 +525,21 @@ public enum AgentHooks {
     /// Thrown when settings.json can't be edited without risking damage.
     public struct SettingsUnreadableError: Error, Equatable, Sendable {
         public init() {}
+    }
+
+    /// Reads a settings file, distinguishing "no file yet" (`nil`, safe to
+    /// start from an empty object) from "exists but can't be read" (thrown).
+    /// Conflating the two would let a permission or IO error make an install
+    /// treat a full settings.json as absent and atomically replace it with a
+    /// hooks-only object, destroying the user's Claude Code configuration.
+    public static func readSettings(at url: URL) throws -> Data? {
+        do {
+            return try Data(contentsOf: url)
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            return nil
+        } catch {
+            throw SettingsUnreadableError()
+        }
     }
 
     /// Merges one Keepresso entry per mapped event into the `hooks` key,

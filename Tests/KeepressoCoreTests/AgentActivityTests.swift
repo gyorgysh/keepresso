@@ -143,6 +143,10 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
             == "-Users-x-git-pueev-web")
     #expect(PSAgentActivityMonitor.claudeProjectDirName(forCwd: "/private/tmp")
             == "-private-tmp")
+    // The alphanumeric class is ASCII-only upstream: an accented letter
+    // flattens to "-" too, or the computed directory would never exist.
+    #expect(PSAgentActivityMonitor.claudeProjectDirName(forCwd: "/Users/józsef/café")
+            == "-Users-j-zsef-caf-")
     #expect(PSAgentActivityMonitor.grokSessionDirName(forCwd: "/Users/x/git/demo")
             == "%2FUsers%2Fx%2Fgit%2Fdemo")
     #expect(PSAgentActivityMonitor.grokSessionDirName(forCwd: "/Users/x/git/pueev_web")
@@ -213,6 +217,47 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     for _ in 0..<20 { state = AgentActivityTrigger.step(state, sample: 1) }
     #expect(state.isWorking == false)
     #expect((state.baseline ?? 99) < 3)
+}
+
+@Test func stepAdoptsAnIdleFloorThatRoseDuringTheEpisode() {
+    // Baseline learned at a quiet idle, then work starts and leaves behind a
+    // hotter idle floor (a dev server or watcher the agent started, still
+    // running as its child). The subtree settles flat above the off
+    // dead-band, which with a frozen baseline would read "working" until the
+    // agent process exits: the baseline must creep up to the new floor and
+    // release.
+    var state = AgentActivityTrigger.State()
+    for _ in 0..<10 { state = AgentActivityTrigger.step(state, sample: 0.5) }
+    for _ in 0..<10 { state = AgentActivityTrigger.step(state, sample: 30) }
+    #expect(state.isWorking)
+
+    var ticks = 0
+    while state.isWorking && ticks < 600 {
+        state = AgentActivityTrigger.step(state, sample: 3.5)
+        ticks += 1
+    }
+    #expect(state.isWorking == false)
+    #expect(ticks < 180) // minutes, not process-lifetime
+
+    // And the raised floor is now the baseline, so the next real burst
+    // still reads as work.
+    for _ in 0..<10 { state = AgentActivityTrigger.step(state, sample: 15) }
+    #expect(state.isWorking)
+}
+
+@Test func stepBurstyWorkKeepsItsHeadroomOverALongSession() {
+    // On/off tool bursts for many minutes: the dips pull each episode's
+    // floor back near the true idle level, so the creeping baseline never
+    // adopts the working level and a late burst still reads as work.
+    var state = AgentActivityTrigger.State()
+    for _ in 0..<10 { state = AgentActivityTrigger.step(state, sample: 1.0) }
+    for _ in 0..<30 {
+        for _ in 0..<20 { state = AgentActivityTrigger.step(state, sample: 15) }
+        for _ in 0..<20 { state = AgentActivityTrigger.step(state, sample: 1.0) }
+    }
+    for _ in 0..<10 { state = AgentActivityTrigger.step(state, sample: 15) }
+    #expect(state.isWorking)
+    #expect((state.baseline ?? 99) < 4)
 }
 
 @Test func stepFreshTranscriptEvidenceWinsOverQuietCPU() {
@@ -348,6 +393,48 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     #expect(monitor.current.sessions.count == 1)
 }
 
+/// Lock-guarded scripted ps output: the monitor calls `fetch` from a detached
+/// task (same pattern as ProcessListerTests' FetchStub).
+private final class PSOutputStub: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _output: String?
+
+    init(_ output: String?) { _output = output }
+
+    var output: String? {
+        get { lock.withLock { _output } }
+        set { lock.withLock { _output = newValue } }
+    }
+
+    @Sendable func fetch() -> String? { output }
+}
+
+@Test func monitorKeepsThePreviousSnapshotOnAFailedFetch() async throws {
+    // A transient ps failure must not commit an empty snapshot: the trigger
+    // would prune every session's smoothing state, and a mid-task session
+    // would rejoin with a baseline learned at its working level. The refresh
+    // latch still resets, so the next tick past the TTL retries.
+    var now = Date(timeIntervalSince1970: 0)
+    let ps = PSOutputStub("  100     1  50.0 ttys003  claude")
+    let monitor = PSAgentActivityMonitor(ttl: 3, now: { now }, fetch: ps.fetch)
+
+    _ = monitor.current
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(monitor.current.sessions.count == 1)
+
+    ps.output = nil
+    now = now.addingTimeInterval(4)
+    _ = monitor.current
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(monitor.current.sessions.count == 1) // stale beats empty
+
+    ps.output = "  100     1  50.0 ttys003  claude\n  200     1  0.1 ttys004  codex"
+    now = now.addingTimeInterval(4)
+    _ = monitor.current
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(monitor.current.sessions.count == 2) // and it recovered
+}
+
 @Test func claudeTranscriptWriteSeesSubagentStreams() throws {
     // Layout: <project>/<session>.jsonl (old) and
     // <project>/<session>/subagents/agent-x.jsonl (fresh). Appends inside
@@ -375,13 +462,19 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     #expect(abs(written.timeIntervalSince(fresh)) < 1)
 }
 
-@Test func freshTranscriptOutranksAnOlderIdleVerdict() async throws {
+@Test func freshTranscriptOutranksAnOlderNotWorkingVerdict() async throws {
     // The main turn's Stop hook writes idle while a background subagent works
     // on: its transcript keeps streaming but it emits no hook event until its
-    // next tool call. Evidence newer than the record drops the stale verdict;
-    // an idle record newer than the last write keeps deciding.
+    // next tool call. A minute later the idle nudge writes a plain `waiting`
+    // record for the same still-working session. Evidence newer than the
+    // record drops both verdicts; a record newer than the last write keeps
+    // deciding, and a pending approval is never overridden (it already reads
+    // as working, and the edge is exact).
     let base = Date(timeIntervalSince1970: 100_000)
-    func monitor(recordAge: TimeInterval, writeAge: TimeInterval) -> PSAgentActivityMonitor {
+    func monitor(
+        state: AgentHooks.HookSessionState, detail: String? = nil,
+        recordAge: TimeInterval, writeAge: TimeInterval
+    ) -> PSAgentActivityMonitor {
         PSAgentActivityMonitor(
             ttl: 3,
             now: { base },
@@ -389,36 +482,49 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
             evidence: { _, _ in base.addingTimeInterval(-writeAge) },
             hookRecords: { _ in
                 [AgentHooks.HookRecord(
-                    sessionId: "s", state: .idle, agentPid: 100,
+                    sessionId: "s", state: state, detail: detail, agentPid: 100,
                     updatedAt: base.addingTimeInterval(-recordAge))]
             }
         )
     }
 
-    let overridden = monitor(recordAge: 10, writeAge: 5)
-    _ = overridden.current
+    let overriddenIdle = monitor(state: .idle, recordAge: 10, writeAge: 5)
+    _ = overriddenIdle.current
     try await Task.sleep(for: .milliseconds(200))
-    #expect(overridden.current.sessions.map(\.hookState) == [nil])
-    #expect(overridden.current.sessions.map(\.hasFreshEvidence) == [true])
+    #expect(overriddenIdle.current.sessions.map(\.hookState) == [nil])
+    #expect(overriddenIdle.current.sessions.map(\.hasFreshEvidence) == [true])
 
-    let respected = monitor(recordAge: 2, writeAge: 5)
+    let overriddenNudge = monitor(state: .waiting, recordAge: 10, writeAge: 5)
+    _ = overriddenNudge.current
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(overriddenNudge.current.sessions.map(\.hookState) == [nil])
+
+    let approval = monitor(
+        state: .waiting, detail: "waiting-approval", recordAge: 10, writeAge: 5)
+    _ = approval.current
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(approval.current.sessions.map(\.hookState) == [.waiting])
+    #expect(approval.current.sessions.map(\.hookDetail) == ["waiting-approval"])
+
+    let respected = monitor(state: .idle, recordAge: 2, writeAge: 5)
     _ = respected.current
     try await Task.sleep(for: .milliseconds(200))
     #expect(respected.current.sessions.map(\.hookState) == [.idle])
 }
 
-@Test func monitorClassifiesTerminalLessSessionsByAncestry() async throws {
-    // A tty-less session is named by the ancestor walk even before any hook
-    // record exists; tty sessions are left alone.
+@Test func monitorClassifiesSessionsByAncestry() async throws {
+    // Every session is named by the ancestor walk even before any hook
+    // record exists, pty or not: an app can hold a pty for its embedded
+    // CLI. A terminal-classified session still shows its tty.
     let monitor = PSAgentActivityMonitor(
         ttl: 3,
         now: { Date(timeIntervalSince1970: 0) },
         fetch: { "  100     1  0.1 ??       claude\n  200     1  0.1 ttys003  claude" },
-        classifyOrigin: { pid in pid == 100 ? .claudeApp : nil }
+        classifyOrigin: { pid in pid == 100 ? .claudeApp : .terminal }
     )
     _ = monitor.current
     try await Task.sleep(for: .milliseconds(200))
     let sessions = monitor.current.sessions
-    #expect(sessions.map(\.origin) == [.claudeApp, nil])
+    #expect(sessions.map(\.origin) == [.claudeApp, .terminal])
     #expect(sessions.map(\.label) == ["claude (Claude app)", "claude (s003)"])
 }

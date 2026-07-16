@@ -167,8 +167,18 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         if shouldRefresh {
             Task.detached { [weak self] in
                 guard let self else { return }
-                let samples = self.fetch().map(Self.parse) ?? []
-                var sessions = Self.sessions(from: samples)
+                // A transient `ps` failure keeps the previous snapshot: an
+                // empty one would make the trigger prune every session's
+                // smoothing state, and a mid-task session would rejoin with
+                // a baseline learned at its working level.
+                guard let raw = self.fetch() else {
+                    self.withLock {
+                        self.lastFetch = self.now()
+                        self.isRefreshing = false
+                    }
+                    return
+                }
+                var sessions = Self.sessions(from: Self.parse(raw))
                 // Decorate with transcript evidence: a session whose
                 // transcript was written within the freshness window is
                 // working, no matter what its CPU says.
@@ -184,22 +194,30 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
                         evidenceDates[session.pid] = written
                         sessions[index].hasFreshEvidence = written >= cutoff
                     }
-                    // Name terminal-less sessions by their host (Claude app,
-                    // IDE) up front; a joined hook record can still refine it.
-                    if session.tty == nil {
-                        sessions[index].origin = self.classifyOrigin(session.pid)
-                    }
+                    // Name sessions by their host (Claude app, IDE) up front;
+                    // a joined hook record can still refine it. Every session
+                    // is classified, not just terminal-less ones: an app can
+                    // hold a pty for its embedded CLI, and the label promises
+                    // to name such sessions by their host.
+                    sessions[index].origin = self.classifyOrigin(session.pid)
                 }
                 // Stamp hook evidence: exact state edges beat both heuristics.
                 sessions = Self.applyHookRecords(
                     self.hookRecords(scanTime), to: sessions, cwdOf: { cwds[$0] })
-                // An idle verdict older than a fresh transcript write is
-                // stale information, not an edge: the main turn's Stop hook
-                // fires while a background subagent works on (its transcript
-                // keeps streaming, but it emits no hook event until its next
-                // tool call). Drop the verdict and let the evidence decide.
+                // A not-working verdict older than a fresh transcript write
+                // is stale information, not an edge: the main turn's Stop
+                // hook fires while a background subagent works on (its
+                // transcript keeps streaming, but it emits no hook event
+                // until its next tool call), and a minute later the idle
+                // nudge fires a Notification that writes a plain `waiting`
+                // record for the same still-working session. Drop both and
+                // let the evidence decide. `waiting-approval` stays: it
+                // already reads as working, and the approval edge is exact.
                 for index in sessions.indices {
-                    if sessions[index].hookState == .idle,
+                    let state = sessions[index].hookState
+                    let overridable = state == .idle
+                        || (state == .waiting && sessions[index].hookDetail != "waiting-approval")
+                    if overridable,
                        sessions[index].hasFreshEvidence,
                        let stamped = sessions[index].hookUpdatedAt,
                        let written = evidenceDates[sessions[index].pid],
@@ -288,11 +306,21 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             return newestModification(in: "\(home)/.grok/sessions/\(grokSessionDirName(forCwd: cwd))")
         case "codex":
             // ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl: date-keyed, not
-            // cwd-keyed, so today's directory stands in for every session.
+            // cwd-keyed, so the day directories stand in for every session.
+            // POSIX locale + Gregorian calendar, or a non-Gregorian user
+            // calendar (e.g. Buddhist) renders a year no directory matches.
+            // Yesterday is checked too: a rollout file is created at session
+            // start, so a session spanning midnight keeps appending to the
+            // previous day's directory.
             let day = DateFormatter()
+            day.locale = Locale(identifier: "en_US_POSIX")
+            day.calendar = Calendar(identifier: .gregorian)
             day.dateFormat = "yyyy/MM/dd"
             day.timeZone = .current
-            return newestModification(in: "\(home)/.codex/sessions/\(day.string(from: Date()))")
+            let today = Date()
+            return [today, today.addingTimeInterval(-86_400)]
+                .compactMap { newestModification(in: "\(home)/.codex/sessions/\(day.string(from: $0))") }
+                .max()
         default:
             return nil
         }
@@ -320,9 +348,12 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
 
     /// Claude Code's per-project transcript folder name: the working
     /// directory with every non-alphanumeric character flattened to "-"
-    /// (`/Users/x/git/pueev_web` becomes `-Users-x-git-pueev-web`).
+    /// (`/Users/x/git/pueev_web` becomes `-Users-x-git-pueev-web`). The
+    /// alphanumeric class is ASCII-only (`[^a-zA-Z0-9]` upstream), so an
+    /// accented letter in the path flattens too; keeping it would map the
+    /// session to a directory that never exists.
     static func claudeProjectDirName(forCwd cwd: String) -> String {
-        String(cwd.map { $0.isLetter || $0.isNumber ? $0 : "-" })
+        String(cwd.map { $0.isASCII && ($0.isLetter || $0.isNumber) ? $0 : "-" })
     }
 
     /// Grok's per-project session folder name: the working directory
@@ -520,8 +551,13 @@ public final class AgentActivityTrigger: Trigger {
     /// agent idles this hot, and it covers a session first seen mid-task.
     public static let hardWorkingFloorPercent = 20.0
     /// How fast the learned baseline drifts upward per tick while idle, so it
-    /// tracks a TUI whose idle level shifts. It snaps *down* instantly, and
-    /// is frozen while working so a long task can't erode its own headroom.
+    /// tracks a TUI whose idle level shifts. It snaps *down* instantly. While
+    /// working it creeps at the same rate but only toward the lowest average
+    /// the episode has seen: bursty real work keeps its headroom (the bar
+    /// never rises past the episode's own floor), while a session whose idle
+    /// level rose *during* the episode (a leftover dev server, a warmed-up
+    /// MCP server) settles flat at the new floor, the bar catches up, and the
+    /// trigger releases instead of holding the Mac awake until process exit.
     static let baselineCreepPerTick = 0.05
     /// Smoothing weight of each new sample; 0.25 at one sample per second
     /// settles a sustained change in a few seconds while damping the sizable
@@ -540,6 +576,10 @@ public final class AgentActivityTrigger: Trigger {
         /// The session's learned idle CPU level (a decaying minimum of
         /// ``average``), or `nil` before the first sample.
         public var baseline: Double?
+        /// The lowest ``average`` seen during the current working episode,
+        /// the ceiling the baseline may creep toward while working; `nil`
+        /// while idle.
+        public var episodeFloor: Double?
         public var isWorking = false
         public init() {}
     }
@@ -611,13 +651,22 @@ public final class AgentActivityTrigger: Trigger {
         next.average = average
 
         // Learn the idle level while idle: snap down to any new minimum,
-        // drift upward slowly toward the observed average. Frozen entirely
-        // while working: a working session must neither raise the bar it is
-        // measured against nor drag the bar down with it as it winds down
-        // (a mid-task dip would otherwise read as "new idle level" and flip
-        // the verdict while the task is still running).
+        // drift upward slowly toward the observed average. While working it
+        // never snaps down (a mid-task dip must not read as "new idle
+        // level") and creeps upward only toward the lowest average this
+        // episode has seen: bursty work keeps its headroom, but an idle
+        // floor that rose during the episode (a leftover child process) is
+        // eventually adopted as the new baseline, or the session would stay
+        // "working" until its process exits (see ``baselineCreepPerTick``).
         var baseline = state.baseline ?? average
-        if !state.isWorking {
+        if state.isWorking {
+            let floor = min(state.episodeFloor ?? average, average)
+            next.episodeFloor = floor
+            if floor > baseline {
+                baseline = min(baseline + Self.baselineCreepPerTick, floor)
+            }
+        } else {
+            next.episodeFloor = nil
             baseline = average < baseline ? average : min(baseline + Self.baselineCreepPerTick, average)
         }
         next.baseline = baseline
