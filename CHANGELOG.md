@@ -32,7 +32,8 @@ Theme: Keepresso learns when your AI agent is actually working.
   countdown in the menu. The menu lists each detected session with a live working / idle
   state, and the built-in "AI Agent" preset now applies this rule instead
   of its old process-name rules, so an agent left open no longer pins the
-  Mac awake around the clock.
+  Mac awake around the clock. If you applied the old AI Agent preset, apply
+  it once more to move your live rules to the new condition.
 - **Claude Code can tell Keepresso exactly what it's doing.** An opt-in
   integration (Preferences ▸ Triggers ▸ the AI agent rule) installs Claude Code
   hooks that report each session's real state, so there's no guessing from CPU
@@ -46,8 +47,8 @@ Theme: Keepresso learns when your AI agent is actually working.
   of Preferences and into the menu, as a switch with an inline 10-90% slider
   that shows the level you're picking (it only commits when you let go, so
   dragging past the current charge can't stop your session). "Only while
-  brewing" joins it, the lid-closed and battery rows appear only on machines
-  with a battery, and small (i) buttons explain what each one does. Every switch
+  brewing" joins it, the battery rows appear only on machines with a battery,
+  and small (i) buttons explain what each one does. Every switch
   in the app now lines up flush right at one size, in the menu, the Gaming &
   Streaming window, and the welcome screen. Working sessions pulse with Claude
   Code's console spinner, in Claude's terracotta for Claude rows and green for
@@ -70,6 +71,11 @@ Theme: Keepresso learns when your AI agent is actually working.
   global shortcut, and Language right under Keep awake, hardware-specific
   settings further down, maintenance last. The battery threshold is the same
   slider as the menu's, so the two always agree.
+- **Desktops get the sleep override under an honest name.** On a Mac with no
+  battery (mini, Studio, Pro) the closed-display switch used to talk about
+  lids. It's now called "Disable system sleep" in the menu and Preferences,
+  with wording to match: the same pmset switch, presented as what it is on a
+  desktop, a hard never-sleep override you turn off when you're done.
 
 ### Fixed
 
@@ -82,7 +88,14 @@ Theme: Keepresso learns when your AI agent is actually working.
 - **Windows opened from the menu are properly in front.** A window opened from
   the menu bar could come up half active, drawn in the inactive gray style with
   clicks inside it doing nothing until you switched away and back. Keepresso now
-  detects that state and repairs it.
+  detects that state and repairs it, and only that state: clicking into another
+  app right after a window opens no longer pulls focus back.
+
+### Notes
+
+- **Downgrading resets settings.** Settings saved by 1.14 include the new
+  agent-activity rule, which older versions can't read: launching 1.13 or
+  older afterwards starts Keepresso from defaults.
 
 ## [1.13.0] - 2026-07-12
 

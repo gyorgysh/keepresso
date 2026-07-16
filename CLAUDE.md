@@ -41,12 +41,20 @@ Homebrew Cask is published and installable at
 `gyorgysh/homebrew-keepresso` tap repo.
 A headless virtual-display feature (private `CGVirtualDisplay` API, behind an
 off-by-default flag) is also done and validated on real headless hardware.
-Current version: 1.5.0 (build 13), released 2026-07-04 with desktop widgets
-(small toggle tile + medium with Start/Stop and trigger pause, macOS 14+), the
+Current version: 1.14.0 (build 24), on main and awaiting release; v1.13.0
+(fifteen UI languages, generated from Python catalogs in
+`tools/localization/`) is the latest shipped tag. v1.14 adds quick "Stop in"
+buttons with an ending-soon notice, an agent-activity trigger
+(`KeepressoCore/AgentActivity.swift`: transcript evidence, per-session CPU
+baselines) with opt-in Claude Code hook tracking
+(`KeepressoCore/AgentHooks.swift`, merged into `~/.claude/settings.json`), a
+reworked menu panel and grouped Preferences with (i) explanations, and, on
+battery-less desktops, the pmset switch presented as "Disable system sleep"
+instead of closed-display wording. Earlier milestones still in the app: desktop
+widgets (small toggle tile + medium with Start/Stop and trigger pause), the
 Control Center Keep Awake toggle (macOS 26, availability-gated in the shared
-`KeepressoWidget` appex), Bluetooth and calendar triggers, and restorable
-default presets. v1.6 (gaming and streaming) is implemented on main and bumped
-to 1.6.0 (build 14), awaiting release: a gaming trigger
+`KeepressoWidget` appex), Bluetooth and calendar triggers, restorable default
+presets, and v1.6's gaming and streaming: a gaming trigger
 (`KeepressoCore/Gaming.swift`, frontmost games app category or a cloud-gaming
 client, 5 min release grace), a Cloud Gaming preset, and a Gaming & Streaming
 Setup window (menu ▸ "Gaming & Streaming…") with a ping jitter test
