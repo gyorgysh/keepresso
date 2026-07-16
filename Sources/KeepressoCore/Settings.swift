@@ -134,6 +134,21 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         }
     }
 
+    /// Bring stored copies of built-in presets up to their current
+    /// definitions: the stored copy is whatever some past version seeded, so
+    /// without this an improved built-in (like the AI Agent preset gaining
+    /// the working rule) never reaches existing users, and the welcome
+    /// screen (which applies ``Preset/builtIns`` directly) and the presets
+    /// menu would apply different rules under the same name. Only presets
+    /// the user hasn't renamed are touched; deleted built-ins stay deleted.
+    public mutating func refreshBuiltInPresets() {
+        for built in Preset.builtIns {
+            guard let index = presets.firstIndex(where: { $0.id == built.id && $0.name == built.name })
+            else { continue }
+            presets[index].ruleSet = built.ruleSet
+        }
+    }
+
     /// Built-in presets not currently in ``presets``, the ones a user has
     /// deleted and could bring back with ``restoreMissingBuiltInPresets()``.
     /// Matched by id, so a built-in the user only renamed or edited still

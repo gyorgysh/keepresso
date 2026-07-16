@@ -68,6 +68,39 @@ import Foundation
     #expect(settings == once)
 }
 
+// MARK: - Refreshing stored built-ins to current definitions
+
+@Test func refreshUpdatesAStaleBuiltInRuleSet() {
+    var settings = KeepressoSettings.default
+    // The AI Agent preset as an older version seeded it: process rules
+    // instead of the working rule.
+    let stale = RuleSet(combine: .any, rules: [.process("claude"), .process("codex")])
+    let index = settings.presets.firstIndex { $0.id == "ai-agent" }!
+    settings.presets[index].ruleSet = stale
+
+    settings.refreshBuiltInPresets()
+    let current = Preset.builtIns.first { $0.id == "ai-agent" }!
+    #expect(settings.presets[index].ruleSet == current.ruleSet)
+}
+
+@Test func refreshLeavesRenamedAndUserPresetsAndDeletionsAlone() {
+    var settings = KeepressoSettings.default
+    // A renamed built-in is the user's own now.
+    let renamedRules = RuleSet(combine: .any, rules: [.process("mine")])
+    let index = settings.presets.firstIndex { $0.id == "ai-agent" }!
+    settings.presets[index].name = "My agents"
+    settings.presets[index].ruleSet = renamedRules
+    // A user-created preset and a deleted built-in.
+    let user = Preset(name: "Mine", ruleSet: renamedRules)
+    settings.presets.append(user)
+    settings.presets.removeAll { $0.id == "meetings" }
+
+    settings.refreshBuiltInPresets()
+    #expect(settings.presets[index].ruleSet == renamedRules)
+    #expect(settings.presets.contains { $0.id == user.id && $0.ruleSet == renamedRules })
+    #expect(!settings.presets.contains { $0.id == "meetings" })
+}
+
 // MARK: - Restoring deleted built-ins
 
 @Test func restoreBringsBackOnlyDeletedBuiltIns() {

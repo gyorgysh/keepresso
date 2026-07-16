@@ -100,6 +100,7 @@ final class AppModel {
         )
         var loaded = store.load()
         loaded.seedNewBuiltInPresets() // new built-ins reach existing users once
+        loaded.refreshBuiltInPresets() // and changed ones stay current
         self.settings = loaded
         self.session = SessionController(reminder: notifier)
         self.session.options = loaded.options
@@ -638,8 +639,10 @@ final class AppModel {
     func importSettings(from data: Data) throws {
         var imported = try SettingsTransfer.importSettings(from: data)
         // An export from an older build can predate built-ins added since; seed
-        // them the same way launch does so the import isn't missing new defaults.
+        // and refresh them the same way launch does so the import isn't
+        // missing new defaults or carrying outdated ones.
         imported.seedNewBuiltInPresets()
+        imported.refreshBuiltInPresets()
         apply(imported)
     }
 
