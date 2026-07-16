@@ -44,24 +44,32 @@ struct RulesView: View {
         ("10 minutes", 600),
     ]
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("When")
-                    .font(.subheadline.weight(.semibold))
-                Picker("", selection: Binding(
-                    get: { model.combine },
-                    set: { model.combine = $0 }
-                )) {
-                    Text("any").tag(CombineMode.any)
-                    Text("all").tag(CombineMode.all)
-                }
-                .pickerStyle(.menu)
-                .fixedSize()
-                Text("of these are true:")
-                    .font(.subheadline)
+    /// The section header above the rules: "When [any/all] of these are
+    /// true:" with the combine-mode picker inline. A header, not a row: the
+    /// grouped Form's label/control row layout would tear the sentence apart.
+    static func combineHeader(model: AppModel) -> some View {
+        HStack(spacing: 6) {
+            Text("When")
+            Picker("", selection: Binding(
+                get: { model.combine },
+                set: { model.combine = $0 }
+            )) {
+                Text("any").tag(CombineMode.any)
+                Text("all").tag(CombineMode.all)
             }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .fixedSize()
+            Text("of these are true:")
+        }
+    }
 
+    // A Group, not a VStack: RulesView sits inside a grouped Form section,
+    // and a Group lets the Form explode each top-level view into its own
+    // row (a VStack would cram the whole editor into one row and fight the
+    // form's row layout).
+    var body: some View {
+        Group {
             if model.rules.isEmpty {
                 Text("No conditions yet, so the Mac can sleep.")
                     .font(.caption)

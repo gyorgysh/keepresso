@@ -70,7 +70,7 @@ struct PreferencesView: View {
     private var content: some View {
         switch section {
         case .general: GeneralTab(model: model)
-        case .triggers: TriggersTab(model: model).padding(20)
+        case .triggers: TriggersTab(model: model)
         case .reminder: ReminderTab(model: model)
         case .disk: DiskTab(model: model)
         case .display: DisplayTab(model: model)
@@ -213,6 +213,55 @@ private struct GeneralTab: View {
                 Toggle("Prevent display sleep", isOn: optionBinding(\.preventDisplaySleep))
                 Toggle("Prevent system sleep", isOn: optionBinding(\.preventSystemSleep))
             }
+            Section {
+                Toggle("Launch at login", isOn: Binding(
+                    get: { launchAtLogin },
+                    set: { newValue in
+                        LoginItem.setEnabled(newValue)
+                        launchAtLogin = LoginItem.isEnabled
+                    }
+                ))
+                Toggle("Start keep-awake on launch", isOn: Binding(
+                    get: { model.startOnLaunch },
+                    set: { model.startOnLaunch = $0 }
+                ))
+            } header: {
+                Text("Startup")
+            } footer: {
+                Text("Starts a session as soon as Keepresso launches, using the default duration. Ignored while triggers are controlling activation.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                LabeledContent("Toggle shortcut") {
+                    ShortcutRecorder(shortcut: Binding(
+                        get: { model.hotKey },
+                        set: { model.hotKey = $0 }
+                    ))
+                }
+            } header: {
+                Text("Global shortcut")
+            } footer: {
+                Text("A system-wide keyboard shortcut that starts or stops keep-awake from any app. Needs at least one modifier key.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                Picker("App language", selection: Binding(
+                    get: { AppLanguage.current },
+                    set: { switchLanguage(to: $0) }
+                )) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(language.label).tag(language)
+                    }
+                }
+            } header: {
+                Text("Language")
+            } footer: {
+                Text("Keepresso follows your system language by default. Changing this relaunches Keepresso so menus, windows, and notifications all switch together.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             // High up on purpose: this is the one-time set-and-forget step that
             // makes every privileged switch below (and AWDL pausing) silent.
             Section {
@@ -229,6 +278,8 @@ private struct GeneralTab: View {
                     get: { model.simulateUserActivity },
                     set: { model.simulateUserActivity = $0 }
                 ))
+            } header: {
+                Text("Presence")
             } footer: {
                 Text("Also tells macOS you're active while a session runs, so remote-desktop sessions, meeting presence (Teams, Slack), and corporate idle-logout don't mark you away. A plain keep-awake doesn't reach those. It only steps in once you've been idle a few seconds, so it never nudges the pointer while you're using the Mac or gaming. Off by default; some managed Macs flag simulated activity.")
                     .font(.caption)
@@ -239,6 +290,8 @@ private struct GeneralTab: View {
                     get: { model.showCountdownInMenuBar },
                     set: { model.showCountdownInMenuBar = $0 }
                 ))
+            } header: {
+                Text("Menu bar")
             } footer: {
                 Text("Shows the remaining time next to the menu-bar icon during a timed session.")
                     .font(.caption)
@@ -291,103 +344,23 @@ private struct GeneralTab: View {
                         set: { model.batteryAutoPauseEnabled = $0 }
                     ))
                     if model.batteryAutoPauseEnabled {
-                        Picker("Below", selection: Binding(
-                            get: { model.pauseBelowBatteryPercent },
-                            set: { model.pauseBelowBatteryPercent = $0 }
-                        )) {
-                            ForEach([10, 15, 20, 30, 50, 60, 70, 80, 90], id: \.self) { percent in
-                                Text("\(percent)%").tag(percent)
-                            }
+                        LabeledContent("Below") {
+                            BatteryThresholdSlider(percent: Binding(
+                                get: { model.pauseBelowBatteryPercent },
+                                set: { model.pauseBelowBatteryPercent = $0 }
+                            ))
                         }
                     }
+                } header: {
+                    Text("Battery")
                 } footer: {
                     Text("Lets the Mac sleep once battery charge drops below this level, even mid-session, so it doesn't run flat.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            Section {
-                Toggle("Keep awake with the lid closed", isOn: Binding(
-                    get: { model.closedDisplayEnabled },
-                    set: { model.setClosedDisplay($0) }
-                ))
-                .disabled(model.closedDisplayBusy)
-                if model.closedDisplayBusy && !model.helperInstalled {
-                    AdminAuthNote(purpose: L("keep the Mac awake with the lid closed"))
-                }
-                if let error = model.closedDisplayError {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
-                Toggle("Only while brewing", isOn: Binding(
-                    get: { model.closedDisplayOnlyWhileBrewing },
-                    set: { model.closedDisplayOnlyWhileBrewing = $0 }
-                ))
-                .disabled(model.closedDisplayAutoBusy)
-                if model.closedDisplayAutoBusy && !model.helperInstalled {
-                    AdminAuthNote(purpose: L("switch closed-display mode with the session"))
-                }
-                if let error = model.closedDisplayAutoError {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
-            } header: {
-                Text("Closed-display mode")
-            } footer: {
-                Text("Keeps running with the lid shut and no external display, on power or battery. The display itself still turns off when the lid closes (unless an external display is attached), so it's not lighting up uselessly inside the closed lid. Changing this flips a system setting (pmset disablesleep), so it stays in effect until you turn it off. On battery and closed it can still drain the battery over time, so don't leave it on in a bag. With \u{201C}Only while brewing\u{201D} on, Keepresso instead switches it on when a keep-awake session starts and back off when it ends or the app quits. Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password (once per app run for \u{201C}Only while brewing\u{201D}).")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Section {
-                LabeledContent("Toggle shortcut") {
-                    ShortcutRecorder(shortcut: Binding(
-                        get: { model.hotKey },
-                        set: { model.hotKey = $0 }
-                    ))
-                }
-            } header: {
-                Text("Global shortcut")
-            } footer: {
-                Text("A system-wide keyboard shortcut that starts or stops keep-awake from any app. Needs at least one modifier key.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Section {
-                Picker("App language", selection: Binding(
-                    get: { AppLanguage.current },
-                    set: { switchLanguage(to: $0) }
-                )) {
-                    ForEach(AppLanguage.allCases) { language in
-                        Text(language.label).tag(language)
-                    }
-                }
-            } header: {
-                Text("Language")
-            } footer: {
-                Text("Keepresso follows your system language by default. Changing this relaunches Keepresso so menus, windows, and notifications all switch together.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Section {
-                Toggle("Launch at login", isOn: Binding(
-                    get: { launchAtLogin },
-                    set: { newValue in
-                        LoginItem.setEnabled(newValue)
-                        launchAtLogin = LoginItem.isEnabled
-                    }
-                ))
-                Toggle("Start keep-awake on launch", isOn: Binding(
-                    get: { model.startOnLaunch },
-                    set: { model.startOnLaunch = $0 }
-                ))
-            } header: {
-                Text("Startup")
-            } footer: {
-                Text("Starts a session as soon as Keepresso launches, using the default duration. Ignored while triggers are controlling activation.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            if model.machineHasBattery {
+                closedDisplaySection
             }
             Section {
                 HStack {
@@ -411,6 +384,8 @@ private struct GeneralTab: View {
                     NSApp.activate(ignoringOtherApps: true)
                     openWindow(id: KeepressoApp.welcomeWindowID)
                 }
+            } header: {
+                Text("Welcome")
             } footer: {
                 Text("Reopen the first-run welcome, with quick one-click setup for how you use your Mac.")
                     .font(.caption)
@@ -425,6 +400,45 @@ private struct GeneralTab: View {
         .animation(.snappy(duration: 0.25), value: model.closedDisplayError)
         .animation(.snappy(duration: 0.25), value: model.closedDisplayAutoError)
         .onAppear { model.refreshClosedDisplay() }
+    }
+
+    /// Closed-display mode only makes sense on a machine with a lid; battery
+    /// presence is the proxy, so desktops never see this section.
+    private var closedDisplaySection: some View {
+        Section {
+            Toggle("Keep awake with the lid closed", isOn: Binding(
+                get: { model.closedDisplayEnabled },
+                set: { model.setClosedDisplay($0) }
+            ))
+            .disabled(model.closedDisplayBusy)
+            if model.closedDisplayBusy && !model.helperInstalled {
+                AdminAuthNote(purpose: L("keep the Mac awake with the lid closed"))
+            }
+            if let error = model.closedDisplayError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+            Toggle("Only while brewing", isOn: Binding(
+                get: { model.closedDisplayOnlyWhileBrewing },
+                set: { model.closedDisplayOnlyWhileBrewing = $0 }
+            ))
+            .disabled(model.closedDisplayAutoBusy)
+            if model.closedDisplayAutoBusy && !model.helperInstalled {
+                AdminAuthNote(purpose: L("switch closed-display mode with the session"))
+            }
+            if let error = model.closedDisplayAutoError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+        } header: {
+            Text("Closed-display mode")
+        } footer: {
+            Text("Keeps running with the lid shut and no external display, on power or battery. The display itself still turns off when the lid closes (unless an external display is attached), so it's not lighting up uselessly inside the closed lid. Changing this flips a system setting (pmset disablesleep), so it stays in effect until you turn it off. On battery and closed it can still drain the battery over time, so don't leave it on in a bag. With \u{201C}Only while brewing\u{201D} on, Keepresso instead switches it on when a keep-awake session starts and back off when it ends or the app quits. Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password (once per app run for \u{201C}Only while brewing\u{201D}).")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     /// Persist a new language choice and relaunch so every surface switches
@@ -493,73 +507,79 @@ private struct TriggersTab: View {
     @State private var newPresetName = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Toggle("Activate by triggers", isOn: Binding(
-                get: { model.triggersEnabled },
-                set: { model.triggersEnabled = $0 }
-            ))
-            .toggleStyle(.switch)
-
-            Text("When on, the listed conditions control the session instead of the manual switch.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            if model.triggersEnabled && model.triggersPaused {
-                HStack(spacing: 6) {
-                    Text("Currently paused from the menu bar.")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                    Button("Resume") { model.resumeTriggers() }
-                        .font(.caption)
+        Form {
+            Section {
+                Toggle("Activate by triggers", isOn: Binding(
+                    get: { model.triggersEnabled },
+                    set: { model.triggersEnabled = $0 }
+                ))
+                if model.triggersEnabled && model.triggersPaused {
+                    HStack(spacing: 6) {
+                        Text("Currently paused from the menu bar.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                        Spacer()
+                        Button("Resume") { model.resumeTriggers() }
+                            .font(.caption)
+                    }
+                }
+            } header: {
+                Text("Triggers")
+            } footer: {
+                Text("When on, the listed conditions control the session instead of the manual switch.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if model.triggersEnabled {
+                Section {
+                    presetRows
+                } header: {
+                    Text("Presets")
+                }
+                Section {
+                    RulesView(model: model)
+                } header: {
+                    RulesView.combineHeader(model: model)
                 }
             }
-
-            if model.triggersEnabled {
-                Divider()
-                presets
-                Divider()
-                RulesView(model: model)
-            }
-            Spacer(minLength: 0)
         }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
         .animation(.snappy(duration: 0.25), value: model.triggersEnabled)
         .animation(.snappy(duration: 0.25), value: model.triggersPaused)
     }
 
-    private var presets: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Presets")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Menu {
-                    ForEach(model.presets) { preset in
-                        Button(preset.displayName) { model.applyPreset(preset) }
-                    }
-                    if !model.presets.isEmpty { Divider() }
-                    ForEach(model.presets) { preset in
-                        Button(L("Remove \u{201C}%@\u{201D}", preset.displayName), role: .destructive) {
-                            model.removePreset(preset)
-                        }
-                    }
-                    if !model.missingBuiltInPresets.isEmpty {
-                        Divider()
-                        Button("Restore default presets") { model.restoreDefaultPresets() }
-                    }
-                } label: {
-                    Label("Apply or remove", systemImage: "list.bullet")
+    @ViewBuilder
+    private var presetRows: some View {
+        HStack {
+            Menu {
+                ForEach(model.presets) { preset in
+                    Button(preset.displayName) { model.applyPreset(preset) }
                 }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
+                if !model.presets.isEmpty { Divider() }
+                ForEach(model.presets) { preset in
+                    Button(L("Remove \u{201C}%@\u{201D}", preset.displayName), role: .destructive) {
+                        model.removePreset(preset)
+                    }
+                }
+                if !model.missingBuiltInPresets.isEmpty {
+                    Divider()
+                    Button("Restore default presets") { model.restoreDefaultPresets() }
+                }
+            } label: {
+                Label("Apply or remove", systemImage: "list.bullet")
             }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            Spacer()
+        }
 
-            HStack(spacing: 6) {
-                TextField("Save current rules as\u{2026}", text: $newPresetName)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit(savePreset)
-                Button("Save") { savePreset() }
-                    .disabled(newPresetName.trimmingCharacters(in: .whitespaces).isEmpty || model.rules.isEmpty)
-            }
+        HStack(spacing: 6) {
+            TextField("Save current rules as\u{2026}", text: $newPresetName)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit(savePreset)
+            Button("Save") { savePreset() }
+                .disabled(newPresetName.trimmingCharacters(in: .whitespaces).isEmpty || model.rules.isEmpty)
         }
     }
 
@@ -616,6 +636,8 @@ private struct ReminderTab: View {
                         set: { model.reminderSound = $0 }
                     ))
                 }
+            } header: {
+                Text("Reminder")
             } footer: {
                 Text(model.reminderRepeats
                      ? L("A recurring notification every interval while a session runs, so a Mac left awake keeps reminding you.")
@@ -772,6 +794,8 @@ private struct DiskTab: View {
                         }
                     }
                 }
+            } header: {
+                Text("Disk")
             } footer: {
                 Text("Writes a tiny marker file on the chosen volume periodically to stop an external drive or NAS from spinning down.")
                     .font(.caption)
