@@ -58,6 +58,21 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   **scheduled time window** (weekdays 9:00-18:00, overnight hours). Combine
   conditions with **any** (OR) or **all** (AND). A one-click "Pause Triggers"
   in the menu bar stops brewing without touching your rules.
+- 🤖 **Agent-aware.** The "AI agent is working" condition keeps the Mac awake
+  while a coding agent (claude, codex, gemini, grok, aider, goose, and friends)
+  is actually working, and lets it sleep once every session goes quiet, after a
+  grace you choose. Agents that stream a transcript to disk prove their work
+  directly, even through long zero-CPU network waits; the rest are judged on the
+  CPU of their processes and tool calls against each session's own learned idle
+  level. **Claude Code** can report its state exactly, via an opt-in hook
+  integration you install in one click: a session is working when Claude says it
+  is, a pending permission prompt counts as working (so the Mac waits for your
+  answer), and background subagents count too. The menu lists every session with
+  a live working / idle state and where it runs.
+- ⏹️ **Stop in 15, one click.** A row of quick "Stop in" buttons (15 min, 30 min,
+  1 h out of the box, editable) turns a running session into a timed one, so the
+  Mac goes back to sleeping on its own without you remembering to toggle off.
+  Optionally get a heads-up a few minutes before any timed session ends.
 - 🎥 **Never sleeps mid-meeting.** The camera/microphone conditions catch every
   meeting app at once, including calls running in a browser tab, and read only
   the device's in-use state (the green-dot signal), never the stream, so no

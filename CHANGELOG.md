@@ -3,7 +3,9 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
-## Unreleased
+## [1.14.0] - 2026-07-16
+
+Theme: Keepresso learns when your AI agent is actually working.
 
 ### Added
 
@@ -31,6 +33,45 @@ Versions follow [Semantic Versioning](https://semver.org).
   state, and the built-in "AI Agent" preset now applies this rule instead
   of its old process-name rules, so an agent left open no longer pins the
   Mac awake around the clock.
+- **Claude Code can tell Keepresso exactly what it's doing.** An opt-in
+  integration (Preferences ▸ Triggers ▸ the AI agent rule) installs Claude Code
+  hooks that report each session's real state, so there's no guessing from CPU
+  at all: a session is working when Claude says it is, and at rest when it says
+  that. A pending permission prompt counts as working, so the Mac stays awake
+  while it waits for your answer, but an abandoned prompt settles back to rest
+  instead of pinning the Mac awake forever. Sessions are listed by where they
+  run ("claude (Claude app)", "claude (IDE)", or the terminal), and background
+  subagents count as work even when the main turn has ended.
+- **The menu panel does more, in less space.** The low-battery pause moved out
+  of Preferences and into the menu, as a switch with an inline 10-90% slider
+  that shows the level you're picking (it only commits when you let go, so
+  dragging past the current charge can't stop your session). "Only while
+  brewing" joins it, the lid-closed and battery rows appear only on machines
+  with a battery, and small (i) buttons explain what each one does. Every switch
+  in the app now lines up flush right at one size, in the menu, the Gaming &
+  Streaming window, and the welcome screen. Working sessions pulse with Claude
+  Code's console spinner, in Claude's terracotta for Claude rows and green for
+  other agents.
+- **Preferences reads as one window.** The Triggers tab is now a grouped form
+  like every other tab, with its own Triggers and Presets sections. Every tab
+  leads with a section header (Reminder, Disk, Presence, Menu bar, Battery,
+  Welcome), and General is ordered by what you reach for most: Startup, the
+  global shortcut, and Language right under Keep awake, hardware-specific
+  settings further down, maintenance last. The battery threshold is the same
+  slider as the menu's, so the two always agree.
+
+### Fixed
+
+- **Built-in presets keep up with updates.** An improved built-in preset (the
+  AI Agent preset gaining the new working rule) never reached you if an older
+  version had already seeded it, so the welcome screen and the presets menu
+  offered two different rule sets under one name. Un-renamed built-ins now
+  refresh to their current definitions on launch. Renamed ones are yours and
+  stay untouched, deleted ones stay deleted.
+- **Windows opened from the menu are properly in front.** A window opened from
+  the menu bar could come up half active, drawn in the inactive gray style with
+  clicks inside it doing nothing until you switched away and back. Keepresso now
+  detects that state and repairs it.
 
 ## [1.13.0] - 2026-07-12
 
