@@ -52,6 +52,17 @@ Theme: Keepresso learns when your AI agent is actually working.
   Streaming window, and the welcome screen. Working sessions pulse with Claude
   Code's console spinner, in Claude's terracotta for Claude rows and green for
   other agents.
+- **Every setting explains itself.** Small (i) buttons now sit beside each
+  Preferences section, the trigger conditions, and the any/all rule: a click
+  explains what the setting actually does, when it doesn't apply, and what it
+  costs (a password prompt, a permission, battery). The explanations that used
+  to sprawl under a section as fine print are in there now, so each section
+  keeps one plain line of caption and the tabs stay scannable. New ground gets
+  covered too: what a trigger is and when it overrides the manual switch, what
+  a preset is and what renaming a built-in does, what "any" and "all" mean,
+  what each condition category watches and which ones ask for a permission,
+  what the reminder is for (and that it never stops a session itself), and why
+  a drive needs keeping awake at all.
 - **Preferences reads as one window.** The Triggers tab is now a grouped form
   like every other tab, with its own Triggers and Presets sections. Every tab
   leads with a section header (Reminder, Disk, Presence, Menu bar, Battery,

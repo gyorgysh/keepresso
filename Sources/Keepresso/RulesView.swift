@@ -61,6 +61,7 @@ struct RulesView: View {
             .labelsHidden()
             .fixedSize()
             Text("of these are true:")
+            InfoButton(text: L("\u{201C}any\u{201D} keeps the Mac awake while at least one condition holds, so the rules pile up: add three and any of them is enough. \u{201C}all\u{201D} needs every one true at once, which narrows things down (on AC power and an external display connected means only while docked). Conditions are checked once a second, and Keepresso stops brewing as soon as they stop being met."))
         }
     }
 
@@ -312,9 +313,30 @@ struct RulesView: View {
 
     @ViewBuilder
     private var addConditionTrio: some View {
-        Menu { powerDisplayItems } label: { Text("Power & Display") }
-        Menu { networkDevicesItems } label: { Text("Network & Devices") }
-        Menu { appsActivityItems } label: { Text("Apps & Activity") }
+        addMenu("Power & Display", info: L("Conditions Keepresso reads straight from the hardware, with no permission needed: whether you're on AC power, on battery, or charging, and whether an external display is connected. Good for a Mac that should only stay awake while it's docked or plugged in, especially combined with \u{201C}all\u{201D} to mean exactly that.")) {
+            powerDisplayItems
+        }
+        addMenu("Network & Devices", info: L("Conditions about what the Mac is connected to or busy with: a chosen Wi-Fi network, a VPN, a Bluetooth device such as headphones or a controller, a mounted volume, or sustained network throughput for a large download, upload, or sync. Reading Wi-Fi names needs Location permission and Bluetooth needs its own, both requested from this menu; the rest ask for nothing.")) {
+            networkDevicesItems
+        }
+        addMenu("Apps & Activity", info: L("Conditions about what you're actually doing: an app running or frontmost, the camera or microphone in use, audio playing, a game in front, an AI agent working, a process by name, a download finishing in a folder you watch, CPU load above a threshold, a time window, or a calendar event in progress. The camera and microphone conditions read only the device's in-use signal (the green dot), never the stream, so neither asks for permission.")) {
+            appsActivityItems
+        }
+    }
+
+    /// One "Add" category: the menu of conditions, with an ``InfoButton``
+    /// alongside explaining what the category covers and what it costs in
+    /// permissions. The button sits outside the menu label, since a menu label
+    /// can't hold a second control of its own.
+    private func addMenu<Items: View>(
+        _ title: LocalizedStringKey,
+        info: String,
+        @ViewBuilder items: () -> Items
+    ) -> some View {
+        HStack(spacing: 2) {
+            Menu { items() } label: { Text(title) }
+            InfoButton(text: info)
+        }
     }
 
     @ViewBuilder

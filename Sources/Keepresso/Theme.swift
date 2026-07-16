@@ -60,6 +60,24 @@ struct InfoButton: View {
     }
 }
 
+/// A Form section header with an ``InfoButton`` after the title. The pairing is
+/// the rule for Preferences: the section's footer stays one plain line saying
+/// what the setting does, and the popover carries the detail (how it works, what
+/// it costs, when it doesn't apply) that used to make footers a wall of text.
+func sectionHeader(_ title: LocalizedStringKey, info: String) -> some View {
+    HStack(spacing: 4) {
+        Text(title)
+        InfoButton(text: info)
+    }
+}
+
+/// A one-line section footer, the short half of the ``sectionHeader`` pairing.
+func sectionFooter(_ text: LocalizedStringKey) -> some View {
+    Text(text)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+}
+
 /// A switch row that pushes the control to the container's trailing edge, so
 /// stacked switches line up in one column instead of each trailing its own
 /// label width. For plain stacks; grouped Forms already align their controls.
