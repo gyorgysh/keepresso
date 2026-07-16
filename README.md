@@ -25,9 +25,9 @@ condition-based **triggers** so your Mac only stays awake when it actually shoul
 It lives quietly in the menu bar, no Dock icon, no clutter.
 
 <p align="center">
-  <img src="docs/assets/menu_idle.webp" width="250" alt="Keepresso menu while idle, with the keep-awake toggle and duration picker">
+  <img src="docs/assets/menu_idle.webp" width="250" alt="Keepresso menu brewing indefinitely, with the keep-awake toggle, duration picker, and Stop-in buttons">
   &nbsp;
-  <img src="docs/assets/menu_countdown.webp" width="250" alt="Keepresso brewing a timed session, with a live countdown in the menu bar">
+  <img src="docs/assets/menu_countdown.webp" width="250" alt="Keepresso brewing a timed session, with a live countdown and one-tap Stop-in buttons">
   &nbsp;
   <img src="docs/assets/menu_trigger.webp" width="250" alt="Keepresso brewing because a trigger condition is met, with the live condition list">
 </p>
@@ -179,11 +179,11 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 <table>
 <tr>
 <td align="center" width="50%">
-  <img src="docs/assets/prefs_general.webp" width="320" alt="Preferences: General tab with keep-awake toggles and closed-display mode"><br>
-  <sub>General: keep-awake toggles, menu-bar countdown, battery auto-pause, closed-display mode</sub>
+  <img src="docs/assets/prefs_general.webp" width="320" alt="Preferences: General tab with keep-awake toggles, startup, a global shortcut, and the app language"><br>
+  <sub>General: keep-awake toggles, launch at login, a global shortcut, your language</sub>
 </td>
 <td align="center" width="50%">
-  <img src="docs/assets/prefs_triggers.webp" width="320" alt="Preferences: a trigger rule set combining processes and AC power"><br>
+  <img src="docs/assets/prefs_triggers.webp" width="320" alt="Preferences: the Triggers tab with presets and a rule list of AI agent working, AC power, playing a game, and CPU conditions"><br>
   <sub>Trigger engine: combine conditions with any or all, or apply a preset</sub>
 </td>
 </tr>
@@ -199,8 +199,8 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 </tr>
 <tr>
 <td align="center" colspan="2">
-  <img src="docs/assets/prefs_conditions.webp" width="320" alt="Preferences: the Add condition menu with power, display, network, and app conditions"><br>
-  <sub>Adding a condition: grouped menus for power and display, network and devices, apps and activity</sub>
+  <img src="docs/assets/prefs_conditions.webp" width="320" alt="Preferences: the Triggers tab with an Add row grouping power and display, network and devices, and apps and activity conditions, and Claude Code connected"><br>
+  <sub>Adding a condition: grouped menus for power and display, network and devices, apps and activity, with Claude Code connected</sub>
 </td>
 </tr>
 </table>
