@@ -21,6 +21,9 @@ public struct AgentSession: Equatable, Hashable, Sendable {
     public var hookState: AgentHooks.HookSessionState?
     /// Semantic activity token from the hook record ("running-command", ...).
     public var hookDetail: String?
+    /// When the joined hook record was last written, so a newer transcript
+    /// write can outrank its verdict.
+    public var hookUpdatedAt: Date?
     /// Where the session runs, classified by the hook's ancestor walk.
     public var origin: AgentHooks.HookSessionOrigin?
 
@@ -172,11 +175,13 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
                 let scanTime = self.now()
                 let cutoff = scanTime.addingTimeInterval(-Self.evidenceFreshWindow)
                 var cwds: [Int32: String] = [:]
+                var evidenceDates: [Int32: Date] = [:]
                 for index in sessions.indices {
                     let session = sessions[index]
                     let cwd = Self.processCwd(session.pid)
                     if let cwd { cwds[session.pid] = cwd }
                     if let written = self.evidence(session.agent, cwd) {
+                        evidenceDates[session.pid] = written
                         sessions[index].hasFreshEvidence = written >= cutoff
                     }
                     // Name terminal-less sessions by their host (Claude app,
@@ -188,6 +193,21 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
                 // Stamp hook evidence: exact state edges beat both heuristics.
                 sessions = Self.applyHookRecords(
                     self.hookRecords(scanTime), to: sessions, cwdOf: { cwds[$0] })
+                // An idle verdict older than a fresh transcript write is
+                // stale information, not an edge: the main turn's Stop hook
+                // fires while a background subagent works on (its transcript
+                // keeps streaming, but it emits no hook event until its next
+                // tool call). Drop the verdict and let the evidence decide.
+                for index in sessions.indices {
+                    if sessions[index].hookState == .idle,
+                       sessions[index].hasFreshEvidence,
+                       let stamped = sessions[index].hookUpdatedAt,
+                       let written = evidenceDates[sessions[index].pid],
+                       written > stamped {
+                        sessions[index].hookState = nil
+                        sessions[index].hookDetail = nil
+                    }
+                }
                 self.withLock {
                     self.cached = AgentSnapshot(sessions: sessions)
                     self.lastFetch = self.now()
@@ -235,6 +255,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     private static func stamp(_ session: inout AgentSession, with record: AgentHooks.HookRecord) {
         session.hookState = record.state
         session.hookDetail = record.detail
+        session.hookUpdatedAt = record.updatedAt
         // A record with no classified origin must not erase what the ps-scan
         // ancestor walk already determined.
         if let origin = record.origin { session.origin = origin }

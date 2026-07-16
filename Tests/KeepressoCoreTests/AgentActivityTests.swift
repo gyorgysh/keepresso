@@ -348,6 +348,38 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     #expect(monitor.current.sessions.count == 1)
 }
 
+@Test func freshTranscriptOutranksAnOlderIdleVerdict() async throws {
+    // The main turn's Stop hook writes idle while a background subagent works
+    // on: its transcript keeps streaming but it emits no hook event until its
+    // next tool call. Evidence newer than the record drops the stale verdict;
+    // an idle record newer than the last write keeps deciding.
+    let base = Date(timeIntervalSince1970: 100_000)
+    func monitor(recordAge: TimeInterval, writeAge: TimeInterval) -> PSAgentActivityMonitor {
+        PSAgentActivityMonitor(
+            ttl: 3,
+            now: { base },
+            fetch: { "  100     1  0.1 ttys003  claude" },
+            evidence: { _, _ in base.addingTimeInterval(-writeAge) },
+            hookRecords: { _ in
+                [AgentHooks.HookRecord(
+                    sessionId: "s", state: .idle, agentPid: 100,
+                    updatedAt: base.addingTimeInterval(-recordAge))]
+            }
+        )
+    }
+
+    let overridden = monitor(recordAge: 10, writeAge: 5)
+    _ = overridden.current
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(overridden.current.sessions.map(\.hookState) == [nil])
+    #expect(overridden.current.sessions.map(\.hasFreshEvidence) == [true])
+
+    let respected = monitor(recordAge: 2, writeAge: 5)
+    _ = respected.current
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(respected.current.sessions.map(\.hookState) == [.idle])
+}
+
 @Test func monitorClassifiesTerminalLessSessionsByAncestry() async throws {
     // A tty-less session is named by the ancestor walk even before any hook
     // record exists; tty sessions are left alone.
