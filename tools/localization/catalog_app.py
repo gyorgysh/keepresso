@@ -555,3 +555,23 @@ _AGENT_HOOKS_APP = {
     "Couldn't update Claude Code's settings file.": {"hu": "A Claude Code beállításfájlját nem sikerült frissíteni.", "es": "No se pudo actualizar el archivo de configuración de Claude Code.", "fr": "Impossible de mettre à jour le fichier de réglages de Claude Code.", "de": "Die Einstellungsdatei von Claude Code konnte nicht aktualisiert werden.", "zh-Hans": "无法更新 Claude Code 的设置文件。"},
 }
 APP.update(_AGENT_HOOKS_APP)
+
+
+# ---------------------------------------------------------------------------
+# Desktop "disable sleep" naming: the pmset disablesleep switch shown on
+# battery-less Macs (mini, Studio, Pro), where "closed-display mode" and lid
+# wording make no sense. Same feature, desktop labels.
+# ---------------------------------------------------------------------------
+_DESKTOP_SLEEP = {
+    "Disable system sleep": {},
+    "Disable sleep": {},
+    "disable system sleep": {},
+    "switch the sleep override with the session": {},
+    "The Mac won't sleep at all until you turn this off. The display still sleeps as usual.": {},
+    "Turns the sleep override on when a keep-awake session starts and off when it ends or Keepresso quits.": {},
+    "Stops the Mac from sleeping at all until you turn it off.": {},
+    "Stops the Mac from sleeping at all, even with no session running. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.": {},
+    "Stops the Mac from sleeping at all, even with no session running. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off, even if Keepresso quits. The display still sleeps as usual. “Only while brewing” ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for “Only while brewing”.": {},
+    "%@ before": {},
+}
+APP.update(_DESKTOP_SLEEP)

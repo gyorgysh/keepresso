@@ -347,9 +347,7 @@ private struct GeneralTab: View {
                     sectionFooter("Lets the Mac sleep once charge drops below this level.")
                 }
             }
-            if model.machineHasBattery {
-                closedDisplaySection
-            }
+            closedDisplaySection
             Section {
                 HStack {
                     Button("Export Settings\u{2026}") { exportSettings() }
@@ -388,17 +386,22 @@ private struct GeneralTab: View {
         .onAppear { model.refreshClosedDisplay() }
     }
 
-    /// Closed-display mode only makes sense on a machine with a lid; battery
-    /// presence is the proxy, so desktops never see this section.
+    /// The pmset disablesleep switch. On a laptop it's "closed-display mode"
+    /// (keep running with the lid shut); a desktop has no lid, so the same
+    /// switch is presented as a hard "disable sleep" override. Shown on both,
+    /// so a desktop that latched the setting always has a way to unlatch it.
     private var closedDisplaySection: some View {
         Section {
-            Toggle("Keep awake with the lid closed", isOn: Binding(
+            Toggle(model.machineHasBattery ? "Keep awake with the lid closed" : "Disable system sleep",
+                   isOn: Binding(
                 get: { model.closedDisplayEnabled },
                 set: { model.setClosedDisplay($0) }
             ))
             .disabled(model.closedDisplayBusy)
             if model.closedDisplayBusy && !model.helperInstalled {
-                AdminAuthNote(purpose: L("keep the Mac awake with the lid closed"))
+                AdminAuthNote(purpose: model.machineHasBattery
+                    ? L("keep the Mac awake with the lid closed")
+                    : L("disable system sleep"))
             }
             if let error = model.closedDisplayError {
                 Label(error, systemImage: "exclamationmark.triangle")
@@ -411,7 +414,9 @@ private struct GeneralTab: View {
             ))
             .disabled(model.closedDisplayAutoBusy)
             if model.closedDisplayAutoBusy && !model.helperInstalled {
-                AdminAuthNote(purpose: L("switch closed-display mode with the session"))
+                AdminAuthNote(purpose: model.machineHasBattery
+                    ? L("switch closed-display mode with the session")
+                    : L("switch the sleep override with the session"))
             }
             if let error = model.closedDisplayAutoError {
                 Label(error, systemImage: "exclamationmark.triangle")
@@ -419,9 +424,13 @@ private struct GeneralTab: View {
                     .foregroundStyle(.orange)
             }
         } header: {
-            sectionHeader("Closed-display mode", info: L("Normally a MacBook sleeps the moment you shut the lid unless a display is attached. This keeps it running with the lid shut and nothing plugged in, on power or battery. The screen itself still turns off when the lid closes (unless an external display is attached), so it isn't lighting up uselessly inside the closed lid. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off: closed and on battery, the Mac can still drain over time, so don't leave it on in a bag. \u{201C}Only while brewing\u{201D} ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for \u{201C}Only while brewing\u{201D}."))
+            model.machineHasBattery
+                ? sectionHeader("Closed-display mode", info: L("Normally a MacBook sleeps the moment you shut the lid unless a display is attached. This keeps it running with the lid shut and nothing plugged in, on power or battery. The screen itself still turns off when the lid closes (unless an external display is attached), so it isn't lighting up uselessly inside the closed lid. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off: closed and on battery, the Mac can still drain over time, so don't leave it on in a bag. \u{201C}Only while brewing\u{201D} ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for \u{201C}Only while brewing\u{201D}."))
+                : sectionHeader("Disable sleep", info: L("Stops the Mac from sleeping at all, even with no session running. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off, even if Keepresso quits. The display still sleeps as usual. \u{201C}Only while brewing\u{201D} ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for \u{201C}Only while brewing\u{201D}."))
         } footer: {
-            sectionFooter("Keeps running with the lid shut and no external display.")
+            model.machineHasBattery
+                ? sectionFooter("Keeps running with the lid shut and no external display.")
+                : sectionFooter("Stops the Mac from sleeping at all until you turn it off.")
         }
     }
 
