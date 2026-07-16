@@ -90,6 +90,11 @@ Theme: Keepresso learns when your AI agent is actually working.
   clicks inside it doing nothing until you switched away and back. Keepresso now
   detects that state and repairs it, and only that state: clicking into another
   app right after a window opens no longer pulls focus back.
+- **"Only while brewing" says what it means in Chinese and Korean.** The label
+  read as a bare "only while running", which could mean the app or anything
+  else. It now names the keep-awake session in Simplified Chinese, Traditional
+  Chinese, and Korean, in the switch and everywhere the text quotes it. Thanks
+  to @ivoidcat for the report and first fix (#2).
 
 ### Notes
 
