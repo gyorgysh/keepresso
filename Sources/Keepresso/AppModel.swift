@@ -824,8 +824,16 @@ final class AppModel {
     private(set) var claudeHooksError: String?
 
     func refreshClaudeHooksStatus() {
-        claudeHooks = AgentHooks.hookInstallState(
-            of: try? Data(contentsOf: AgentHooks.claudeSettingsURL()))
+        do {
+            claudeHooks = AgentHooks.hookInstallState(
+                of: try AgentHooks.readSettings(at: AgentHooks.claudeSettingsURL()))
+        } catch {
+            // An existing file we can't read must report as unreadable, not
+            // "not installed": the latter invites the install click, and an
+            // install that mistakes a full settings.json for a missing one
+            // would replace the user's whole Claude Code configuration.
+            claudeHooks = .unreadable
+        }
     }
 
     /// Merge Keepresso's hook entries into `~/.claude/settings.json` so
@@ -861,14 +869,22 @@ final class AppModel {
         let url = AgentHooks.claudeSettingsURL()
         defer { refreshClaudeHooksStatus() }
         do {
-            let updated = try transform(try? Data(contentsOf: url))
+            // readSettings distinguishes "no file yet" from "exists but
+            // unreadable" and throws on the latter: treating a read failure
+            // as absence would make the atomic write below replace the
+            // user's whole settings file with just our hooks.
+            let updated = try transform(try AgentHooks.readSettings(at: url))
             try FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try updated.write(to: url, options: .atomic)
+            // Resolve a symlinked settings.json (dotfiles setups) so the
+            // atomic write replaces the real file, not the link.
+            try updated.write(to: url.resolvingSymlinksInPath(), options: .atomic)
             claudeHooksError = nil
             return true
         } catch is AgentHooks.SettingsUnreadableError {
-            claudeHooksError = L("Claude Code's settings file couldn't be read, so it was left untouched.")
+            // The refreshed status row already explains the unreadable file;
+            // a second identical line under it would just stack.
+            claudeHooksError = nil
             return false
         } catch {
             claudeHooksError = L("Couldn't update Claude Code's settings file.")

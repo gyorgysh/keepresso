@@ -593,6 +593,21 @@ private struct ReminderTab: View {
         ("10 minutes before", 10 * 60),
     ]
 
+    /// The picker rows: the presets plus the current value when it isn't one
+    /// of them, so an imported custom lead time doesn't render as an empty
+    /// selection.
+    private func noticeChoices(including current: TimeInterval) -> [TimeInterval] {
+        let presets = Self.noticeOptions.map(\.interval)
+        return presets.contains(current) ? presets : (presets + [current]).sorted()
+    }
+
+    private func noticeLabel(_ interval: TimeInterval) -> String {
+        if let preset = Self.noticeOptions.first(where: { $0.interval == interval }) {
+            return L(preset.label)
+        }
+        return L("%@ before", MenuBarContent.shortDuration(interval))
+    }
+
     var body: some View {
         Form {
             Section {
@@ -642,8 +657,8 @@ private struct ReminderTab: View {
                         get: { model.endingSoonNotice },
                         set: { model.endingSoonNotice = $0 }
                     )) {
-                        ForEach(Self.noticeOptions, id: \.interval) { option in
-                            Text(L(option.label)).tag(option.interval)
+                        ForEach(noticeChoices(including: model.endingSoonNotice), id: \.self) { interval in
+                            Text(noticeLabel(interval)).tag(interval)
                         }
                     }
                 }

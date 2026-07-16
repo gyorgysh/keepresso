@@ -122,15 +122,16 @@ struct MenuBarContent: View {
                 }
 
                 if session.isActive && !model.quickStopDurations.isEmpty {
-                    LabeledContent("Stop in") {
-                        HStack(spacing: 6) {
-                            ForEach(model.quickStopDurations, id: \.self) { duration in
-                                Button(Self.shortDuration(duration)) {
-                                    model.stopSessionIn(duration)
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                            }
+                    // The three short defaults share a line with the label;
+                    // four shortcuts, or compound durations ("1 h 30 min",
+                    // wordier in some languages), get the full panel width
+                    // on their own row so the buttons never clip.
+                    if quickStopButtonsFitInline {
+                        LabeledContent("Stop in") { quickStopButtons }
+                    } else {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Stop in")
+                            quickStopButtons
                         }
                     }
                 }
@@ -239,6 +240,29 @@ struct MenuBarContent: View {
         }
     }
 
+    /// The quick "Stop in" shortcut buttons for the running session.
+    private var quickStopButtons: some View {
+        HStack(spacing: 6) {
+            ForEach(model.quickStopDurations, id: \.self) { duration in
+                Button(Self.shortDuration(duration)) {
+                    model.stopSessionIn(duration)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .lineLimit(1)
+            }
+        }
+    }
+
+    /// Whether the shortcut buttons fit next to the "Stop in" label: at most
+    /// three, none of them a compound duration (hours and minutes both).
+    private var quickStopButtonsFitInline: Bool {
+        model.quickStopDurations.count <= 3 && !model.quickStopDurations.contains {
+            let minutes = Int(($0 / 60).rounded())
+            return minutes > 60 && minutes % 60 != 0
+        }
+    }
+
     /// Dismisses the dropdown, then opens a window scene with the app brought
     /// forward. Keepresso is an `LSUIElement` agent, so opening a sibling
     /// `Window` scene doesn't deactivate it: the `.window`-style panel keeps key
@@ -312,10 +336,10 @@ struct MenuBarContent: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            Button("Fix\u{2026}") {
-                NSApp.activate(ignoringOtherApps: true)
-                openWindow(id: KeepressoApp.helperWindowID)
-            }
+            // Through open(_:) so the panel closes first; a window opened
+            // while the panel holds key status comes up behind it, drawn
+            // inactive (the exact bug open(_:) exists for).
+            Button("Fix\u{2026}") { open(KeepressoApp.helperWindowID) }
         }
         .padding(8)
         .glassCard(cornerRadius: 8, tint: Color.orange.opacity(0.16))

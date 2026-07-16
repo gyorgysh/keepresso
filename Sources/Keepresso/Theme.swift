@@ -214,18 +214,26 @@ struct WindowPlacement: NSViewRepresentable {
     /// Check a beat after opening and do programmatically what the user
     /// otherwise must do by hand: drop active status, take it again, re-key
     /// the window.
+    ///
+    /// Repair only fires on the wedge's exact signature (the two activation
+    /// views disagreeing) or when the app is frontmost with no key window at
+    /// all. When AppKit itself reports the app inactive, or another of our
+    /// windows holds key, the user has moved on, and stealing focus back
+    /// would be worse than the wedge.
     static func repairIfWedged(_ window: NSWindow?, attempts: Int) {
         guard attempts > 0 else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak window] in
             guard let window, window.isVisible else { return }
             let trulyActive = NSRunningApplication.current.isActive
-            guard !trulyActive || !window.isKeyWindow else { return }
             if NSApp.isActive && !trulyActive {
                 NSApp.deactivate()
+                NSApp.activate(ignoringOtherApps: true)
+                window.makeKeyAndOrderFront(nil)
+                repairIfWedged(window, attempts: attempts - 1)
+            } else if trulyActive && !window.isKeyWindow && NSApp.keyWindow == nil {
+                window.makeKeyAndOrderFront(nil)
+                repairIfWedged(window, attempts: attempts - 1)
             }
-            NSApp.activate(ignoringOtherApps: true)
-            window.makeKeyAndOrderFront(nil)
-            repairIfWedged(window, attempts: attempts - 1)
         }
     }
 }
