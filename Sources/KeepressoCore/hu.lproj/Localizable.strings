@@ -169,3 +169,11 @@
 "terminal" = "terminál";
 "Claude app" = "Claude app";
 "IDE" = "IDE";
+"Critical" = "Kritikus";
+"Fair" = "Elfogadható";
+"Keepresso stopped the keep-awake session so the Mac can cool down. It resumes when temperatures recover." = "A Keepresso leállította az ébrentartási munkamenetet, hogy a Mac lehűlhessen. Folytatódik, amint a hőmérsékletek helyreállnak.";
+"Nominal" = "Normál";
+"Not started, the Mac is running hot" = "Nem indult el, a Mac forró";
+"Paused on high temperature" = "Szüneteltetve magas hőmérséklet miatt";
+"Paused, the Mac is running hot" = "Szüneteltetve, a Mac forró";
+"Serious" = "Súlyos";

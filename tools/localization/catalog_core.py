@@ -213,3 +213,20 @@ _AGENT_HOOKS = {
     "IDE": {"hu": "IDE", "es": "IDE", "fr": "IDE", "de": "IDE", "zh-Hans": "IDE"},
 }
 CORE.update(_AGENT_HOOKS)
+
+
+# ---------------------------------------------------------------------------
+# v1.15 thermal safety net: pressure level names and the session's
+# heat-pause status lines and notification.
+# ---------------------------------------------------------------------------
+_THERMAL_V115 = {
+    "Critical": {"hu": "Kritikus", "es": "Crítico", "fr": "Critique", "de": "Kritisch", "zh-Hans": "危急"},
+    "Fair": {"hu": "Elfogadható", "es": "Aceptable", "fr": "Modéré", "de": "Mäßig", "zh-Hans": "一般"},
+    "Keepresso stopped the keep-awake session so the Mac can cool down. It resumes when temperatures recover.": {"hu": "A Keepresso leállította az ébrentartási munkamenetet, hogy a Mac lehűlhessen. Folytatódik, amint a hőmérsékletek helyreállnak.", "es": "Keepresso detuvo la sesión para que el Mac pueda enfriarse. Se reanuda cuando las temperaturas se recuperan.", "fr": "Keepresso a arrêté la session de maintien en éveil pour laisser le Mac refroidir. Elle reprend quand les températures redescendent.", "de": "Keepresso hat die Wachhalte-Sitzung gestoppt, damit der Mac abkühlen kann. Sie wird fortgesetzt, sobald sich die Temperaturen erholt haben.", "zh-Hans": "Keepresso 已停止保持唤醒会话，以便 Mac 降温。温度恢复正常后会话将自动继续。"},
+    "Nominal": {"hu": "Normál", "es": "Nominal", "fr": "Normal", "de": "Normal", "zh-Hans": "正常"},
+    "Not started, the Mac is running hot": {"hu": "Nem indult el, a Mac forró", "es": "No iniciado, el Mac está muy caliente", "fr": "Non démarré, le Mac chauffe", "de": "Nicht gestartet, der Mac läuft heiß", "zh-Hans": "未启动，Mac 过热"},
+    "Paused on high temperature": {"hu": "Szüneteltetve magas hőmérséklet miatt", "es": "En pausa por temperatura alta", "fr": "En pause : température élevée", "de": "Wegen hoher Temperatur pausiert", "zh-Hans": "因温度过高已暂停"},
+    "Paused, the Mac is running hot": {"hu": "Szüneteltetve, a Mac forró", "es": "En pausa, el Mac está muy caliente", "fr": "En pause, le Mac chauffe", "de": "Pausiert, der Mac läuft heiß", "zh-Hans": "已暂停，Mac 过热"},
+    "Serious": {"hu": "Súlyos", "es": "Grave", "fr": "Élevé", "de": "Hoch", "zh-Hans": "严重"},
+}
+CORE.update(_THERMAL_V115)

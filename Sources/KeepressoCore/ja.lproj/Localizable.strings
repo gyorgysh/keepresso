@@ -169,3 +169,11 @@
 "terminal" = "ターミナル";
 "Claude app" = "Claude アプリ";
 "IDE" = "IDE";
+"Critical" = "危機的";
+"Fair" = "やや高温";
+"Keepresso stopped the keep-awake session so the Mac can cool down. It resumes when temperatures recover." = "Mac を冷却するため、Keepresso はスリープ防止セッションを停止しました。温度が回復すると再開します。";
+"Nominal" = "通常";
+"Not started, the Mac is running hot" = "未開始、Mac が高温";
+"Paused on high temperature" = "高温で一時停止";
+"Paused, the Mac is running hot" = "一時停止、Mac が高温";
+"Serious" = "深刻";

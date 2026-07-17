@@ -169,3 +169,11 @@
 "terminal" = "terminal";
 "Claude app" = "app Claude";
 "IDE" = "IDE";
+"Critical" = "Critique";
+"Fair" = "Modéré";
+"Keepresso stopped the keep-awake session so the Mac can cool down. It resumes when temperatures recover." = "Keepresso a arrêté la session de maintien en éveil pour laisser le Mac refroidir. Elle reprend quand les températures redescendent.";
+"Nominal" = "Normal";
+"Not started, the Mac is running hot" = "Non démarré, le Mac chauffe";
+"Paused on high temperature" = "En pause : température élevée";
+"Paused, the Mac is running hot" = "En pause, le Mac chauffe";
+"Serious" = "Élevé";

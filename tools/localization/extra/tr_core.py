@@ -191,3 +191,15 @@ CORE.update({
     "Claude app": "Claude uygulaması",
     "IDE": "IDE",
 })
+
+# v1.15 thermal safety net: pressure levels and heat-pause lines.
+CORE.update({
+    "Critical": "Kritik",
+    "Fair": "Makul",
+    "Keepresso stopped the keep-awake session so the Mac can cool down. It resumes when temperatures recover.": "Keepresso, Mac'in soğuyabilmesi için uyanık tutma oturumunu durdurdu. Sıcaklıklar normale döndüğünde sürdürülür.",
+    "Nominal": "Normal",
+    "Not started, the Mac is running hot": "Başlatılmadı, Mac aşırı ısınıyor",
+    "Paused on high temperature": "Yüksek sıcaklıkta duraklatıldı",
+    "Paused, the Mac is running hot": "Duraklatıldı, Mac aşırı ısınıyor",
+    "Serious": "Ciddi",
+})
