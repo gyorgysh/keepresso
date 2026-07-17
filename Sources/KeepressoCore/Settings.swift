@@ -43,6 +43,10 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     /// collapsed status-and-controls-only layout (the panel's "Show less" row).
     /// Expanded by default.
     public var menuPanelExpanded: Bool
+    /// How see-through the menu-bar dropdown is, 0 (fully frosty,
+    /// strongest readability backing) to 100 (clearest Liquid Glass).
+    /// Defaults to the halfway 50.
+    public var glassClarity: Int
     /// Whether the AWDL watchdog starts and stops with a gaming trigger
     /// (see ``AWDLWatchdogController/autoWithGaming``).
     public var awdlAutoWithGaming: Bool
@@ -95,6 +99,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         pauseBelowBatteryPercent: Int? = nil,
         showCountdownInMenuBar: Bool = false,
         menuPanelExpanded: Bool = true,
+        glassClarity: Int = 50,
         awdlAutoWithGaming: Bool = false,
         awdlNotifications: Bool = false,
         awdlGraceSeconds: TimeInterval = 60,
@@ -122,6 +127,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.pauseBelowBatteryPercent = pauseBelowBatteryPercent.map(Self.clampedBatteryPausePercent)
         self.showCountdownInMenuBar = showCountdownInMenuBar
         self.menuPanelExpanded = menuPanelExpanded
+        self.glassClarity = min(max(glassClarity, 0), 100)
         self.awdlAutoWithGaming = awdlAutoWithGaming
         self.awdlNotifications = awdlNotifications
         self.awdlGraceSeconds = awdlGraceSeconds
@@ -211,6 +217,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
             .map(Self.clampedBatteryPausePercent)
         showCountdownInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showCountdownInMenuBar) ?? false
         menuPanelExpanded = try c.decodeIfPresent(Bool.self, forKey: .menuPanelExpanded) ?? true
+        glassClarity = min(max(try c.decodeIfPresent(Int.self, forKey: .glassClarity) ?? 50, 0), 100)
         awdlAutoWithGaming = try c.decodeIfPresent(Bool.self, forKey: .awdlAutoWithGaming) ?? false
         awdlNotifications = try c.decodeIfPresent(Bool.self, forKey: .awdlNotifications) ?? false
         awdlGraceSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .awdlGraceSeconds) ?? 60

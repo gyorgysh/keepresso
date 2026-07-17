@@ -258,6 +258,36 @@ private struct GeneralTab: View {
             } footer: {
                 sectionFooter("Keepresso follows your system language by default.")
             }
+            Section {
+                LabeledContent("See-through") {
+                    HStack(spacing: 8) {
+                        Image(systemName: "snowflake")
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                        Slider(
+                            value: Binding(
+                                get: { Double(model.glassClarity) },
+                                set: { model.glassClarity = Int($0) }
+                            ),
+                            in: 0...100,
+                            step: 5
+                        )
+                        .frame(width: 180)
+                        .accessibilityLabel(L("Window transparency"))
+                        Image(systemName: "circle.dotted")
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                        Text(verbatim: "\(model.glassClarity)%")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(minWidth: 38, alignment: .trailing)
+                    }
+                }
+            } header: {
+                sectionHeader("Appearance", info: L("How see-through the menu-bar dropdown is. Frosty (0%) backs its glass with blur and a wash of the window color, so text stays crisp on any wallpaper. Sliding toward 100% thins that backing away until the panel is the system's bare Liquid Glass, letting the desktop shine through, with some contrast cost on busy or very dark wallpapers. Changes apply instantly, only to the dropdown (windows like this one keep their standard look), and the system's Reduce Transparency accessibility setting always wins."))
+            } footer: {
+                sectionFooter("The menu-bar dropdown's glass, from frosty to clear Liquid Glass.")
+            }
             // High up on purpose: this is the one-time set-and-forget step that
             // makes every privileged switch below (and AWDL pausing) silent.
             Section {

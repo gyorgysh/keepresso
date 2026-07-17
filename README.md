@@ -180,7 +180,8 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 - ✨ **Native and quiet.** A menu-bar agent with an animated cup while brewing, a
   live summary of what's holding the session on, a Liquid Glass app icon (Icon
   Composer, with light, dark, and tinted appearances), and Liquid Glass window
-  styling on macOS 26+.
+  styling on macOS 26+. The dropdown's glass is yours to tune, from frosty to
+  fully clear (Preferences > General > Appearance).
 - 🌍 **Fifteen languages.** English, German, Spanish, French, Hungarian, Italian,
   Japanese, Korean, Russian, Brazilian Portuguese, Turkish, Polish, Ukrainian,
   Simplified Chinese, and Traditional Chinese, across the menu, every window,

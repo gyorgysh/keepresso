@@ -388,7 +388,7 @@ struct MenuBarContent: View {
         .padding(.vertical, 8)
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
+        .glassCard(followsClarity: true)
         // A faint warm wash behind the glass while brewing, like a lit burner.
         .background(
             Color.keepressoBrew.opacity(session.isActive ? 0.08 : 0),
@@ -442,7 +442,7 @@ struct MenuBarContent: View {
             Button("Fix\u{2026}") { open(KeepressoApp.helperWindowID) }
         }
         .padding(8)
-        .glassCard(cornerRadius: 8, tint: Color.orange.opacity(0.16))
+        .glassCard(cornerRadius: 8, tint: Color.orange.opacity(0.16), followsClarity: true)
     }
 
     // MARK: - Duration editors

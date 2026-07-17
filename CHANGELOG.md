@@ -49,6 +49,14 @@ Versions follow [Semantic Versioning](https://semver.org).
   behind a single lock row while the helper isn't installed, with Install one
   click away right there and the approval step walked through in place,
   instead of live-looking toggles warning underneath.
+- **Glass, your way.** Preferences ▸ General ▸ Appearance adds a see-through
+  slider for the menu-bar dropdown. At 0% its glass is fully frosty, backed
+  by blur and a wash that guard readability on any wallpaper. Sliding
+  toward 100% thins that backing away until the panel is the system's bare
+  Liquid Glass and the desktop shines through. The default is halfway, 50%.
+  Changes apply live, only the dropdown is affected (windows keep their
+  standard look), and the system's Reduce Transparency accessibility
+  setting always wins.
 - **Helper updates take care of themselves.** The helper service ships inside
   the app, so an app update replaces it on disk automatically. The only
   leftover is the pre-update service still running in memory, which Keepresso

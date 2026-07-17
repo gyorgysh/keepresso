@@ -127,6 +127,7 @@ final class AppModel {
         // availability derivation); the first thermalAvailabilityTick one
         // second later nils an unavailable boost stage out.
         self.thermalGuard.config = loaded.thermalSafety
+        GlassClarity.shared.value = Double(loaded.glassClarity) / 100
         self.disk = DiskKeepAliveController()
         self.disk.config = loaded.diskKeepAlive
         self.virtualDisplay.config = loaded.virtualDisplay
@@ -856,6 +857,18 @@ final class AppModel {
         }
     }
 
+    /// How see-through the panel and windows are, 0 (frosted default) to 100
+    /// (clearest glass). Mirrored into ``GlassClarity`` so every glass
+    /// surface updates live while the slider moves.
+    var glassClarity: Int {
+        get { settings.glassClarity }
+        set {
+            settings.glassClarity = newValue
+            GlassClarity.shared.value = Double(settings.glassClarity) / 100
+            persist()
+        }
+    }
+
     // MARK: - Presets
 
     /// Saved trigger-rule bundles, in display order.
@@ -942,6 +955,7 @@ final class AppModel {
         session.pauseWhenHot = newSettings.thermalSafety?.stopBrewing ?? false
         // The guard's didSet queues fan/pause releases if it was mid-emergency.
         thermalGuard.config = effectiveThermalConfig(newSettings.thermalSafety)
+        GlassClarity.shared.value = Double(newSettings.glassClarity) / 100
         disk.config = newSettings.diskKeepAlive
         virtualDisplay.config = newSettings.virtualDisplay
         awdl.autoWithGaming = newSettings.awdlAutoWithGaming

@@ -279,14 +279,39 @@ private struct PanelKeyAssert: NSViewRepresentable {
 /// Two strengths: the menu panel sits on the system's own panel chrome and
 /// needs only a light touch; full windows show far more wallpaper, so they get
 /// a stronger material and a heavier wash to stay readable in any environment.
+/// The user's window-transparency choice (Preferences ▸ General ▸
+/// Appearance), 0 = the frosted default, 1 = clearest glass. A process-wide
+/// observable rather than a parameter, so every glass surface (the menu
+/// panel and each window's plate) reads it in place and a slider change
+/// re-renders them all live, with no plumbing through seven call sites.
+@MainActor
+@Observable
+final class GlassClarity {
+    static let shared = GlassClarity()
+    var value: Double = 0
+}
+
 private struct GlassReadabilityPlate: View {
     var material: Material = .thinMaterial
     var washOpacity: Double = 0.28
+    /// How much of the frosting survives at full clarity. The panel sits on
+    /// the system's own glass chrome and can go nearly bare. A window's
+    /// plate is all there is between the text and the wallpaper, so it
+    /// keeps a higher floor even at 100% see-through.
+    var clarityFloor: Double = 0.08
+    /// nil follows the Appearance slider (the menu panel); a fixed value
+    /// opts out (the windows, which always keep their full frosted plate:
+    /// the setting is about the dropdown, and window text has nothing but
+    /// this plate between it and the wallpaper).
+    var fixedClarity: Double?
 
     var body: some View {
+        let clarity = fixedClarity ?? GlassClarity.shared.value
         ZStack {
             Rectangle().fill(material)
-            Color(nsColor: .windowBackgroundColor).opacity(washOpacity)
+                .opacity(1 - (1 - clarityFloor) * clarity)
+            Color(nsColor: .windowBackgroundColor)
+                .opacity(washOpacity * (1 - clarity))
         }
     }
 }
@@ -298,19 +323,30 @@ extension View {
     /// falls back to a frosted `ultraThinMaterial`, which reads as glass too.
     /// Pass a `tint` for an accented card (the copper callouts, the warning
     /// banner); it replaces the neutral wash on both paths.
+    ///
+    /// `followsClarity` is for cards living inside the menu panel: their
+    /// backing thins out with the Appearance slider alongside the panel's
+    /// own plate, so a clear-glass panel doesn't show frosted rectangles
+    /// floating over it. Cards in windows leave it off, like the windows
+    /// themselves.
+    @MainActor
     @ViewBuilder
-    func glassCard(cornerRadius: CGFloat = 12, tint: Color? = nil) -> some View {
+    func glassCard(
+        cornerRadius: CGFloat = 12, tint: Color? = nil, followsClarity: Bool = false
+    ) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        let clarity = followsClarity ? GlassClarity.shared.value : 0
+        let cardTint = (tint ?? Color(nsColor: .windowBackgroundColor).opacity(0.25))
+            .opacity(1 - clarity)
         if #available(macOS 26.0, *) {
-            self.glassEffect(
-                .regular.tint(tint ?? Color(nsColor: .windowBackgroundColor).opacity(0.25)),
-                in: shape
-            )
+            // The Liquid Glass itself stays at full clarity (that IS the
+            // clear look); only the readability tint fades away.
+            self.glassEffect(.regular.tint(cardTint), in: shape)
         } else {
             // The tint sits behind the material, so it shows through the blur
             // softly instead of flat.
-            self.background(.ultraThinMaterial, in: shape)
-                .background(tint ?? .clear, in: shape)
+            self.background(shape.fill(.ultraThinMaterial).opacity(1 - 0.9 * clarity))
+                .background(cardTint, in: shape)
         }
     }
 
@@ -329,7 +365,10 @@ extension View {
     /// A readability plate for the menu bar panel, layered over the system's
     /// glass chrome. The panel window itself owns the Liquid Glass; this adds
     /// blur and a faint neutral wash so the content stays sharp when the
-    /// wallpaper behind the panel is very dark or high-contrast.
+    /// wallpaper behind the panel is very dark or high-contrast. Follows the
+    /// Appearance slider: at 100% the plate all but vanishes and the panel
+    /// is the system's bare Liquid Glass, at 0% it is fully frosty. The
+    /// default sits at the halfway 50%.
     func glassPanelBackground() -> some View {
         background(GlassReadabilityPlate().ignoresSafeArea())
     }
@@ -350,7 +389,9 @@ extension View {
                 // top of the system's own frosted chrome, but a window's plate
                 // is all there is between the content and the wallpaper, so it
                 // must supply that brightness itself to match the menu's look.
-                GlassReadabilityPlate(material: .thickMaterial, washOpacity: 0.6)
+                GlassReadabilityPlate(
+                    material: .thickMaterial, washOpacity: 0.6, fixedClarity: 0
+                )
             }
         } else {
             self
