@@ -16,6 +16,11 @@ Versions follow [Semantic Versioning](https://semver.org).
   the option toggles and app entries away, leaving just the status and the
   keep-awake controls. The choice sticks across launches, and everything
   hidden stays one right-click away.
+- **The battery pause explains itself when poked.** Turning Keep awake on
+  while the low-battery pause is holding can't start a session (it would only
+  die again on the next battery reading), so the switch snaps back. The status
+  card now shakes on each attempt, pointing at the line that explains the
+  pause, instead of appearing to ignore the click.
 
 ## [1.14.0] - 2026-07-16
 

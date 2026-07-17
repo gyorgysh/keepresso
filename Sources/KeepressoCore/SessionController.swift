@@ -136,6 +136,13 @@ public final class SessionController {
     /// immediately restart every second.
     static let batteryResumeMargin = 3
 
+    /// Bumped each time ``start(mode:options:cause:)`` is refused by the
+    /// battery pause, so the UI can nudge its explanation: the user just asked
+    /// to start and nothing visibly happened. Only user-initiated paths (menu,
+    /// hotkey, widget, URL command) reach `start` while paused; the trigger
+    /// gate activates through `reconcile`, which never counts.
+    public private(set) var batteryRefusedStarts = 0
+
     /// - Parameters:
     ///   - assertions: power-assertion backend; inject a fake in tests.
     ///   - reminder: reminder delivery backend; inject a fake in tests. `nil`
@@ -168,6 +175,7 @@ public final class SessionController {
         // the user seconds after they asked to start. The menu explains the
         // pause; raising the threshold or plugging in lifts it.
         if pausedByBattery {
+            batteryRefusedStarts += 1
             log.record(
                 began: false,
                 reason: L("Not started, battery below %d%%", pauseBelowBatteryPercent ?? 0),

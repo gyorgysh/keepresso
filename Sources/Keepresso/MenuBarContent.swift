@@ -391,6 +391,24 @@ struct MenuBarContent: View {
             in: RoundedRectangle(cornerRadius: 12, style: .continuous)
         )
         .animation(.easeInOut(duration: 0.35), value: session.isActive)
+        // Flipping "Keep awake" on while the battery pause holds can't start a
+        // session, and the switch just snaps back. Shake the card whose
+        // subtitle explains why, so the refusal reads as deliberate.
+        .modifier(ShakeEffect(animatableData: CGFloat(session.batteryRefusedStarts)))
+        .animation(.easeInOut(duration: 0.45), value: session.batteryRefusedStarts)
+    }
+
+    /// A horizontal shake driven by an incrementing counter: each +1 sweeps
+    /// the sine through three full oscillations and lands back at zero offset.
+    private struct ShakeEffect: GeometryEffect {
+        var animatableData: CGFloat
+
+        func effectValue(size: CGSize) -> ProjectionTransform {
+            ProjectionTransform(CGAffineTransform(
+                translationX: 5 * sin(animatableData * .pi * 6),
+                y: 0
+            ))
+        }
     }
 
     /// A warning row shown while the privileged helper needs the user (approve

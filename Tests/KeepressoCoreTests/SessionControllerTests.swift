@@ -328,6 +328,28 @@ private final class StubGate: TriggerEvaluating {
 }
 
 @MainActor
+@Test func refusedStartsWhileBatteryPausedAreCounted() {
+    let (controller, _, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.reconcile(battery: .discharging(15))
+    #expect(controller.pausedByBattery)
+    #expect(controller.batteryRefusedStarts == 0)
+
+    // Each refused user attempt bumps the counter, so the UI can nudge its
+    // "paused on low battery" explanation exactly when the user pokes it.
+    controller.start()
+    #expect(controller.batteryRefusedStarts == 1)
+    controller.start()
+    #expect(controller.batteryRefusedStarts == 2)
+
+    // A start that actually begins doesn't count as a refusal.
+    controller.reconcile(battery: .onAC)
+    controller.start()
+    #expect(controller.isActive)
+    #expect(controller.batteryRefusedStarts == 2)
+}
+
+@MainActor
 @Test func pluggingInLiftsTheBatteryPause() {
     let (controller, fake, _) = makeController()
     controller.pauseBelowBatteryPercent = 20
