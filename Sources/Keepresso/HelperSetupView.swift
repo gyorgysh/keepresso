@@ -26,7 +26,7 @@ struct HelperStatusRows: View {
             // switch, e.g. closed-display mode mid-session).
             if model.helper.daemonOutdated {
                 Label(
-                    L("The helper service is updating itself to this version of Keepresso in the background. No reinstall or password is needed; features new to this version wait until it finishes, usually under a minute."),
+                    L("The helper service is updating itself to this version of Keepresso in the background. No reinstall or password is needed. Features new to this version wait until it finishes, usually under a minute."),
                     systemImage: "arrow.triangle.2.circlepath"
                 )
                 .font(.caption)
@@ -43,7 +43,7 @@ struct HelperStatusRows: View {
             }
         default:
             HStack(alignment: .top, spacing: 6) {
-                Text("Install a small helper service so closed-display mode, the thermal fan boost, and AWDL pausing work without password prompts. macOS will ask you to allow it in System Settings, once; nothing else changes.")
+                Text("Install a small helper service so closed-display mode, the thermal fan boost, and AWDL pausing work without password prompts. macOS will ask you to allow it in System Settings, once. Nothing else changes.")
                 Spacer(minLength: 8)
                 Button("Install Helper…") { model.installHelper() }
             }

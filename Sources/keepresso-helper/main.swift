@@ -52,6 +52,10 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
         reply(engine.setFanHold(client: clientID, holding: holding, percent: percent))
     }
 
+    func fanHoldDropped(reply: @escaping @Sendable (Bool) -> Void) {
+        reply(engine.fanHoldDropped)
+    }
+
     func terminateWhenIdle() {
         onTerminateRequest()
     }

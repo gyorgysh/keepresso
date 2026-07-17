@@ -41,8 +41,8 @@ struct ThermalHelperLockedRow: View {
 
     private var lockedText: String {
         model.machineHasFans
-            ? L("Boosting fans and switching off closed-display mode during a heat pause need the administrator helper; watching temperatures and pausing work without it. Installing asks for your approval once, in System Settings.")
-            : L("Switching off closed-display mode during a heat pause needs the administrator helper; watching temperatures and pausing work without it. Installing asks for your approval once, in System Settings.")
+            ? L("Boosting fans and switching off closed-display mode during a heat pause need the administrator helper. Watching temperatures and pausing work without it. Installing asks for your approval once, in System Settings.")
+            : L("Switching off closed-display mode during a heat pause needs the administrator helper. Watching temperatures and pausing work without it. Installing asks for your approval once, in System Settings.")
     }
 }
 
@@ -128,7 +128,7 @@ struct FanTestRows: View {
         case .fansDidNotRespond:
             Label {
                 Text(verbatim: [
-                    L("The fans didn't follow the boost, so this Mac's firmware likely refuses manual fan control. The rest of the thermal safety net still works; the boost stage will just be skipped."),
+                    L("The fans didn't follow the boost, so this Mac's firmware likely refuses manual fan control. The rest of the thermal safety net still works, the boost stage will just be skipped."),
                     fanSummary(report)
                 ].compactMap { $0 }.joined(separator: " "))
             } icon: {

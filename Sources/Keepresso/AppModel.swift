@@ -123,6 +123,9 @@ final class AppModel {
         self.session.endAction = loaded.endAction
         self.session.pauseBelowBatteryPercent = loaded.pauseBelowBatteryPercent
         self.session.pauseWhenHot = loaded.thermalSafety?.stopBrewing ?? false
+        // Raw config here (self isn't fully initialized yet for the
+        // availability derivation); the first thermalAvailabilityTick one
+        // second later nils an unavailable boost stage out.
         self.thermalGuard.config = loaded.thermalSafety
         self.disk = DiskKeepAliveController()
         self.disk.config = loaded.diskKeepAlive
@@ -538,10 +541,71 @@ final class AppModel {
         get { settings.thermalSafety }
         set {
             settings.thermalSafety = newValue
-            thermalGuard.config = newValue
+            thermalGuard.config = effectiveThermalConfig(newValue)
             session.pauseWhenHot = newValue?.stopBrewing ?? false
             if newValue != nil { notifier.requestAuthorization() }
             persist()
+        }
+    }
+
+    /// The guard's view of the config: the fan-boost stage is nilled out
+    /// while a boost can't actually run (fanless Mac via an imported config,
+    /// helper missing or removed, daemon still pre-update), so an
+    /// unavailable stage 1 never eats a sustain window before the pause.
+    /// Settings keep the user's chosen strength untouched.
+    private func effectiveThermalConfig(_ config: ThermalSafetyConfig?) -> ThermalSafetyConfig? {
+        guard var config else { return nil }
+        if config.fanBoostPercent != nil,
+           !(machineHasFans && helperInstalled && !helper.daemonOutdated) {
+            config.fanBoostPercent = nil
+        }
+        return config
+    }
+
+    /// Once per tick: re-derive the guard's effective config (helper state
+    /// changes on its own timetable) and, while an active boost claim
+    /// exists, watch for the daemon surrendering it. Cheap when idle: a
+    /// value compare, and no XPC unless a boost is showing.
+    func thermalAvailabilityTick() {
+        thermalGuard.config = effectiveThermalConfig(settings.thermalSafety)
+        // A stale "daemon outdated" verdict would silently keep the boost
+        // stage off; while it matters (boost configured), keep the version
+        // watch armed so the verdict converges (single-flight, no-op while
+        // one is already running).
+        if settings.thermalSafety?.fanBoostPercent != nil,
+           helperInstalled, helper.daemonOutdated {
+            helper.watchDaemonUpdate()
+        }
+        fanHoldWatchTick()
+    }
+
+    /// Poll the daemon's surrendered-boost flag every few seconds while the
+    /// app claims an active boost, so the menu never keeps advertising a
+    /// boost the firmware refused (the daemon gives up after repeated
+    /// failed writes and restores auto on its own).
+    @ObservationIgnored private var fanDropCheckInFlight = false
+    @ObservationIgnored private var ticksSinceFanDropCheck = 0
+
+    private func fanHoldWatchTick() {
+        guard fanBoostActivePercent != nil, !fanDropCheckInFlight else { return }
+        ticksSinceFanDropCheck += 1
+        guard ticksSinceFanDropCheck >= 3 else { return }
+        ticksSinceFanDropCheck = 0
+        fanDropCheckInFlight = true
+        let client = helperClient
+        Task { [weak self] in
+            let dropped = await Task.detached { client.fanHoldDropped() }.value
+            guard let self else { return }
+            self.fanDropCheckInFlight = false
+            guard dropped == true, self.fanBoostActivePercent != nil else { return }
+            // Let go of our side too, so a daemon restart can't re-assert
+            // the hold the firmware already refused.
+            self.setFanHold(percent: nil)
+            self.notifier.notify(
+                title: L("Fan boost ended"),
+                body: L("The firmware kept refusing manual fan control, so the fans are back with the system. The rest of the thermal safety net still applies."),
+                sound: false
+            )
         }
     }
 
@@ -575,7 +639,7 @@ final class AppModel {
                 guard !helper.daemonOutdated else {
                     notifier.notify(
                         title: L("Fans not boosted"),
-                        body: L("The administrator helper is still updating itself to this version of Keepresso. Fan boost engages once that finishes; the rest of the thermal safety net still applies."),
+                        body: L("The administrator helper is still updating itself to this version of Keepresso. Fan boost engages once that finishes, and the rest of the thermal safety net still applies."),
                         sound: false
                     )
                     break
@@ -583,16 +647,27 @@ final class AppModel {
                 if fanDryRun.isRunning {
                     // A real emergency never shares the fans with the
                     // diagnostic: stop the test, wait for its release, then
-                    // take the hold.
+                    // take the hold. Re-check that the emergency is still
+                    // latched before engaging: cancelAndWait can outlast
+                    // several ticks (in-flight XPC calls block up to their
+                    // timeout), and a .restoreFans delivered meanwhile would
+                    // find nothing to release yet, so engaging here after
+                    // the guard cleared would leak the hold.
                     Task { [weak self] in
                         await self?.fanDryRun.cancelAndWait()
-                        self?.setFanHold(percent: percent)
+                        guard let self, self.thermalGuard.state.stage != .clear else { return }
+                        self.setFanHold(percent: percent)
                     }
                 } else {
                     setFanHold(percent: percent)
                 }
             case .restoreFans:
-                guard fanBoostActivePercent != nil else { break }
+                // Always send the release, even when no boost looks active
+                // here: a failed engage rolls fanBoostActivePercent back
+                // while the daemon keeps the holder and retries into
+                // success, so skipping on the local status would strand a
+                // live hold. The release is idempotent and costs one silent
+                // call when there is truly nothing to release.
                 setFanHold(percent: nil)
             case .pauseBrewing:
                 // The session pause itself latches through reconcile (the
@@ -866,7 +941,7 @@ final class AppModel {
         session.pauseBelowBatteryPercent = newSettings.pauseBelowBatteryPercent
         session.pauseWhenHot = newSettings.thermalSafety?.stopBrewing ?? false
         // The guard's didSet queues fan/pause releases if it was mid-emergency.
-        thermalGuard.config = newSettings.thermalSafety
+        thermalGuard.config = effectiveThermalConfig(newSettings.thermalSafety)
         disk.config = newSettings.diskKeepAlive
         virtualDisplay.config = newSettings.virtualDisplay
         awdl.autoWithGaming = newSettings.awdlAutoWithGaming

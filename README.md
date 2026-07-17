@@ -127,7 +127,7 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   temperatures recover. A built-in **"Test Fans"** check proves the fan path
   end to end in about 12 seconds ("All good. Fan 1: 0 → 4800 rpm"), so you
   can trust the boost before a heavy render needs it. Watching and pausing
-  work everywhere; the fan boost runs through the administrator helper, so
+  work everywhere. The fan boost runs through the administrator helper, so
   it's silent and never prompts.
 - ⏱️ **Menu-bar countdown.** An optional live countdown next to the cup icon for
   timed sessions.
@@ -156,7 +156,7 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   thermal fan boost, and the AWDL pause become instant and silent, with no
   password prompt on any launch. macOS asks for your password once, when you
   approve the helper under Login Items, and the approval survives restarts
-  and updates; app updates replace the service automatically, never a
+  and updates, and app updates replace the service automatically, never a
   reinstall. The helper can only flip those specific switches, restores
   everything if the app quits or crashes, puts the `keepresso` CLI on PATH
   for DMG installs, and can be removed at any time. Without it, everything

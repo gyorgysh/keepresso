@@ -19,7 +19,8 @@ extern CFTypeRef IOHIDServiceClientCopyProperty(KPHIDServiceClientRef service, C
 extern KPHIDEventRef IOHIDServiceClientCopyEvent(KPHIDServiceClientRef service, int64_t type,
                                                  int32_t options, int64_t timestamp)
     __attribute__((weak_import));
-extern double IOHIDEventGetFloatValue(KPHIDEventRef event, int32_t field);
+extern double IOHIDEventGetFloatValue(KPHIDEventRef event, int32_t field)
+    __attribute__((weak_import));
 
 // kIOHIDEventTypeTemperature and its value field (IOHIDEventFieldBase(type)).
 static const int64_t KPHIDEventTypeTemperature = 15;
@@ -30,7 +31,8 @@ NSDictionary<NSString *, NSNumber *> *KPHIDTemperatureReadings(void) {
         IOHIDEventSystemClientSetMatching == NULL ||
         IOHIDEventSystemClientCopyServices == NULL ||
         IOHIDServiceClientCopyProperty == NULL ||
-        IOHIDServiceClientCopyEvent == NULL) {
+        IOHIDServiceClientCopyEvent == NULL ||
+        IOHIDEventGetFloatValue == NULL) {
         return nil;
     }
 

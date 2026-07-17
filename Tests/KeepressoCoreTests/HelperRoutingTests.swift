@@ -40,6 +40,11 @@ private final class FakeHelperClient: PrivilegedHelperCalling, @unchecked Sendab
         return holdSucceeds
     }
 
+    func fanHoldDropped() -> Bool? {
+        record("fanHoldDropped")
+        return false
+    }
+
     private func record(_ call: String) {
         lock.lock()
         calls.append(call)

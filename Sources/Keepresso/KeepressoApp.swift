@@ -142,6 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.model.syncWidgetState()
             self?.model.awdlAutoTick()
             self?.model.closedDisplayAutoTick()
+            self?.model.thermalAvailabilityTick()
         }
     )
     /// Listens for the Control Center toggle's Darwin doorbell.

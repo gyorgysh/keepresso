@@ -22,12 +22,12 @@ Versions follow [Semantic Versioning](https://semver.org).
   card now shakes on each attempt, pointing at the line that explains the
   pause, instead of appearing to ignore the click.
 - **A thermal safety net.** Keepresso can hold a Mac awake through heavy load,
-  with the lid closed, even on battery; now it can also watch the heat.
+  with the lid closed, even on battery. Now it can also watch the heat.
   Preferences ▸ General ▸ Thermal watches either macOS's own thermal pressure
   (works on every Mac) or temperature sensors you pick from a live list, and
   once the reading stays over your threshold for a sustained time it
   escalates: first, optionally, it boosts the fans to a chosen strength
-  (never below what the system already chose; silent, through the
+  (never below what the system already chose, silent through the
   administrator helper), and if the Mac stays hot, it pauses the session,
   refuses restarts with the same explanatory shake as the battery pause, can
   switch off closed-display mode, and tells you why in a notification.
@@ -43,14 +43,14 @@ Versions follow [Semantic Versioning](https://semver.org).
   0 → 4800 rpm (max 5348)." A real heat emergency always outranks the test:
   the safety net cancels it and takes the fans for itself.
 - **The privileged thermal controls know their place.** Watching temperatures
-  and pausing the session never need the administrator helper; boosting fans
+  and pausing the session never need the administrator helper. Boosting fans
   and lifting closed-display mode do (fan writes are root-only, and an
   unattended safety action must never ask for a password). Those two now sit
   behind a single lock row while the helper isn't installed, with Install one
   click away right there and the approval step walked through in place,
   instead of live-looking toggles warning underneath.
 - **Helper updates take care of themselves.** The helper service ships inside
-  the app, so an app update replaces it on disk automatically; the only
+  the app, so an app update replaces it on disk automatically. The only
   leftover is the pre-update service still running in memory, which Keepresso
   now recognizes by version, retires in the background, and reports in
   Preferences while it lasts (usually under a minute). No reinstall, no

@@ -288,8 +288,11 @@ public final class HelperEngine: @unchecked Sendable {
         }
         lock.unlock()
         if giveUp {
-            _ = fans.restoreAuto()
-            state.set(.fanForced, present: false)
+            // Same rule as the union edge: the marker clears only when the
+            // restore actually landed, so a crash after a failed restore
+            // still settles the debt at the next daemon launch.
+            let ok = fans.restoreAuto()
+            state.set(.fanForced, present: !ok)
         }
     }
 
@@ -356,6 +359,13 @@ public final class HelperEngine: @unchecked Sendable {
     /// across holders, and a change in that target (including to or from
     /// nothing) is what writes hardware. Engaging resets the failure streak
     /// and the dropped flag: a fresh hold gets a fresh chance.
+    ///
+    /// The restore marker is debt-by-attempt, not debt-by-success: a forced
+    /// write can partially land (mode set on one fan, refused on the next)
+    /// and `fanTick` retries a failed engage into success later, so the
+    /// marker goes down on the first attempt and comes off only after a
+    /// restore that actually succeeded. A spurious restore of already-auto
+    /// fans is harmless, forced fans with no marker are not.
     private func applyFanUnion(_ mutate: () -> Void) -> Bool {
         let before = fanHolders.values.max()
         mutate()
@@ -364,12 +374,11 @@ public final class HelperEngine: @unchecked Sendable {
         if let target = after {
             fanFailureStreak = 0
             fanHoldDropped = false
-            let ok = writeFanTarget(target)
-            state.set(.fanForced, present: ok)
-            return ok
+            state.set(.fanForced, present: true)
+            return writeFanTarget(target)
         }
         let ok = fans.restoreAuto()
-        state.set(.fanForced, present: false)
+        state.set(.fanForced, present: !ok)
         return ok
     }
 

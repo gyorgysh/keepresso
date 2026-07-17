@@ -50,6 +50,7 @@ private final class FakeFanControl: FanControlling, @unchecked Sendable {
     /// Scripted results for successive setForced calls; empty = keep .ok.
     var results: [FanWriteResult] = []
     var unlockSucceeds = true
+    var restoreSucceeds = true
 
     func fanCount() -> Int? { 2 }
 
@@ -71,7 +72,7 @@ private final class FakeFanControl: FanControlling, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         restoreCalls += 1
-        return true
+        return restoreSucceeds
     }
 }
 
@@ -299,6 +300,37 @@ private struct CLILinkFixture {
     #expect(fans.restoreCalls == 1)
     #expect(state.markers().isEmpty)
     #expect(engine.isIdle)
+}
+
+@Test func failedFanEngageStillRecordsTheRestoreDebt() {
+    let fans = FakeFanControl()
+    fans.results = [.failed]
+    let state = FakeRestoreState()
+    let engine = HelperEngine(runner: FakeRunner(), state: state, fans: fans)
+
+    // The write failed, but it can partially land (per-fan mode writes) and
+    // the tick retries it into success, so the debt exists from the first
+    // attempt: a crash between here and the retry must still restore auto.
+    #expect(!engine.setFanHold(client: 1, holding: true, percent: 80))
+    #expect(state.markers() == [.fanForced])
+
+    engine.fanTick() // retry succeeds; the debt naturally stays
+    #expect(state.markers() == [.fanForced])
+    #expect(fans.forcedPercents == [80, 80])
+}
+
+@Test func failedRestoreKeepsTheFanMarkerForTheNextLaunch() {
+    let fans = FakeFanControl()
+    let state = FakeRestoreState()
+    let engine = HelperEngine(runner: FakeRunner(), state: state, fans: fans)
+    _ = engine.setFanHold(client: 1, holding: true, percent: 80)
+
+    // The release's restore write failed: the fans are still forced, so the
+    // marker must survive for restoreAtLaunch to settle after the daemon
+    // exits or crashes.
+    fans.restoreSucceeds = false
+    #expect(!engine.setFanHold(client: 1, holding: false, percent: 0))
+    #expect(state.markers() == [.fanForced])
 }
 
 @Test func fanTickReassertsWhileHeldAndIdlesOtherwise() {

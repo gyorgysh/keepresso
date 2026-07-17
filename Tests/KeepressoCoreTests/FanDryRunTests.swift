@@ -24,6 +24,8 @@ private final class FakeFanHelper: PrivilegedHelperCalling, @unchecked Sendable 
         return ok
     }
 
+    func fanHoldDropped() -> Bool? { false }
+
     var recorded: [String] {
         lock.lock()
         defer { lock.unlock() }
@@ -74,6 +76,8 @@ private final class RigHelper: PrivilegedHelperCalling, @unchecked Sendable {
         if ok { fans.forcedPercent = holding ? percent : nil }
         return ok
     }
+
+    func fanHoldDropped() -> Bool? { inner.fanHoldDropped() }
 }
 
 @MainActor

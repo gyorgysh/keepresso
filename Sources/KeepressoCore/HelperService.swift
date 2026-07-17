@@ -31,7 +31,8 @@ public enum HelperService {
     /// 3: removed it again. Tested live: even root can't delete from the
     /// TCC-protected Trash, so the app now tells the user instead of asking
     /// the daemon to try.
-    /// 4: added `setFanHold` (the thermal safety net's fan boost).
+    /// 4: added `setFanHold` (the thermal safety net's fan boost) and
+    /// `fanHoldDropped` (the app's view of a surrendered boost).
     public static let protocolVersion = 4
 
     /// The code-signing requirement one side demands of the other: an
@@ -95,6 +96,10 @@ public enum HelperService {
     /// what auto control had; while any hold is live the daemon re-writes the
     /// target every few seconds, since the system re-takes fan control.
     func setFanHold(_ holding: Bool, percent: Int, reply: @escaping @Sendable (Bool) -> Void)
+    /// Whether the daemon surrendered a forced-fan hold on its own (repeated
+    /// firmware refusals), so the app can stop claiming a boost the hardware
+    /// no longer has and release its side of the hold.
+    func fanHoldDropped(reply: @escaping @Sendable (Bool) -> Void)
     /// Ask the daemon to exit at its first fully idle moment, without the
     /// ordinary exit's extra grace period (see ``HelperShutdownPolicy``), so
     /// launchd relaunches the binary currently in the bundle on the next call.
@@ -118,6 +123,9 @@ public protocol PrivilegedHelperCalling: AnyObject, Sendable {
     func setSleepHold(_ holding: Bool) -> Bool
     func setAWDLHold(_ holding: Bool) -> Bool
     func setFanHold(_ holding: Bool, percent: Int) -> Bool
+    /// Whether the daemon surrendered the forced-fan hold on its own, `nil`
+    /// when no daemon answered.
+    func fanHoldDropped() -> Bool?
 }
 
 /// Real client over `NSXPCConnection`. The connection *is* the app's claim on
@@ -184,6 +192,17 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         wantsFanHold = holding ? percent : nil
         lock.unlock()
         return call { proxy, done in proxy.setFanHold(holding, percent: percent, reply: done) }
+    }
+
+    public func fanHoldDropped() -> Bool? {
+        let dropped = LockedBox(false)
+        let replied = call { proxy, done in
+            proxy.fanHoldDropped { value in
+                dropped.value = value
+                done(true)
+            }
+        }
+        return replied ? dropped.value : nil
     }
 
     /// Fire the version-handshake-and-retire nudge: if the daemon on the other
