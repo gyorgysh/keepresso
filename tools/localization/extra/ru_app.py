@@ -175,6 +175,8 @@ APP = {
     "Set Up…": "Настроить…",
     "Show Welcome Screen…": "Показать экран приветствия…",
     "Show countdown in menu bar": "Показывать обратный отсчёт в строке меню",
+    "Show less": "Показать меньше",
+    "Show more": "Показать больше",
     "Start keep-awake on launch": "Включать поддержание активности при запуске",
     "The helper needs attention": "Помощник требует внимания",
     "The test couldn't run. Check that you're online and try again.": "Не удалось запустить тест. Убедитесь, что вы в сети, и повторите попытку.",

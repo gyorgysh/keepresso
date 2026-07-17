@@ -583,6 +583,16 @@ final class AppModel {
         }
     }
 
+    /// Whether the menu panel shows its option toggles and app entries, or the
+    /// collapsed status-and-controls-only layout (the panel's "Show less" row).
+    var menuPanelExpanded: Bool {
+        get { settings.menuPanelExpanded }
+        set {
+            settings.menuPanelExpanded = newValue
+            persist()
+        }
+    }
+
     // MARK: - Presets
 
     /// Saved trigger-rule bundles, in display order.

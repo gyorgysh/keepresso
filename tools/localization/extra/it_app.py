@@ -179,6 +179,8 @@ APP = {
     "Set Up…": "Configura…",
     "Show Welcome Screen…": "Mostra la schermata di benvenuto…",
     "Show countdown in menu bar": "Mostra il conto alla rovescia nella barra dei menu",
+    "Show less": "Mostra meno",
+    "Show more": "Mostra altro",
     "Start keep-awake on launch": "Avvia la veglia all’avvio",
     "The helper needs attention": "L’assistente richiede attenzione",
     "The test couldn't run. Check that you're online and try again.":

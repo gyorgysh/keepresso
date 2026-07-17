@@ -3,6 +3,20 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [1.15.0] - Unreleased
+
+### Added
+
+- **Right-click the cup.** The menu-bar icon now has a native context menu
+  (right-click or control-click) with the app entries: Preferences, Headless
+  Setup, Gaming & Streaming, About, Check for Updates, and Quit. Left click
+  keeps opening the panel as always. Thanks to @ruzickap for the suggestion
+  (#1).
+- **Show less.** A slim disclosure row at the bottom of the menu panel folds
+  the option toggles and app entries away, leaving just the status and the
+  keep-awake controls. The choice sticks across launches, and everything
+  hidden stays one right-click away.
+
 ## [1.14.0] - 2026-07-16
 
 Theme: Keepresso learns when your AI agent is actually working.

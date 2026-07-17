@@ -175,6 +175,8 @@ APP = {
     "Set Up…": "セットアップ…",
     "Show Welcome Screen…": "ようこそ画面を表示…",
     "Show countdown in menu bar": "メニューバーにカウントダウンを表示",
+    "Show less": "詳細を隠す",
+    "Show more": "詳細を表示",
     "Start keep-awake on launch": "起動時にスリープ防止を開始",
     "The helper needs attention": "ヘルパーに対応が必要です",
     "The test couldn't run. Check that you're online and try again.": "テストを実行できませんでした。オンラインであることを確認して、もう一度お試しください。",

@@ -244,11 +244,17 @@ Either way, Keepresso keeps itself up to date from there.
 
 ## Using Keepresso
 
-Click the cup in the menu bar to open Keepresso.
+Click the cup in the menu bar to open Keepresso. Right-click (or control-click)
+it for a compact context menu with the app entries: Preferences, Headless
+Setup, Gaming & Streaming, About, Check for Updates, and Quit.
 
 - **Quick toggle.** Flip **Keep awake** on or off and pick a duration:
   indefinitely, a preset (15 minutes, 1 hour, 4 hours), any custom duration, or
   until a time of day. The cup fills and animates while brewing.
+- **Show less.** The disclosure row at the bottom of the panel folds the option
+  toggles and app entries away, leaving just the status and the keep-awake
+  controls. Keepresso remembers the choice, and everything hidden stays
+  reachable from the right-click menu.
 - **Keep awake with lid closed.** Toggle it right from the menu before you shut
   the lid or unplug. It flips a system setting (`pmset disablesleep`), so it
   needs administrator rights: silent with the helper installed, one password

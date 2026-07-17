@@ -36,6 +36,10 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     public var pauseBelowBatteryPercent: Int?
     /// Whether the menu-bar icon shows a live countdown for timed sessions.
     public var showCountdownInMenuBar: Bool
+    /// Whether the menu panel shows its option toggles and app entries, or the
+    /// collapsed status-and-controls-only layout (the panel's "Show less" row).
+    /// Expanded by default.
+    public var menuPanelExpanded: Bool
     /// Whether the AWDL watchdog starts and stops with a gaming trigger
     /// (see ``AWDLWatchdogController/autoWithGaming``).
     public var awdlAutoWithGaming: Bool
@@ -86,6 +90,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         virtualDisplay: VirtualDisplayConfig? = nil,
         pauseBelowBatteryPercent: Int? = nil,
         showCountdownInMenuBar: Bool = false,
+        menuPanelExpanded: Bool = true,
         awdlAutoWithGaming: Bool = false,
         awdlNotifications: Bool = false,
         awdlGraceSeconds: TimeInterval = 60,
@@ -111,6 +116,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.virtualDisplay = virtualDisplay
         self.pauseBelowBatteryPercent = pauseBelowBatteryPercent.map(Self.clampedBatteryPausePercent)
         self.showCountdownInMenuBar = showCountdownInMenuBar
+        self.menuPanelExpanded = menuPanelExpanded
         self.awdlAutoWithGaming = awdlAutoWithGaming
         self.awdlNotifications = awdlNotifications
         self.awdlGraceSeconds = awdlGraceSeconds
@@ -197,6 +203,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         pauseBelowBatteryPercent = try c.decodeIfPresent(Int.self, forKey: .pauseBelowBatteryPercent)
             .map(Self.clampedBatteryPausePercent)
         showCountdownInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showCountdownInMenuBar) ?? false
+        menuPanelExpanded = try c.decodeIfPresent(Bool.self, forKey: .menuPanelExpanded) ?? true
         awdlAutoWithGaming = try c.decodeIfPresent(Bool.self, forKey: .awdlAutoWithGaming) ?? false
         awdlNotifications = try c.decodeIfPresent(Bool.self, forKey: .awdlNotifications) ?? false
         awdlGraceSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .awdlGraceSeconds) ?? 60

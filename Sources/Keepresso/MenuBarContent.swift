@@ -10,6 +10,10 @@ struct MenuBarContent: View {
     /// The auto-updater behind the "Check for Updates…" item.
     let updater: any Updating
 
+    /// Receives this panel's window, so a right-click on the icon can close
+    /// the panel before showing the context menu.
+    let bridge: StatusItemBridge
+
     /// Opens the window scenes declared in ``KeepressoApp``.
     @Environment(\.openWindow) private var openWindow
 
@@ -143,91 +147,22 @@ struct MenuBarContent: View {
                 }
             }
 
-            Divider()
-
-            // The same pmset switch wears two names: on a laptop it exists to
-            // survive the lid closing, on a desktop (no lid, no battery) it
-            // reads as a hard "never sleep" override.
-            switchRow(model.machineHasBattery ? "Keep awake with lid closed" : "Disable system sleep",
-                      isOn: Binding(
-                get: { model.closedDisplayEnabled },
-                set: { model.setClosedDisplay($0) }
-            ), info: model.machineHasBattery
-                ? L("Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.")
-                : L("Stops the Mac from sleeping at all, even with no session running. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password."))
-            .disabled(model.closedDisplayBusy)
-            if model.closedDisplayBusy {
-                AdminAuthNote(purpose: model.machineHasBattery
-                    ? L("keep the Mac awake with the lid closed")
-                    : L("disable system sleep"))
-            }
-            if model.closedDisplayEnabled {
-                Text(model.machineHasBattery
-                    ? L("Stays awake on battery too; the display turns off when the lid closes. Turn it off before putting it in a bag.")
-                    : L("The Mac won't sleep at all until you turn this off. The display still sleeps as usual."))
-                    .font(type.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if let error = model.closedDisplayError {
-                Text(error)
-                    .font(type.caption)
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            switchRow("Only while brewing", isOn: Binding(
-                get: { model.closedDisplayOnlyWhileBrewing },
-                set: { model.closedDisplayOnlyWhileBrewing = $0 }
-            ), info: model.machineHasBattery
-                ? L("Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.")
-                : L("Turns the sleep override on when a keep-awake session starts and off when it ends or Keepresso quits."))
-            .disabled(model.closedDisplayAutoBusy)
-            if model.closedDisplayAutoBusy && !model.helperInstalled {
-                AdminAuthNote(purpose: model.machineHasBattery
-                    ? L("switch closed-display mode with the session")
-                    : L("switch the sleep override with the session"))
-            }
-            if let error = model.closedDisplayAutoError {
-                Text(error)
-                    .font(type.caption)
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if model.machineHasBattery {
-                switchRow("Pause on low battery", isOn: Binding(
-                    get: { model.batteryAutoPauseEnabled },
-                    set: { model.batteryAutoPauseEnabled = $0 }
-                ), info: L("Lets the Mac sleep once battery charge drops below this level, even mid-session, so it doesn't run flat."))
-                if model.batteryAutoPauseEnabled {
-                    BatteryThresholdSlider(percent: Binding(
-                        get: { model.pauseBelowBatteryPercent },
-                        set: { model.pauseBelowBatteryPercent = $0 }
-                    ))
-                }
+            // The option toggles and app entries fold away behind the "Show
+            // less" row, leaving a status-and-controls-only panel; everything
+            // hidden stays reachable via right-click on the icon.
+            if model.menuPanelExpanded {
+                optionToggles
             }
 
             awdlStatusLine
 
-            Divider()
+            if model.menuPanelExpanded {
+                Divider()
 
-            Group {
-                Button("Preferences…") { open(KeepressoApp.preferencesWindowID) }
-                    .keyboardShortcut(",")
-                Button("Headless Setup…") { open(KeepressoApp.setupWindowID) }
-                Button("Gaming & Streaming…") { open(KeepressoApp.streamingWindowID) }
-                Button("About Keepresso") { open(KeepressoApp.aboutWindowID) }
-                Button("Check for Updates…") { updater.checkForUpdates() }
-                    .disabled(!updater.canCheckForUpdates)
+                appEntries
             }
-            .buttonStyle(.menuRow)
 
-            Divider()
-
-            Button("Quit Keepresso") { NSApplication.shared.terminate(nil) }
-                .keyboardShortcut("q")
-                .buttonStyle(.menuRow)
+            expandToggleRow
         }
         .padding(14)
         .frame(width: 280 * type.scale)
@@ -241,8 +176,12 @@ struct MenuBarContent: View {
         .animation(.snappy(duration: 0.25), value: model.batteryAutoPauseEnabled)
         .animation(.snappy(duration: 0.25), value: model.closedDisplayError)
         .animation(.snappy(duration: 0.25), value: model.helperAttention)
+        .animation(.snappy(duration: 0.25), value: model.menuPanelExpanded)
         .glassPanelBackground()
         .keepsPanelKey()
+        // Hands the panel window to the bridge, so a right-click on the icon
+        // closes this panel before its context menu opens.
+        .background(PanelWindowRegistrar { bridge.panelWindow = $0 })
         .tint(.keepressoBrew)
         // Cascades to every text that sets no font of its own (toggles,
         // buttons, menu rows), so the whole panel scales together.
@@ -251,6 +190,130 @@ struct MenuBarContent: View {
         .onReceive(tick) { _ in
             displayedElapsed = session.elapsed
             liveRefresh &+= 1
+        }
+    }
+
+    /// The middle option toggles (closed-display, only-while-brewing, battery),
+    /// hidden while the panel is collapsed.
+    @ViewBuilder
+    private var optionToggles: some View {
+        Divider()
+
+        // The same pmset switch wears two names: on a laptop it exists to
+        // survive the lid closing, on a desktop (no lid, no battery) it
+        // reads as a hard "never sleep" override.
+        switchRow(model.machineHasBattery ? "Keep awake with lid closed" : "Disable system sleep",
+                  isOn: Binding(
+            get: { model.closedDisplayEnabled },
+            set: { model.setClosedDisplay($0) }
+        ), info: model.machineHasBattery
+            ? L("Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.")
+            : L("Stops the Mac from sleeping at all, even with no session running. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password."))
+        .disabled(model.closedDisplayBusy)
+        if model.closedDisplayBusy {
+            AdminAuthNote(purpose: model.machineHasBattery
+                ? L("keep the Mac awake with the lid closed")
+                : L("disable system sleep"))
+        }
+        if model.closedDisplayEnabled {
+            Text(model.machineHasBattery
+                ? L("Stays awake on battery too; the display turns off when the lid closes. Turn it off before putting it in a bag.")
+                : L("The Mac won't sleep at all until you turn this off. The display still sleeps as usual."))
+                .font(type.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        if let error = model.closedDisplayError {
+            Text(error)
+                .font(type.caption)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
+        switchRow("Only while brewing", isOn: Binding(
+            get: { model.closedDisplayOnlyWhileBrewing },
+            set: { model.closedDisplayOnlyWhileBrewing = $0 }
+        ), info: model.machineHasBattery
+            ? L("Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.")
+            : L("Turns the sleep override on when a keep-awake session starts and off when it ends or Keepresso quits."))
+        .disabled(model.closedDisplayAutoBusy)
+        if model.closedDisplayAutoBusy && !model.helperInstalled {
+            AdminAuthNote(purpose: model.machineHasBattery
+                ? L("switch closed-display mode with the session")
+                : L("switch the sleep override with the session"))
+        }
+        if let error = model.closedDisplayAutoError {
+            Text(error)
+                .font(type.caption)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
+        if model.machineHasBattery {
+            switchRow("Pause on low battery", isOn: Binding(
+                get: { model.batteryAutoPauseEnabled },
+                set: { model.batteryAutoPauseEnabled = $0 }
+            ), info: L("Lets the Mac sleep once battery charge drops below this level, even mid-session, so it doesn't run flat."))
+            if model.batteryAutoPauseEnabled {
+                BatteryThresholdSlider(percent: Binding(
+                    get: { model.pauseBelowBatteryPercent },
+                    set: { model.pauseBelowBatteryPercent = $0 }
+                ))
+            }
+        }
+    }
+
+    /// The window-opening entries and Quit, hidden while the panel is
+    /// collapsed (they stay reachable via the icon's right-click menu).
+    @ViewBuilder
+    private var appEntries: some View {
+        Group {
+            Button("Preferences…") { open(KeepressoApp.preferencesWindowID) }
+                .keyboardShortcut(",")
+            Button("Headless Setup…") { open(KeepressoApp.setupWindowID) }
+            Button("Gaming & Streaming…") { open(KeepressoApp.streamingWindowID) }
+            Button("About Keepresso") { open(KeepressoApp.aboutWindowID) }
+            Button("Check for Updates…") { updater.checkForUpdates() }
+                .disabled(!updater.canCheckForUpdates)
+        }
+        .buttonStyle(.menuRow)
+
+        Divider()
+
+        Button("Quit Keepresso") { NSApplication.shared.terminate(nil) }
+            .keyboardShortcut("q")
+            .buttonStyle(.menuRow)
+    }
+
+    /// The slim "Show less" / "Show more" row that folds the option toggles
+    /// and app entries away, pinned to the panel's bottom in both states.
+    private var expandToggleRow: some View {
+        Button {
+            model.menuPanelExpanded.toggle()
+        } label: {
+            HStack(spacing: 4) {
+                Spacer()
+                Image(systemName: model.menuPanelExpanded ? "chevron.up" : "chevron.down")
+                    .font(type.caption2)
+                Text(model.menuPanelExpanded ? "Show less" : "Show more")
+                    .font(type.caption)
+                Spacer()
+            }
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.menuRow)
+        // Keep the panel's ⌘, and ⌘Q working while their visible carriers are
+        // folded away. As a background, the carriers take no layout slot in
+        // the panel's VStack (a zero-size child would still add its spacing).
+        .background {
+            if !model.menuPanelExpanded {
+                Button("") { open(KeepressoApp.preferencesWindowID) }
+                    .keyboardShortcut(",")
+                    .hidden()
+                Button("") { NSApplication.shared.terminate(nil) }
+                    .keyboardShortcut("q")
+                    .hidden()
+            }
         }
     }
 

@@ -175,6 +175,8 @@ APP = {
     'Set Up…': '設定…',
     'Show Welcome Screen…': '顯示歡迎畫面…',
     'Show countdown in menu bar': '在選單列顯示倒數計時',
+    'Show less': '顯示較少',
+    'Show more': '顯示更多',
     'Start keep-awake on launch': '啟動時開始保持喚醒',
     'The helper needs attention': '輔助程式需要處理',
     "The test couldn't run. Check that you're online and try again.": '測試無法執行，請確認已連上網路後再試一次。',

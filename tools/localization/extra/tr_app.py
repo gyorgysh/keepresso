@@ -175,6 +175,8 @@ APP = {
     "Set Up…": "Kur…",
     "Show Welcome Screen…": "Hoş Geldiniz Ekranını Göster…",
     "Show countdown in menu bar": "Menü çubuğunda geri sayımı göster",
+    "Show less": "Daha az göster",
+    "Show more": "Daha fazla göster",
     "Start keep-awake on launch": "Başlatıldığında uyanık tutmayı başlat",
     "The helper needs attention": "Yardımcı ilgi gerektiriyor",
     "The test couldn't run. Check that you're online and try again.": "Test çalıştırılamadı. Çevrimiçi olduğunuzu kontrol edip yeniden deneyin.",

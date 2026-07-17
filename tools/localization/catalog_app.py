@@ -24,6 +24,8 @@ _SHORT = {
     "Resume": {"hu": "Folytatás", "es": "Reanudar", "fr": "Reprendre", "de": "Fortsetzen", "zh-Hans": "继续"},
     "Later": {"hu": "Később", "es": "Más tarde", "fr": "Plus tard", "de": "Später", "zh-Hans": "稍后"},
     "Learn more": {"hu": "Tudjon meg többet", "es": "Más información", "fr": "En savoir plus", "de": "Mehr erfahren", "zh-Hans": "了解更多"},
+    "Show more": {"hu": "Több megjelenítése", "es": "Mostrar más", "fr": "Afficher plus", "de": "Mehr anzeigen", "zh-Hans": "显示更多"},
+    "Show less": {"hu": "Kevesebb megjelenítése", "es": "Mostrar menos", "fr": "Afficher moins", "de": "Weniger anzeigen", "zh-Hans": "显示更少"},
     "Re-check": {"hu": "Újraellenőrzés", "es": "Volver a comprobar", "fr": "Revérifier", "de": "Erneut prüfen", "zh-Hans": "重新检查"},
     "Run Test": {"hu": "Teszt futtatása", "es": "Ejecutar prueba", "fr": "Lancer le test", "de": "Test starten", "zh-Hans": "运行测试"},
     "Match": {"hu": "Egyezés", "es": "Coincidencia", "fr": "Correspondance", "de": "Übereinstimmung", "zh-Hans": "匹配"},

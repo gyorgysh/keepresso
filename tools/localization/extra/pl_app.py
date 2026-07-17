@@ -175,6 +175,8 @@ APP = {
     'Set Up…': 'Skonfiguruj…',
     'Show Welcome Screen…': 'Pokaż ekran powitalny…',
     'Show countdown in menu bar': 'Pokazuj odliczanie na pasku menu',
+    'Show less': 'Pokaż mniej',
+    'Show more': 'Pokaż więcej',
     'Start keep-awake on launch': 'Uruchamiaj tryb czuwania przy starcie',
     'The helper needs attention': 'Pomocnik wymaga uwagi',
     "The test couldn't run. Check that you're online and try again.": 'Nie udało się uruchomić testu. Sprawdź połączenie z internetem i spróbuj ponownie.',

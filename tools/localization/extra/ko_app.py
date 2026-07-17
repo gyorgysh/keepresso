@@ -175,6 +175,8 @@ APP = {
     "Set Up…": "설정…",
     "Show Welcome Screen…": "시작 화면 표시…",
     "Show countdown in menu bar": "메뉴 막대에 카운트다운 표시",
+    "Show less": "간략히 보기",
+    "Show more": "더 보기",
     "Start keep-awake on launch": "실행 시 깨어 있게 유지 시작",
     "The helper needs attention": "도우미에 조치가 필요합니다",
     "The test couldn't run. Check that you're online and try again.": "테스트를 실행할 수 없습니다. 인터넷에 연결되어 있는지 확인하고 다시 시도하십시오.",

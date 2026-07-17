@@ -9,9 +9,9 @@ struct KeepressoApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarContent(model: appDelegate.model, updater: appDelegate.updater)
+            MenuBarContent(model: appDelegate.model, updater: appDelegate.updater, bridge: appDelegate.statusItemBridge)
         } label: {
-            MenuBarLabelView(model: appDelegate.model)
+            MenuBarLabelView(model: appDelegate.model, bridge: appDelegate.statusItemBridge)
         }
         .menuBarExtraStyle(.window)
 
@@ -71,11 +71,16 @@ struct KeepressoApp: App {
 /// doesn't burn the first run.
 private struct MenuBarLabelView: View {
     @Bindable var model: AppModel
+    let bridge: StatusItemBridge
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         MenuBarLabel(session: model.session, showCountdown: model.showCountdownInMenuBar)
             .task {
+                // The context menu's window entries need openWindow, which
+                // only exists inside SwiftUI; this is the app's one always
+                // alive view, so it lends its environment to the bridge.
+                bridge.openWindow = { openWindow(id: $0) }
                 guard !model.hasOnboarded else { return }
                 // First launch from a DMG: this instance is about to copy
                 // itself to /Applications and quit. Flashing the welcome here
@@ -105,6 +110,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Sparkle-backed auto-updater, behind the ``Updating`` seam. Started here so
     /// it schedules background checks for the app's whole lifetime.
     let updater: any Updating = SparkleUpdater()
+    /// Right-click context menu on the menu-bar icon (see ``StatusItemBridge``).
+    private(set) lazy var statusItemBridge = StatusItemBridge(updater: updater)
 
     override init() {
         // Keep the AppleLanguages override consistent with the recorded
@@ -176,6 +183,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // If launched from the DMG / Downloads, move into /Applications and
         // relaunch from there (this instance quits if it relocates).
         AppRelocator.relocateIfNeeded()
+        // Right-click on the menu-bar icon shows the app-entries context menu.
+        statusItemBridge.install()
         // Give the Shortcuts intents their way to the live model.
         IntentContext.model = model
         // Read the closed-display (pmset disablesleep) state now: it persists

@@ -39,6 +39,20 @@ import Foundation
     #expect(try JSONDecoder().decode(KeepressoSettings.self, from: data).hasOnboarded == true)
 }
 
+@Test func menuPanelExpandedDefaultsOnAndRoundTripsCollapsed() throws {
+    // A blob saved before the field existed keeps today's full panel.
+    let json = """
+    { "triggersEnabled": true }
+    """
+    let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: Data(json.utf8))
+    #expect(decoded.menuPanelExpanded == true)
+    // And a collapsed panel stays collapsed across a save/load.
+    var settings = KeepressoSettings.default
+    settings.menuPanelExpanded = false
+    let data = try JSONEncoder().encode(settings)
+    #expect(try JSONDecoder().decode(KeepressoSettings.self, from: data).menuPanelExpanded == false)
+}
+
 @Test func optionsWithoutSimulateActivityDecodeToItsDefault() throws {
     // Same guarantee one level down: an options blob from before keep-active
     // existed still decodes (simulateUserActivity defaults off).
