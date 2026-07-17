@@ -56,6 +56,20 @@ final class HelperManager {
     /// True while a health check (and possibly a repair) is in flight, so the
     /// attention window can show progress instead of a stale verdict.
     private(set) var isChecking = false
+    /// The protocol version the daemon last answered with, `nil` before any
+    /// handshake. Right after an app update this can briefly lag behind
+    /// ``HelperService/protocolVersion``: the pre-update daemon image keeps
+    /// serving until it idles out, while the binary on disk is already new.
+    private(set) var daemonProtocolVersion: Int?
+
+    /// Whether the answering daemon predates this app's protocol. Features
+    /// added in newer protocols (the fan boost) gate on this; it clears by
+    /// itself once the old image retires (see ``watchDaemonUpdate()``), with
+    /// no reinstall and no password.
+    var daemonOutdated: Bool {
+        guard let daemonProtocolVersion else { return false }
+        return daemonProtocolVersion < HelperService.protocolVersion
+    }
 
     /// Polls while the user is over in System Settings deciding, so the UI
     /// flips to "installed" by itself once they approve.
@@ -64,6 +78,8 @@ final class HelperManager {
     /// Single-flight guard for the health check, so a launch-time check and a
     /// failure-triggered one join the same run instead of stacking repairs.
     @ObservationIgnored private var healthCheck: Task<HelperHealth, Never>?
+    /// Single-flight guard for the stale-daemon watch (see ``watchDaemonUpdate()``).
+    @ObservationIgnored private var daemonUpdateWatch: Task<Void, Never>?
     /// One repair per app run: registration churn must never loop.
     @ObservationIgnored private var repairAttempted = false
     /// Whether this build may rewrite the daemon registration. BTM refuses
@@ -117,6 +133,14 @@ final class HelperManager {
         let wasInstalled = status == .enabled
         status = service.status
         availability.set(status == .enabled)
+        if status != .enabled {
+            daemonProtocolVersion = nil
+        } else if daemonOutdated {
+            // Still waiting out a stale daemon image; re-arm the watch in
+            // case an earlier one gave up (e.g. a hold kept the old process
+            // alive through the whole window).
+            watchDaemonUpdate()
+        }
         if status == .enabled, !wasInstalled {
             // Warm the connection and, after an app update or a protocol
             // bump, nudge the stale daemon to retire so launchd relaunches
@@ -215,7 +239,20 @@ final class HelperManager {
 
     private func runHealthCheck() async -> HelperHealth {
         guard status == .enabled else { return .notApplicable }
-        if await pings() { return .healthy }
+        if let version = await pingedVersion() {
+            daemonProtocolVersion = version
+            if version < HelperService.protocolVersion {
+                // An older daemon image is still serving: the app just
+                // updated and the pre-update process hasn't idled out yet.
+                // The registration and the binary on disk are both fine, so
+                // this must NEVER route into the repair below; churning a
+                // live registration is the one path that can cost the user a
+                // fresh approval on an auto-update. Nudge it to retire and
+                // watch for the new image instead.
+                watchDaemonUpdate()
+            }
+            return .healthy
+        }
         // A dev build stays hands-off: no repair, no attention window. The
         // installed release copy owns the registration.
         guard canRepair else { return .notApplicable }
@@ -271,10 +308,48 @@ final class HelperManager {
     }
 
     /// Whether a matching daemon answers, off the main actor (a dead daemon
-    /// means waiting out the XPC timeout).
+    /// means waiting out the XPC timeout). Any answer also refreshes the
+    /// recorded daemon version, so a repair that spawned the new binary
+    /// clears a stale ``daemonOutdated`` on its own.
     private func pings() async -> Bool {
+        let version = await pingedVersion()
+        if version != nil { daemonProtocolVersion = version }
+        return version == HelperService.protocolVersion
+    }
+
+    /// The daemon's answered protocol version, or nil when nothing replied,
+    /// off the main actor.
+    private func pingedVersion() async -> Int? {
         let client = self.client
-        return await Task.detached { client.ping() }.value
+        return await Task.detached { client.pingVersion() }.value
+    }
+
+    /// A stale daemon image answered the handshake: keep asking it to retire
+    /// and re-ping until the new binary answers. Each ping after the old
+    /// process exits makes launchd spawn the binary currently in the bundle,
+    /// so this resolves in about a minute (the old daemon's idle timer).
+    /// It can stall legitimately: a live hold (closed-display mid-session)
+    /// blocks the old daemon's exit, so the watch gives up after a few
+    /// minutes and refresh re-arms it later; the UI shows the waiting state
+    /// via ``daemonOutdated`` either way. No repair, no reinstall, no prompt.
+    func watchDaemonUpdate() {
+        guard daemonUpdateWatch == nil else { return }
+        daemonUpdateWatch = Task { [weak self] in
+            defer { self?.daemonUpdateWatch = nil }
+            for attempt in 0..<36 {
+                guard let self, !Task.isCancelled, self.status == .enabled else { return }
+                if attempt % 6 == 0 {
+                    // Re-nudge occasionally; the request is sticky daemon-side
+                    // but a daemon relaunched for another reason loses it.
+                    let client = self.client
+                    await Task.detached { client.retireStaleDaemon() }.value
+                }
+                try? await Task.sleep(for: .seconds(5))
+                guard let version = await self.pingedVersion() else { continue }
+                self.daemonProtocolVersion = version
+                if version >= HelperService.protocolVersion { return }
+            }
+        }
     }
 
     /// One ping, for callers watching a recovery (the attention window's

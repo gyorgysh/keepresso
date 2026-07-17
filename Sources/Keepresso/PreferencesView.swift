@@ -263,7 +263,7 @@ private struct GeneralTab: View {
             Section {
                 HelperStatusRows(model: model)
             } header: {
-                sectionHeader("Administrator helper", info: L("A small system service for the two switches that need administrator rights: closed-display mode below, and AWDL pausing in Gaming & Streaming. Without it, macOS asks for your password once per app run. With it, both are instant and silent: macOS asks once, when you approve the helper under Login Items, and the approval survives restarts and updates. It can only flip those specific switches, everything it changes is restored if Keepresso quits or crashes, and you can remove it here at any time. It also puts the keepresso command-line tool on your PATH (Homebrew installs already have it). After removal, System Settings can keep showing a stale Login Items row until macOS refreshes its list; the status shown here is the real one."))
+                sectionHeader("Administrator helper", info: L("A small system service for the switches that need administrator rights: closed-display mode below, the thermal fan boost, and AWDL pausing in Gaming & Streaming. Without it, macOS asks for your password once per app run (and fan boost stays off entirely: fan control can't prompt). With it, everything is instant and silent: macOS asks once, when you approve the helper under Login Items, and the approval survives restarts and app updates. Updates never need a reinstall; the service replaces itself with the app. It can only flip those specific switches, everything it changes is restored if Keepresso quits or crashes, and you can remove it here at any time. It also puts the keepresso command-line tool on your PATH (Homebrew installs already have it). After removal, System Settings can keep showing a stale Login Items row until macOS refreshes its list; the status shown here is the real one."))
             } footer: {
                 sectionFooter("Handles the privileged switches for Keepresso, with no password prompts.")
             }
@@ -347,6 +347,7 @@ private struct GeneralTab: View {
                     sectionFooter("Lets the Mac sleep once charge drops below this level.")
                 }
             }
+            thermalSection
             closedDisplaySection
             Section {
                 HStack {
@@ -381,9 +382,136 @@ private struct GeneralTab: View {
         // Slide the conditional rows (battery threshold, error notes) in and
         // out instead of popping them.
         .animation(.snappy(duration: 0.25), value: model.batteryAutoPauseEnabled)
+        .animation(.snappy(duration: 0.25), value: model.thermalSafety)
+        .animation(.snappy(duration: 0.25), value: model.fanDryRun.phase)
         .animation(.snappy(duration: 0.25), value: model.closedDisplayError)
         .animation(.snappy(duration: 0.25), value: model.closedDisplayAutoError)
         .onAppear { model.refreshClosedDisplay() }
+    }
+
+    /// The fan boost strength a fresh "Boost fans first" toggle starts at.
+    private static let defaultFanBoostPercent = 80
+
+    /// The thermal safety net: watch a heat signal, and once it stays over the
+    /// threshold for the sustain window, pause the session so the Mac can
+    /// cool. The battery pause's sibling, so it sits right beside it.
+    private var thermalSection: some View {
+        Section {
+            Toggle("Pause when running hot", isOn: Binding(
+                get: { model.thermalSafety != nil },
+                set: { model.thermalSafety = $0 ? ThermalSafetyConfig() : nil }
+            ))
+            if let config = model.thermalSafety {
+                Picker("Watch", selection: Binding(
+                    get: { if case .sensors = config.mode { return 1 } else { return 0 } },
+                    set: { kind in
+                        var updated = config
+                        updated.mode = kind == 1
+                            ? .sensors(ids: [], celsius: ThermalSafetyConfig.celsiusRange.upperBound - 15)
+                            : .pressure(atOrAbove: .serious)
+                        model.thermalSafety = updated
+                    }
+                )) {
+                    Text("System thermal pressure").tag(0)
+                    Text("Temperature sensors").tag(1)
+                }
+                switch config.mode {
+                case .pressure(let level):
+                    Picker("At or above", selection: Binding(
+                        get: { level },
+                        set: { newLevel in
+                            var updated = config
+                            updated.mode = .pressure(atOrAbove: newLevel)
+                            model.thermalSafety = updated
+                        }
+                    )) {
+                        // Labels come from Core so the level names localize once.
+                        ForEach([ThermalPressureLevel.fair, .serious, .critical], id: \.self) { level in
+                            Text(verbatim: level.label).tag(level)
+                        }
+                    }
+                case .sensors(let ids, let celsius):
+                    ThermalSensorPicker(model: model, selectedIDs: Binding(
+                        get: { ids },
+                        set: { newIDs in
+                            var updated = config
+                            updated.mode = .sensors(ids: newIDs, celsius: celsius)
+                            model.thermalSafety = updated
+                        }
+                    ))
+                    LabeledContent("Above") {
+                        TemperatureThresholdSlider(celsius: Binding(
+                            get: { celsius },
+                            set: { newCelsius in
+                                var updated = config
+                                updated.mode = .sensors(ids: ids, celsius: newCelsius)
+                                model.thermalSafety = updated
+                            }
+                        ))
+                    }
+                }
+                Picker("Sustained for", selection: Binding(
+                    get: { Int(config.sustainSeconds) },
+                    set: { seconds in
+                        var updated = config
+                        updated.sustainSeconds = TimeInterval(seconds)
+                        model.thermalSafety = updated
+                    }
+                )) {
+                    Text("15 seconds").tag(15)
+                    Text("30 seconds").tag(30)
+                    Text("1 minute").tag(60)
+                    Text("2 minutes").tag(120)
+                    Text("5 minutes").tag(300)
+                }
+                // Everything above (watching, thresholds, the pause itself)
+                // is unprivileged and always works. Everything below is the
+                // helper-only territory: fan writes are root-enforced by the
+                // SMC, and the closed-display lift must be prompt-free.
+                // Without the helper the whole group collapses to one row
+                // that says what's locked and offers the install, instead of
+                // live-looking toggles with warning captions under each.
+                if model.helperInstalled {
+                    if model.machineHasFans {
+                        Toggle("Boost fans first", isOn: Binding(
+                            get: { config.fanBoostPercent != nil },
+                            set: { boost in
+                                var updated = config
+                                updated.fanBoostPercent = boost ? Self.defaultFanBoostPercent : nil
+                                model.thermalSafety = updated
+                            }
+                        ))
+                        if let percent = config.fanBoostPercent {
+                            LabeledContent("To") {
+                                FanBoostSlider(percent: Binding(
+                                    get: { percent },
+                                    set: { newPercent in
+                                        var updated = config
+                                        updated.fanBoostPercent = newPercent
+                                        model.thermalSafety = updated
+                                    }
+                                ))
+                            }
+                            FanTestRows(model: model)
+                        }
+                    }
+                    Toggle("Also switch off closed-display mode", isOn: Binding(
+                        get: { config.liftSleepDisable },
+                        set: { lift in
+                            var updated = config
+                            updated.liftSleepDisable = lift
+                            model.thermalSafety = updated
+                        }
+                    ))
+                } else {
+                    ThermalHelperLockedRow(model: model)
+                }
+            }
+        } header: {
+            sectionHeader("Thermal", info: L("A safety net for heat. Watch macOS's own thermal pressure (works everywhere, \u{201C}Serious\u{201D} is where throttling bites) or specific temperature sensors, and if the reading stays over the threshold for the chosen time, Keepresso escalates: first, optionally, it boosts the fans (never below what the system chose; needs the administrator helper), and if the reading stays hot for the same time again, it pauses the session and lets the Mac cool, telling you why in a notification. It restores fan control and resumes on its own once readings recover. Die sensors on modern Macs routinely run at 90-100 \u{00B0}C under load; thresholds around 95-100 \u{00B0}C are sensible, lower ones mostly keep the session paused."))
+        } footer: {
+            sectionFooter("Pauses the session when the Mac stays hot, so it can cool down.")
+        }
     }
 
     /// The pmset disablesleep switch. On a laptop it's "closed-display mode"

@@ -136,6 +136,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         session: model.session,
         disk: model.disk,
         closedDisplay: model.closedDisplay,
+        thermalGuard: model.thermalGuard,
+        onThermalEffects: { [weak self] in self?.model.handleThermalEffects($0) },
         onTick: { [weak self] in
             self?.model.syncWidgetState()
             self?.model.awdlAutoTick()

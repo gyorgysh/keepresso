@@ -12,6 +12,11 @@ final class SessionTicker {
     private let disk: DiskKeepAliveController
     private let closedDisplay: ClosedDisplayController
     private let powerSource: PowerSourceMonitoring
+    private let thermalGuard: ThermalGuardController?
+    /// Receives the thermal guard's escalation effects (fan boost, pause,
+    /// releases) each tick they occur; AppModel turns them into helper calls
+    /// and notifications.
+    private let onThermalEffects: (([ThermalEffect]) -> Void)?
     /// Runs after each reconcile, e.g. to mirror session state to the widget.
     private let onTick: (() -> Void)?
     private var timer: Timer?
@@ -21,12 +26,16 @@ final class SessionTicker {
         disk: DiskKeepAliveController,
         closedDisplay: ClosedDisplayController,
         powerSource: PowerSourceMonitoring = IOKitPowerSourceMonitor(),
+        thermalGuard: ThermalGuardController? = nil,
+        onThermalEffects: (([ThermalEffect]) -> Void)? = nil,
         onTick: (() -> Void)? = nil
     ) {
         self.session = session
         self.disk = disk
         self.closedDisplay = closedDisplay
         self.powerSource = powerSource
+        self.thermalGuard = thermalGuard
+        self.onThermalEffects = onThermalEffects
         self.onTick = onTick
     }
 
@@ -50,9 +59,22 @@ final class SessionTicker {
                             battery = .onAC
                         }
                     }
+                    // The thermal guard ticks whenever it's configured (its
+                    // fan stage runs even with stop-brewing off, so this
+                    // can't hide behind consumesThermalReading); the session
+                    // only reads its verdict when the pause stage is on.
+                    var thermal = ThermalReading.unknown
+                    if let guard_ = self?.thermalGuard {
+                        let effects = guard_.tick()
+                        if !effects.isEmpty { self?.onThermalEffects?(effects) }
+                        if session.consumesThermalReading {
+                            thermal = guard_.readingForSession
+                        }
+                    }
                     session.reconcile(
                         systemIdleSeconds: session.consumesIdleReading ? Self.systemIdleSeconds() : nil,
-                        battery: battery
+                        battery: battery,
+                        thermal: thermal
                     )
                 }
                 disk?.tick(now: Date())

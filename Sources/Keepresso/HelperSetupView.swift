@@ -16,9 +16,21 @@ struct HelperStatusRows: View {
                 Image(systemName: "checkmark.seal.fill")
                     .foregroundStyle(.green)
                     .accessibilityHidden(true)
-                Text("Helper installed. Closed-display mode and AWDL pausing work without password prompts.")
+                Text("Helper installed. Closed-display mode, fan boost, and AWDL pausing work without password prompts.")
                 Spacer(minLength: 8)
                 Button("Remove") { model.removeHelper() }
+            }
+            // The helper ships inside the app, so an app update replaces it
+            // on disk automatically; this shows only while the pre-update
+            // service is still winding down (it can't while it holds a
+            // switch, e.g. closed-display mode mid-session).
+            if model.helper.daemonOutdated {
+                Label(
+                    L("The helper service is updating itself to this version of Keepresso in the background. No reinstall or password is needed; features new to this version wait until it finishes, usually under a minute."),
+                    systemImage: "arrow.triangle.2.circlepath"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
         case .requiresApproval:
             HStack(alignment: .top, spacing: 6) {
@@ -31,7 +43,7 @@ struct HelperStatusRows: View {
             }
         default:
             HStack(alignment: .top, spacing: 6) {
-                Text("Install a small helper service so closed-display mode and AWDL pausing never ask for your password again. macOS will ask you to allow it in System Settings, once; nothing else changes.")
+                Text("Install a small helper service so closed-display mode, the thermal fan boost, and AWDL pausing work without password prompts. macOS will ask you to allow it in System Settings, once; nothing else changes.")
                 Spacer(minLength: 8)
                 Button("Install Helper…") { model.installHelper() }
             }

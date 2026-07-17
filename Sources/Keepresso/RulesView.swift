@@ -88,6 +88,14 @@ struct RulesView: View {
 
             addConditionMenus
             processField
+
+            // Heat deliberately isn't a condition here: a "too hot" rule that
+            // merely stops satisfying could be overridden by any other rule in
+            // "any" mode. Point the people who come looking to the real thing.
+            Text("Looking for heat? \u{201C}Pause when running hot\u{201D} lives in General \u{25B8} Thermal, and it overrides these rules as a safety net.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

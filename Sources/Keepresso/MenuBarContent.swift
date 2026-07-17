@@ -154,6 +154,8 @@ struct MenuBarContent: View {
                 optionToggles
             }
 
+            fanStatusLine
+
             awdlStatusLine
 
             if model.menuPanelExpanded {
@@ -367,7 +369,9 @@ struct MenuBarContent: View {
                 scale: type.scale
             )
             VStack(alignment: .leading, spacing: 2) {
-                Text(session.pausedByBattery ? L("Paused") : (session.isActive ? L("Brewing") : L("Idle")))
+                Text((session.pausedByBattery || session.pausedByThermal)
+                    ? L("Paused")
+                    : (session.isActive ? L("Brewing") : L("Idle")))
                     .font(type.headline)
                     .contentTransition(.opacity)
                 Text(statusDetail)
@@ -391,11 +395,12 @@ struct MenuBarContent: View {
             in: RoundedRectangle(cornerRadius: 12, style: .continuous)
         )
         .animation(.easeInOut(duration: 0.35), value: session.isActive)
-        // Flipping "Keep awake" on while the battery pause holds can't start a
-        // session, and the switch just snaps back. Shake the card whose
-        // subtitle explains why, so the refusal reads as deliberate.
-        .modifier(ShakeEffect(animatableData: CGFloat(session.batteryRefusedStarts)))
-        .animation(.easeInOut(duration: 0.45), value: session.batteryRefusedStarts)
+        // Flipping "Keep awake" on while a safety pause (battery or thermal)
+        // holds can't start a session, and the switch just snaps back. Shake
+        // the card whose subtitle explains why, so the refusal reads as
+        // deliberate.
+        .modifier(ShakeEffect(animatableData: CGFloat(session.refusedStarts)))
+        .animation(.easeInOut(duration: 0.45), value: session.refusedStarts)
     }
 
     /// A horizontal shake driven by an incrementing counter: each +1 sweeps
@@ -508,10 +513,16 @@ struct MenuBarContent: View {
     }
 
     private var statusDetail: String {
-        // Battery auto-pause overrides everything else: say so, or an otherwise
+        // Safety pauses override everything else: say so, or an otherwise
         // satisfied session looks stuck for no visible reason.
         if session.pausedByBattery {
             return L("Battery below %d%%, letting the Mac sleep", model.pauseBelowBatteryPercent)
+        }
+        if session.pausedByThermal {
+            if let celsius = model.thermalGuard.currentCelsius {
+                return L("Running hot (%d °C), letting the Mac cool down", Int(celsius))
+            }
+            return L("Running hot, letting the Mac cool down")
         }
         if model.triggersEnabled && !model.triggersPaused {
             return model.triggerSummary() ?? L("No conditions yet")
@@ -539,6 +550,25 @@ struct MenuBarContent: View {
                     .font(type.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    /// A caption while the thermal safety net is forcing the fans, so the
+    /// sudden fan noise explains itself in the place the user looks first.
+    @ViewBuilder
+    private var fanStatusLine: some View {
+        if let percent = model.fanBoostActivePercent {
+            HStack(spacing: 6) {
+                Image(systemName: "fanblades")
+                    .foregroundStyle(.orange)
+                    .font(type.caption)
+                    .accessibilityHidden(true)
+                Text(L("Fans boosted to %d%% to cool the Mac", percent))
+                    .font(type.caption)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }

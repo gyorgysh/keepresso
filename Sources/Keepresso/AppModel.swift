@@ -40,12 +40,22 @@ final class AppModel {
     /// The AWDL watchdog: the helper daemon when installed, else the
     /// session-scoped root loop behind one admin prompt per app run.
     let awdl: AWDLWatchdogController
+    /// The thermal safety net: watches the configured heat signal, applies the
+    /// dwell/hysteresis, and hands escalation effects to
+    /// ``handleThermalEffects(_:)`` via the ticker. Off while its config is nil.
+    let thermalGuard = ThermalGuardController(
+        pressure: SystemThermalPressure(),
+        sensors: MachineThermalSensors()
+    )
     /// Registration and status of the privileged helper daemon, the one-time
     /// password alternative to the per-run osascript prompts.
     let helper: HelperManager
 
     private let store: SettingsStore
     private let notifier: UserNotificationReminder
+    /// Direct line to the helper daemon for the thermal fan boost (the other
+    /// privileged features go through their Routed* controllers).
+    @ObservationIgnored private let helperClient: PrivilegedHelperCalling
     private(set) var settings: KeepressoSettings
 
     /// The default reminder interval used when the feature is first enabled.
@@ -69,6 +79,7 @@ final class AppModel {
         // thread-safe bridge: the manager writes it, the detached-task
         // closures read it at each engage.
         let helperClient = XPCHelperClient()
+        self.helperClient = helperClient
         let helperManager = HelperManager(
             client: helperClient,
             appUpdatedSinceLastRun: appUpdatedSinceLastRun
@@ -111,6 +122,8 @@ final class AppModel {
         self.session.endingSoonNotice = loaded.endingSoonNoticeSeconds
         self.session.endAction = loaded.endAction
         self.session.pauseBelowBatteryPercent = loaded.pauseBelowBatteryPercent
+        self.session.pauseWhenHot = loaded.thermalSafety?.stopBrewing ?? false
+        self.thermalGuard.config = loaded.thermalSafety
         self.disk = DiskKeepAliveController()
         self.disk.config = loaded.diskKeepAlive
         self.virtualDisplay.config = loaded.virtualDisplay
@@ -125,6 +138,11 @@ final class AppModel {
         // A no-op once the user has decided either way.
         if !helperManager.isInstalled,
            loaded.closedDisplayOnlyWhileBrewing || loaded.awdlAutoWithGaming {
+            notifier.requestAuthorization()
+        }
+        // The thermal pause always announces itself in a notification (an
+        // otherwise silent stop just looks like the app quit), helper or not.
+        if loaded.thermalSafety != nil {
             notifier.requestAuthorization()
         }
         // Launch idle: a manual session waits for the user's toggle, a gated
@@ -507,6 +525,176 @@ final class AppModel {
         }
     }
 
+    // MARK: - Thermal safety
+
+    /// Whether this Mac has any fans, read once at launch like
+    /// ``machineHasBattery`` (a MacBook Air reports zero and hides the fan
+    /// boost UI entirely). `nil` fan counts (SMC unreachable) read as fanless.
+    @ObservationIgnored let machineHasFans = (SMCFanInfo().fanCount() ?? 0) > 0
+
+    /// The thermal safety configuration, or nil for off. Setting it re-derives
+    /// the guard and the session's pause gate, mirroring the battery setters.
+    var thermalSafety: ThermalSafetyConfig? {
+        get { settings.thermalSafety }
+        set {
+            settings.thermalSafety = newValue
+            thermalGuard.config = newValue
+            session.pauseWhenHot = newValue?.stopBrewing ?? false
+            if newValue != nil { notifier.requestAuthorization() }
+            persist()
+        }
+    }
+
+    /// Set when a thermal emergency lifted closed-display mode, so recovery
+    /// puts it back. In-memory only: a relaunch mid-emergency starts clean
+    /// rather than resurrecting a stale intent.
+    @ObservationIgnored private var thermalLiftedClosedDisplay = false
+
+    /// The fan boost percent currently held through the helper, or nil when
+    /// the fans are under system control. Drives the menu's status line.
+    private(set) var fanBoostActivePercent: Int?
+
+    /// Translate the guard's escalation effects into helper calls, the
+    /// closed-display lift, and notifications. Called from the ticker on any
+    /// tick that produced effects.
+    func handleThermalEffects(_ effects: [ThermalEffect]) {
+        for effect in effects {
+            switch effect {
+            case .boostFans(let percent):
+                // Fan writes are root-only, so this is daemon-or-skip, and the
+                // skip explains itself (the Preferences toggle also warns).
+                guard machineHasFans else { break }
+                guard helperInstalled else {
+                    notifier.notify(
+                        title: L("Fans not boosted"),
+                        body: L("Boosting fans needs the administrator helper (Preferences ▸ General). The rest of the thermal safety net still applies."),
+                        sound: false
+                    )
+                    break
+                }
+                guard !helper.daemonOutdated else {
+                    notifier.notify(
+                        title: L("Fans not boosted"),
+                        body: L("The administrator helper is still updating itself to this version of Keepresso. Fan boost engages once that finishes; the rest of the thermal safety net still applies."),
+                        sound: false
+                    )
+                    break
+                }
+                if fanDryRun.isRunning {
+                    // A real emergency never shares the fans with the
+                    // diagnostic: stop the test, wait for its release, then
+                    // take the hold.
+                    Task { [weak self] in
+                        await self?.fanDryRun.cancelAndWait()
+                        self?.setFanHold(percent: percent)
+                    }
+                } else {
+                    setFanHold(percent: percent)
+                }
+            case .restoreFans:
+                guard fanBoostActivePercent != nil else { break }
+                setFanHold(percent: nil)
+            case .pauseBrewing:
+                // The session pause itself latches through reconcile (the
+                // guard's reading), which posts the pause notification. Here:
+                // the optional closed-display lift, and only through the
+                // prompt-free daemon path. Never prompt for a password from
+                // an unattended safety action; without the helper the lift is
+                // skipped and the notification says so.
+                guard settings.thermalSafety?.liftSleepDisable == true,
+                      closedDisplayEnabled else { break }
+                guard helperInstalled else {
+                    notifier.notify(
+                        title: L("Closed-display mode left on"),
+                        body: L("Keepresso paused for heat but can't switch off closed-display mode without the administrator helper (Preferences ▸ General)."),
+                        sound: false
+                    )
+                    break
+                }
+                thermalLiftedClosedDisplay = true
+                setClosedDisplay(false)
+            case .resumeBrewing:
+                notifier.notify(
+                    title: L("Temperatures recovered"),
+                    body: L("The Mac has cooled down. Keepresso is back to normal control."),
+                    sound: false
+                )
+                if thermalLiftedClosedDisplay {
+                    thermalLiftedClosedDisplay = false
+                    if helperInstalled { setClosedDisplay(true) }
+                }
+            }
+        }
+    }
+
+    /// Take (percent) or release (nil) the forced-fan hold through the helper,
+    /// off the main actor: the XPC call is synchronous with a timeout. The
+    /// status flips optimistically and rolls back if the daemon said no.
+    private func setFanHold(percent: Int?) {
+        fanBoostActivePercent = percent
+        let client = helperClient
+        Task.detached { [weak self] in
+            let ok = client.setFanHold(percent != nil, percent: percent ?? 0)
+            guard !ok, percent != nil else { return }
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.fanBoostActivePercent = nil
+                self.notifier.notify(
+                    title: L("Fans not boosted"),
+                    body: L("The administrator helper didn't accept the fan boost. The rest of the thermal safety net still applies."),
+                    sound: false
+                )
+            }
+        }
+    }
+
+    // MARK: - Fan dry run
+
+    /// The "Test Fans" system check in Preferences ▸ General ▸ Thermal: a
+    /// short supervised run through three boost levels with readings at each,
+    /// so the fan path can be trusted before the safety net ever needs it.
+    /// Its own controller is `@Observable`; the temperature comes from the
+    /// same reader the guard uses (hottest sensor the machine offers).
+    @ObservationIgnored private(set) lazy var fanDryRun = FanDryRunController(
+        helper: helperClient,
+        fans: SMCFanInfo(),
+        readCelsius: { [thermalGuard] in
+            let ids = thermalGuard.discoverSensors().map(\.id)
+            return thermalGuard.liveReadings(ids: ids).values.max()
+        }
+    )
+
+    /// Why the fan test can't start right now, so the UI can say it next to
+    /// the disabled button instead of greying out silently. `machineHasFans`
+    /// needs no case: the whole fan block is hidden on fanless Macs.
+    enum FanTestGate: Equatable {
+        case ready
+        /// Helper not installed (also every debug build, which stays
+        /// hands-off the daemon by design). The row offers the install
+        /// itself, so nobody has to scroll up hunting for the helper section.
+        case needsHelper
+        /// Install started; macOS wants the one-time approval in System
+        /// Settings.
+        case awaitingApproval
+        /// Installed, but the pre-update daemon image is still serving and
+        /// doesn't speak the fan protocol yet.
+        case helperUpdating
+        /// The safety net currently holds the fans; an emergency always
+        /// outranks a diagnostic.
+        case boostActive
+    }
+
+    var fanTestGate: FanTestGate {
+        if helper.awaitingApproval { return .awaitingApproval }
+        if !helperInstalled { return .needsHelper }
+        if helper.daemonOutdated { return .helperUpdating }
+        if fanBoostActivePercent != nil { return .boostActive }
+        return .ready
+    }
+
+    /// Whether the test may start right now.
+    var canRunFanDryRun: Bool { fanTestGate == .ready }
+
     // MARK: - Global hotkey
 
     /// Registers the system-wide keep-awake toggle shortcut.
@@ -676,6 +864,9 @@ final class AppModel {
         session.endingSoonNotice = newSettings.endingSoonNoticeSeconds
         session.endAction = newSettings.endAction
         session.pauseBelowBatteryPercent = newSettings.pauseBelowBatteryPercent
+        session.pauseWhenHot = newSettings.thermalSafety?.stopBrewing ?? false
+        // The guard's didSet queues fan/pause releases if it was mid-emergency.
+        thermalGuard.config = newSettings.thermalSafety
         disk.config = newSettings.diskKeepAlive
         virtualDisplay.config = newSettings.virtualDisplay
         awdl.autoWithGaming = newSettings.awdlAutoWithGaming
@@ -919,6 +1110,7 @@ final class AppModel {
     /// fallback takes over from the next engage.
     func removeHelper() {
         Task {
+            await fanDryRun.cancelAndWait()
             await closedDisplayAuto.stopIfHolding()
             await awdl.stop()
             await helper.uninstall()
