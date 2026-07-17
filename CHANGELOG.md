@@ -3,7 +3,7 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
-## [1.15.0] - Unreleased
+## [1.15.0] - 2026-07-17
 
 ### Added
 
