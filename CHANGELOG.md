@@ -3,6 +3,22 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Changed
+
+- **The thermal safety net now guards the closed lid.** "Pause when running
+  hot" is a protection for a Mac that cannot help itself: one held awake with
+  the lid shut (closed-display mode) and then forgotten, maybe slid into a
+  bag. The net now acts only in that trapped state, lid closed with the sleep
+  override on. When sustained heat reaches the pause stage it always switches
+  the override off as well, so the Mac can truly sleep and cool (the separate
+  "Also switch off closed-display mode" toggle is gone, that lift is the
+  point of the pause). Opening the lid ends the emergency on the spot: fans
+  return to the system and the session resumes. With the lid open, macOS's
+  own thermal management is in charge, as it should be, and desktops (no lid
+  to trap heat behind) no longer show the Thermal section.
+
 ## [1.15.0] - 2026-07-17
 
 ### Added

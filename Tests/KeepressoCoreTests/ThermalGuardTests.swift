@@ -166,7 +166,7 @@ private let pressureConfig = ThermalSafetyConfig(
         fanBoostPercent: 80
     )
     var effects: [ThermalEffect] = []
-    for _ in 0..<10 { effects.append(contentsOf: controller.tick()) }
+    for _ in 0..<10 { effects.append(contentsOf: controller.tick(armed: true)) }
     #expect(effects == [.boostFans(percent: 80), .pauseBrewing])
     #expect(controller.readingForSession == .hot)
 
@@ -174,12 +174,81 @@ private let pressureConfig = ThermalSafetyConfig(
     // paused session: the very next tick surfaces the releases, even while off.
     controller.config = nil
     #expect(controller.readingForSession == .unknown)
-    let released = controller.tick()
+    let released = controller.tick(armed: true)
     #expect(released == [.restoreFans, .resumeBrewing])
-    #expect(controller.tick().isEmpty) // released exactly once
+    #expect(controller.tick(armed: true).isEmpty) // released exactly once
+}
+
+@MainActor
+@Test func disarmedControllerNeverEscalates() {
+    final class ScriptedSensors: ThermalSensorReading {
+        func discoverSensors() -> [ThermalSensor] { [ThermalSensor(id: "Tp09", name: "Tp09")] }
+        func readCelsius(ids: [String]) -> [String: Double]? { ["Tp09": 105] }
+    }
+    let controller = ThermalGuardController(sensors: ScriptedSensors())
+    controller.config = ThermalSafetyConfig(
+        mode: .sensors(ids: ["Tp09"], celsius: 95),
+        sustainSeconds: 5,
+        fanBoostPercent: 80
+    )
+    // Scorching readings with the lid open: the net stays out of the way.
+    for _ in 0..<60 { #expect(controller.tick(armed: false).isEmpty) }
+    #expect(controller.state.stage == .clear)
+    #expect(controller.readingForSession == .clear)
+    // The live UI still gets its reading while disarmed.
+    #expect(controller.currentCelsius == 105)
+}
+
+@MainActor
+@Test func disarmingMidEmergencyReleasesImmediately() {
+    final class ScriptedSensors: ThermalSensorReading {
+        func discoverSensors() -> [ThermalSensor] { [ThermalSensor(id: "Tp09", name: "Tp09")] }
+        func readCelsius(ids: [String]) -> [String: Double]? { ["Tp09": 105] }
+    }
+    let controller = ThermalGuardController(sensors: ScriptedSensors())
+    controller.config = ThermalSafetyConfig(
+        mode: .sensors(ids: ["Tp09"], celsius: 95),
+        sustainSeconds: 5,
+        fanBoostPercent: 80
+    )
+    var effects: [ThermalEffect] = []
+    for _ in 0..<10 { effects.append(contentsOf: controller.tick(armed: true)) }
+    #expect(effects == [.boostFans(percent: 80), .pauseBrewing])
+
+    // Opening the lid ends the emergency: fans and the session come back on
+    // that very tick, still hot, without waiting out the cool-down dwell.
+    let released = controller.tick(armed: false)
+    #expect(released == [.restoreFans, .resumeBrewing])
+    #expect(controller.state.stage == .clear)
+    #expect(controller.tick(armed: false).isEmpty) // released exactly once
+
+    // Closing the lid again restarts the escalation from a fresh dwell.
+    #expect(controller.tick(armed: true).isEmpty)
+}
+
+@Test func armingLatchesLastKnownReadsAcrossNilBlips() {
+    var arming = ThermalArming()
+    // Nothing known yet, and a closed lid alone isn't enough.
+    let unknown = arming.update(lidClosed: nil, sleepOverrideActive: nil)
+    let lidOnly = arming.update(lidClosed: true, sleepOverrideActive: nil)
+    let both = arming.update(lidClosed: true, sleepOverrideActive: true)
+    // A transient failed read (AppleClamshellState flutter, pmset hiccup)
+    // must not disarm a potentially latched safety measure.
+    let blip = arming.update(lidClosed: nil, sleepOverrideActive: nil)
+    // An explicit lid-open read disarms; a later nil stays disarmed.
+    let opened = arming.update(lidClosed: false, sleepOverrideActive: true)
+    let stillOpen = arming.update(lidClosed: nil, sleepOverrideActive: nil)
+    #expect(!unknown)
+    #expect(!lidOnly)
+    #expect(both)
+    #expect(blip)
+    #expect(!opened)
+    #expect(!stillOpen)
 }
 
 @Test func configDecodingClampsOutOfRangeValues() throws {
+    // liftSleepDisable is retired (the lift is unconditional now); the stale
+    // key in old exports must decode without complaint.
     let json = """
     {
       "mode": {"sensors": {"ids": ["Tp09"], "celsius": 20}},
@@ -204,8 +273,7 @@ private let pressureConfig = ThermalSafetyConfig(
         mode: .sensors(ids: ["Tp09", "Tp0D"], celsius: 98),
         sustainSeconds: 60,
         fanBoostPercent: 70,
-        stopBrewing: true,
-        liftSleepDisable: true
+        stopBrewing: true
     )
     let pressure = ThermalSafetyConfig(mode: .pressure(atOrAbove: .critical))
     for config in [sensors, pressure] {

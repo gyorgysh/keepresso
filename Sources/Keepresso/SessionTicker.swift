@@ -17,6 +17,10 @@ final class SessionTicker {
     /// releases) each tick they occur; AppModel turns them into helper calls
     /// and notifications.
     private let onThermalEffects: (([ThermalEffect]) -> Void)?
+    /// Feeds the guard's arming: the net only escalates with the lid closed
+    /// while the sleep override holds the Mac awake (the left-in-a-bag case).
+    private let lid: LidStateReading
+    private var thermalArming = ThermalArming()
     /// Runs after each reconcile, e.g. to mirror session state to the widget.
     private let onTick: (() -> Void)?
     private var timer: Timer?
@@ -27,6 +31,7 @@ final class SessionTicker {
         closedDisplay: ClosedDisplayController,
         powerSource: PowerSourceMonitoring = IOKitPowerSourceMonitor(),
         thermalGuard: ThermalGuardController? = nil,
+        lid: LidStateReading = IORegistryLidState(),
         onThermalEffects: (([ThermalEffect]) -> Void)? = nil,
         onTick: (() -> Void)? = nil
     ) {
@@ -35,6 +40,7 @@ final class SessionTicker {
         self.closedDisplay = closedDisplay
         self.powerSource = powerSource
         self.thermalGuard = thermalGuard
+        self.lid = lid
         self.onThermalEffects = onThermalEffects
         self.onTick = onTick
     }
@@ -63,10 +69,18 @@ final class SessionTicker {
                     // fan stage runs even with stop-brewing off, so this
                     // can't hide behind consumesThermalReading); the session
                     // only reads its verdict when the pause stage is on.
+                    // Armed only with the lid shut and the sleep override on:
+                    // closedDisplay.isEnabled is read at launch and refreshed
+                    // on every toggle and menu open, so it's current by the
+                    // time a lid can close on a configured override.
                     var thermal = ThermalReading.unknown
-                    if let guard_ = self?.thermalGuard {
-                        let effects = guard_.tick()
-                        if !effects.isEmpty { self?.onThermalEffects?(effects) }
+                    if let guard_ = self?.thermalGuard, let self {
+                        let armed = self.thermalArming.update(
+                            lidClosed: self.lid.isClosed(),
+                            sleepOverrideActive: closedDisplay?.isEnabled
+                        )
+                        let effects = guard_.tick(armed: armed)
+                        if !effects.isEmpty { self.onThermalEffects?(effects) }
                         if session.consumesThermalReading {
                             thermal = guard_.readingForSession
                         }

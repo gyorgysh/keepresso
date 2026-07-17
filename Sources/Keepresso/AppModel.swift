@@ -673,12 +673,13 @@ final class AppModel {
             case .pauseBrewing:
                 // The session pause itself latches through reconcile (the
                 // guard's reading), which posts the pause notification. Here:
-                // the optional closed-display lift, and only through the
-                // prompt-free daemon path. Never prompt for a password from
-                // an unattended safety action; without the helper the lift is
-                // skipped and the notification says so.
-                guard settings.thermalSafety?.liftSleepDisable == true,
-                      closedDisplayEnabled else { break }
+                // the closed-display lift, always, because the guard only
+                // fires with the lid shut and the override on, and pausing
+                // alone can't let that Mac sleep. Only through the prompt-free
+                // daemon path: never prompt for a password from an unattended
+                // safety action; without the helper the lift is skipped and
+                // the notification says so.
+                guard closedDisplayEnabled else { break }
                 guard helperInstalled else {
                     notifier.notify(
                         title: L("Closed-display mode left on"),

@@ -3,6 +3,13 @@ import Foundation
 /// User configuration for the thermal safety net: which signal to watch, how
 /// long it must stay hot, and what to do about it. `nil` in settings means the
 /// whole feature is off.
+///
+/// The net protects a Mac that cannot help itself: it only escalates while
+/// **armed**, meaning the lid is closed and the `pmset disablesleep` override
+/// is holding the Mac awake (see ``ThermalArming``). That is the
+/// left-in-a-bag scenario, where macOS cannot sheathe the heat by sleeping.
+/// With the lid open, or without the override, the system's own thermal
+/// management is free to act and the net stays out of the way.
 public struct ThermalSafetyConfig: Codable, Equatable, Sendable {
     /// The watched signal.
     public enum Mode: Codable, Equatable, Sendable {
@@ -19,24 +26,22 @@ public struct ThermalSafetyConfig: Codable, Equatable, Sendable {
     public var sustainSeconds: TimeInterval
     /// Stage 1: boost fans to this percent of their range. `nil` = stage off.
     public var fanBoostPercent: Int?
-    /// Stage 2: force-stop the keep-awake session and refuse restarts while hot.
+    /// Stage 2: force-stop the keep-awake session and refuse restarts while
+    /// hot. The app also switches off the sleep override at this stage
+    /// (prompt-free through the helper only; skipped, and said so, without
+    /// it), because pausing alone can't let an armed Mac sleep.
     public var stopBrewing: Bool
-    /// With stage 2, also switch off closed-display mode (pmset disablesleep),
-    /// prompt-free through the helper only; skipped (and said so) without it.
-    public var liftSleepDisable: Bool
 
     public init(
         mode: Mode = .pressure(atOrAbove: .serious),
         sustainSeconds: TimeInterval = ThermalSafetyConfig.defaultSustainSeconds,
         fanBoostPercent: Int? = nil,
-        stopBrewing: Bool = true,
-        liftSleepDisable: Bool = false
+        stopBrewing: Bool = true
     ) {
         self.mode = Self.clamped(mode)
         self.sustainSeconds = Self.clampedSustain(sustainSeconds)
         self.fanBoostPercent = fanBoostPercent.map(Self.clampedBoostPercent)
         self.stopBrewing = stopBrewing
-        self.liftSleepDisable = liftSleepDisable
     }
 
     /// Forgiving decode with the same clamps as the memberwise init, so a
@@ -49,8 +54,7 @@ public struct ThermalSafetyConfig: Codable, Equatable, Sendable {
             sustainSeconds: try c.decodeIfPresent(TimeInterval.self, forKey: .sustainSeconds)
                 ?? Self.defaultSustainSeconds,
             fanBoostPercent: try c.decodeIfPresent(Int.self, forKey: .fanBoostPercent),
-            stopBrewing: try c.decodeIfPresent(Bool.self, forKey: .stopBrewing) ?? true,
-            liftSleepDisable: try c.decodeIfPresent(Bool.self, forKey: .liftSleepDisable) ?? false
+            stopBrewing: try c.decodeIfPresent(Bool.self, forKey: .stopBrewing) ?? true
         )
     }
 
@@ -200,6 +204,26 @@ public enum ThermalGuard {
     }
 }
 
+/// Decides, once per tick, whether the safety net is armed: lid closed while
+/// the `pmset disablesleep` override holds the Mac awake. Both inputs can
+/// read `nil` transiently (`AppleClamshellState` flutters, `pmset -g` can
+/// fail), so each latches its last known value: a failed read must never
+/// release a latched safety measure, mirroring how a `nil` thermal sample
+/// freezes the guard.
+public struct ThermalArming: Sendable, Equatable {
+    private var lidClosed = false
+    private var overrideActive = false
+
+    public init() {}
+
+    /// Fold in this tick's readings and return the current verdict.
+    public mutating func update(lidClosed: Bool?, sleepOverrideActive: Bool?) -> Bool {
+        if let lidClosed { self.lidClosed = lidClosed }
+        if let sleepOverrideActive { overrideActive = sleepOverrideActive }
+        return self.lidClosed && overrideActive
+    }
+}
+
 /// Owns the live guard: samples the configured signal once per host tick, runs
 /// the pure step, and hands the effects back for the app to act on. Also the
 /// menu's and Preferences' source for live thermal display values.
@@ -254,11 +278,24 @@ public final class ThermalGuardController {
     /// push-updated value, sensor mode reads through the backend's TTL cache.
     /// Pending releases flush even while off, so disabling the feature
     /// mid-emergency restores fans and the session on the very next tick.
-    public func tick() -> [ThermalEffect] {
+    ///
+    /// `armed` is the host's ``ThermalArming`` verdict. While disarmed the
+    /// signal is still sampled (the live UI keeps its readings) but the state
+    /// machine never escalates, and any latched stage releases immediately:
+    /// opening the lid ends the emergency, so fans and the session come back
+    /// on that very tick rather than waiting out the cool-down dwell.
+    public func tick(armed: Bool) -> [ThermalEffect] {
         var effects = pendingReleases
         pendingReleases = []
         guard let config else { return effects }
         let sample = sample(for: config.mode)
+        guard armed else {
+            if state != ThermalGuardState() {
+                effects.append(contentsOf: releaseEffects(for: state.stage))
+                state = ThermalGuardState()
+            }
+            return effects
+        }
         let (next, stepEffects) = ThermalGuard.step(state, sample: sample, config: config)
         state = next
         effects.append(contentsOf: stepEffects)

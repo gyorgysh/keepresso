@@ -52,8 +52,7 @@ import Foundation
         mode: .sensors(ids: ["Tp09"], celsius: 98),
         sustainSeconds: 60,
         fanBoostPercent: 80,
-        stopBrewing: true,
-        liftSleepDisable: true
+        stopBrewing: true
     )
     let data = try JSONEncoder().encode(settings)
     #expect(try JSONDecoder().decode(KeepressoSettings.self, from: data).thermalSafety == settings.thermalSafety)

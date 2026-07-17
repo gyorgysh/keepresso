@@ -41,8 +41,8 @@ Homebrew Cask is published and installable at
 `gyorgysh/homebrew-keepresso` tap repo.
 A headless virtual-display feature (private `CGVirtualDisplay` API, behind an
 off-by-default flag) is also done and validated on real headless hardware.
-Current version: 1.15.0 (build 25), on main and awaiting release; v1.14.0 is
-the latest shipped tag (fifteen UI languages shipped in v1.13, generated from
+Current version: 1.15.0 (build 25), shipped 2026-07-17 as the latest tag
+(fifteen UI languages shipped in v1.13, generated from
 Python catalogs in `tools/localization/`). v1.15 adds a thermal safety net
 (`KeepressoCore/ThermalGuard.swift`: pressure or sensor watch, sustained-heat
 escalation to an optional fan boost then a session pause, hysteresis on
@@ -54,7 +54,12 @@ its answered protocol version, retired in the background, and never routed
 into the register/unregister repair (which could cost a re-approval). The
 thermal UI keeps unprivileged controls always live and collapses the
 helper-only group (fan boost, fan test, closed-display lift) to a single
-lock row with an inline install when the helper is missing. v1.14 added quick
+lock row with an inline install when the helper is missing. Post-1.15.0 on
+main, the net is scoped to the left-in-a-bag case: it only escalates with
+the lid shut while `disablesleep` holds the Mac awake (`ThermalArming`,
+ticker-fed `tick(armed:)`), the pause stage always lifts the override
+(`liftSleepDisable` retired), opening the lid releases everything at once,
+and desktops (no lid) don't show the Thermal section. v1.14 added quick
 "Stop in" buttons with an ending-soon notice, an agent-activity trigger
 (`KeepressoCore/AgentActivity.swift`: transcript evidence, per-session CPU
 baselines) with opt-in Claude Code hook tracking

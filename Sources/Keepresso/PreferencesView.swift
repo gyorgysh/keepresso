@@ -377,7 +377,12 @@ private struct GeneralTab: View {
                     sectionFooter("Lets the Mac sleep once charge drops below this level.")
                 }
             }
-            thermalSection
+            // The thermal net is a lid-closed safety: a desktop has no lid to
+            // trap heat behind, so it gets no section (battery is the same
+            // laptop proxy the closed-display wording uses below).
+            if model.machineHasBattery {
+                thermalSection
+            }
             closedDisplaySection
             Section {
                 HStack {
@@ -422,9 +427,12 @@ private struct GeneralTab: View {
     /// The fan boost strength a fresh "Boost fans first" toggle starts at.
     private static let defaultFanBoostPercent = 80
 
-    /// The thermal safety net: watch a heat signal, and once it stays over the
-    /// threshold for the sustain window, pause the session so the Mac can
-    /// cool. The battery pause's sibling, so it sits right beside it.
+    /// The thermal safety net: with the lid closed and the sleep override
+    /// holding the Mac awake, watch a heat signal, and once it stays over the
+    /// threshold for the sustain window, pause the session and lift the
+    /// override so the Mac can sleep and cool. The battery pause's sibling,
+    /// so it sits right beside it. Laptops only: the arming condition needs
+    /// a lid.
     private var thermalSection: some View {
         Section {
             Toggle("Pause when running hot", isOn: Binding(
@@ -497,10 +505,11 @@ private struct GeneralTab: View {
                 // Everything above (watching, thresholds, the pause itself)
                 // is unprivileged and always works. Everything below is the
                 // helper-only territory: fan writes are root-enforced by the
-                // SMC, and the closed-display lift must be prompt-free.
-                // Without the helper the whole group collapses to one row
-                // that says what's locked and offers the install, instead of
-                // live-looking toggles with warning captions under each.
+                // SMC, and the automatic closed-display lift at the pause
+                // stage must be prompt-free. Without the helper the whole
+                // group collapses to one row that says what's locked and
+                // offers the install, instead of live-looking toggles with
+                // warning captions under each.
                 if model.helperInstalled {
                     if model.machineHasFans {
                         Toggle("Boost fans first", isOn: Binding(
@@ -525,22 +534,14 @@ private struct GeneralTab: View {
                             FanTestRows(model: model)
                         }
                     }
-                    Toggle("Also switch off closed-display mode", isOn: Binding(
-                        get: { config.liftSleepDisable },
-                        set: { lift in
-                            var updated = config
-                            updated.liftSleepDisable = lift
-                            model.thermalSafety = updated
-                        }
-                    ))
                 } else {
                     ThermalHelperLockedRow(model: model)
                 }
             }
         } header: {
-            sectionHeader("Thermal", info: L("A safety net for heat. Watch macOS's own thermal pressure (works everywhere, \u{201C}Serious\u{201D} is where throttling bites) or specific temperature sensors, and if the reading stays over the threshold for the chosen time, Keepresso escalates: first, optionally, it boosts the fans (never below what the system chose, needs the administrator helper), and if the reading stays hot for the same time again, it pauses the session and lets the Mac cool, telling you why in a notification. It restores fan control and resumes on its own once readings recover. Die sensors on modern Macs routinely run at 90-100 \u{00B0}C under load, so thresholds around 95-100 \u{00B0}C are sensible, and lower ones mostly keep the session paused."))
+            sectionHeader("Thermal", info: L("A safety net for a Mac left running with the lid closed, slid into a bag with a session still holding it awake. It acts only in that trapped state: lid shut, with \u{201C}Keep awake with the lid closed\u{201D} overriding sleep. Watch macOS's own thermal pressure (works everywhere, \u{201C}Serious\u{201D} is where throttling bites) or specific temperature sensors, and if the reading stays over the threshold for the chosen time, Keepresso escalates: first, optionally, it boosts the fans (never below what the system chose, needs the administrator helper), and if it stays hot for the same time again, it pauses the session and switches the sleep override off, so the Mac can finally sleep and cool, telling you why in a notification. Opening the lid, or readings recovering, undoes everything: fan control returns to the system, the override comes back, and the session resumes. Die sensors on modern Macs routinely run at 90-100 \u{00B0}C under load, so thresholds around 95-100 \u{00B0}C are sensible."))
         } footer: {
-            sectionFooter("Pauses the session when the Mac stays hot, so it can cool down.")
+            sectionFooter("If the Mac runs hot with the lid closed, the session pauses so it can sleep and cool down.")
         }
     }
 
