@@ -41,10 +41,21 @@ Homebrew Cask is published and installable at
 `gyorgysh/homebrew-keepresso` tap repo.
 A headless virtual-display feature (private `CGVirtualDisplay` API, behind an
 off-by-default flag) is also done and validated on real headless hardware.
-Current version: 1.14.0 (build 24), on main and awaiting release; v1.13.0
-(fifteen UI languages, generated from Python catalogs in
-`tools/localization/`) is the latest shipped tag. v1.14 adds quick "Stop in"
-buttons with an ending-soon notice, an agent-activity trigger
+Current version: 1.15.0 (build 25), on main and awaiting release; v1.14.0 is
+the latest shipped tag (fifteen UI languages shipped in v1.13, generated from
+Python catalogs in `tools/localization/`). v1.15 adds a thermal safety net
+(`KeepressoCore/ThermalGuard.swift`: pressure or sensor watch, sustained-heat
+escalation to an optional fan boost then a session pause, hysteresis on
+release), SMC access in Core (`SMC.swift`, unprivileged reads; fan writes are
+root-only through helper protocol 4's connection-scoped `setFanHold`), a
+"Test Fans" dry run (`KeepressoCore/FanDryRun.swift`), and version-aware
+helper handling: after an app update the stale daemon image is recognized by
+its answered protocol version, retired in the background, and never routed
+into the register/unregister repair (which could cost a re-approval). The
+thermal UI keeps unprivileged controls always live and collapses the
+helper-only group (fan boost, fan test, closed-display lift) to a single
+lock row with an inline install when the helper is missing. v1.14 added quick
+"Stop in" buttons with an ending-soon notice, an agent-activity trigger
 (`KeepressoCore/AgentActivity.swift`: transcript evidence, per-session CPU
 baselines) with opt-in Claude Code hook tracking
 (`KeepressoCore/AgentHooks.swift`, merged into `~/.claude/settings.json`), a

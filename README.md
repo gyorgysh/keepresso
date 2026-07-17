@@ -117,6 +117,18 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   with an optional grace period before it lets go.
 - 🔋 **Battery-aware auto-pause.** Let the Mac sleep once charge drops below a
   threshold you choose, even mid-session, so it never runs the battery flat.
+- 🌡️ **Thermal safety net.** Holding a Mac awake through heavy load can also
+  hold in the heat, so Keepresso can watch it: macOS's own thermal pressure
+  (works on every Mac) or specific temperature sensors picked from a live
+  list. If the reading stays over your threshold for a sustained time it
+  escalates, first (optionally) boosting the fans to a chosen strength, never
+  below what the system already chose, then pausing the session so the Mac
+  can cool, with a notification saying why. Everything restores itself once
+  temperatures recover. A built-in **"Test Fans"** check proves the fan path
+  end to end in about 12 seconds ("All good. Fan 1: 0 → 4800 rpm"), so you
+  can trust the boost before a heavy render needs it. Watching and pausing
+  work everywhere; the fan boost runs through the administrator helper, so
+  it's silent and never prompts.
 - ⏱️ **Menu-bar countdown.** An optional live countdown next to the cup icon for
   timed sessions.
 - ⌨️ **Global hotkey.** A system-wide keyboard shortcut to toggle keep-awake from
@@ -140,14 +152,17 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   password asked once per app run, or never with the administrator helper.
 - 🔑 **One password, ever.** An optional **administrator helper**, a small
   system service installed from Preferences > General (or the welcome screen),
-  handles the privileged switches for Keepresso: closed-display mode and the
-  AWDL pause become instant and silent, with no password prompt on any launch.
-  macOS asks for your password once, when you approve the helper under Login
-  Items, and the approval survives restarts and updates. The helper can only
-  flip those specific switches, restores everything if the app quits or
-  crashes, puts the `keepresso` CLI on PATH for DMG installs, and can be
-  removed at any time. Without it, everything still works the old way, with a
-  once-per-run prompt (now always announced by a notification).
+  handles the privileged switches for Keepresso: closed-display mode, the
+  thermal fan boost, and the AWDL pause become instant and silent, with no
+  password prompt on any launch. macOS asks for your password once, when you
+  approve the helper under Login Items, and the approval survives restarts
+  and updates; app updates replace the service automatically, never a
+  reinstall. The helper can only flip those specific switches, restores
+  everything if the app quits or crashes, puts the `keepresso` CLI on PATH
+  for DMG installs, and can be removed at any time. Without it, everything
+  still works the old way, with a once-per-run prompt (now always announced
+  by a notification), except the fan boost, which stays off rather than ever
+  prompting from a background safety action.
 - 🔔 **Reminders and end actions.** A "still brewing" notification (with an
   optional sound) after _N_ minutes, one-time or recurring, so a forgotten
   session can't quietly drain the battery. Plus an optional notification and

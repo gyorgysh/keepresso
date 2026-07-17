@@ -21,6 +21,41 @@ Versions follow [Semantic Versioning](https://semver.org).
   die again on the next battery reading), so the switch snaps back. The status
   card now shakes on each attempt, pointing at the line that explains the
   pause, instead of appearing to ignore the click.
+- **A thermal safety net.** Keepresso can hold a Mac awake through heavy load,
+  with the lid closed, even on battery; now it can also watch the heat.
+  Preferences ▸ General ▸ Thermal watches either macOS's own thermal pressure
+  (works on every Mac) or temperature sensors you pick from a live list, and
+  once the reading stays over your threshold for a sustained time it
+  escalates: first, optionally, it boosts the fans to a chosen strength
+  (never below what the system already chose; silent, through the
+  administrator helper), and if the Mac stays hot, it pauses the session,
+  refuses restarts with the same explanatory shake as the battery pause, can
+  switch off closed-display mode, and tells you why in a notification.
+  Everything restores itself once temperatures recover, with hysteresis so a
+  reading hovering at the threshold never flaps. Fans are forced through a
+  new helper verb that fails safe: the boost dies with the app connection,
+  and a crash marker restores auto control at the next daemon start.
+- **Prove the fans before you need them.** Next to the boost strength slider,
+  a "Test Fans" check steps the fans through 50, 70, and 90 percent for about
+  12 seconds, reading every fan's speed at each level and the hottest sensor
+  along the way, then hands control back and answers plainly whether the
+  whole path (helper, firmware, readings) can be trusted: "All good. Fan 1:
+  0 → 4800 rpm (max 5348)." A real heat emergency always outranks the test:
+  the safety net cancels it and takes the fans for itself.
+- **The privileged thermal controls know their place.** Watching temperatures
+  and pausing the session never need the administrator helper; boosting fans
+  and lifting closed-display mode do (fan writes are root-only, and an
+  unattended safety action must never ask for a password). Those two now sit
+  behind a single lock row while the helper isn't installed, with Install one
+  click away right there and the approval step walked through in place,
+  instead of live-looking toggles warning underneath.
+- **Helper updates take care of themselves.** The helper service ships inside
+  the app, so an app update replaces it on disk automatically; the only
+  leftover is the pre-update service still running in memory, which Keepresso
+  now recognizes by version, retires in the background, and reports in
+  Preferences while it lasts (usually under a minute). No reinstall, no
+  password, no new approval, and no more risk of the updater mistaking the
+  old-but-healthy service for a broken one.
 
 ## [1.14.0] - 2026-07-16
 
