@@ -11,14 +11,16 @@ import Foundation
 ///
 /// Not thread-safe: the monitors are driven from the main actor. The clock is
 /// injectable so the TTL can be unit-tested without waiting on real time.
-final class TTLCache<Value> {
+/// Public because app-side monitor backends (the thermal sensor reader) share
+/// the same read-twice-per-tick shape.
+public final class TTLCache<Value> {
     private let ttl: TimeInterval
     private let now: () -> Date
     private let probe: () -> Value
     private var cached: Value?
     private var cachedAt: Date?
 
-    init(ttl: TimeInterval, now: @escaping () -> Date = Date.init, probe: @escaping () -> Value) {
+    public init(ttl: TimeInterval, now: @escaping () -> Date = Date.init, probe: @escaping () -> Value) {
         self.ttl = ttl
         self.now = now
         self.probe = probe
@@ -27,7 +29,7 @@ final class TTLCache<Value> {
     /// The cached value while fresh, otherwise a fresh probe (which is then
     /// cached). A probed `nil` (for an optional `Value`) is a real cached value,
     /// not a cache miss, so it isn't re-probed until the TTL lapses.
-    var current: Value {
+    public var current: Value {
         if let cached, let cachedAt, now().timeIntervalSince(cachedAt) < ttl {
             return cached
         }

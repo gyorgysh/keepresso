@@ -42,6 +42,39 @@ private final class FakeRestoreState: HelperRestoreStatePersisting, @unchecked S
     }
 }
 
+private final class FakeFanControl: FanControlling, @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var forcedPercents: [Int] = []
+    private(set) var restoreCalls = 0
+    private(set) var unlockCalls = 0
+    /// Scripted results for successive setForced calls; empty = keep .ok.
+    var results: [FanWriteResult] = []
+    var unlockSucceeds = true
+
+    func fanCount() -> Int? { 2 }
+
+    func setForced(percent: Int) -> FanWriteResult {
+        lock.lock()
+        defer { lock.unlock() }
+        forcedPercents.append(percent)
+        return results.isEmpty ? .ok : results.removeFirst()
+    }
+
+    func unlock() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        unlockCalls += 1
+        return unlockSucceeds
+    }
+
+    func restoreAuto() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        restoreCalls += 1
+        return true
+    }
+}
+
 private let sleepOn = "/usr/bin/pmset -a disablesleep 1"
 private let sleepOff = "/usr/bin/pmset -a disablesleep 0"
 private let awdlDown = "/sbin/ifconfig awdl0 down"
@@ -226,4 +259,110 @@ private struct CLILinkFixture {
     let cleanRunner = FakeRunner()
     HelperEngine(runner: cleanRunner, state: FakeRestoreState()).restoreAtLaunch()
     #expect(cleanRunner.commands.isEmpty)
+}
+
+// MARK: - Fan holds
+
+@Test func fanHoldWritesOnUnionEdgesWithMaxPercentWinning() {
+    let fans = FakeFanControl()
+    let state = FakeRestoreState()
+    let engine = HelperEngine(runner: FakeRunner(), state: state, fans: fans)
+
+    #expect(engine.setFanHold(client: 1, holding: true, percent: 60))
+    #expect(fans.forcedPercents == [60])
+    #expect(state.markers() == [.fanForced])
+
+    // A hotter holder raises the target; the same target writes nothing new.
+    #expect(engine.setFanHold(client: 2, holding: true, percent: 90))
+    #expect(fans.forcedPercents == [60, 90])
+    #expect(engine.setFanHold(client: 3, holding: true, percent: 50))
+    #expect(fans.forcedPercents == [60, 90])
+
+    // The hottest leaving steps the target back down; the last one out
+    // restores auto and clears the marker.
+    #expect(engine.setFanHold(client: 2, holding: false, percent: 0))
+    #expect(fans.forcedPercents == [60, 90, 60])
+    _ = engine.setFanHold(client: 1, holding: false, percent: 0)
+    _ = engine.setFanHold(client: 3, holding: false, percent: 0)
+    #expect(fans.restoreCalls == 1)
+    #expect(state.markers().isEmpty)
+}
+
+@Test func fanHoldDisconnectRestoresAutoAndClearsTheMarker() {
+    let fans = FakeFanControl()
+    let state = FakeRestoreState()
+    let engine = HelperEngine(runner: FakeRunner(), state: state, fans: fans)
+
+    _ = engine.setFanHold(client: 1, holding: true, percent: 80)
+    #expect(!engine.isIdle)
+    engine.clientDisconnected(1)
+    #expect(fans.restoreCalls == 1)
+    #expect(state.markers().isEmpty)
+    #expect(engine.isIdle)
+}
+
+@Test func fanTickReassertsWhileHeldAndIdlesOtherwise() {
+    let fans = FakeFanControl()
+    let engine = HelperEngine(runner: FakeRunner(), state: FakeRestoreState(), fans: fans)
+
+    engine.fanTick() // idle: no writes
+    #expect(fans.forcedPercents.isEmpty)
+
+    _ = engine.setFanHold(client: 1, holding: true, percent: 70)
+    engine.fanTick()
+    engine.fanTick()
+    #expect(fans.forcedPercents == [70, 70, 70])
+}
+
+@Test func needsUnlockGetsExactlyOneFtstRetry() {
+    let fans = FakeFanControl()
+    fans.results = [.needsUnlock, .ok]
+    let engine = HelperEngine(runner: FakeRunner(), state: FakeRestoreState(), fans: fans)
+
+    #expect(engine.setFanHold(client: 1, holding: true, percent: 80))
+    #expect(fans.unlockCalls == 1)
+    #expect(fans.forcedPercents == [80, 80]) // rejected, unlocked, retried
+
+    // When the unlock itself fails, there is no second retry.
+    let stubborn = FakeFanControl()
+    stubborn.results = [.needsUnlock]
+    stubborn.unlockSucceeds = false
+    let engine2 = HelperEngine(runner: FakeRunner(), state: FakeRestoreState(), fans: stubborn)
+    #expect(!engine2.setFanHold(client: 1, holding: true, percent: 80))
+    #expect(stubborn.forcedPercents == [80])
+}
+
+@Test func repeatedFanWriteFailuresSurrenderTheHold() {
+    let fans = FakeFanControl()
+    let state = FakeRestoreState()
+    let engine = HelperEngine(runner: FakeRunner(), state: state, fans: fans)
+    _ = engine.setFanHold(client: 1, holding: true, percent: 80)
+    #expect(state.markers() == [.fanForced])
+
+    // Every re-assert fails from here on; the engine gives up after the cap,
+    // restores auto, clears the marker, and records the drop.
+    fans.results = Array(repeating: .failed, count: 20)
+    for _ in 0..<HelperEngine.maxFanFailures { engine.fanTick() }
+    #expect(engine.fanHoldDropped)
+    #expect(engine.isIdle)
+    #expect(fans.restoreCalls == 1)
+    #expect(state.markers().isEmpty)
+
+    // Ticks after the surrender write nothing further.
+    let writesAfterDrop = fans.forcedPercents.count
+    engine.fanTick()
+    #expect(fans.forcedPercents.count == writesAfterDrop)
+
+    // A fresh hold gets a fresh chance and clears the dropped flag.
+    _ = engine.setFanHold(client: 2, holding: true, percent: 50)
+    #expect(!engine.fanHoldDropped)
+}
+
+@Test func restoreAtLaunchSettlesALeftoverFanMarker() {
+    let fans = FakeFanControl()
+    let state = FakeRestoreState([.fanForced])
+    let engine = HelperEngine(runner: FakeRunner(), state: state, fans: fans)
+    engine.restoreAtLaunch()
+    #expect(fans.restoreCalls == 1)
+    #expect(state.markers().isEmpty)
 }

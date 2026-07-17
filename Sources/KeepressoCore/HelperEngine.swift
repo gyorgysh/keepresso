@@ -29,6 +29,42 @@ public final class ProcessCommandRunner: HelperCommandRunning {
     }
 }
 
+/// How one forced-fan write went. `needsUnlock` is the M3-and-newer firmware
+/// refusing manual mode (SMC result 0x82) until the `Ftst` test flag is set;
+/// the engine answers it with exactly one unlock-and-retry.
+public enum FanWriteResult: Equatable, Sendable {
+    case ok
+    case needsUnlock
+    case failed
+}
+
+/// Fan override seam for the daemon (fan writes are root-only, enforced by the
+/// SMC itself). ``SMCFanController`` is the real backend; tests use a fake.
+public protocol FanControlling: AnyObject, Sendable {
+    /// Number of fans, nil when the SMC is unreachable. 0 = fanless.
+    func fanCount() -> Int?
+    /// Force every fan to `percent` of its min...max RPM range. Boost only:
+    /// the backend clamps each fan's target to at least its RPM when the
+    /// boost first engaged, so this can never slow a fan below what the
+    /// system's own control had chosen.
+    func setForced(percent: Int) -> FanWriteResult
+    /// Write the firmware test-mode unlock (`Ftst` = 1) that newer machines
+    /// require before manual fan mode. Returns whether the write landed.
+    func unlock() -> Bool
+    /// Hand fan control back to the system (mode 0, unlock cleared).
+    func restoreAuto() -> Bool
+}
+
+/// The do-nothing backend: the default in tests and wherever fan control
+/// isn't wired.
+public final class NullFanControl: FanControlling {
+    public init() {}
+    public func fanCount() -> Int? { nil }
+    public func setForced(percent: Int) -> FanWriteResult { .failed }
+    public func unlock() -> Bool { false }
+    public func restoreAuto() -> Bool { false }
+}
+
 /// What the daemon still owes the system if it dies mid-hold: markers persist
 /// on disk (root-owned, under `/var/db`) and are settled on the next daemon
 /// launch, including the launchd `RunAtLoad` start after a reboot or crash.
@@ -37,6 +73,8 @@ public enum HelperRestoreMarker: String, CaseIterable, Sendable {
     case sleepDisabled = "sleep-disabled"
     /// We took `awdl0` down for a hold and haven't raised it.
     case awdlDown = "awdl-down"
+    /// We forced the fans for a hold and haven't restored auto control.
+    case fanForced = "fan-forced"
 }
 
 /// Persistence seam for the restore markers.
@@ -110,13 +148,29 @@ public final class HelperEngine: @unchecked Sendable {
     private let lock = NSLock()
     private let runner: HelperCommandRunning
     private let state: HelperRestoreStatePersisting
+    private let fans: FanControlling
 
     private var sleepHolders: Set<Int> = []
     private var awdlHolders: Set<Int> = []
+    /// Client → wanted fan boost percent; the effective target is the max.
+    private var fanHolders: [Int: Int] = [:]
+    /// Consecutive failed fan writes; past the cap the engine surrenders the
+    /// hold instead of fighting the firmware forever.
+    private var fanFailureStreak = 0
+    /// How many consecutive failed writes drop the fan hold.
+    static let maxFanFailures = 5
+    /// Set once ``fanTick()`` gave up on a hold, so the state is inspectable
+    /// (and the app can tell "boost silently ended" from "still boosting").
+    public private(set) var fanHoldDropped = false
 
-    public init(runner: HelperCommandRunning, state: HelperRestoreStatePersisting) {
+    public init(
+        runner: HelperCommandRunning,
+        state: HelperRestoreStatePersisting,
+        fans: FanControlling = NullFanControl()
+    ) {
         self.runner = runner
         self.state = state
+        self.fans = fans
     }
 
     /// Settle debts from a previous daemon life (crash, kill, reboot
@@ -132,6 +186,10 @@ public final class HelperEngine: @unchecked Sendable {
         if leftovers.contains(.awdlDown) {
             runner.run("/sbin/ifconfig", ["awdl0", "up"])
             state.set(.awdlDown, present: false)
+        }
+        if leftovers.contains(.fanForced) {
+            _ = fans.restoreAuto()
+            state.set(.fanForced, present: false)
         }
     }
 
@@ -161,6 +219,21 @@ public final class HelperEngine: @unchecked Sendable {
         }
     }
 
+    /// Take or release `client`'s forced-fan hold at `percent`. With several
+    /// holders the hottest request wins (the max percent). Writes only when
+    /// the effective target changes.
+    public func setFanHold(client: Int, holding: Bool, percent: Int) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return applyFanUnion {
+            if holding {
+                fanHolders[client] = max(30, min(percent, 100))
+            } else {
+                fanHolders.removeValue(forKey: client)
+            }
+        }
+    }
+
     /// A client connection died (app quit or crashed): release everything it
     /// held, restoring the system defaults if it was the last holder. This is
     /// the daemon-era version of the old loops' pid watch.
@@ -169,6 +242,7 @@ public final class HelperEngine: @unchecked Sendable {
         defer { lock.unlock() }
         _ = applySleepUnion { sleepHolders.remove(client) }
         _ = applyAWDLUnion { awdlHolders.remove(client) }
+        _ = applyFanUnion { fanHolders.removeValue(forKey: client) }
     }
 
     /// Re-down `awdl0` while any hold is live: macOS re-raises the interface
@@ -184,12 +258,47 @@ public final class HelperEngine: @unchecked Sendable {
         }
     }
 
+    /// Re-force the fans while any hold is live: thermalmonitord re-takes fan
+    /// control on newer machines, so the target is re-written every tick, the
+    /// AWDL loop's re-assert carried over to fans. Repeated failures surrender
+    /// the hold (restoring auto as best as possible) rather than fighting the
+    /// firmware forever; ``fanHoldDropped`` records that it happened.
+    public func fanTick() {
+        lock.lock()
+        guard let target = fanHolders.values.max() else {
+            lock.unlock()
+            return
+        }
+        let failures = fanFailureStreak
+        lock.unlock()
+
+        if writeFanTarget(target) {
+            lock.lock()
+            fanFailureStreak = 0
+            lock.unlock()
+            return
+        }
+        lock.lock()
+        fanFailureStreak = failures + 1
+        let giveUp = fanFailureStreak >= Self.maxFanFailures
+        if giveUp {
+            fanHolders.removeAll()
+            fanFailureStreak = 0
+            fanHoldDropped = true
+        }
+        lock.unlock()
+        if giveUp {
+            _ = fans.restoreAuto()
+            state.set(.fanForced, present: false)
+        }
+    }
+
     /// Whether nothing is held, so an idle daemon may exit (launchd relaunches
     /// it on demand).
     public var isIdle: Bool {
         lock.lock()
         defer { lock.unlock() }
-        return sleepHolders.isEmpty && awdlHolders.isEmpty
+        return sleepHolders.isEmpty && awdlHolders.isEmpty && fanHolders.isEmpty
     }
 
     // MARK: - CLI symlink
@@ -241,5 +350,40 @@ public final class HelperEngine: @unchecked Sendable {
         let ok = runner.run("/sbin/ifconfig", ["awdl0", after ? "down" : "up"])
         state.set(.awdlDown, present: after && ok)
         return ok
+    }
+
+    /// Fan version of the union edge: the effective target is the max percent
+    /// across holders, and a change in that target (including to or from
+    /// nothing) is what writes hardware. Engaging resets the failure streak
+    /// and the dropped flag: a fresh hold gets a fresh chance.
+    private func applyFanUnion(_ mutate: () -> Void) -> Bool {
+        let before = fanHolders.values.max()
+        mutate()
+        let after = fanHolders.values.max()
+        guard before != after else { return true }
+        if let target = after {
+            fanFailureStreak = 0
+            fanHoldDropped = false
+            let ok = writeFanTarget(target)
+            state.set(.fanForced, present: ok)
+            return ok
+        }
+        let ok = fans.restoreAuto()
+        state.set(.fanForced, present: false)
+        return ok
+    }
+
+    /// One forced write, with the single unlock-and-retry newer firmware
+    /// needs (SMC 0x82 until `Ftst` is set).
+    private func writeFanTarget(_ percent: Int) -> Bool {
+        switch fans.setForced(percent: percent) {
+        case .ok:
+            return true
+        case .failed:
+            return false
+        case .needsUnlock:
+            guard fans.unlock() else { return false }
+            return fans.setForced(percent: percent) == .ok
+        }
     }
 }

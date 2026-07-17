@@ -15,6 +15,11 @@ private final class FakeHelperClient: PrivilegedHelperCalling, @unchecked Sendab
         return pingSucceeds
     }
 
+    func pingVersion() -> Int? {
+        record("pingVersion")
+        return pingSucceeds ? HelperService.protocolVersion : nil
+    }
+
     func setSleepDisabled(_ disabled: Bool) -> Bool {
         record("setSleepDisabled(\(disabled))")
         return holdSucceeds
@@ -27,6 +32,11 @@ private final class FakeHelperClient: PrivilegedHelperCalling, @unchecked Sendab
 
     func setAWDLHold(_ holding: Bool) -> Bool {
         record("setAWDLHold(\(holding))")
+        return holdSucceeds
+    }
+
+    func setFanHold(_ holding: Bool, percent: Int) -> Bool {
+        record("setFanHold(\(holding), \(percent))")
         return holdSucceeds
     }
 

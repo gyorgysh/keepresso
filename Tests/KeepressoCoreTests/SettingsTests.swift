@@ -39,6 +39,26 @@ import Foundation
     #expect(try JSONDecoder().decode(KeepressoSettings.self, from: data).hasOnboarded == true)
 }
 
+@Test func thermalSafetyRoundTripsAndDefaultsOff() throws {
+    // Absent key (any pre-thermal blob) decodes to off.
+    let json = """
+    { "triggersEnabled": true }
+    """
+    let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: Data(json.utf8))
+    #expect(decoded.thermalSafety == nil)
+    // A full config survives the settings round-trip.
+    var settings = KeepressoSettings.default
+    settings.thermalSafety = ThermalSafetyConfig(
+        mode: .sensors(ids: ["Tp09"], celsius: 98),
+        sustainSeconds: 60,
+        fanBoostPercent: 80,
+        stopBrewing: true,
+        liftSleepDisable: true
+    )
+    let data = try JSONEncoder().encode(settings)
+    #expect(try JSONDecoder().decode(KeepressoSettings.self, from: data).thermalSafety == settings.thermalSafety)
+}
+
 @Test func menuPanelExpandedDefaultsOnAndRoundTripsCollapsed() throws {
     // A blob saved before the field existed keeps today's full panel.
     let json = """

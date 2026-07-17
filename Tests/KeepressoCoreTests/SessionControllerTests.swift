@@ -349,6 +349,123 @@ private final class StubGate: TriggerEvaluating {
     #expect(controller.batteryRefusedStarts == 2)
 }
 
+// MARK: - Thermal pause
+
+@MainActor
+@Test func hotReadingForceStopsAnActiveSession() {
+    let (controller, fake, _) = makeController()
+    controller.pauseWhenHot = true
+    controller.start()
+    #expect(controller.isActive)
+
+    controller.reconcile(thermal: .hot)
+    #expect(controller.isActive == false)
+    #expect(controller.pausedByThermal)
+    #expect(fake.held.isEmpty)
+
+    // Recovery releases the latch; the session does not restart on its own
+    // (it was a manual session, the user starts it again).
+    controller.reconcile(thermal: .clear)
+    #expect(controller.pausedByThermal == false)
+    #expect(controller.isActive == false)
+}
+
+@MainActor
+@Test func hotReadingBlocksTriggerGateReactivation() {
+    let (controller, fake, _) = makeController()
+    controller.pauseWhenHot = true
+    controller.triggerGate = StubGate(true)
+    controller.reconcile(thermal: .hot)
+    #expect(controller.pausedByThermal)
+    #expect(controller.isActive == false)
+
+    // The gate stays satisfied, but the pause outranks it every tick.
+    controller.reconcile(thermal: .hot)
+    #expect(controller.isActive == false)
+    #expect(fake.held.isEmpty)
+
+    // On all-clear the very same reconcile lets the gate reactivate.
+    controller.reconcile(thermal: .clear)
+    #expect(controller.isActive)
+}
+
+@MainActor
+@Test func unknownThermalReadingHoldsTheLatchAcrossStarts() {
+    let (controller, fake, _) = makeController()
+    controller.pauseWhenHot = true
+    controller.reconcile(thermal: .hot)
+    #expect(controller.pausedByThermal)
+
+    // A manual start must not activate for one tick: start()'s internal
+    // reconcile passes .unknown, which leaves the latch alone.
+    controller.start()
+    #expect(controller.isActive == false)
+    #expect(controller.pausedByThermal)
+    #expect(fake.held.isEmpty)
+
+    controller.reconcile() // internal-style reconcile: still latched
+    #expect(controller.pausedByThermal)
+}
+
+@MainActor
+@Test func refusedStartsCombineBothSafetyPauses() {
+    let (controller, _, _) = makeController()
+    controller.pauseWhenHot = true
+    controller.reconcile(thermal: .hot)
+    controller.start()
+    controller.start()
+    #expect(controller.thermalRefusedStarts == 2)
+    #expect(controller.refusedStarts == 2)
+
+    // Battery refusals land in the same combined counter.
+    controller.reconcile(thermal: .clear)
+    controller.pauseBelowBatteryPercent = 20
+    controller.reconcile(battery: .discharging(15))
+    controller.start()
+    #expect(controller.batteryRefusedStarts == 1)
+    #expect(controller.refusedStarts == 3)
+}
+
+@MainActor
+@Test func disablingPauseWhenHotClearsAStaleLatch() {
+    let (controller, _, _) = makeController()
+    controller.pauseWhenHot = true
+    controller.reconcile(thermal: .hot)
+    #expect(controller.pausedByThermal)
+
+    controller.pauseWhenHot = false
+    controller.reconcile() // no reading needed; feature off clears the latch
+    #expect(controller.pausedByThermal == false)
+    controller.start()
+    #expect(controller.isActive)
+}
+
+@MainActor
+@Test func batteryAndThermalPausesHandOverCleanly() {
+    let (controller, _, _) = makeController()
+    controller.pauseWhenHot = true
+    controller.pauseBelowBatteryPercent = 20
+
+    // The battery block runs first and holds while latched, so a simultaneous
+    // hot reading defers: everything is stopped anyway, one latch suffices.
+    controller.reconcile(battery: .discharging(15), thermal: .hot)
+    #expect(controller.pausedByBattery)
+    #expect(controller.pausedByThermal == false)
+
+    // Plugging in lifts the battery pause; the still-hot reading latches the
+    // thermal pause on the very same reconcile, so there is no unprotected gap.
+    controller.reconcile(battery: .onAC, thermal: .hot)
+    #expect(controller.pausedByBattery == false)
+    #expect(controller.pausedByThermal)
+    controller.start()
+    #expect(controller.isActive == false)
+
+    // Cooling releases the last hold; now a start works.
+    controller.reconcile(battery: .onAC, thermal: .clear)
+    controller.start()
+    #expect(controller.isActive)
+}
+
 @MainActor
 @Test func pluggingInLiftsTheBatteryPause() {
     let (controller, fake, _) = makeController()

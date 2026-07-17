@@ -31,6 +31,9 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     public var diskKeepAlive: DiskKeepAliveConfig?
     /// Experimental headless virtual display, or `nil` (the default) for off.
     public var virtualDisplay: VirtualDisplayConfig?
+    /// The thermal safety net (watch a heat signal, boost fans, pause
+    /// brewing), or `nil` (the default) for off.
+    public var thermalSafety: ThermalSafetyConfig?
     /// Force-stop an active session (and hold off reactivating) once battery
     /// charge drops below this percentage, or `nil` (the default) for off.
     public var pauseBelowBatteryPercent: Int?
@@ -88,6 +91,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         endAction: SessionEndAction = .none,
         diskKeepAlive: DiskKeepAliveConfig? = nil,
         virtualDisplay: VirtualDisplayConfig? = nil,
+        thermalSafety: ThermalSafetyConfig? = nil,
         pauseBelowBatteryPercent: Int? = nil,
         showCountdownInMenuBar: Bool = false,
         menuPanelExpanded: Bool = true,
@@ -114,6 +118,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.endAction = endAction
         self.diskKeepAlive = diskKeepAlive
         self.virtualDisplay = virtualDisplay
+        self.thermalSafety = thermalSafety
         self.pauseBelowBatteryPercent = pauseBelowBatteryPercent.map(Self.clampedBatteryPausePercent)
         self.showCountdownInMenuBar = showCountdownInMenuBar
         self.menuPanelExpanded = menuPanelExpanded
@@ -200,6 +205,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         endAction = try c.decodeIfPresent(SessionEndAction.self, forKey: .endAction) ?? .none
         diskKeepAlive = try c.decodeIfPresent(DiskKeepAliveConfig.self, forKey: .diskKeepAlive)
         virtualDisplay = try c.decodeIfPresent(VirtualDisplayConfig.self, forKey: .virtualDisplay)
+        // ThermalSafetyConfig's own decoder applies the clamps.
+        thermalSafety = try c.decodeIfPresent(ThermalSafetyConfig.self, forKey: .thermalSafety)
         pauseBelowBatteryPercent = try c.decodeIfPresent(Int.self, forKey: .pauseBelowBatteryPercent)
             .map(Self.clampedBatteryPausePercent)
         showCountdownInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showCountdownInMenuBar) ?? false

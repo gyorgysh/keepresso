@@ -48,6 +48,10 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
         reply(engine.setAWDLHold(client: clientID, holding: holding))
     }
 
+    func setFanHold(_ holding: Bool, percent: Int, reply: @escaping @Sendable (Bool) -> Void) {
+        reply(engine.setFanHold(client: clientID, holding: holding, percent: percent))
+    }
+
     func terminateWhenIdle() {
         onTerminateRequest()
     }
@@ -127,7 +131,11 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
     }
 }
 
-let engine = HelperEngine(runner: ProcessCommandRunner(), state: FileRestoreState())
+let engine = HelperEngine(
+    runner: ProcessCommandRunner(),
+    state: FileRestoreState(),
+    fans: SMCFanController()
+)
 // Settle anything a previous life left behind (crash or reboot mid-hold)
 // before accepting new work.
 engine.restoreAtLaunch()
@@ -147,12 +155,15 @@ let listener = NSXPCListener(machServiceName: HelperService.machServiceLabel)
 listener.delegate = delegate
 listener.resume()
 
-// While any AWDL hold is live, keep re-downing the interface (macOS re-raises
-// it on its own); a no-op otherwise.
-let awdlTimer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "awdl-tick"))
-awdlTimer.schedule(deadline: .now() + 3, repeating: 3)
-awdlTimer.setEventHandler { engine.awdlTick() }
-awdlTimer.resume()
+// While any AWDL or fan hold is live, keep re-asserting it (macOS re-raises
+// the interface and re-takes fan control on its own); a no-op otherwise.
+let holdTimer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "hold-tick"))
+holdTimer.schedule(deadline: .now() + 3, repeating: 3)
+holdTimer.setEventHandler {
+    engine.awdlTick()
+    engine.fanTick()
+}
+holdTimer.resume()
 
 // Exit when there's nothing to do (launchd relaunches us on the next XPC
 // call), and promptly, skipping the idle grace, when the app asked us to

@@ -31,7 +31,8 @@ public enum HelperService {
     /// 3: removed it again. Tested live: even root can't delete from the
     /// TCC-protected Trash, so the app now tells the user instead of asking
     /// the daemon to try.
-    public static let protocolVersion = 3
+    /// 4: added `setFanHold` (the thermal safety net's fan boost).
+    public static let protocolVersion = 4
 
     /// The code-signing requirement one side demands of the other: an
     /// Apple-issued certificate, the expected identifier, and the same team as
@@ -89,6 +90,11 @@ public enum HelperService {
     /// watchdog). While any hold is live the daemon re-downs the interface
     /// every few seconds, since macOS re-raises it on its own.
     func setAWDLHold(_ holding: Bool, reply: @escaping @Sendable (Bool) -> Void)
+    /// Take or release this connection's forced-fan hold at `percent` of the
+    /// fans' range (the thermal safety net's boost). Boost only, never below
+    /// what auto control had; while any hold is live the daemon re-writes the
+    /// target every few seconds, since the system re-takes fan control.
+    func setFanHold(_ holding: Bool, percent: Int, reply: @escaping @Sendable (Bool) -> Void)
     /// Ask the daemon to exit at its first fully idle moment, without the
     /// ordinary exit's extra grace period (see ``HelperShutdownPolicy``), so
     /// launchd relaunches the binary currently in the bundle on the next call.
@@ -101,9 +107,17 @@ public enum HelperService {
 public protocol PrivilegedHelperCalling: AnyObject, Sendable {
     /// Whether a matching daemon answered the version handshake.
     func ping() -> Bool
+    /// The protocol version the daemon answered with, or `nil` when no daemon
+    /// replied at all. An old version is not a failure: right after an app
+    /// update the pre-update daemon image can keep serving until it idles
+    /// out, and callers must treat that as "answering, needs retirement",
+    /// never as "broken" (repairing a live registration is what risks a
+    /// fresh approval prompt).
+    func pingVersion() -> Int?
     func setSleepDisabled(_ disabled: Bool) -> Bool
     func setSleepHold(_ holding: Bool) -> Bool
     func setAWDLHold(_ holding: Bool) -> Bool
+    func setFanHold(_ holding: Bool, percent: Int) -> Bool
 }
 
 /// Real client over `NSXPCConnection`. The connection *is* the app's claim on
@@ -121,6 +135,8 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     /// What we currently want held, for re-assertion after an interruption.
     private var wantsSleepHold = false
     private var wantsAWDLHold = false
+    /// The wanted fan boost percent, or nil for no fan hold.
+    private var wantsFanHold: Int?
 
     /// How long a call may wait on the daemon before counting as failed.
     /// Generous enough for launchd to spawn it on first contact.
@@ -131,6 +147,10 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func ping() -> Bool {
+        pingVersion() == HelperService.protocolVersion
+    }
+
+    public func pingVersion() -> Int? {
         let version = LockedBox(-1)
         let replied = call { proxy, done in
             proxy.ping { replyVersion in
@@ -138,7 +158,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
                 done(true)
             }
         }
-        return replied && version.value == HelperService.protocolVersion
+        return replied ? version.value : nil
     }
 
     public func setSleepDisabled(_ disabled: Bool) -> Bool {
@@ -157,6 +177,13 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         wantsAWDLHold = holding
         lock.unlock()
         return call { proxy, done in proxy.setAWDLHold(holding, reply: done) }
+    }
+
+    public func setFanHold(_ holding: Bool, percent: Int) -> Bool {
+        lock.lock()
+        wantsFanHold = holding ? percent : nil
+        lock.unlock()
+        return call { proxy, done in proxy.setFanHold(holding, percent: percent, reply: done) }
     }
 
     /// Fire the version-handshake-and-retire nudge: if the daemon on the other
@@ -206,7 +233,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     /// launchd only picks up a newly installed binary on a fresh connection.
     private func releaseConnectionUnlessHeld() {
         lock.lock()
-        let held = wantsSleepHold || wantsAWDLHold
+        let held = wantsSleepHold || wantsAWDLHold || wantsFanHold != nil
         let stale = held ? nil : connection
         if !held { connection = nil }
         lock.unlock()
@@ -255,10 +282,12 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         lock.lock()
         let sleep = wantsSleepHold
         let awdl = wantsAWDLHold
+        let fan = wantsFanHold
         lock.unlock()
-        guard sleep || awdl, let proxy = proxyForAsyncUse() else { return }
+        guard sleep || awdl || fan != nil, let proxy = proxyForAsyncUse() else { return }
         if sleep { proxy.setSleepHold(true) { _ in } }
         if awdl { proxy.setAWDLHold(true) { _ in } }
+        if let fan { proxy.setFanHold(true, percent: fan) { _ in } }
     }
 }
 

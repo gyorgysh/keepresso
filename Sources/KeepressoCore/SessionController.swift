@@ -58,7 +58,7 @@ public final class SessionController {
     /// What to do to the Mac when a session ends on its own. Default none.
     public var endAction: SessionEndAction = .none
 
-    /// When set, ``reconcile(now:systemIdleSeconds:battery:)`` force-stops
+    /// When set, ``reconcile(now:systemIdleSeconds:battery:thermal:)`` force-stops
     /// an active session (releasing assertions and letting the Mac sleep) once
     /// the battery drops below this percentage, and holds off reactivating,
     /// manual or trigger-gated, until it's fed a reading at or above it again
@@ -66,7 +66,7 @@ public final class SessionController {
     /// level.
     public var pauseBelowBatteryPercent: Int?
 
-    /// The power situation fed to ``reconcile(now:systemIdleSeconds:battery:)``.
+    /// The power situation fed to ``reconcile(now:systemIdleSeconds:battery:thermal:)``.
     ///
     /// A three-way value, not an optional percentage, because the two "no
     /// number" cases must behave differently: on AC the pause is moot and the
@@ -143,6 +143,24 @@ public final class SessionController {
     /// gate activates through `reconcile`, which never counts.
     public private(set) var batteryRefusedStarts = 0
 
+    /// Whether the thermal guard's stop-brewing stage is enabled: the host
+    /// sets it from ``ThermalSafetyConfig/stopBrewing``. Off means any stale
+    /// thermal latch is cleared on the next reconcile.
+    public var pauseWhenHot = false
+
+    /// True once the thermal guard force-stopped the session, so reactivation
+    /// waits for the guard's all-clear (dwell and hysteresis live there, not
+    /// here). Public for the same reason as ``pausedByBattery``: the UI must
+    /// be able to say the Mac is deliberately being allowed to cool.
+    public private(set) var pausedByThermal = false
+
+    /// The thermal twin of ``batteryRefusedStarts``.
+    public private(set) var thermalRefusedStarts = 0
+
+    /// Refused start attempts across both safety pauses, for the menu's
+    /// "that didn't work, and here's why" shake.
+    public var refusedStarts: Int { batteryRefusedStarts + thermalRefusedStarts }
+
     /// - Parameters:
     ///   - assertions: power-assertion backend; inject a fake in tests.
     ///   - reminder: reminder delivery backend; inject a fake in tests. `nil`
@@ -181,6 +199,13 @@ public final class SessionController {
                 reason: L("Not started, battery below %d%%", pauseBelowBatteryPercent ?? 0),
                 at: now()
             )
+            return
+        }
+        // Same contract for the thermal pause: the guard decides when the Mac
+        // has cooled; a start now would just be re-stopped on the next tick.
+        if pausedByThermal {
+            thermalRefusedStarts += 1
+            log.record(began: false, reason: L("Not started, the Mac is running hot"), at: now())
             return
         }
         let restarted = isActive
@@ -273,13 +298,13 @@ public final class SessionController {
 
     /// Seconds remaining in a timed session, or `nil` for indefinite/idle or a
     /// trigger-gated session (gating ignores the timed cap, so there's nothing
-    /// counting down, see ``reconcile(now:systemIdleSeconds:battery:)``).
+    /// counting down, see ``reconcile(now:systemIdleSeconds:battery:thermal:)``).
     public var remaining: TimeInterval? {
         guard triggerGate == nil, isActive, let total = mode.duration, let startedAt else { return nil }
         return max(0, total - now().timeIntervalSince(startedAt))
     }
 
-    /// Whether ``reconcile(now:systemIdleSeconds:battery:)`` can currently
+    /// Whether ``reconcile(now:systemIdleSeconds:battery:thermal:)`` can currently
     /// use a HID idle reading. True when the screen-saver yield is configured, or
     /// when keep-active is on (it needs idle time to avoid nudging a user who is
     /// actively at the keyboard/mouse). The host skips the per-second IOKit idle
@@ -289,11 +314,17 @@ public final class SessionController {
             || options.simulateUserActivity
     }
 
-    /// Whether ``reconcile(now:systemIdleSeconds:battery:)`` can currently
+    /// Whether ``reconcile(now:systemIdleSeconds:battery:thermal:)`` can currently
     /// use a battery reading: battery auto-pause is on. The host skips the
     /// per-second power-source sweep when this is false (off by default).
     public var consumesBatteryReading: Bool {
         pauseBelowBatteryPercent != nil
+    }
+
+    /// Whether a thermal reading has any effect here: the guard's stop-brewing
+    /// stage is on. (The guard itself still runs its other stages regardless.)
+    public var consumesThermalReading: Bool {
+        pauseWhenHot
     }
 
     // MARK: - Reconciliation
@@ -311,7 +342,15 @@ public final class SessionController {
     ///     ``BatteryReading/discharging(_:)`` with the percentage otherwise;
     ///     internal reconciles default to ``BatteryReading/unknown``, which
     ///     leaves the pause latch untouched.
-    public func reconcile(now: Date? = nil, systemIdleSeconds: TimeInterval? = nil, battery: BatteryReading = .unknown) {
+    ///   - thermal: the thermal guard's verdict, dwell and hysteresis already
+    ///     applied there. `.unknown` (the internal-reconcile default) leaves
+    ///     the thermal latch untouched, exactly like the battery reading.
+    public func reconcile(
+        now: Date? = nil,
+        systemIdleSeconds: TimeInterval? = nil,
+        battery: BatteryReading = .unknown,
+        thermal: ThermalReading = .unknown
+    ) {
         let instant = now ?? self.now()
 
         if pauseBelowBatteryPercent == nil {
@@ -350,6 +389,40 @@ public final class SessionController {
             // latch rather than activating for one tick and dying on the next.
             triggerGate?.tick()
             return
+        }
+
+        // The thermal pause, mirroring the battery block above. The guard has
+        // already applied dwell and hysteresis, so this only latches: `.hot`
+        // stops and holds, `.clear` releases, `.unknown` changes nothing.
+        if !pauseWhenHot {
+            // Feature off: never leave a stale pause latched.
+            pausedByThermal = false
+        } else {
+            switch thermal {
+            case .hot:
+                if !pausedByThermal {
+                    pausedByThermal = true
+                    if isActive {
+                        stop(
+                            reason: L("Paused, the Mac is running hot"),
+                            endedNaturally: true,
+                            notice: (
+                                title: L("Paused on high temperature"),
+                                body: L("Keepresso stopped the keep-awake session so the Mac can cool down. It resumes when temperatures recover.")
+                            )
+                        )
+                    }
+                }
+                triggerGate?.tick()
+                return
+            case .clear:
+                pausedByThermal = false
+            case .unknown:
+                if pausedByThermal {
+                    triggerGate?.tick()
+                    return
+                }
+            }
         }
 
         if let triggerGate {
