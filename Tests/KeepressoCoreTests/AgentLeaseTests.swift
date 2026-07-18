@@ -261,6 +261,51 @@ private func temporaryLeaseFile() throws -> (directory: URL, file: URL) {
 }
 
 @MainActor
+@Test func callerSelectedAcquireIDIsIdempotentOnlyForAnExactActiveRequest() throws {
+    let clock = LeaseClock()
+    let store = MemoryAgentLeaseStore()
+    let service = try AgentLeaseCommandService(
+        persistence: store,
+        now: { clock.now }
+    )
+    let id = UUID()
+    let metadata = AgentLeaseMetadata(
+        owner: "retrying-client",
+        agent: "codex",
+        task: "task-42",
+        attributes: ["message": "starting"]
+    )
+    let request = AgentLeaseCommand.acquire(
+        id: id,
+        metadata: metadata,
+        ttl: 300,
+        maxLifetime: 3_600
+    )
+
+    let first = try service.execute(request)
+    let retry = try service.execute(request)
+    #expect(first == retry)
+    #expect(store.state.leases.count == 1)
+
+    do {
+        _ = try service.execute(.acquire(
+            id: id,
+            metadata: AgentLeaseMetadata(owner: "different-client"),
+            ttl: 300,
+            maxLifetime: 3_600
+        ))
+        Issue.record("A conflicting idempotency key was accepted")
+    } catch {
+        #expect(error as? AgentLeaseRegistryError == .leaseAlreadyExists(id))
+    }
+
+    _ = try service.execute(.release(id: id, outcome: .success))
+    #expect(throws: AgentLeaseRegistryError.leaseAlreadyExists(id)) {
+        try service.execute(request)
+    }
+}
+
+@MainActor
 @Test func cancelledReleaseIsTerminalAndCannotBeReleasedTwice() throws {
     let registry = try AgentLeaseRegistry(persistence: MemoryAgentLeaseStore())
     let acquired = try registry.acquire(owner: "automation")
@@ -557,6 +602,47 @@ private func temporaryLeaseFile() throws -> (directory: URL, file: URL) {
     #expect(try store.load().leases == [wanted])
 }
 
+@Test func fileStoreCreatesAndRepairsPrivateLeaseFilePermissions() throws {
+    let fixture = try temporaryLeaseFile()
+    defer { try? FileManager.default.removeItem(at: fixture.directory) }
+    let store = FileAgentLeaseStore(fileURL: fixture.file)
+    _ = try store.update { $0.leases.append(lease()) }
+
+    var attributes = try FileManager.default.attributesOfItem(atPath: fixture.file.path)
+    #expect((attributes[.posixPermissions] as? NSNumber)?.intValue == 0o600)
+
+    try FileManager.default.setAttributes(
+        [.posixPermissions: 0o644],
+        ofItemAtPath: fixture.file.path
+    )
+    _ = try store.load()
+    attributes = try FileManager.default.attributesOfItem(atPath: fixture.file.path)
+    #expect((attributes[.posixPermissions] as? NSNumber)?.intValue == 0o600)
+
+    let temporaryFiles = try FileManager.default.contentsOfDirectory(
+        at: fixture.directory,
+        includingPropertiesForKeys: nil
+    ).filter { $0.lastPathComponent.contains(".tmp-") }
+    #expect(temporaryFiles.isEmpty)
+}
+
+@Test func fileStoreQuarantinesAnOversizedPayloadBeforeDecoding() throws {
+    let fixture = try temporaryLeaseFile()
+    defer { try? FileManager.default.removeItem(at: fixture.directory) }
+    let bytes = AgentLeaseLimits.maximumPersistenceBytes + 1
+    try Data(repeating: 0x20, count: bytes).write(to: fixture.file)
+
+    #expect(try FileAgentLeaseStore(fileURL: fixture.file).load() == .empty)
+    #expect(!FileManager.default.fileExists(atPath: fixture.file.path))
+    let quarantined = try FileManager.default.contentsOfDirectory(
+        at: fixture.directory,
+        includingPropertiesForKeys: nil
+    ).filter { $0.lastPathComponent.hasPrefix("agent-leases.corrupt-") }
+    #expect(quarantined.count == 1)
+    let size = try quarantined[0].resourceValues(forKeys: [.fileSizeKey]).fileSize
+    #expect(size == bytes)
+}
+
 @Test func fileStoreQuarantinesSemanticallyUnsafeLeases() throws {
     let fixture = try temporaryLeaseFile()
     defer { try? FileManager.default.removeItem(at: fixture.directory) }
@@ -686,14 +772,51 @@ private func temporaryLeaseFile() throws -> (directory: URL, file: URL) {
     } catch {
         #expect(error as? AgentLeaseRegistryError == .invalidMaxLifetime)
     }
+    for limit in [-1, AgentLeaseLimits.maximumTerminalRetentionLimit + 1] {
+        do {
+            _ = try AgentLeaseRegistry(
+                persistence: MemoryAgentLeaseStore(),
+                terminalRetentionLimit: limit
+            )
+            Issue.record("An invalid terminal retention limit was accepted")
+        } catch {
+            #expect(error as? AgentLeaseRegistryError == .invalidTerminalRetentionLimit)
+        }
+    }
+}
+
+@MainActor
+@Test func registryBoundsMetadataMessagesAndActiveLeaseCount() throws {
+    let registry = try AgentLeaseRegistry(persistence: MemoryAgentLeaseStore())
+    let oversized = String(
+        repeating: "x",
+        count: AgentLeaseLimits.maximumAttributeValueBytes + 1
+    )
     do {
-        _ = try AgentLeaseRegistry(
-            persistence: MemoryAgentLeaseStore(),
-            terminalRetentionLimit: -1
+        _ = try registry.acquire(
+            metadata: AgentLeaseMetadata(
+                owner: "owner",
+                attributes: ["message": oversized]
+            )
         )
-        Issue.record("A negative terminal retention limit was accepted")
+        Issue.record("Oversized metadata was accepted")
     } catch {
-        #expect(error as? AgentLeaseRegistryError == .invalidTerminalRetentionLimit)
+        #expect(error as? AgentLeaseRegistryError == .invalidMetadata)
+    }
+
+    let item = try registry.acquire(owner: "bounded-message")
+    #expect(throws: AgentLeaseRegistryError.invalidMetadata) {
+        try registry.heartbeat(item.id, message: oversized)
+    }
+
+    let fullState = AgentLeasePersistenceState(leases: (0..<AgentLeaseLimits.maximumActiveLeaseCount).map {
+        lease(owner: "owner-\($0)")
+    })
+    let fullRegistry = try AgentLeaseRegistry(
+        persistence: MemoryAgentLeaseStore(fullState)
+    )
+    #expect(throws: AgentLeaseRegistryError.activeLeaseLimitReached) {
+        try fullRegistry.acquire(owner: "one-too-many")
     }
 }
 

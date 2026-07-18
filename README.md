@@ -374,7 +374,9 @@ An Agent should declare its lifecycle instead of asking Keepresso to infer it
 from a process name, CPU use, or log activity. A minimal shell lifecycle is:
 
 ```sh
+lease_request_id="$(/usr/bin/uuidgen | /usr/bin/tr '[:upper:]' '[:lower:]')"
 lease_json="$(keepresso lease acquire \
+  --lease-id "$lease_request_id" \
   --owner "$USER" --agent codex --task "nightly-refactor" \
   --ttl 300 --max-lifetime 14400)"
 lease_id="$(printf '%s' "$lease_json" | \
@@ -386,7 +388,9 @@ keepresso lease release "$lease_id" --result success
 
 Every command returns a stable JSON envelope. A lease heartbeat extends its TTL
 but never its absolute maximum lifetime. Release only the ID owned by the current
-task. Other agents remain protected independently.
+task. Reusing the same caller-generated UUID with the exact acquire request is
+safe after a lost response and returns the original active lease. Other agents
+remain protected independently.
 
 The app also embeds:
 

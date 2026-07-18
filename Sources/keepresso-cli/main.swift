@@ -26,7 +26,8 @@ Standalone holds (this process holds the assertion, caffeinate-style):
 
 Agent wake leases (stable JSON output):
   keepresso lease acquire --owner <owner> --agent <agent> --task <task>
-      [--ttl <seconds>] [--max-lifetime <seconds>] [--message <text>]
+      [--lease-id <uuid>] [--ttl <seconds>] [--max-lifetime <seconds>]
+      [--message <text>]
   keepresso lease renew <id> [--ttl <seconds>] [--message <text>]
   keepresso lease heartbeat <id> [--ttl <seconds>] [--message <text>]
   keepresso lease release <id> [--result success|failure|cancelled] [--message <text>]

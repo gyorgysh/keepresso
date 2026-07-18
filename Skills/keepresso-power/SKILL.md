@@ -18,7 +18,9 @@ Use the `keepresso lease` CLI to declare the task lifecycle explicitly. Acquire 
 4. Acquire before starting protected work:
 
    ```sh
+   lease_request_id="$(/usr/bin/uuidgen | /usr/bin/tr '[:upper:]' '[:lower:]')"
    lease_json="$(keepresso lease acquire \
+     --lease-id "$lease_request_id" \
      --owner "${USER:-automation}" \
      --agent codex \
      --task "repository-task-name" \
@@ -28,6 +30,10 @@ Use the `keepresso lease` CLI to declare the task lifecycle explicitly. Acquire 
    lease_id="$(printf '%s' "$lease_json" | \
      /usr/bin/plutil -extract lease.id raw -o - -)"
    ```
+
+   If the response is lost, retry the same acquire command with the same
+   `lease_request_id`. An exact retry returns the original active lease instead
+   of creating another hold. Never reuse that ID for different task metadata.
 
 5. Confirm that the response has `"ok": true` and a non-empty lease ID. Also
    inspect `status.warnings`. `closed_lid_protection_not_ready` or

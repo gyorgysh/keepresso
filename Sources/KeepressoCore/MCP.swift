@@ -269,9 +269,10 @@ public final class KeepressoMCPServer {
         case "acquire_wake_lease":
             try rejectUnknown(
                 arguments,
-                allowed: ["owner", "agent", "task", "ttl", "max_lifetime", "message"]
+                allowed: ["lease_id", "owner", "agent", "task", "ttl", "max_lifetime", "message"]
             )
             return .acquire(
+                id: try optionalString("lease_id", arguments),
                 owner: try requiredString("owner", arguments),
                 agent: try requiredString("agent", arguments),
                 task: try requiredString("task", arguments),
@@ -345,6 +346,7 @@ public final class KeepressoMCPServer {
             "description": "Acquire an expiring wake lease before an unattended AI task starts.",
             "inputSchema": objectSchema(
                 properties: [
+                    "lease_id": stringSchema("Optional caller-generated UUID for idempotent acquire retries."),
                     "owner": stringSchema("Human or automation owner of the task."),
                     "agent": stringSchema("Agent implementation, such as codex or claude-code."),
                     "task": stringSchema("Stable task name or task identifier."),

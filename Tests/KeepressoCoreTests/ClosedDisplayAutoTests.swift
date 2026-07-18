@@ -213,7 +213,9 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     controller.onlyWhileBrewing = true
 
     await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+    #expect(controller.hasConfirmedAutomaticProtection)
     controller.requestBatterySuspend()
+    #expect(!controller.hasConfirmedAutomaticProtection)
     await controller.autoTick(brewing: true, sleepAlreadyDisabled: true)
     #expect(controller.isBatterySuspended)
     #expect(controller.confirmedMode == .thermallySuspended)
@@ -279,7 +281,9 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     controller.onlyWhileBrewing = true
 
     await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+    #expect(controller.hasConfirmedAutomaticProtection)
     controller.requestThermalSuspend()
+    #expect(!controller.hasConfirmedAutomaticProtection)
     await controller.autoTick(brewing: true, sleepAlreadyDisabled: true)
     controller.requestThermalResume()
     controller.requestThermalSuspend()

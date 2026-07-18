@@ -55,6 +55,7 @@ private func testAdapter(
 @Test func parsesLeaseAcquireOptions() throws {
     #expect(try CLIRequest.parse([
         "lease", "acquire",
+        "--lease-id", "ae21d9ee-c5c7-4dff-8664-b29d73ac9b11",
         "--owner", "quasar",
         "--agent", "codex",
         "--task", "fix-tests",
@@ -62,6 +63,7 @@ private func testAdapter(
         "--max-lifetime", "7200",
         "--message", "working",
     ]) == .lease(.acquire(
+        id: "ae21d9ee-c5c7-4dff-8664-b29d73ac9b11",
         owner: "quasar",
         agent: "codex",
         task: "fix-tests",

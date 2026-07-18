@@ -1103,7 +1103,7 @@ final class AppModel {
         return ClosedLidProtectionReadiness.resolve(
             hasUnattendedDemand: hasExternalWakeDemand,
             helperReady: wakeHelperGate == .ready,
-            automaticHoldActive: closedDisplayAuto.isHolding,
+            automaticHoldActive: closedDisplayAuto.hasConfirmedAutomaticProtection,
             manualProtectionActive: manualProtectionActive
         )
     }
