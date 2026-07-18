@@ -14,6 +14,16 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
     public var endsAt: Date?
     public var triggersEnabled: Bool
     public var triggersPaused: Bool
+    /// Explicit Agent leases currently contributing to the wake union.
+    public var activeAgentLeaseCount: Int?
+    /// Earliest TTL or maximum-lifetime deadline among active Agent leases.
+    public var nextAgentLeaseDeadline: Date?
+    /// Stable unattended phase for scripts, such as preparing or awaitingLease.
+    public var unattendedPhase: String?
+    /// Whether the privileged path needed for reliable closed-lid work is ready.
+    public var closedLidProtectionReady: Bool?
+    /// Nearest enabled local Codex automation run known to the app.
+    public var nextCodexRun: Date?
     /// The writing app's marketing version, for support and mismatch checks.
     public var appVersion: String?
     /// The writing app's process id.
@@ -25,6 +35,11 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
         endsAt: Date? = nil,
         triggersEnabled: Bool = false,
         triggersPaused: Bool = false,
+        activeAgentLeaseCount: Int? = nil,
+        nextAgentLeaseDeadline: Date? = nil,
+        unattendedPhase: String? = nil,
+        closedLidProtectionReady: Bool? = nil,
+        nextCodexRun: Date? = nil,
         appVersion: String? = nil,
         pid: Int32,
         writtenAt: Date
@@ -33,6 +48,11 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
         self.endsAt = endsAt
         self.triggersEnabled = triggersEnabled
         self.triggersPaused = triggersPaused
+        self.activeAgentLeaseCount = activeAgentLeaseCount
+        self.nextAgentLeaseDeadline = nextAgentLeaseDeadline
+        self.unattendedPhase = unattendedPhase
+        self.closedLidProtectionReady = closedLidProtectionReady
+        self.nextCodexRun = nextCodexRun
         self.appVersion = appVersion
         self.pid = pid
         self.writtenAt = writtenAt
