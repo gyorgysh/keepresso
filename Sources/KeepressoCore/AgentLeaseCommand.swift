@@ -12,9 +12,9 @@ public enum AgentLeaseCommand: Equatable, Sendable {
         ttl: TimeInterval?,
         maxLifetime: TimeInterval?
     )
-    case heartbeat(id: UUID)
-    case renew(id: UUID, ttl: TimeInterval)
-    case release(id: UUID, outcome: AgentLeaseReleaseOutcome)
+    case heartbeat(id: UUID, message: String?)
+    case renew(id: UUID, ttl: TimeInterval, message: String?)
+    case release(id: UUID, outcome: AgentLeaseReleaseOutcome, message: String?)
     case list(includeTerminal: Bool)
     case status(id: UUID)
     case snapshot
@@ -38,6 +38,7 @@ extension AgentLeaseCommand: Codable {
         case ttl
         case maxLifetime
         case outcome
+        case message
         case includeTerminal
     }
 
@@ -53,16 +54,21 @@ extension AgentLeaseCommand: Codable {
                 maxLifetime: try container.decodeIfPresent(TimeInterval.self, forKey: .maxLifetime)
             )
         case .heartbeat:
-            self = .heartbeat(id: try container.decode(UUID.self, forKey: .id))
+            self = .heartbeat(
+                id: try container.decode(UUID.self, forKey: .id),
+                message: try container.decodeIfPresent(String.self, forKey: .message)
+            )
         case .renew:
             self = .renew(
                 id: try container.decode(UUID.self, forKey: .id),
-                ttl: try container.decode(TimeInterval.self, forKey: .ttl)
+                ttl: try container.decode(TimeInterval.self, forKey: .ttl),
+                message: try container.decodeIfPresent(String.self, forKey: .message)
             )
         case .release:
             self = .release(
                 id: try container.decode(UUID.self, forKey: .id),
-                outcome: try container.decode(AgentLeaseReleaseOutcome.self, forKey: .outcome)
+                outcome: try container.decode(AgentLeaseReleaseOutcome.self, forKey: .outcome),
+                message: try container.decodeIfPresent(String.self, forKey: .message)
             )
         case .list:
             self = .list(
@@ -84,17 +90,20 @@ extension AgentLeaseCommand: Codable {
             try container.encode(metadata, forKey: .metadata)
             try container.encodeIfPresent(ttl, forKey: .ttl)
             try container.encodeIfPresent(maxLifetime, forKey: .maxLifetime)
-        case .heartbeat(let id):
+        case .heartbeat(let id, let message):
             try container.encode(Action.heartbeat, forKey: .action)
             try container.encode(id, forKey: .id)
-        case .renew(let id, let ttl):
+            try container.encodeIfPresent(message, forKey: .message)
+        case .renew(let id, let ttl, let message):
             try container.encode(Action.renew, forKey: .action)
             try container.encode(id, forKey: .id)
             try container.encode(ttl, forKey: .ttl)
-        case .release(let id, let outcome):
+            try container.encodeIfPresent(message, forKey: .message)
+        case .release(let id, let outcome, let message):
             try container.encode(Action.release, forKey: .action)
             try container.encode(id, forKey: .id)
             try container.encode(outcome, forKey: .outcome)
+            try container.encodeIfPresent(message, forKey: .message)
         case .list(let includeTerminal):
             try container.encode(Action.list, forKey: .action)
             try container.encode(includeTerminal, forKey: .includeTerminal)
@@ -104,6 +113,20 @@ extension AgentLeaseCommand: Codable {
         case .snapshot:
             try container.encode(Action.snapshot, forKey: .action)
         }
+    }
+}
+
+public extension AgentLeaseCommand {
+    static func heartbeat(id: UUID) -> Self {
+        .heartbeat(id: id, message: nil)
+    }
+
+    static func renew(id: UUID, ttl: TimeInterval) -> Self {
+        .renew(id: id, ttl: ttl, message: nil)
+    }
+
+    static func release(id: UUID, outcome: AgentLeaseReleaseOutcome) -> Self {
+        .release(id: id, outcome: outcome, message: nil)
     }
 }
 
@@ -206,12 +229,12 @@ public final class AgentLeaseCommandService: AgentLeaseCommandServing {
                 ttl: ttl,
                 maxLifetime: maxLifetime
             ))
-        case .heartbeat(let id):
-            return .lease(try registry.heartbeat(id))
-        case .renew(let id, let ttl):
-            return .lease(try registry.renew(id, ttl: ttl))
-        case .release(let id, let outcome):
-            return .lease(try registry.release(id, outcome: outcome))
+        case .heartbeat(let id, let message):
+            return .lease(try registry.heartbeat(id, message: message))
+        case .renew(let id, let ttl, let message):
+            return .lease(try registry.renew(id, ttl: ttl, message: message))
+        case .release(let id, let outcome, let message):
+            return .lease(try registry.release(id, outcome: outcome, message: message))
         case .list(let includeTerminal):
             return .leases(try registry.list(includeTerminal: includeTerminal))
         case .status(let id):

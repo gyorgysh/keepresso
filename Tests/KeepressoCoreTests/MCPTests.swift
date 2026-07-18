@@ -18,6 +18,24 @@ private final class RecordingLeaseCommander: LeaseCommanding {
     }
 }
 
+private final class MCPLeaseStore: AgentLeasePersisting {
+    var state = AgentLeasePersistenceState.empty
+
+    func load() throws -> AgentLeasePersistenceState { state }
+
+    func update(
+        _ mutation: (inout AgentLeasePersistenceState) throws -> Void
+    ) throws -> AgentLeasePersistenceState {
+        try mutation(&state)
+        return state
+    }
+}
+
+@MainActor
+private final class SilentMCPAppSignaler: AgentLeaseAppSignaling {
+    func leaseStateDidChange(launchIfNeeded: Bool) {}
+}
+
 @MainActor
 private func callMCP(
     _ server: KeepressoMCPServer,
@@ -214,6 +232,50 @@ private func completeInitialization(
         .list(LeaseListFilter(owner: "quasar", includeInactive: true)),
         .status(id: "lease-1"),
     ])
+}
+
+@Test @MainActor func mcpStructuredContentCarriesLatestLifecycleMessage() throws {
+    let adapter = try AgentLeaseCommandAdapter(
+        persistence: MCPLeaseStore(),
+        appSignaler: SilentMCPAppSignaler()
+    )
+    let server = KeepressoMCPServer(commander: adapter)
+    try completeInitialization(server)
+
+    let acquired = try callMCP(server, method: "tools/call", params: [
+        "name": "acquire_wake_lease",
+        "arguments": [
+            "owner": "quasar", "agent": "codex", "task": "tests",
+            "message": "starting",
+        ],
+    ])
+    let acquiredResult = try #require(acquired["result"] as? [String: Any])
+    let acquiredContent = try #require(acquiredResult["structuredContent"] as? [String: Any])
+    let acquiredLease = try #require(acquiredContent["lease"] as? [String: Any])
+    let leaseID = try #require(acquiredLease["id"] as? String)
+    #expect(acquiredLease["message"] as? String == "starting")
+
+    let heartbeat = try callMCP(server, method: "tools/call", params: [
+        "name": "heartbeat_wake_lease",
+        "arguments": ["lease_id": leaseID, "message": "running tests"],
+    ])
+    let heartbeatResult = try #require(heartbeat["result"] as? [String: Any])
+    let heartbeatContent = try #require(
+        heartbeatResult["structuredContent"] as? [String: Any]
+    )
+    let heartbeatLease = try #require(heartbeatContent["lease"] as? [String: Any])
+    #expect(heartbeatLease["message"] as? String == "running tests")
+
+    let released = try callMCP(server, method: "tools/call", params: [
+        "name": "release_wake_lease",
+        "arguments": [
+            "lease_id": leaseID, "result": "success", "message": "complete",
+        ],
+    ])
+    let releasedResult = try #require(released["result"] as? [String: Any])
+    let releasedContent = try #require(releasedResult["structuredContent"] as? [String: Any])
+    let releasedLease = try #require(releasedContent["lease"] as? [String: Any])
+    #expect(releasedLease["message"] as? String == "complete")
 }
 
 @Test @MainActor func mcpArgumentErrorsAreToolResultsAndUnknownToolsAreProtocolErrors() throws {

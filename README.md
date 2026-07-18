@@ -385,7 +385,8 @@ task. Other agents remain protected independently.
 The app also embeds:
 
 - `Keepresso.app/Contents/Helpers/keepresso-mcp`, a local stdio MCP server with
-  `acquire`, `renew`, `heartbeat`, `release`, `list`, and `status` tools.
+  `acquire_wake_lease`, `renew_wake_lease`, `heartbeat_wake_lease`,
+  `release_wake_lease`, `list_wake_leases`, and `wake_status` tools.
 - `Keepresso.app/Contents/Resources/keepresso-power`, a Codex-compatible Skill
   containing the complete acquire, heartbeat, and cleanup workflow.
 

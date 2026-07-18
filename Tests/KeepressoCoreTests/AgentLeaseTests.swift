@@ -126,9 +126,13 @@ private func temporaryLeaseFile() throws -> (directory: URL, file: URL) {
     let metadata = AgentLeaseMetadata(owner: "codex", agent: "codex", task: "review")
     let commands: [AgentLeaseCommand] = [
         .acquire(id: id, metadata: metadata, ttl: 60, maxLifetime: 600),
-        .heartbeat(id: id),
-        .renew(id: id, ttl: 120),
-        .release(id: id, outcome: .failure(reason: "failed")),
+        .heartbeat(id: id, message: "checking tests"),
+        .renew(id: id, ttl: 120, message: "running tests"),
+        .release(
+            id: id,
+            outcome: .failure(reason: "failed"),
+            message: "tests failed"
+        ),
         .list(includeTerminal: false),
         .status(id: id),
         .snapshot,
@@ -221,11 +225,15 @@ private func temporaryLeaseFile() throws -> (directory: URL, file: URL) {
     #expect(acquired.id == id)
 
     clock.advance(10)
-    guard case .lease(let heartbeat) = try service.execute(.heartbeat(id: id)) else {
+    guard case .lease(let heartbeat) = try service.execute(.heartbeat(
+        id: id,
+        message: "indexing"
+    )) else {
         Issue.record("Heartbeat returned the wrong response")
         return
     }
     #expect(heartbeat.heartbeatAt == clock.now)
+    #expect(heartbeat.metadata.attributes["message"] == "indexing")
 
     guard case .leases(let active) = try service.execute(.list(includeTerminal: false)) else {
         Issue.record("List returned the wrong response")
@@ -233,12 +241,17 @@ private func temporaryLeaseFile() throws -> (directory: URL, file: URL) {
     }
     #expect(active.map(\.id) == [id])
 
-    _ = try service.execute(.release(id: id, outcome: .success))
+    _ = try service.execute(.release(
+        id: id,
+        outcome: .success,
+        message: "index complete"
+    ))
     guard case .status(let terminal) = try service.execute(.status(id: id)) else {
         Issue.record("Status returned the wrong response")
         return
     }
     #expect(terminal?.state == .success)
+    #expect(terminal?.metadata.attributes["message"] == "index complete")
 
     guard case .snapshot(let snapshot) = try service.execute(.snapshot) else {
         Issue.record("Snapshot returned the wrong response")

@@ -212,6 +212,38 @@ private func testAdapter(
     #expect(signaler.launchRequests == [true, true, true, false, false])
 }
 
+@Test @MainActor func lifecycleMessagesRemainObservableThroughTheAdapter() throws {
+    let store = AdapterLeaseStore()
+    let adapter = try testAdapter(
+        store: store,
+        clock: LeaseTestClock(Date(timeIntervalSince1970: 1_800_000_000))
+    )
+    let acquired = adapter.execute(.acquire(
+        owner: "owner", agent: "codex", task: "task",
+        ttlSeconds: 300, maxLifetimeSeconds: 3_600, message: "starting"
+    ))
+    let id = try #require(acquired.lease?.id)
+
+    let heartbeat = adapter.execute(.heartbeat(
+        id: id, ttlSeconds: nil, message: "running tests"
+    ))
+    #expect(heartbeat.lease?.message == "running tests")
+    #expect(store.state.leases[0].metadata.attributes["message"] == "running tests")
+
+    let renewed = adapter.execute(.renew(
+        id: id, ttlSeconds: 600, message: "packaging"
+    ))
+    #expect(renewed.lease?.message == "packaging")
+    #expect(store.state.leases[0].metadata.attributes["message"] == "packaging")
+
+    let released = adapter.execute(.release(
+        id: id, result: .success, message: "complete"
+    ))
+    #expect(released.lease?.state == .released)
+    #expect(released.lease?.message == "complete")
+    #expect(store.state.leases[0].metadata.attributes["message"] == "complete")
+}
+
 @Test @MainActor func watchdogOwnsTimeoutAndStatusReconcilesIt() throws {
     let start = Date(timeIntervalSince1970: 1_800_000_000)
     let clock = LeaseTestClock(start)

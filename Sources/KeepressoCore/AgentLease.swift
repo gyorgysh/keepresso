@@ -657,25 +657,43 @@ public final class AgentLeaseRegistry {
 
     /// Extend a lease using its existing TTL.
     @discardableResult
-    public func heartbeat(_ id: UUID) throws -> AgentWakeLease {
-        try updateHeartbeat(id, newTTL: nil, eventKind: .heartbeat)
+    public func heartbeat(
+        _ id: UUID,
+        message: String? = nil
+    ) throws -> AgentWakeLease {
+        try updateHeartbeat(
+            id,
+            newTTL: nil,
+            message: message,
+            eventKind: .heartbeat
+        )
     }
 
     /// Replace the heartbeat TTL and extend the lease, without changing its
     /// maximum lifetime measured from acquisition.
     @discardableResult
-    public func renew(_ id: UUID, ttl: TimeInterval) throws -> AgentWakeLease {
+    public func renew(
+        _ id: UUID,
+        ttl: TimeInterval,
+        message: String? = nil
+    ) throws -> AgentWakeLease {
         guard Self.isValidDuration(ttl, atMost: Self.maximumAllowedLifetime) else {
             throw AgentLeaseRegistryError.invalidTTL
         }
-        return try updateHeartbeat(id, newTTL: ttl, eventKind: .renewed)
+        return try updateHeartbeat(
+            id,
+            newTTL: ttl,
+            message: message,
+            eventKind: .renewed
+        )
     }
 
     /// Move one active lease to a caller-selected terminal state.
     @discardableResult
     public func release(
         _ id: UUID,
-        outcome: AgentLeaseReleaseOutcome = .success
+        outcome: AgentLeaseReleaseOutcome = .success,
+        message: String? = nil
     ) throws -> AgentWakeLease {
         let instant = now()
         var result: AgentWakeLease?
@@ -699,6 +717,9 @@ public final class AgentLeaseRegistry {
             let previous = state.leases[index].state
             state.leases[index].state = outcome.state
             state.leases[index].completedAt = instant
+            if let message {
+                state.leases[index].metadata.attributes["message"] = message
+            }
             result = state.leases[index]
             events.append(AgentLeaseLifecycleEvent(
                 date: instant,
@@ -751,6 +772,7 @@ public final class AgentLeaseRegistry {
     private func updateHeartbeat(
         _ id: UUID,
         newTTL: TimeInterval?,
+        message: String?,
         eventKind: AgentLeaseEventKind
     ) throws -> AgentWakeLease {
         let instant = now()
@@ -773,6 +795,9 @@ public final class AgentLeaseRegistry {
                 return
             }
             if let newTTL { state.leases[index].ttl = newTTL }
+            if let message {
+                state.leases[index].metadata.attributes["message"] = message
+            }
             state.leases[index].heartbeatAt = instant
             state.leases[index].expiresAt = min(
                 instant.addingTimeInterval(state.leases[index].ttl),

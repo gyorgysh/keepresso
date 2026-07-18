@@ -348,10 +348,14 @@ public final class AgentLeaseCommandAdapter: LeaseCommanding {
                     lease: lease
                 )
 
-            case .renew(let rawID, let ttl, _):
+            case .renew(let rawID, let ttl, let message):
                 let id = try parseID(rawID)
                 let wantedTTL = try ttl.map(TimeInterval.init) ?? existingTTL(for: id)
-                let lease = try requireLease(service.execute(.renew(id: id, ttl: wantedTTL)))
+                let lease = try requireLease(service.execute(.renew(
+                    id: id,
+                    ttl: wantedTTL,
+                    message: message
+                )))
                 appSignaler.leaseStateDidChange(launchIfNeeded: true)
                 return try success(
                     command: "renew",
@@ -359,13 +363,17 @@ public final class AgentLeaseCommandAdapter: LeaseCommanding {
                     lease: lease
                 )
 
-            case .heartbeat(let rawID, let ttl, _):
+            case .heartbeat(let rawID, let ttl, let message):
                 let id = try parseID(rawID)
                 let serviceResponse: AgentLeaseCommandResponse
                 if let ttl {
-                    serviceResponse = try service.execute(.renew(id: id, ttl: TimeInterval(ttl)))
+                    serviceResponse = try service.execute(.renew(
+                        id: id,
+                        ttl: TimeInterval(ttl),
+                        message: message
+                    ))
                 } else {
-                    serviceResponse = try service.execute(.heartbeat(id: id))
+                    serviceResponse = try service.execute(.heartbeat(id: id, message: message))
                 }
                 let lease = try requireLease(serviceResponse)
                 appSignaler.leaseStateDidChange(launchIfNeeded: true)
@@ -388,7 +396,11 @@ public final class AgentLeaseCommandAdapter: LeaseCommanding {
                 case .timeout:
                     throw LeaseAdapterError.callerCannotDeclareTimeout
                 }
-                let lease = try requireLease(service.execute(.release(id: id, outcome: outcome)))
+                let lease = try requireLease(service.execute(.release(
+                    id: id,
+                    outcome: outcome,
+                    message: message
+                )))
                 appSignaler.leaseStateDidChange(launchIfNeeded: false)
                 return try success(
                     command: "release",
