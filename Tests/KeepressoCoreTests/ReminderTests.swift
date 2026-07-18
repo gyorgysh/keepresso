@@ -209,6 +209,23 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
 }
 
 @MainActor
+@Test func unattendedCompletionRunsTheConfiguredEndAction() {
+    let (controller, reminder, endActor, clock) = makeEndController()
+    controller.notifyOnEnd = true
+    controller.endAction = .sleepMac
+    controller.start(cause: .command)
+
+    controller.finishUnattended()
+    #expect(controller.isActive == false)
+    #expect(reminder.notices.contains { $0.title == "Keepresso stopped" })
+    #expect(endActor.performed.isEmpty)
+
+    clock.advance(SessionController.endActionDebounce)
+    controller.reconcile()
+    #expect(endActor.performed == [.sleepMac])
+}
+
+@MainActor
 @Test func endEffectsFireWhenTriggerConditionsDrop() {
     let (controller, reminder, endActor, clock) = makeEndController()
     controller.notifyOnEnd = true

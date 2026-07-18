@@ -282,6 +282,16 @@ public final class SessionController {
         stop(reason: cause == .manual ? L("Stopped manually") : L("Stopped by a command"))
     }
 
+    /// End work that was owned by an unattended scheduler or the active lease
+    /// union. Unlike a manual stop, this is a natural completion, so the
+    /// configured unattended end action runs after the debounce.
+    public func finishUnattended(reason: String = "All unattended work finished") {
+        stop(
+            reason: L(reason),
+            effects: .natural(kind: .sessionEnded)
+        )
+    }
+
     /// What effects a stop may fire beyond releasing assertions.
     private enum StopEffects {
         /// Manual or command stop: silent.
