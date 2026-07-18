@@ -48,6 +48,38 @@ public extension TriggerEvaluating {
     func tick() {}
 }
 
+/// A host-owned boolean signal that can join the regular trigger engine. It is
+/// useful for durable state updated outside the trigger subsystem, such as an
+/// explicit Agent wake-lease union.
+public final class MutableTriggerEvaluator: TriggerEvaluating {
+    public var isOn: Bool
+
+    public init(isOn: Bool = false) {
+        self.isOn = isOn
+    }
+
+    public func isSatisfied() -> Bool { isOn }
+}
+
+/// OR-combines independent evaluators while still ticking every child once.
+/// Ticking never short-circuits because stateful children must advance even
+/// when another child already holds the combined result true.
+public final class AnyTriggerEvaluator: TriggerEvaluating {
+    public var evaluators: [any TriggerEvaluating]
+
+    public init(_ evaluators: [any TriggerEvaluating]) {
+        self.evaluators = evaluators
+    }
+
+    public func tick() {
+        for evaluator in evaluators { evaluator.tick() }
+    }
+
+    public func isSatisfied() -> Bool {
+        evaluators.contains { $0.isSatisfied() }
+    }
+}
+
 /// Fires based on how the Mac is being powered (`IOPowerSources`).
 public final class PowerSourceTrigger: Trigger {
     /// Which power situation should satisfy this trigger.
