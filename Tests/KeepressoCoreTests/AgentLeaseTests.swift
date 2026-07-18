@@ -504,6 +504,7 @@ private func temporaryLeaseFile() throws -> (directory: URL, file: URL) {
     )
     #expect(restoredRegistry.shouldKeepAwake)
     #expect(restoredEvents.map(\.kind) == [.restored])
+    #expect(restoredRegistry.initialRecoveryEvents == restoredEvents)
 
     clock.advance(5)
     var recoveryEvents: [AgentLeaseLifecycleEvent] = []
@@ -515,7 +516,19 @@ private func temporaryLeaseFile() throws -> (directory: URL, file: URL) {
     #expect(!recoveredAfterDeadline.shouldKeepAwake)
     #expect(recoveryEvents.map(\.kind) == [.timedOut])
     #expect(recoveryEvents.first?.timeoutCause == .ttl)
+    #expect(recoveredAfterDeadline.initialRecoveryEvents == recoveryEvents)
     #expect(try recoveredAfterDeadline.status(for: acquired.id)?.state == .timeout)
+
+    let audit = UnattendedAuditLog(
+        fileURL: fixture.directory.appendingPathComponent("recovery-audit.jsonl")
+    )
+    for event in recoveredAfterDeadline.initialRecoveryEvents {
+        audit.recordLeaseEvent(event)
+    }
+    let recoveredAudit = try #require(audit.loadRecent().last?.leaseLifecycle)
+    #expect(recoveredAudit.kind == .timedOut)
+    #expect(recoveredAudit.source == .recovery)
+    #expect(recoveredAudit.timeoutCause == .ttl)
 
     let finalReload = try AgentLeaseRegistry(
         persistence: FileAgentLeaseStore(fileURL: fixture.file),

@@ -102,6 +102,10 @@ private func completeInitialization(
         ["protocolVersion": "2025-11-25", "capabilities": [], "clientInfo": ["name": "Client", "version": "1"]],
         ["protocolVersion": "2025-11-25", "capabilities": [:], "clientInfo": [:]],
         ["protocolVersion": "2025-11-25", "capabilities": [:], "clientInfo": ["name": "Client"]],
+        ["protocolVersion": "2025-11-25", "capabilities": ["roots": "invalid"], "clientInfo": ["name": "Client", "version": "1"]],
+        ["protocolVersion": "2025-11-25", "capabilities": [:], "clientInfo": ["name": "Client", "version": "1", "icons": "invalid"]],
+        ["protocolVersion": "2025-11-25", "capabilities": [:], "clientInfo": ["name": "Client", "version": "1", "websiteUrl": "not a URI"]],
+        ["protocolVersion": "2025-11-25", "capabilities": [:], "clientInfo": ["name": "Client", "version": "1", "icons": [["src": "https://example.test/icon.png", "theme": "purple"]]]],
     ]
     for parameters in cases {
         let server = KeepressoMCPServer(commander: RecordingLeaseCommander())
@@ -109,6 +113,34 @@ private func completeInitialization(
         let error = try #require(response["error"] as? [String: Any])
         #expect(error["code"] as? Int == -32602)
     }
+}
+
+@Test @MainActor func malformedInitializedNotificationDoesNotAdvanceLifecycle() throws {
+    let server = KeepressoMCPServer(commander: RecordingLeaseCommander())
+    _ = try callMCP(
+        server,
+        method: "initialize",
+        params: [
+            "protocolVersion": "2025-11-25",
+            "capabilities": [:],
+            "clientInfo": ["name": "Client", "version": "1"],
+        ]
+    )
+    let malformed = try JSONSerialization.data(withJSONObject: [
+        "jsonrpc": "2.0",
+        "method": "notifications/initialized",
+        "params": ["not", "an", "object"],
+    ])
+    #expect(server.handle(malformed) == nil)
+    let nullParams = try JSONSerialization.data(withJSONObject: [
+        "jsonrpc": "2.0",
+        "method": "notifications/initialized",
+        "params": NSNull(),
+    ])
+    #expect(server.handle(nullParams) == nil)
+    let tooEarly = try callMCP(server, method: "tools/list", params: [:])
+    let error = try #require(tooEarly["error"] as? [String: Any])
+    #expect(error["code"] as? Int == -32002)
 }
 
 @Test @MainActor func mcpRequiresInitializationLifecycle() throws {
@@ -159,6 +191,11 @@ private func completeInitialization(
     for tool in tools {
         let schema = try #require(tool["inputSchema"] as? [String: Any])
         #expect(schema["type"] as? String == "object")
+        let properties = try #require(schema["properties"] as? [String: Any])
+        for name in ["ttl", "max_lifetime"] {
+            guard let duration = properties[name] as? [String: Any] else { continue }
+            #expect(duration["maximum"] as? Int == Int(AgentLeaseRegistry.maximumAllowedLifetime))
+        }
     }
 }
 
@@ -291,6 +328,15 @@ private func completeInitialization(
     let invalidStructured = try #require(invalidResult["structuredContent"] as? [String: Any])
     #expect(invalidStructured["code"] as? String == "invalid_arguments")
 
+    for malformedArguments: Any in [["array"], NSNull()] {
+        let malformed = try callMCP(server, method: "tools/call", params: [
+            "name": "wake_status",
+            "arguments": malformedArguments,
+        ])
+        let malformedError = try #require(malformed["error"] as? [String: Any])
+        #expect(malformedError["code"] as? Int == -32602)
+    }
+
     let unknown = try callMCP(server, method: "tools/call", params: [
         "name": "make_coffee",
         "arguments": [:],
@@ -298,6 +344,25 @@ private func completeInitialization(
     let unknownError = try #require(unknown["error"] as? [String: Any])
     #expect(unknownError["code"] as? Int == -32602)
     #expect(commander.commands.isEmpty)
+}
+
+@Test func boundedJSONLineFramerReleasesOversizedInputBeforeNewline() {
+    var framer = BoundedJSONLineFramer(maximumMessageBytes: 16)
+    #expect(framer.append(Data(repeating: 0x41, count: 16)).isEmpty)
+    #expect(framer.bufferedByteCount == 16)
+    #expect(framer.append(Data([0x41])).isEmpty)
+    #expect(framer.isDiscardingOversizedMessage)
+    #expect(framer.bufferedByteCount == 0)
+    #expect(framer.append(Data(repeating: 0x41, count: 1_000_000)).isEmpty)
+    #expect(framer.bufferedByteCount == 0)
+    #expect(framer.append(Data([0x0A])) == [.oversized])
+    #expect(!framer.isDiscardingOversizedMessage)
+
+    #expect(framer.append(Data("{\"jsonrpc\":".utf8)).isEmpty)
+    #expect(framer.append(Data("\"2.0\"}\n".utf8)) == [
+        .message(Data("{\"jsonrpc\":\"2.0\"}".utf8)),
+    ])
+    #expect(framer.finish() == nil)
 }
 
 @Test @MainActor func unknownMethodAndMalformedJSONUseProtocolErrors() throws {

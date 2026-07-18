@@ -252,14 +252,22 @@ public final class WakeReadinessController {
             case .unknown: issues.append(.powerSourceUnknown)
             }
         }
-        if let minimum = requirements.powerPolicy.minimumBatteryPercentage,
-           snapshot.power.provider == .battery {
-            if let actual = snapshot.power.percentage {
-                if actual < minimum {
-                    issues.append(.batteryBelowMinimum(actual: actual, required: minimum))
+        if let minimum = requirements.powerPolicy.minimumBatteryPercentage {
+            switch snapshot.power.provider {
+            case .ac:
+                break
+            case .battery:
+                if let actual = snapshot.power.percentage {
+                    if actual < minimum {
+                        issues.append(.batteryBelowMinimum(actual: actual, required: minimum))
+                    }
+                } else {
+                    issues.append(.batteryLevelUnknown)
                 }
-            } else {
-                issues.append(.batteryLevelUnknown)
+            case .unknown:
+                if !issues.contains(.powerSourceUnknown) {
+                    issues.append(.powerSourceUnknown)
+                }
             }
         }
         if requirements.networkRequired {

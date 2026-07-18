@@ -506,6 +506,10 @@ public final class AgentLeaseRegistry {
 
     public var onEvent: AgentLeaseEventHandler?
     public var onSnapshotChange: AgentLeaseSnapshotHandler?
+    /// Lifecycle events synthesized while opening durable state. Hosts that
+    /// cannot install callbacks until construction finishes can replay these
+    /// into notifications and audit logs without losing offline timeouts.
+    public private(set) var initialRecoveryEvents: [AgentLeaseLifecycleEvent] = []
 
     private let persistence: AgentLeasePersisting
     private let now: () -> Date
@@ -550,19 +554,21 @@ public final class AgentLeaseRegistry {
         }
         self.persisted = restored
 
-        for lease in Self.sorted(restored.leases.filter(\.isActive)) {
-            onEvent?(AgentLeaseLifecycleEvent(
+        var recoveryEvents = Self.sorted(restored.leases.filter(\.isActive)).map { lease in
+            AgentLeaseLifecycleEvent(
                 date: instant,
                 kind: .restored,
                 source: .recovery,
                 lease: lease
-            ))
+            )
         }
         for event in timeoutEvents {
             var recoveryEvent = event
             recoveryEvent.source = .recovery
-            onEvent?(recoveryEvent)
+            recoveryEvents.append(recoveryEvent)
         }
+        initialRecoveryEvents = recoveryEvents
+        for event in recoveryEvents { onEvent?(event) }
         onSnapshotChange?(makeSnapshot(at: instant))
     }
 

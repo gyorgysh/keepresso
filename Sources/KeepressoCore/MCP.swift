@@ -1,6 +1,69 @@
 import CoreFoundation
 import Foundation
 
+public enum BoundedJSONLineFrame: Equatable, Sendable {
+    case message(Data)
+    case oversized
+}
+
+/// Incremental newline framing for the stdio MCP transport. Once a message
+/// crosses the byte limit, its buffered bytes are released and subsequent
+/// input is discarded through the next newline, so a missing newline cannot
+/// make the server grow memory without bound.
+public struct BoundedJSONLineFramer: Sendable {
+    public let maximumMessageBytes: Int
+    public private(set) var bufferedByteCount = 0
+    public private(set) var isDiscardingOversizedMessage = false
+
+    private var buffer = Data()
+
+    public init(maximumMessageBytes: Int) {
+        precondition(maximumMessageBytes > 0)
+        self.maximumMessageBytes = maximumMessageBytes
+        buffer.reserveCapacity(min(maximumMessageBytes, 4_096))
+    }
+
+    public mutating func append(_ chunk: Data) -> [BoundedJSONLineFrame] {
+        var frames: [BoundedJSONLineFrame] = []
+        for byte in chunk {
+            if byte == 0x0A {
+                if isDiscardingOversizedMessage {
+                    frames.append(.oversized)
+                } else {
+                    frames.append(.message(buffer))
+                }
+                resetLine()
+                continue
+            }
+            guard !isDiscardingOversizedMessage else { continue }
+            if bufferedByteCount < maximumMessageBytes {
+                buffer.append(byte)
+                bufferedByteCount += 1
+            } else {
+                buffer.removeAll(keepingCapacity: false)
+                bufferedByteCount = 0
+                isDiscardingOversizedMessage = true
+            }
+        }
+        return frames
+    }
+
+    public mutating func finish() -> BoundedJSONLineFrame? {
+        guard isDiscardingOversizedMessage || bufferedByteCount > 0 else { return nil }
+        let frame: BoundedJSONLineFrame = isDiscardingOversizedMessage
+            ? .oversized
+            : .message(buffer)
+        resetLine()
+        return frame
+    }
+
+    private mutating func resetLine() {
+        buffer.removeAll(keepingCapacity: true)
+        bufferedByteCount = 0
+        isDiscardingOversizedMessage = false
+    }
+}
+
 /// A small JSON-RPC handler for the wake-lease MCP server.
 /// Transport framing stays in the executable so this type is unit-testable.
 @MainActor
@@ -32,15 +95,19 @@ public final class KeepressoMCPServer {
         try self.init(commander: AgentLeaseCommandAdapter())
     }
 
+    public static func messageTooLargeResponse() -> Data {
+        encode(errorEnvelope(
+            id: NSNull(),
+            code: -32600,
+            message: "Request exceeds the maximum message size"
+        )) ?? Data()
+    }
+
     /// Handle one newline-delimited JSON-RPC message.
     /// Notifications deliberately return nil because they have no response.
     public func handle(_ data: Data) -> Data? {
         guard data.count <= Self.maximumMessageBytes else {
-            return Self.encode(Self.errorEnvelope(
-                id: NSNull(),
-                code: -32600,
-                message: "Request exceeds the maximum message size"
-            ))
+            return Self.messageTooLargeResponse()
         }
         guard let value = try? JSONSerialization.jsonObject(with: data) else {
             return Self.encode(Self.errorEnvelope(id: NSNull(), code: -32700, message: "Parse error"))
@@ -62,7 +129,9 @@ public final class KeepressoMCPServer {
 
         let hasID = request.keys.contains("id")
         guard hasID else {
-            if method == "notifications/initialized", lifecycle == .awaitingInitialized {
+            if method == "notifications/initialized",
+               lifecycle == .awaitingInitialized,
+               Self.parameters(request["params"], allowMissing: true) != nil {
                 lifecycle = .ready
             }
             return nil
@@ -95,12 +164,9 @@ public final class KeepressoMCPServer {
             guard let parameters = Self.parameters(params),
                   let requestedVersion = parameters["protocolVersion"] as? String,
                   !requestedVersion.isEmpty,
-                  parameters["capabilities"] is [String: Any],
+                  Self.validClientCapabilities(parameters["capabilities"]),
                   let clientInfo = parameters["clientInfo"] as? [String: Any],
-                  let clientName = clientInfo["name"] as? String,
-                  !clientName.isEmpty,
-                  let clientVersion = clientInfo["version"] as? String,
-                  !clientVersion.isEmpty
+                  Self.validClientInfo(clientInfo)
             else {
                 return .error(
                     -32602,
@@ -166,11 +232,7 @@ public final class KeepressoMCPServer {
         let arguments: [String: Any]
         if let value = parameters["arguments"] {
             guard !(value is NSNull), let object = value as? [String: Any] else {
-                return .result(Self.toolResult(.failure(
-                    command: operation,
-                    code: "invalid_arguments",
-                    message: "tool arguments must be an object"
-                )))
+                return .error(-32602, "tools/call arguments must be an object")
             }
             arguments = object
         } else {
@@ -373,11 +435,58 @@ public final class KeepressoMCPServer {
     }
 
     private static func integerSchema(_ description: String) -> [String: Any] {
-        ["type": "integer", "minimum": 1, "description": description]
+        [
+            "type": "integer",
+            "minimum": 1,
+            "maximum": Int(AgentLeaseRegistry.maximumAllowedLifetime),
+            "description": description,
+        ]
+    }
+
+    private static func validClientCapabilities(_ value: Any?) -> Bool {
+        guard let capabilities = value as? [String: Any] else { return false }
+        for key in ["experimental", "roots", "sampling", "elicitation"] {
+            if let value = capabilities[key], !(value is [String: Any]) { return false }
+        }
+        if let roots = capabilities["roots"] as? [String: Any],
+           let listChanged = roots["listChanged"],
+           !(listChanged is Bool) {
+            return false
+        }
+        return true
+    }
+
+    private static func validClientInfo(_ clientInfo: [String: Any]) -> Bool {
+        guard clientInfo["name"] is String,
+              clientInfo["version"] is String
+        else { return false }
+        if let title = clientInfo["title"], !(title is String) { return false }
+        if let website = clientInfo["websiteUrl"] {
+            guard let raw = website as? String, isAbsoluteURI(raw) else { return false }
+        }
+        if let rawIcons = clientInfo["icons"] {
+            guard let icons = rawIcons as? [[String: Any]] else { return false }
+            for icon in icons {
+                guard let src = icon["src"] as? String, isAbsoluteURI(src) else { return false }
+                if let mimeType = icon["mimeType"], !(mimeType is String) { return false }
+                if let sizes = icon["sizes"], !(sizes is [String]) { return false }
+                if let rawTheme = icon["theme"] {
+                    guard let theme = rawTheme as? String,
+                          ["light", "dark"].contains(theme)
+                    else { return false }
+                }
+            }
+        }
+        return true
+    }
+
+    private static func isAbsoluteURI(_ raw: String) -> Bool {
+        URLComponents(string: raw)?.scheme?.isEmpty == false
     }
 
     private static func parameters(_ value: Any?, allowMissing: Bool = false) -> [String: Any]? {
-        if value == nil || value is NSNull { return allowMissing ? [:] : nil }
+        if value == nil { return allowMissing ? [:] : nil }
+        if value is NSNull { return nil }
         return value as? [String: Any]
     }
 

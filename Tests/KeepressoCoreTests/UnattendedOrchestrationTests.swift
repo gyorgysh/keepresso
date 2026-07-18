@@ -124,6 +124,21 @@ private var testRequirements: WakeReadinessRequirements {
     ])
 }
 
+@Test func batteryMinimumBlocksAnUnknownPowerProviderAfterWake() {
+    let requirements = WakeReadinessRequirements(
+        powerPolicy: WakePowerPolicy(
+            requireExternalPower: false,
+            minimumBatteryPercentage: 30
+        ),
+        networkRequired: false
+    )
+    let issues = WakeReadinessController.evaluate(
+        readySnapshot(provider: .unknown, percentage: nil),
+        against: requirements
+    )
+    #expect(issues == [.powerSourceUnknown])
+}
+
 @MainActor
 @Test func readinessCreatesKeepAliveIntentBeforeFirstProbeAndRetries() {
     let trace = CallTrace()

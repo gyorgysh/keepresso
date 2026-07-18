@@ -305,14 +305,12 @@ final class AppModel {
             registry.onSnapshotChange = { [weak self] snapshot in
                 self?.adoptAgentLeaseSnapshot(snapshot, at: snapshot.capturedAt)
             }
-            for lease in registry.currentSnapshot.activeLeases {
-                unattendedAuditLog.recordLeaseEvent(AgentLeaseLifecycleEvent(
-                    date: Date(),
-                    kind: .restored,
-                    source: .recovery,
-                    lease: lease
-                ))
+            var recoveredTimeout = false
+            for event in registry.initialRecoveryEvents {
+                unattendedAuditLog.recordLeaseEvent(event)
+                if event.kind == .timedOut { recoveredTimeout = true }
             }
+            if recoveredTimeout { notifyAgentLeaseExpired() }
             adoptAgentLeaseSnapshot(registry.currentSnapshot, at: Date())
         } catch {
             agentLeaseError = L("The Agent lease registry could not be opened.")
@@ -705,13 +703,15 @@ final class AppModel {
 
     private func handleAgentLeaseEvent(_ event: AgentLeaseLifecycleEvent) {
         unattendedAuditLog.recordLeaseEvent(event)
-        if event.kind == .timedOut {
-            notifier.notify(
-                title: L("Agent wake lease expired"),
-                body: L("An Agent stopped renewing its lease. Keepresso released that task's wake request safely."),
-                sound: false
-            )
-        }
+        if event.kind == .timedOut { notifyAgentLeaseExpired() }
+    }
+
+    private func notifyAgentLeaseExpired() {
+        notifier.notify(
+            title: L("Agent wake lease expired"),
+            body: L("An Agent stopped renewing its lease. Keepresso released that task's wake request safely."),
+            sound: false
+        )
     }
 
     private func adoptAgentLeaseSnapshot(_ snapshot: AgentLeaseSnapshot, at date: Date) {
