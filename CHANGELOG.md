@@ -5,6 +5,8 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 ## Unreleased
 
+## [1.17.0] - 2026-07-19
+
 ### Added
 
 - **Explicit AI Agent wake leases.** Codex, Claude Code, Gemini CLI, and other

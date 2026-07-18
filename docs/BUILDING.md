@@ -7,8 +7,9 @@ app with your own machine's developer identity, which is all you need to run it.
 ## What you need
 
 - macOS 14 (Sonoma) or later
-- **Xcode 16 or later** (the full Xcode app from the App Store, not just the
-  Command Line Tools)
+- **Xcode 26 or later**, including the macOS 26 SDK (the full Xcode app from the
+  App Store, not just the Command Line Tools). Keepresso still deploys to
+  macOS 14; newer APIs are runtime availability-gated in the built app.
 - **XcodeGen**, which turns [`project.yml`](../project.yml) into an Xcode project:
 
   ```sh

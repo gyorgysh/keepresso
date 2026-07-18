@@ -22,6 +22,8 @@ jobs:
     environment: release # add a required reviewer to this environment in repo settings
     steps:
       - uses: actions/checkout@v5
+      - name: Validate release metadata
+        run: ./scripts/validate-release.sh "$GITHUB_REF_NAME"
       - uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable
@@ -82,6 +84,7 @@ jobs:
           PLIST
           xcodebuild -exportArchive -archivePath build/Keepresso.xcarchive \
             -exportOptionsPlist build/ExportOptions.plist -exportPath build/export
+          ./scripts/validate-release.sh "$GITHUB_REF_NAME" "build/export/Keepresso.app"
           codesign --verify --deep --strict --verbose=2 "build/export/Keepresso.app"
 
       - name: Package and notarize DMG

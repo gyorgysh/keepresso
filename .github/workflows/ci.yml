@@ -11,8 +11,8 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v5
-      # The project format (objectVersion 77) and swift-testing both need
-      # Xcode 16+, so pin to the latest stable Xcode on the runner.
+      # The project format, swift-testing, and newer SDK symbols need Xcode 26+
+      # with the macOS 26 SDK, so pin to the latest stable Xcode on the runner.
       - uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable

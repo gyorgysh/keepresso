@@ -418,7 +418,9 @@ the Xcode project from [`project.yml`](project.yml) (the `.xcodeproj` is **not**
 checked in), and **Swift Package Manager** for the testable core
 ([`KeepressoCore`](Sources/KeepressoCore)).
 
-**Requirements:** macOS 14+, Xcode 16+, `xcodegen` (`brew install xcodegen`).
+**Requirements:** macOS 14+, Xcode 26+ with the macOS 26 SDK, and `xcodegen`
+(`brew install xcodegen`). The deployment target remains macOS 14; APIs added
+later are runtime availability-gated in the built app.
 
 ```sh
 git clone https://github.com/gyorgysh/keepresso.git

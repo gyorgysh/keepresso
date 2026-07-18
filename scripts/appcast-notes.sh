@@ -35,7 +35,8 @@ awk -v ver="$VERSION" '
 ' CHANGELOG.md > build/RELEASE_NOTES.md
 
 if ! grep -q '[^[:space:]]' build/RELEASE_NOTES.md; then
-  echo "Warning: CHANGELOG.md has no [$VERSION] section, the notes will only carry a link" >&2
+  echo "Error: CHANGELOG.md has no non-empty [$VERSION] section" >&2
+  exit 1
 fi
 
 [ -f "$APPCAST" ] || { echo "Error: $APPCAST not found, run generate_appcast first" >&2; exit 1; }

@@ -44,6 +44,7 @@ VERSION="$(awk -F'"' '/MARKETING_VERSION:/ {print $2; exit}' project.yml)"
 TAG="v$VERSION"
 DMG_PATH="$DIST_DIR/Keepresso-$VERSION.dmg"
 [ -f "$DMG_PATH" ] || die "Missing $DMG_PATH — run scripts/build-dmg.sh first"
+"$SCRIPT_DIR/validate-release.sh" "$TAG"
 
 # Locate generate_appcast.
 GENERATE_APPCAST="${SPARKLE_BIN:-}/generate_appcast"

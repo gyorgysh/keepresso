@@ -45,6 +45,7 @@ command -v xcodegen >/dev/null 2>&1 || die "xcodegen not found (brew install xco
 # Read the marketing version straight from project.yml so the DMG is named after it.
 VERSION="$(awk -F'"' '/MARKETING_VERSION:/ {print $2; exit}' project.yml)"
 [ -n "$VERSION" ] || die "Couldn't read MARKETING_VERSION from project.yml"
+"$SCRIPT_DIR/validate-release.sh" "v$VERSION"
 DMG_PATH="$DIST_DIR/$APP_NAME-$VERSION.dmg"
 
 rm -rf "$BUILD_DIR" "$DIST_DIR"
@@ -86,6 +87,7 @@ xcodebuild -exportArchive \
 
 APP_PATH="$EXPORT_DIR/$APP_NAME.app"
 [ -d "$APP_PATH" ] || die "Export produced no $APP_NAME.app"
+"$SCRIPT_DIR/validate-release.sh" "v$VERSION" "$APP_PATH"
 
 info "Verifying signature"
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"
