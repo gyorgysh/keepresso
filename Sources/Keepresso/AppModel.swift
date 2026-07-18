@@ -179,8 +179,15 @@ final class AppModel {
             let persisted = PersistedSessionEvent(event, batteryPercent: event.batteryPercent)
             logPersister?.append(persisted)
             self?.recordForStats(persisted)
-            if event.kind == .sessionEnded || event.kind == .startRefused {
-                self?.disarmUnattendedPowerPolicy()
+            if let kind = event.kind,
+               [SessionEventKind.sessionEnded, .triggerReleased, .batteryPaused, .thermalPaused, .startRefused]
+                .contains(kind) {
+                // SessionController records before it snapshots the pending
+                // end action. Defer restoration one actor turn so an
+                // unattended completion still captures its sleep action.
+                Task { @MainActor [weak self] in
+                    self?.disarmUnattendedPowerPolicy()
+                }
             }
         }
         // With one of the auto features on and no helper installed, this run
@@ -731,7 +738,11 @@ final class AppModel {
             return .indefinite
         }()
         session.start(mode: mode, cause: .command)
-        performUnattendedPrivacyActions()
+        if session.isActive {
+            performUnattendedPrivacyActions()
+        } else {
+            disarmUnattendedPowerPolicy()
+        }
     }
 
     /// Apply the secure defaults before an unattended task can show content.
