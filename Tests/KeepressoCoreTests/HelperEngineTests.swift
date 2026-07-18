@@ -250,7 +250,7 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
         previousOwnerForC = previousClientID
         return true
     })
-    #expect(previousOwnerForC == nil)
+    #expect(previousOwnerForC == 11)
     #expect(registry.apply(
         streamID: "process-stream",
         generation: 4,
@@ -279,7 +279,7 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
         generation: 5,
         clientID: 11
     ) { previousClientID in
-        previousClientID == nil
+        previousClientID == 10
     })
     #expect(cleanups == 2)
 }
@@ -1003,8 +1003,112 @@ private struct CLILinkFixture {
     engine.fanTick()
     #expect(fans.forcedPercents.count == writesAfterDrop)
 
-    // A fresh hold gets a fresh chance and clears the dropped flag.
-    _ = engine.setFanHold(client: 2, holding: true, percent: 50)
+    // Another client gets a fresh chance, but cannot erase client 1's
+    // surrendered status. Client 1 must explicitly release before retrying.
+    fans.results = []
+    #expect(engine.setFanHold(client: 2, holding: true, percent: 50))
+    #expect(!engine.fanHoldDropped(client: 2))
+    #expect(engine.fanHoldDropped(client: 1))
+    #expect(engine.fanHoldDropped)
+    #expect(!engine.setFanHold(client: 1, holding: true, percent: 80))
+    #expect(engine.setFanHold(client: 1, holding: false, percent: 0))
+    #expect(!engine.fanHoldDropped)
+}
+
+@Test func surrenderedFanStatusMigratesAcrossReconnectUntilExplicitRelease() {
+    let fans = FakeFanControl()
+    let engine = HelperEngine(runner: FakeRunner(), state: FakeRestoreState(), fans: fans)
+    let registry = SleepModeGenerationRegistry()
+
+    #expect(registry.apply(
+        streamID: "fan-stream",
+        generation: 1,
+        clientID: 1
+    ) { previousClientID in
+        engine.setFanHold(
+            client: 1,
+            replacing: previousClientID,
+            holding: true,
+            percent: 80
+        )
+    })
+    fans.results = Array(repeating: .failed, count: HelperEngine.maxFanFailures)
+    for _ in 0..<HelperEngine.maxFanFailures { engine.fanTick() }
+    #expect(engine.fanHoldDropped(client: 1))
+
+    registry.clientDisconnected(1) { engine.fanClientDisconnected(1) }
+    // Reconnect B replays the exact acquire generation. Registry ownership
+    // migrates, but the engine refuses to revive the surrendered hold.
+    #expect(!registry.apply(
+        streamID: "fan-stream",
+        generation: 1,
+        clientID: 2
+    ) { previousClientID in
+        engine.setFanHold(
+            client: 2,
+            replacing: previousClientID,
+            holding: true,
+            percent: 80
+        )
+    })
+    #expect(!engine.fanHoldDropped(client: 1))
+    #expect(engine.fanHoldDropped(client: 2))
+
+    #expect(registry.apply(
+        streamID: "fan-stream",
+        generation: 2,
+        clientID: 2
+    ) { previousClientID in
+        engine.setFanHold(
+            client: 2,
+            replacing: previousClientID,
+            holding: false,
+            percent: 0
+        )
+    })
+    #expect(!engine.fanHoldDropped(client: 2))
+
+    fans.results = []
+    #expect(registry.apply(
+        streamID: "fan-stream",
+        generation: 3,
+        clientID: 2
+    ) { previousClientID in
+        engine.setFanHold(
+            client: 2,
+            replacing: previousClientID,
+            holding: true,
+            percent: 80
+        )
+    })
+    #expect(!engine.fanHoldDropped(client: 2))
+}
+
+@Test func fanSurrenderTracksEveryHolderWithoutBlockingANewClient() {
+    let fans = FakeFanControl()
+    let engine = HelperEngine(runner: FakeRunner(), state: FakeRestoreState(), fans: fans)
+    #expect(engine.setFanHold(client: 1, holding: true, percent: 60))
+    #expect(engine.setFanHold(client: 2, holding: true, percent: 80))
+
+    fans.results = Array(repeating: .failed, count: HelperEngine.maxFanFailures)
+    for _ in 0..<HelperEngine.maxFanFailures { engine.fanTick() }
+    #expect(engine.fanHoldDropped(client: 1))
+    #expect(engine.fanHoldDropped(client: 2))
+
+    fans.results = []
+    #expect(engine.setFanHold(client: 3, holding: true, percent: 70))
+    #expect(!engine.fanHoldDropped(client: 3))
+    #expect(!engine.setFanHold(
+        client: 4,
+        replacing: 2,
+        holding: true,
+        percent: 80
+    ))
+    #expect(!engine.fanHoldDropped(client: 2))
+    #expect(engine.fanHoldDropped(client: 4))
+
+    #expect(engine.setFanHold(client: 4, holding: false, percent: 0))
+    #expect(engine.setFanHold(client: 1, holding: false, percent: 0))
     #expect(!engine.fanHoldDropped)
 }
 

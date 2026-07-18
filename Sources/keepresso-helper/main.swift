@@ -133,7 +133,7 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
     }
 
     func fanHoldDropped(reply: @escaping @Sendable (Bool) -> Void) {
-        reply(engine.fanHoldDropped)
+        reply(engine.fanHoldDropped(client: clientID))
     }
 
     func sleepNow(reply: @escaping @Sendable (Bool) -> Void) {
@@ -158,10 +158,7 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
     private let sleepGenerations = SleepModeGenerationRegistry()
     private let awdlGenerations = SleepModeGenerationRegistry()
     private let fanGenerations = SleepModeGenerationRegistry()
-    private let lock = NSLock()
-    private var nextClientID = 1
-    private var liveConnections = 0
-    private var terminateRequested = false
+    private let shutdownGate = HelperShutdownGate()
 
     init(engine: HelperEngine) {
         self.engine = engine
@@ -175,11 +172,9 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
             HelperService.peerRequirement(identifier: HelperService.appCodeSignIdentifier)
         )
 
-        lock.lock()
-        let clientID = nextClientID
-        nextClientID += 1
-        liveConnections += 1
-        lock.unlock()
+        guard let clientID = shutdownGate.acceptConnection() else {
+            return false
+        }
 
         newConnection.exportedInterface = NSXPCInterface(with: HelperXPCProtocol.self)
         newConnection.exportedObject = HelperConnection(
@@ -208,36 +203,18 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
         return true
     }
 
-    /// Whether the daemon may exit right now: no clients, no holds.
-    var isIdle: Bool {
-        lock.lock()
-        let clients = liveConnections
-        lock.unlock()
-        return clients == 0 && engine.isIdle
-    }
-
-    var clientCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return liveConnections
-    }
-
-    var wantsTermination: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return terminateRequested
+    /// Atomically close connection acceptance once the engine is idle and the
+    /// shutdown policy allows exit.
+    func claimShutdownIfAllowed() -> Bool {
+        shutdownGate.claimExitIfAllowed { engine.isIdle }
     }
 
     private func requestTerminate() {
-        lock.lock()
-        terminateRequested = true
-        lock.unlock()
+        shutdownGate.requestTermination()
     }
 
     private func connectionEnded() {
-        lock.lock()
-        liveConnections -= 1
-        lock.unlock()
+        shutdownGate.connectionEnded()
     }
 }
 
@@ -280,19 +257,12 @@ holdTimer.resume()
 // call), and promptly, skipping the idle grace, when the app asked us to
 // retire after an update: this process is still the pre-update binary image
 // no matter what was installed on disk, so lingering would keep old code
-// serving the new app. The decision lives in `HelperShutdownPolicy`
-// (unit-tested).
+// serving the new app. `HelperShutdownGate` closes connection acceptance and
+// makes the final idle decision atomically (unit-tested).
 let idleTimer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "idle-check"))
-nonisolated(unsafe) var idleChecks = 0
 idleTimer.schedule(deadline: .now() + 60, repeating: 60)
 idleTimer.setEventHandler {
-    if delegate.isIdle { idleChecks += 1 } else { idleChecks = 0 }
-    if HelperShutdownPolicy.shouldExit(
-        clientCount: delegate.clientCount,
-        holdsIdle: engine.isIdle,
-        terminateRequested: delegate.wantsTermination,
-        consecutiveIdleChecks: idleChecks
-    ) {
+    if delegate.claimShutdownIfAllowed() {
         exit(0)
     }
 }
