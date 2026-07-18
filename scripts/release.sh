@@ -10,9 +10,9 @@
 #   1. Runs Sparkle's generate_appcast over dist/, which EdDSA-signs the DMG
 #      (using the private key in your Keychain) and writes dist/appcast.xml with
 #      enclosure URLs pointing at this release's GitHub download.
-#   2. Runs appcast-notes.sh, which links the appcast's release notes to the
-#      GitHub release page and extracts this version's CHANGELOG.md section
-#      for the release body.
+#   2. Runs appcast-notes.sh, which embeds this version's CHANGELOG.md
+#      section into the appcast (shown in the Sparkle update dialog) and
+#      extracts it for the release body.
 #   3. Creates (or updates) the GitHub Release vX.Y.Z and uploads the DMG plus
 #      appcast.xml as assets.
 #
@@ -63,7 +63,7 @@ info "Signing appcast with Sparkle ($VERSION)"
 APPCAST="$DIST_DIR/appcast.xml"
 [ -f "$APPCAST" ] || die "generate_appcast did not produce appcast.xml"
 
-info "Adding release notes (appcast link + changelog section)"
+info "Adding release notes (embedded changelog)"
 "$SCRIPT_DIR/appcast-notes.sh" "$VERSION" "$REPO" "$TAG"
 
 info "Publishing GitHub Release $TAG"

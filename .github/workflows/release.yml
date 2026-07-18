@@ -115,10 +115,12 @@ jobs:
             --download-url-prefix "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/"
           rm -f "$KEYFILE"
 
-      # Point the appcast's release notes at the GitHub release page, and pull
-      # this version's CHANGELOG.md section out for the release body, so the
-      # Sparkle update dialog shows the real changelog.
+      # Embed this version's CHANGELOG.md section into the appcast (rendered
+      # to HTML) so the Sparkle update dialog shows the real changelog, and
+      # extract it as markdown for the release body.
       - name: Add release notes to the appcast
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: ./scripts/appcast-notes.sh "${GITHUB_REF_NAME#v}" "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME"
 
       - name: Publish GitHub Release
