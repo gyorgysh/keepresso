@@ -10,8 +10,12 @@ Use the `keepresso lease` CLI to declare the task lifecycle explicitly. Acquire 
 ## Run the lease lifecycle
 
 1. Verify the CLI is available with `command -v keepresso`.
-2. Choose a short TTL and a bounded maximum lifetime. Prefer a TTL of 300 seconds and renew it by the halfway point. Set the maximum lifetime to the expected task duration plus a reasonable recovery margin.
-3. Acquire before starting protected work:
+2. For unattended or closed-lid work, inspect `keepresso status --json` before
+   the first lease. Continue only when `status.closedLidProtectionReady` is
+   `true`. If it is false or missing, keep the lid open and ask the user to
+   install and approve the administrator helper in Keepresso Preferences.
+3. Choose a short TTL and a bounded maximum lifetime. Prefer a TTL of 300 seconds and renew it by the halfway point. Set the maximum lifetime to the expected task duration plus a reasonable recovery margin.
+4. Acquire before starting protected work:
 
    ```sh
    lease_json="$(keepresso lease acquire \
@@ -25,8 +29,12 @@ Use the `keepresso lease` CLI to declare the task lifecycle explicitly. Acquire 
      /usr/bin/plutil -extract lease.id raw -o - -)"
    ```
 
-4. Confirm that the response has `"ok": true` and a non-empty lease ID. If acquisition fails, stop or tell the user that the task is not protected from sleep.
-5. Renew during long work, no later than half of the current TTL:
+5. Confirm that the response has `"ok": true` and a non-empty lease ID. Also
+   inspect `status.warnings`. `closed_lid_protection_not_ready` or
+   `closed_lid_protection_unknown` means the lease protects open-lid idle sleep
+   only. If acquisition fails, stop or tell the user that the task is not
+   protected from sleep.
+6. Renew during long work, no later than half of the current TTL:
 
    ```sh
    keepresso lease heartbeat "$lease_id" \
@@ -34,7 +42,7 @@ Use the `keepresso lease` CLI to declare the task lifecycle explicitly. Acquire 
      --message "Task is still running"
    ```
 
-6. Release in a `finally`, `defer`, or exit-trap path. Report the actual result as `success`, `failure`, or `cancelled`:
+7. Release in a `finally`, `defer`, or exit-trap path. Report the actual result as `success`, `failure`, or `cancelled`:
 
    ```sh
    lease_result=failure

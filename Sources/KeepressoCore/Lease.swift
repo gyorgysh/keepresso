@@ -1,4 +1,5 @@
 import CoreFoundation
+import Darwin
 import Foundation
 
 /// Stable transport result for a terminal lease. Callers may release with
@@ -150,19 +151,30 @@ public struct LeaseStatusSummary: Codable, Equatable, Sendable {
     public var releasedCount: Int
     public var expiredCount: Int
     public var totalCount: Int
+    /// `true` means the live app reports that its administrator helper can
+    /// protect a closed lid. `false` is an actionable warning; nil means the
+    /// app status is not live or has not reported the capability yet.
+    public var closedLidProtectionReady: Bool?
+    /// Stable machine-readable warnings. Acquiring a lease remains successful
+    /// because open-lid idle-sleep protection is still useful.
+    public var warnings: [String]
 
     public init(
         wakeRequired: Bool,
         activeCount: Int,
         releasedCount: Int,
         expiredCount: Int,
-        totalCount: Int
+        totalCount: Int,
+        closedLidProtectionReady: Bool? = nil,
+        warnings: [String] = []
     ) {
         self.wakeRequired = wakeRequired
         self.activeCount = activeCount
         self.releasedCount = releasedCount
         self.expiredCount = expiredCount
         self.totalCount = totalCount
+        self.closedLidProtectionReady = closedLidProtectionReady
+        self.warnings = warnings
     }
 }
 
@@ -295,6 +307,7 @@ public final class SystemAgentLeaseAppSignaler: AgentLeaseAppSignaling {
 public final class AgentLeaseCommandAdapter: LeaseCommanding {
     private let service: AgentLeaseCommandServing
     private let appSignaler: AgentLeaseAppSignaling
+    private let closedLidProtectionReady: @MainActor () -> Bool?
 
     public init(
         service: AgentLeaseCommandServing,
@@ -302,6 +315,17 @@ public final class AgentLeaseCommandAdapter: LeaseCommanding {
     ) {
         self.service = service
         self.appSignaler = appSignaler
+        self.closedLidProtectionReady = Self.liveClosedLidProtectionReady
+    }
+
+    public init(
+        service: AgentLeaseCommandServing,
+        appSignaler: AgentLeaseAppSignaling,
+        closedLidProtectionReady: @escaping @MainActor () -> Bool?
+    ) {
+        self.service = service
+        self.appSignaler = appSignaler
+        self.closedLidProtectionReady = closedLidProtectionReady
     }
 
     public convenience init(
@@ -463,7 +487,7 @@ public final class AgentLeaseCommandAdapter: LeaseCommanding {
             message: message,
             lease: lease.map(Self.record),
             leases: leases.map { $0.map(Self.record) },
-            status: Self.summary(snapshot.leases)
+            status: summary(snapshot.leases)
         )
     }
 
@@ -474,7 +498,7 @@ public final class AgentLeaseCommandAdapter: LeaseCommanding {
     ) throws -> LeaseCommandResponse {
         let snapshot = try requireSnapshot(service.execute(.snapshot))
         var response = LeaseCommandResponse.failure(command: command, code: code, message: message)
-        response.status = Self.summary(snapshot.leases)
+        response.status = summary(snapshot.leases)
         return response
     }
 
@@ -591,16 +615,32 @@ public final class AgentLeaseCommandAdapter: LeaseCommanding {
         )
     }
 
-    private static func summary(_ leases: [AgentWakeLease]) -> LeaseStatusSummary {
+    private func summary(_ leases: [AgentWakeLease]) -> LeaseStatusSummary {
         let active = leases.count { $0.state == .active }
         let expired = leases.count { $0.state == .timeout }
+        let closedLidReady = closedLidProtectionReady()
+        let warnings: [String]
+        switch closedLidReady {
+        case true: warnings = []
+        case false: warnings = ["closed_lid_protection_not_ready"]
+        case nil: warnings = ["closed_lid_protection_unknown"]
+        }
         return LeaseStatusSummary(
             wakeRequired: active > 0,
             activeCount: active,
             releasedCount: leases.count - active - expired,
             expiredCount: expired,
-            totalCount: leases.count
+            totalCount: leases.count,
+            closedLidProtectionReady: closedLidReady,
+            warnings: warnings
         )
+    }
+
+    private static func liveClosedLidProtectionReady() -> Bool? {
+        guard let snapshot = StatusFile.read(),
+              kill(snapshot.pid, 0) == 0 || errno == EPERM
+        else { return nil }
+        return snapshot.closedLidProtectionReady
     }
 }
 

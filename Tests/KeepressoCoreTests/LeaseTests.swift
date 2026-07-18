@@ -174,6 +174,38 @@ private func testAdapter(
     #expect(object["leases"] is NSNull)
 }
 
+@Test @MainActor func leaseWarnsWhenClosedLidProtectionIsNotReady() throws {
+    let instant = Date(timeIntervalSince1970: 1_800_000_000)
+    let store = AdapterLeaseStore()
+    let service = try AgentLeaseCommandService(
+        persistence: store,
+        now: { instant }
+    )
+    let adapter = AgentLeaseCommandAdapter(
+        service: service,
+        appSignaler: RecordingAppSignaler(),
+        closedLidProtectionReady: { false }
+    )
+
+    let response = adapter.execute(.acquire(
+        owner: "owner",
+        agent: "codex",
+        task: "open-lid-task",
+        ttlSeconds: 300,
+        maxLifetimeSeconds: 3_600,
+        message: nil
+    ))
+    #expect(response.ok)
+    #expect(response.status?.closedLidProtectionReady == false)
+    #expect(response.status?.warnings == ["closed_lid_protection_not_ready"])
+
+    let json = try #require(LeaseJSON.encode(response, prettyPrinted: false))
+    let object = try #require(JSONSerialization.jsonObject(with: json) as? [String: Any])
+    let status = try #require(object["status"] as? [String: Any])
+    #expect(status["closedLidProtectionReady"] as? Bool == false)
+    #expect(status["warnings"] as? [String] == ["closed_lid_protection_not_ready"])
+}
+
 @Test @MainActor func concurrentLeasesSignalAndKeepUnionActive() throws {
     let clock = LeaseTestClock(Date(timeIntervalSince1970: 1_800_000_000))
     let signaler = RecordingAppSignaler()
