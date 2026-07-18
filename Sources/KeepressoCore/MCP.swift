@@ -3,20 +3,24 @@ import Foundation
 
 /// A small JSON-RPC handler for the wake-lease MCP server.
 /// Transport framing stays in the executable so this type is unit-testable.
+@MainActor
 public final class KeepressoMCPServer {
     public static let protocolVersion = "2025-11-25"
 
     private static let supportedProtocolVersions = [
         "2025-11-25",
         "2025-06-18",
-        "2025-03-26",
-        "2024-11-05",
     ]
 
     private let commander: LeaseCommanding
+    private var lifecycle = MCPLifecycle.awaitingInitialize
 
-    public init(commander: LeaseCommanding = FileLeaseCommander()) {
+    public init(commander: LeaseCommanding) {
         self.commander = commander
+    }
+
+    public convenience init() throws {
+        try self.init(commander: AgentLeaseCommandAdapter())
     }
 
     /// Handle one newline-delimited JSON-RPC message.
@@ -40,14 +44,22 @@ public final class KeepressoMCPServer {
             ))
         }
 
+        if method.hasPrefix("notifications/") {
+            if method == "notifications/initialized", lifecycle == .awaitingInitialized {
+                lifecycle = .ready
+            }
+            return nil
+        }
+
         let hasID = request.keys.contains("id")
+        guard hasID else { return nil }
         let id = request["id"]
-        if hasID, !Self.isValidRequestID(id) {
+        guard Self.isValidRequestID(id) else {
             return Self.encode(Self.errorEnvelope(id: NSNull(), code: -32600, message: "Invalid Request"))
         }
 
         let outcome = dispatch(method: method, params: request["params"])
-        guard hasID, let id else { return nil }
+        guard let id else { return nil }
         switch outcome {
         case .result(let result):
             return Self.encode([
@@ -63,31 +75,35 @@ public final class KeepressoMCPServer {
     private func dispatch(method: String, params: Any?) -> MCPMethodOutcome {
         switch method {
         case "initialize":
+            guard lifecycle == .awaitingInitialize else {
+                return .error(-32600, "Server is already initialized")
+            }
             guard let parameters = Self.parameters(params),
                   let requestedVersion = parameters["protocolVersion"] as? String
             else { return .error(-32602, "initialize requires protocolVersion") }
             let selectedVersion = Self.supportedProtocolVersions.contains(requestedVersion)
                 ? requestedVersion
                 : Self.protocolVersion
+            lifecycle = .awaitingInitialized
             return .result([
                 "protocolVersion": selectedVersion,
                 "capabilities": ["tools": ["listChanged": false]],
                 "serverInfo": ["name": "keepresso-mcp", "version": "1.0.0"],
                 "instructions": "Acquire a wake lease before unattended work, renew it before expiry, and release it when work ends.",
             ])
-        case "notifications/initialized":
-            return .result([:])
         case "ping":
             guard Self.parameters(params, allowMissing: true) != nil else {
                 return .error(-32602, "ping params must be an object")
             }
             return .result([:])
         case "tools/list":
+            guard lifecycle == .ready else { return .error(-32002, "Server is not initialized") }
             guard Self.parameters(params, allowMissing: true) != nil else {
                 return .error(-32602, "tools/list params must be an object")
             }
             return .result(["tools": Self.toolDefinitions])
         case "tools/call":
+            guard lifecycle == .ready else { return .error(-32002, "Server is not initialized") }
             return callTool(params: params)
         default:
             return .error(-32601, "Method not found: \(method)")
@@ -100,18 +116,26 @@ public final class KeepressoMCPServer {
               !name.isEmpty
         else { return .error(-32602, "tools/call requires a tool name") }
 
+        guard let operation = Self.operationName(for: name) else {
+            return .result(Self.toolResult(.failure(
+                command: name,
+                code: "unknown_tool",
+                message: "Unknown tool: \(name)"
+            )))
+        }
+
         let arguments: [String: Any]
         if let value = parameters["arguments"] {
             guard !(value is NSNull), let object = value as? [String: Any] else {
-                return .error(-32602, "tool arguments must be an object")
+                return .result(Self.toolResult(.failure(
+                    command: operation,
+                    code: "invalid_arguments",
+                    message: "tool arguments must be an object"
+                )))
             }
             arguments = object
         } else {
             arguments = [:]
-        }
-
-        guard let operation = Self.operationName(for: name) else {
-            return .error(-32602, "Unknown tool: \(name)")
         }
         do {
             let command = try Self.command(tool: name, arguments: arguments)
@@ -131,6 +155,7 @@ public final class KeepressoMCPServer {
         switch tool {
         case "acquire_wake_lease": return "acquire"
         case "renew_wake_lease": return "renew"
+        case "heartbeat_wake_lease": return "heartbeat"
         case "release_wake_lease": return "release"
         case "list_wake_leases": return "list"
         case "wake_status": return "status"
@@ -160,11 +185,18 @@ public final class KeepressoMCPServer {
                 ttlSeconds: try positiveInteger("ttl", arguments),
                 message: try optionalString("message", arguments)
             )
+        case "heartbeat_wake_lease":
+            try rejectUnknown(arguments, allowed: ["lease_id", "ttl", "message"])
+            return .heartbeat(
+                id: try requiredString("lease_id", arguments),
+                ttlSeconds: try positiveInteger("ttl", arguments),
+                message: try optionalString("message", arguments)
+            )
         case "release_wake_lease":
             try rejectUnknown(arguments, allowed: ["lease_id", "result", "message"])
             let rawResult = try optionalString("result", arguments) ?? LeaseCompletionResult.success.rawValue
-            guard let result = LeaseCompletionResult(rawValue: rawResult) else {
-                throw MCPToolInputError("result must be success, failure, cancelled, or timeout")
+            guard let result = LeaseCompletionResult(rawValue: rawResult), result != .timeout else {
+                throw MCPToolInputError("result must be success, failure, or cancelled")
             }
             return .release(
                 id: try requiredString("lease_id", arguments),
@@ -235,6 +267,18 @@ public final class KeepressoMCPServer {
             ),
         ],
         [
+            "name": "heartbeat_wake_lease",
+            "description": "Heartbeat an active wake lease using its current TTL.",
+            "inputSchema": objectSchema(
+                properties: [
+                    "lease_id": stringSchema("Identifier returned by acquire_wake_lease."),
+                    "ttl": integerSchema("Optional replacement TTL in seconds."),
+                    "message": stringSchema("Optional progress context."),
+                ],
+                required: ["lease_id"]
+            ),
+        ],
+        [
             "name": "release_wake_lease",
             "description": "Release a wake lease when its AI task ends.",
             "inputSchema": objectSchema(
@@ -242,7 +286,7 @@ public final class KeepressoMCPServer {
                     "lease_id": stringSchema("Identifier returned by acquire_wake_lease."),
                     "result": [
                         "type": "string",
-                        "enum": LeaseCompletionResult.allCases.map(\.rawValue),
+                        "enum": ["success", "failure", "cancelled"],
                         "description": "Terminal task result. Defaults to success.",
                     ],
                     "message": stringSchema("Optional completion details."),
@@ -388,6 +432,12 @@ public final class KeepressoMCPServer {
 private enum MCPMethodOutcome {
     case result([String: Any])
     case error(Int, String)
+}
+
+private enum MCPLifecycle {
+    case awaitingInitialize
+    case awaitingInitialized
+    case ready
 }
 
 private struct MCPToolInputError: Error {
