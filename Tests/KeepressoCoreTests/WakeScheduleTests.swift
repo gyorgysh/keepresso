@@ -149,6 +149,150 @@ import Foundation
     #expect(runner.commands.contains { $0.contains("repeat wakeorpoweron MWF 07:00:00") })
 }
 
+@Test func newerWakeScheduleArrivingBeforeTimedOutOldApplyWins() {
+    let registry = SleepModeGenerationRegistry()
+    let runner = RecordingRunner()
+    let engine = HelperEngine(runner: runner, state: FakeMarkerState())
+    let oldA = "08/01/26 06:30:00"
+    let newB = "08/02/26 07:45:00"
+
+    // B reaches the helper after A timed out on the app side but before A's
+    // delayed XPC delivery. Its newer generation becomes the tombstone.
+    #expect(fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 2,
+        generation: 2,
+        oneShot: newB
+    ))
+    let commandsAfterB = runner.commands
+
+    #expect(!fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 1,
+        generation: 1,
+        oneShot: oldA
+    ))
+    #expect(runner.commands == commandsAfterB)
+    #expect(runner.commands.last == "/usr/bin/pmset schedule wake \(newB)")
+}
+
+@Test func newerWakeClearArrivingBeforeTimedOutOldApplyWins() {
+    let registry = SleepModeGenerationRegistry()
+    let runner = RecordingRunner()
+    let engine = HelperEngine(runner: runner, state: FakeMarkerState())
+
+    #expect(fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 2,
+        generation: 2,
+        oneShot: nil
+    ))
+    let commandsAfterClear = runner.commands
+
+    #expect(!fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 1,
+        generation: 1,
+        oneShot: "08/01/26 06:30:00"
+    ))
+    #expect(runner.commands == commandsAfterClear)
+    #expect(runner.commands.last == "/usr/bin/pmset repeat cancel")
+}
+
+@Test func newerWakeScheduleUltimatelyWinsWhenOldApplyArrivesFirst() {
+    let registry = SleepModeGenerationRegistry()
+    let runner = RecordingRunner()
+    let engine = HelperEngine(runner: runner, state: FakeMarkerState())
+    let oldA = "08/01/26 06:30:00"
+    let newB = "08/02/26 07:45:00"
+
+    #expect(fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 1,
+        generation: 1,
+        oneShot: oldA
+    ))
+    #expect(fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 2,
+        generation: 2,
+        oneShot: newB
+    ))
+    #expect(runner.commands.last == "/usr/bin/pmset schedule wake \(newB)")
+}
+
+@Test func newerWakeClearUltimatelyWinsWhenOldApplyArrivesFirst() {
+    let registry = SleepModeGenerationRegistry()
+    let runner = RecordingRunner()
+    let engine = HelperEngine(runner: runner, state: FakeMarkerState())
+
+    #expect(fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 1,
+        generation: 1,
+        oneShot: "08/01/26 06:30:00"
+    ))
+    #expect(fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 2,
+        generation: 2,
+        oneShot: nil
+    ))
+    #expect(runner.commands.last == "/usr/bin/pmset repeat cancel")
+}
+
+@Test func wakeDisconnectKeepsScheduleAndGenerationTombstone() {
+    let registry = SleepModeGenerationRegistry()
+    let runner = RecordingRunner()
+    let engine = HelperEngine(runner: runner, state: FakeMarkerState())
+    let desired = "08/02/26 07:45:00"
+
+    #expect(fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 10,
+        generation: 4,
+        oneShot: desired
+    ))
+    // The live connection may retry the exact generation.
+    #expect(fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 10,
+        generation: 4,
+        oneShot: desired
+    ))
+    let commandsBeforeDisconnect = runner.commands
+
+    registry.clientDisconnected(10) {}
+    #expect(runner.commands == commandsBeforeDisconnect)
+    #expect(!fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 10,
+        generation: 4,
+        oneShot: desired
+    ))
+    // A later listener connection may retry the same generation after the
+    // earlier reply was lost. Connection IDs are monotonic in the helper.
+    #expect(fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 11,
+        generation: 4,
+        oneShot: desired
+    ))
+    #expect(runner.commands.last == "/usr/bin/pmset schedule wake \(desired)")
+}
+
 @Test func failedClearLeavesPendingMarker() {
     let runner = RecordingRunner()
     runner.failAll = true
@@ -205,6 +349,28 @@ import Foundation
 }
 
 // MARK: - Fakes
+
+private func fencedWakeApply(
+    registry: SleepModeGenerationRegistry,
+    engine: HelperEngine,
+    clientID: Int,
+    generation: UInt64,
+    oneShot: String?
+) -> Bool {
+    registry.apply(
+        streamID: "wake-process-stream",
+        generation: generation,
+        clientID: clientID
+    ) { _ in
+        // This matches the helper's lock scope: the complete engine apply is
+        // the registry operation, not just a generation check before it.
+        engine.applyWakeSchedule(
+            oneShot: oneShot,
+            repeatDays: nil,
+            repeatTime: nil
+        )
+    }
+}
 
 private final class RecordingRunner: HelperCommandRunning, @unchecked Sendable {
     private(set) var commands: [String] = []

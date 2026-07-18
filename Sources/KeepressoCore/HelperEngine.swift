@@ -81,7 +81,12 @@ public final class SleepModeGenerationRegistry: @unchecked Sendable {
             guard statesByStream.count < maximumStreams else { return false }
         }
 
-        let previousClientID = statesByStream[streamID]?.ownerClientID
+        let previousState = statesByStream[streamID]
+        // After disconnect, the live owner is nil but the last accepted
+        // client remains the logical predecessor. Passing it lets domain
+        // state such as a surrendered fan hold migrate to the new connection.
+        let previousClientID = previousState?.ownerClientID
+            ?? previousState?.highestClientID
         // Advance ownership before applying. The registry lock remains held
         // while the engine moves the holder, making connection migration and
         // its system reconciliation one indivisible operation to disconnect.
@@ -242,6 +247,69 @@ public enum HelperShutdownPolicy {
     }
 }
 
+/// Atomically coordinates XPC connection acceptance with daemon shutdown.
+/// Once an idle exit is claimed, later connections are rejected instead of
+/// being accepted in the gap between a client-count sample and `exit(0)`.
+public final class HelperShutdownGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var nextClientID = 1
+    private var liveConnections = 0
+    private var terminateRequested = false
+    private var consecutiveIdleChecks = 0
+    private var shuttingDown = false
+
+    public init() {}
+
+    /// Register an accepted listener connection and return its monotonic ID.
+    /// Nil means shutdown already won and the listener must reject it.
+    public func acceptConnection() -> Int? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !shuttingDown else { return nil }
+        let clientID = nextClientID
+        nextClientID += 1
+        liveConnections += 1
+        consecutiveIdleChecks = 0
+        return clientID
+    }
+
+    public func connectionEnded() {
+        lock.lock()
+        liveConnections = max(0, liveConnections - 1)
+        lock.unlock()
+    }
+
+    public func requestTermination() {
+        lock.lock()
+        terminateRequested = true
+        lock.unlock()
+    }
+
+    /// Check engine idleness while connection acceptance is blocked by this
+    /// gate's lock. A successful decision permanently closes the gate.
+    public func claimExitIfAllowed(holdsIdle: () -> Bool) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !shuttingDown else { return true }
+        guard liveConnections == 0, holdsIdle() else {
+            consecutiveIdleChecks = 0
+            return false
+        }
+        consecutiveIdleChecks += 1
+        guard terminateRequested || consecutiveIdleChecks >= 2 else {
+            return false
+        }
+        shuttingDown = true
+        return true
+    }
+
+    public var isShuttingDown: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return shuttingDown
+    }
+}
+
 /// The helper daemon's whole brain, kept out of the executable target so it
 /// can be unit-tested (the `keepresso-helper` binary is just XPC wiring around
 /// this). Tracks which client connections hold the sleep and AWDL switches,
@@ -264,14 +332,28 @@ public final class HelperEngine: @unchecked Sendable {
     private var awdlHolders: Set<Int> = []
     /// Client → wanted fan boost percent; the effective target is the max.
     private var fanHolders: [Int: Int] = [:]
+    /// Clients whose fan hold was surrendered after repeated firmware errors.
+    /// This status follows reconnect ownership and survives disconnect until
+    /// an explicit release, preventing same-intent replay from re-engaging it.
+    private var droppedFanClients: Set<Int> = []
     /// Consecutive failed fan writes; past the cap the engine surrenders the
     /// hold instead of fighting the firmware forever.
     private var fanFailureStreak = 0
     /// How many consecutive failed writes drop the fan hold.
     static let maxFanFailures = 5
-    /// Set once ``fanTick()`` gave up on a hold, so the state is inspectable
-    /// (and the app can tell "boost silently ended" from "still boosting").
-    public private(set) var fanHoldDropped = false
+    /// Compatibility aggregate for tests and diagnostics. XPC callers query
+    /// their own connection through ``fanHoldDropped(client:)``.
+    public var fanHoldDropped: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return !droppedFanClients.isEmpty
+    }
+
+    public func fanHoldDropped(client: Int) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return droppedFanClients.contains(client)
+    }
 
     public init(
         runner: HelperCommandRunning,
@@ -511,16 +593,25 @@ public final class HelperEngine: @unchecked Sendable {
     ) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        return applyFanUnion {
+        if let previousClient, previousClient != client,
+           droppedFanClients.remove(previousClient) != nil {
+            droppedFanClients.insert(client)
+        }
+        if !holding {
+            droppedFanClients.remove(client)
+        }
+        let replayingDroppedHold = holding && droppedFanClients.contains(client)
+        let reconciled = applyFanUnion {
             if let previousClient, previousClient != client {
                 fanHolders.removeValue(forKey: previousClient)
             }
-            if holding {
+            if holding, !replayingDroppedHold {
                 fanHolders[client] = max(30, min(percent, 100))
             } else {
                 fanHolders.removeValue(forKey: client)
             }
         }
+        return replayingDroppedHold ? false : reconciled
     }
 
     /// A client connection died (app quit or crashed): release everything it
@@ -553,6 +644,9 @@ public final class HelperEngine: @unchecked Sendable {
 
     public func fanClientDisconnected(_ client: Int) {
         lock.lock()
+        // Keep a surrendered status as a reconnect tombstone. A later owner
+        // receives this client as `replacing` and migrates the status. Only an
+        // explicit release clears it.
         _ = applyFanUnion { fanHolders.removeValue(forKey: client) }
         lock.unlock()
     }
@@ -604,9 +698,9 @@ public final class HelperEngine: @unchecked Sendable {
         fanFailureStreak = failures + 1
         let giveUp = fanFailureStreak >= Self.maxFanFailures
         if giveUp {
+            droppedFanClients.formUnion(fanHolders.keys)
             fanHolders.removeAll()
             fanFailureStreak = 0
-            fanHoldDropped = true
         }
         lock.unlock()
         if giveUp {
@@ -763,8 +857,8 @@ public final class HelperEngine: @unchecked Sendable {
 
     /// Fan version of the union edge: the effective target is the max percent
     /// across holders, and a change in that target (including to or from
-    /// nothing) is what writes hardware. Engaging resets the failure streak
-    /// and the dropped flag: a fresh hold gets a fresh chance.
+    /// nothing) is what writes hardware. Engaging resets the failure streak;
+    /// surrendered status is client-scoped and clears only on release.
     ///
     /// The restore marker is debt-by-attempt, not debt-by-success: a forced
     /// write can partially land (mode set on one fan, refused on the next)
@@ -781,7 +875,6 @@ public final class HelperEngine: @unchecked Sendable {
         guard before != after else { return true }
         if let target = after {
             fanFailureStreak = 0
-            fanHoldDropped = false
             if before == nil,
                !state.update({ $0.fanRestorePending = true }) {
                 fanHolders = originalHolders
