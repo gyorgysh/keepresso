@@ -763,6 +763,9 @@ final class AppModel {
             prepareUnattendedPowerPolicy()
         }
 
+        let systemOverrideChanged = session.setRuntimeSystemSleepPreventionRequired(
+            demand.requiresSystemSleepPrevention
+        )
         externalWakeTrigger.isOn = !demand.isEmpty
         closedDisplayAuto.onlyWhileBrewing = settings.closedDisplayOnlyWhileBrewing || !demand.isEmpty
         applyTriggerGate()
@@ -788,7 +791,7 @@ final class AppModel {
                     finishExternalSession(at: date)
                 }
             case .none, .ensureSessionActive:
-                break
+                if systemOverrideChanged { session.reconcile(now: date) }
             }
             if case .ended = decision.lifecycle,
                !settings.closedDisplayOnlyWhileBrewing {
@@ -797,7 +800,7 @@ final class AppModel {
             return
         }
 
-        if decision.sessionAction == .ensureSessionActive {
+        if decision.sessionAction == .ensureSessionActive || systemOverrideChanged {
             prepareUnattendedPowerPolicy()
             session.reconcile(now: date)
         }

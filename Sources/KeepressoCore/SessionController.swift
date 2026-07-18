@@ -22,6 +22,23 @@ public final class SessionController {
     /// the next ``reconcile(now:systemIdleSeconds:)``.
     public var options: SleepPreventionOptions = .default
 
+    /// Runtime-only system assertion required by explicit Agent leases and
+    /// scheduled unattended work. This never mutates the user's saved options,
+    /// and it deliberately does not force a display assertion.
+    public private(set) var runtimeSystemSleepPreventionRequired = false
+
+    /// Update the runtime override. The host owns reconcile ordering so it can
+    /// first install or remove its trigger gate, then apply the resulting
+    /// assertion set without a transition gap.
+    @discardableResult
+    public func setRuntimeSystemSleepPreventionRequired(
+        _ required: Bool
+    ) -> Bool {
+        guard runtimeSystemSleepPreventionRequired != required else { return false }
+        runtimeSystemSleepPreventionRequired = required
+        return true
+    }
+
     /// When the active session began, or `nil` while idle.
     public private(set) var startedAt: Date?
 
@@ -733,7 +750,9 @@ public final class SessionController {
     func desiredAssertions(systemIdleSeconds: TimeInterval?) -> Set<PowerAssertionKind> {
         guard isActive else { return [] }
         var kinds: Set<PowerAssertionKind> = []
-        if options.preventSystemSleep { kinds.insert(.system) }
+        if options.preventSystemSleep || runtimeSystemSleepPreventionRequired {
+            kinds.insert(.system)
+        }
         if options.preventDisplaySleep {
             let yielded: Bool = {
                 guard let threshold = options.allowScreenSaverAfter,

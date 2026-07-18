@@ -55,6 +55,7 @@ private func demandSession(
     #expect(oneRemaining.lifecycle == .sourcesChanged)
     #expect(oneRemaining.sessionAction == .none)
     #expect(coordinator.ownership?.baseline == .idle)
+    #expect(coordinator.demand.requiresSystemSleepPrevention)
 
     let allFinished = coordinator.update(
         ExternalWakeDemandSnapshot(),
@@ -63,6 +64,18 @@ private func demandSession(
     )
     #expect(allFinished.lifecycle == .ended)
     #expect(allFinished.sessionAction == .finishUnattendedSession)
+    #expect(!coordinator.demand.requiresSystemSleepPrevention)
+}
+
+@Test func scheduledAndAgentDemandBothRequireSystemSleepPrevention() {
+    let scheduled = ExternalWakeDemandSnapshot(scheduled: [
+        ScheduledWakeDemand(id: "nightly", phase: .preparation),
+    ])
+    let leased = ExternalWakeDemandSnapshot(activeLeaseIDs: [UUID()])
+
+    #expect(scheduled.requiresSystemSleepPrevention)
+    #expect(leased.requiresSystemSleepPrevention)
+    #expect(!ExternalWakeDemandSnapshot().requiresSystemSleepPrevention)
 }
 
 @Test func scheduledPreparationHandsOffToLeaseWithoutEndingOwnership() {

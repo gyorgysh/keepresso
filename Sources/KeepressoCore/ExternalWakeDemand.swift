@@ -45,6 +45,10 @@ public struct ExternalWakeDemandSnapshot: Equatable, Sendable {
     public var sourceCount: Int {
         activeLeaseIDs.count + scheduled.count
     }
+
+    /// Explicit Agent and scheduled demand always requires a system assertion,
+    /// independently of the user's interactive session options.
+    public var requiresSystemSleepPrevention: Bool { !isEmpty }
 }
 
 /// Session state sampled in the same tick as ``ExternalWakeDemandSnapshot``.

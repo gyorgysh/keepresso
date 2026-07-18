@@ -113,6 +113,57 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
 }
 
 @MainActor
+@Test func runtimeSystemOverrideProtectsAUserSessionWithBothOptionsOff() {
+    let (controller, fake, _) = makeController()
+    let userOptions = SleepPreventionOptions(
+        preventSystemSleep: false,
+        preventDisplaySleep: false
+    )
+    controller.start(options: userOptions)
+    #expect(controller.isActive)
+    #expect(fake.held.isEmpty)
+
+    #expect(controller.setRuntimeSystemSleepPreventionRequired(true))
+    controller.reconcile()
+    #expect(fake.held == [.system])
+    #expect(controller.options == userOptions)
+
+    #expect(controller.setRuntimeSystemSleepPreventionRequired(false))
+    controller.reconcile()
+    #expect(fake.held.isEmpty)
+    #expect(controller.options == userOptions)
+}
+
+@MainActor
+@Test func runtimeSystemOverrideKeepsTheUsersDisplayChoiceIndependent() {
+    let (controller, fake, _) = makeController()
+    let userOptions = SleepPreventionOptions(
+        preventSystemSleep: false,
+        preventDisplaySleep: true
+    )
+    controller.start(options: userOptions)
+    #expect(fake.held == [.display])
+
+    _ = controller.setRuntimeSystemSleepPreventionRequired(true)
+    controller.reconcile()
+    #expect(fake.held == [.system, .display])
+
+    _ = controller.setRuntimeSystemSleepPreventionRequired(false)
+    controller.reconcile()
+    #expect(fake.held == [.display])
+}
+
+@MainActor
+@Test func manualSessionHasNoRuntimeOverrideWithoutExternalDemand() {
+    let (controller, fake, _) = makeController()
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: false))
+
+    #expect(!controller.runtimeSystemSleepPreventionRequired)
+    #expect(fake.held.isEmpty)
+    #expect(!controller.setRuntimeSystemSleepPreventionRequired(false))
+}
+
+@MainActor
 @Test func stopReleasesEverything() {
     let (controller, fake, _) = makeController()
     controller.start()
