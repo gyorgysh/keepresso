@@ -137,13 +137,27 @@ public final class CompositeSystemSleeper: SystemSleepCommanding {
     }
 }
 
-/// Locks via System Events `lock screen` (Monterey+). Prompt-free on a
-/// console session that already trusts the app, otherwise macOS may ask for
-/// Automation once.
+/// Locks through the system CGSession tool first, which needs no Automation
+/// permission. System Events remains a compatibility fallback.
 public final class SystemEventsScreenLocker: ScreenLocking {
     public init() {}
 
     public func lock() {
+        let session = Process()
+        session.executableURL = URL(
+            fileURLWithPath: "/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession"
+        )
+        session.arguments = ["-suspend"]
+        session.standardOutput = Pipe()
+        session.standardError = Pipe()
+        do {
+            try session.run()
+            session.waitUntilExit()
+            if session.terminationStatus == 0 { return }
+        } catch {
+            // Fall through to the compatibility path.
+        }
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         process.arguments = ["-e", "tell application \"System Events\" to lock screen"]
