@@ -159,10 +159,49 @@ import Foundation
         triggersPaused: false,
         appVersion: "1.8.0",
         pid: 4242,
+        processStartToken: 123_456_789,
         writtenAt: Date(timeIntervalSinceReferenceDate: 799_999_000)
     )
     StatusFile.write(snapshot, to: url)
     #expect(StatusFile.read(from: url) == snapshot)
+}
+
+@Test func statusLivenessRequiresFreshHeartbeatAndExactProcessInstance() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let live = StatusSnapshot(
+        isActive: true,
+        pid: 4242,
+        processStartToken: 9001,
+        writtenAt: now.addingTimeInterval(-1)
+    )
+    #expect(StatusSnapshotLiveness.isLive(
+        live,
+        now: now,
+        startTokenForPID: { $0 == 4242 ? 9001 : nil }
+    ))
+    #expect(!StatusSnapshotLiveness.isLive(
+        live,
+        now: now,
+        startTokenForPID: { _ in 9002 }
+    ))
+
+    var stale = live
+    stale.writtenAt = now.addingTimeInterval(
+        -StatusSnapshotLiveness.maximumHeartbeatAge - 1
+    )
+    #expect(!StatusSnapshotLiveness.isLive(
+        stale,
+        now: now,
+        startTokenForPID: { _ in 9001 }
+    ))
+
+    var legacy = live
+    legacy.processStartToken = nil
+    #expect(!StatusSnapshotLiveness.isLive(
+        legacy,
+        now: now,
+        startTokenForPID: { _ in 9001 }
+    ))
 }
 
 @Test func statusFileReadsMissingFileAsNil() {

@@ -98,10 +98,10 @@ public final class HelperDaemonAWDLWatchdog: AWDLWatchdogLaunching, @unchecked S
 
 // MARK: - Routing
 
-/// Routes ``SleepWatchdogLaunching`` calls to the daemon backend while the
-/// helper is installed and to the osascript fallback otherwise. A live
-/// transaction pins its backend because only that backend owns the original
-/// sleep-setting snapshot.
+/// Routes new scoped sleep transactions only to the daemon backend, whose
+/// restore journal survives a reboot. The osascript fallback is release-only
+/// here so upgrades can clean stale control files. A live transaction pins its
+/// backend because only that backend owns the original sleep-setting snapshot.
 public final class RoutedSleepWatchdog: SleepWatchdogLaunching, @unchecked Sendable {
     private enum Backend {
         case daemon
@@ -145,6 +145,14 @@ public final class RoutedSleepWatchdog: SleepWatchdogLaunching, @unchecked Senda
         if let pinned {
             selected = pinned
         } else {
+            // A scoped global sleep transaction needs the daemon's durable
+            // root-owned restore journal. The legacy osascript loop remains
+            // release-only so an upgrade can clean its stale control file,
+            // but it cannot safely promise reboot recovery for new work.
+            if mode != .released, !helperInstalled() {
+                lock.unlock()
+                return false
+            }
             selected = helperInstalled() ? .daemon : .fallback
             if mode != .released { pinnedBackend = selected }
         }
@@ -174,8 +182,12 @@ public final class RoutedSleepWatchdog: SleepWatchdogLaunching, @unchecked Senda
 
     public func startHelper(appPID: Int32) -> SleepSettingResult {
         lock.lock()
-        let selected = pinnedBackend ?? (helperInstalled() ? Backend.daemon : Backend.fallback)
-        if pinnedBackend == nil { pinnedBackend = selected }
+        let pinned = pinnedBackend
+        if pinned == nil, !helperInstalled() {
+            lock.unlock()
+            return .failed(L("The Keepresso helper isn't responding."))
+        }
+        let selected = pinned ?? Backend.daemon
         lock.unlock()
         let result: SleepSettingResult
         switch selected {
@@ -204,7 +216,7 @@ public final class RoutedSleepWatchdog: SleepWatchdogLaunching, @unchecked Senda
         switch pinned {
         case .daemon: return daemon.engageFailureMessage
         case .fallback: return fallback.engageFailureMessage
-        case nil: return helperInstalled() ? daemon.engageFailureMessage : fallback.engageFailureMessage
+        case nil: return daemon.engageFailureMessage
         }
     }
 }

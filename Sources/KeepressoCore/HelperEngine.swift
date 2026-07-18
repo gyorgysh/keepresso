@@ -36,6 +36,42 @@ public protocol SleepSettingReading: AnyObject, Sendable {
     func sleepIsDisabled() -> Bool?
 }
 
+/// Orders connection-scoped sleep mode requests across XPC reconnects. A
+/// client keeps one random stream ID for its process lifetime and increments
+/// the generation for every intent. The helper shares this registry across
+/// exported connection objects, so a delayed reconnect replay cannot revive
+/// an older active hold after suspension or release already won.
+public final class SleepModeGenerationRegistry: @unchecked Sendable {
+    private let lock = NSLock()
+    private var latestByStream: [String: UInt64] = [:]
+    private let maximumStreams: Int
+
+    public init(maximumStreams: Int = 1_024) {
+        precondition(maximumStreams > 0)
+        self.maximumStreams = maximumStreams
+    }
+
+    public func apply(
+        streamID: String,
+        generation: UInt64,
+        operation: () -> Bool
+    ) -> Bool {
+        guard !streamID.isEmpty, streamID.utf8.count <= 128 else { return false }
+        lock.lock()
+        defer { lock.unlock() }
+        if let latest = latestByStream[streamID], generation < latest {
+            return false
+        }
+        guard latestByStream[streamID] != nil || latestByStream.count < maximumStreams else {
+            return false
+        }
+        // Advance before applying. Even an ambiguous operation failure must
+        // fence older requests while the caller retries a newer generation.
+        latestByStream[streamID] = generation
+        return operation()
+    }
+}
+
 /// Reads `pmset -g` without changing power settings.
 public final class PMSetSleepSettingReader: SleepSettingReading {
     public init() {}
@@ -296,7 +332,7 @@ public final class HelperEngine: @unchecked Sendable {
         let leftovers = state.markers()
         if leftovers.contains(.sleepDisabled) {
             let original = persistedSleepRestoreValue() ?? false
-            let ok = runner.run("/usr/bin/pmset", ["-a", "disablesleep", original ? "1" : "0"])
+            let ok = applyAndConfirmSleepTargetLocked(original)
             if ok { _ = clearPersistedSleepRestore() }
             appliedSleepTarget = nil
         }
@@ -600,16 +636,7 @@ public final class HelperEngine: @unchecked Sendable {
                 return true
             }
             let original = persistedSleepRestoreValue() ?? false
-            if appliedSleepTarget != original {
-                guard runner.run(
-                    "/usr/bin/pmset",
-                    ["-a", "disablesleep", original ? "1" : "0"]
-                ) else {
-                    appliedSleepTarget = nil
-                    return false
-                }
-                appliedSleepTarget = original
-            }
+            guard applyAndConfirmSleepTargetLocked(original) else { return false }
             guard clearPersistedSleepRestore() else { return false }
             appliedSleepTarget = nil
             return true
@@ -620,12 +647,26 @@ public final class HelperEngine: @unchecked Sendable {
             return false
         }
         let target = mode == .active
-        guard appliedSleepTarget != target else { return true }
+        return applyAndConfirmSleepTargetLocked(target)
+    }
+
+    /// A successful `pmset` exit is not confirmation that the global setting
+    /// actually changed. Read before skipping a known target, and read again
+    /// after every write. Unknown or mismatched state keeps the journal debt
+    /// and makes the daemon retry on its periodic sleep tick.
+    private func applyAndConfirmSleepTargetLocked(_ target: Bool) -> Bool {
+        if appliedSleepTarget == target,
+           sleepSettingReader.sleepIsDisabled() == target {
+            return true
+        }
+        appliedSleepTarget = nil
         guard runner.run(
             "/usr/bin/pmset",
             ["-a", "disablesleep", target ? "1" : "0"]
         ) else {
-            appliedSleepTarget = nil
+            return false
+        }
+        guard sleepSettingReader.sleepIsDisabled() == target else {
             return false
         }
         appliedSleepTarget = target

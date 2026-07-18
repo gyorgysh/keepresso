@@ -4,10 +4,29 @@ import Foundation
 
 // MARK: - Fakes
 
-private final class FakeRunner: HelperCommandRunning, @unchecked Sendable {
+private final class FakeRunner: HelperCommandRunning, SleepSettingReading, @unchecked Sendable {
     private let lock = NSLock()
     private(set) var commands: [String] = []
     var failNext = false
+    var dropNextSuccessfulSleepWrite = false
+    private var storedSleepValue: Bool?
+
+    init(sleepValue: Bool? = false) {
+        storedSleepValue = sleepValue
+    }
+
+    var sleepValue: Bool? {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return storedSleepValue
+        }
+        set {
+            lock.lock()
+            storedSleepValue = newValue
+            lock.unlock()
+        }
+    }
 
     func run(_ path: String, _ arguments: [String]) -> Bool {
         lock.lock()
@@ -17,8 +36,20 @@ private final class FakeRunner: HelperCommandRunning, @unchecked Sendable {
             failNext = false
             return false
         }
+        if path == "/usr/bin/pmset",
+           arguments.count >= 3,
+           arguments[arguments.count - 2] == "disablesleep",
+           let value = Int(arguments.last ?? "") {
+            if dropNextSuccessfulSleepWrite {
+                dropNextSuccessfulSleepWrite = false
+            } else {
+                storedSleepValue = value == 1
+            }
+        }
         return true
     }
+
+    func sleepIsDisabled() -> Bool? { sleepValue }
 }
 
 private final class FakeRestoreState: HelperSleepRestoreValuePersisting, @unchecked Sendable {
@@ -64,16 +95,6 @@ private final class FakeRestoreState: HelperSleepRestoreValuePersisting, @unchec
     }
 }
 
-private final class FakeSleepSettingReader: SleepSettingReading, @unchecked Sendable {
-    var value: Bool?
-
-    init(_ value: Bool?) {
-        self.value = value
-    }
-
-    func sleepIsDisabled() -> Bool? { value }
-}
-
 private final class FakeFanControl: FanControlling, @unchecked Sendable {
     private let lock = NSLock()
     private(set) var forcedPercents: [Int] = []
@@ -115,6 +136,34 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 
 // MARK: - Holds
 
+@Test func sleepModeGenerationRegistryRejectsReconnectReplay() {
+    let registry = SleepModeGenerationRegistry()
+    var applied: [Int] = []
+
+    #expect(registry.apply(streamID: "app-instance", generation: 2) {
+        applied.append(2)
+        return true
+    })
+    #expect(!registry.apply(streamID: "app-instance", generation: 1) {
+        applied.append(1)
+        return true
+    })
+    // An idempotent retry of the newest generation remains allowed.
+    #expect(registry.apply(streamID: "app-instance", generation: 2) {
+        applied.append(22)
+        return true
+    })
+    #expect(applied == [2, 22])
+}
+
+@Test func sleepModeGenerationRegistryBoundsUntrustedStreamKeys() {
+    let registry = SleepModeGenerationRegistry(maximumStreams: 1)
+    #expect(registry.apply(streamID: "first", generation: 1) { true })
+    #expect(!registry.apply(streamID: "second", generation: 1) { true })
+    #expect(!registry.apply(streamID: "", generation: 1) { true })
+    #expect(!registry.apply(streamID: String(repeating: "x", count: 129), generation: 1) { true })
+}
+
 @Test func sleepSettingReaderParsesRealAndLegacyPMSetKeys() {
     #expect(PMSetSleepSettingReader.parse("System-wide power settings:\n SleepDisabled 1\n") == true)
     #expect(PMSetSleepSettingReader.parse(" disablesleep 0\n") == false)
@@ -124,12 +173,12 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 }
 
 @Test func sleepHoldWritesOnlyOnUnionEdges() {
-    let runner = FakeRunner()
+    let runner = FakeRunner(sleepValue: false)
     let state = FakeRestoreState()
     let engine = HelperEngine(
         runner: runner,
         state: state,
-        sleepSettingReader: FakeSleepSettingReader(false)
+        sleepSettingReader: runner
     )
 
     #expect(engine.setSleepHold(client: 1, holding: true))
@@ -148,7 +197,7 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 }
 
 @Test func awdlHoldDownsUpsAndReassertsOnTick() {
-    let runner = FakeRunner()
+    let runner = FakeRunner(sleepValue: false)
     let engine = HelperEngine(runner: runner, state: FakeRestoreState())
 
     // Idle ticks are no-ops.
@@ -172,7 +221,7 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     let engine = HelperEngine(
         runner: runner,
         state: state,
-        sleepSettingReader: FakeSleepSettingReader(false)
+        sleepSettingReader: runner
     )
 
     _ = engine.setSleepHold(client: 1, holding: true)
@@ -193,12 +242,12 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 }
 
 @Test func failedWriteKeepsAConservativeRestoreDebt() {
-    let runner = FakeRunner()
+    let runner = FakeRunner(sleepValue: false)
     let state = FakeRestoreState()
     let engine = HelperEngine(
         runner: runner,
         state: state,
-        sleepSettingReader: FakeSleepSettingReader(false)
+        sleepSettingReader: runner
     )
 
     runner.failNext = true
@@ -210,12 +259,12 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 }
 
 @Test func sleepHoldRestoresAnOriginallyDisabledSleepSetting() {
-    let runner = FakeRunner()
+    let runner = FakeRunner(sleepValue: true)
     let state = FakeRestoreState()
     let engine = HelperEngine(
         runner: runner,
         state: state,
-        sleepSettingReader: FakeSleepSettingReader(true)
+        sleepSettingReader: runner
     )
 
     #expect(engine.setSleepHold(client: 1, holding: true))
@@ -229,12 +278,12 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 }
 
 @Test func sleepHoldRefusesToGuessWhenOriginalSettingIsUnreadable() {
-    let runner = FakeRunner()
+    let runner = FakeRunner(sleepValue: nil)
     let state = FakeRestoreState()
     let engine = HelperEngine(
         runner: runner,
         state: state,
-        sleepSettingReader: FakeSleepSettingReader(nil)
+        sleepSettingReader: runner
     )
 
     #expect(!engine.setSleepHold(client: 1, holding: true))
@@ -245,12 +294,12 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 }
 
 @Test func failedSleepRestoreKeepsSnapshotForNextLaunch() {
-    let runner = FakeRunner()
+    let runner = FakeRunner(sleepValue: false)
     let state = FakeRestoreState()
     let engine = HelperEngine(
         runner: runner,
         state: state,
-        sleepSettingReader: FakeSleepSettingReader(false)
+        sleepSettingReader: runner
     )
     #expect(engine.setSleepHold(client: 1, holding: true))
 
@@ -265,13 +314,55 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     #expect(state.sleepRestoreValue() == nil)
 }
 
-@Test func thermalSleepModesPreserveFalseOriginalAcrossTheWholeTransaction() {
-    let runner = FakeRunner()
+@Test func successfulExitWithoutSleepReadbackKeepsDebtAndRetries() {
+    let runner = FakeRunner(sleepValue: false)
     let state = FakeRestoreState()
     let engine = HelperEngine(
         runner: runner,
         state: state,
-        sleepSettingReader: FakeSleepSettingReader(false)
+        sleepSettingReader: runner
+    )
+
+    runner.dropNextSuccessfulSleepWrite = true
+    #expect(!engine.setSleepHoldMode(client: 1, mode: .active))
+    #expect(state.markers() == [.sleepDisabled])
+    #expect(runner.sleepValue == false)
+
+    engine.sleepTick()
+    #expect(runner.sleepValue == true)
+    #expect(engine.setSleepHoldMode(client: 1, mode: .released))
+    #expect(state.markers().isEmpty)
+}
+
+@Test func successfulRestoreExitWithoutReadbackCannotClearJournal() {
+    let runner = FakeRunner(sleepValue: false)
+    let state = FakeRestoreState()
+    let engine = HelperEngine(
+        runner: runner,
+        state: state,
+        sleepSettingReader: runner
+    )
+
+    #expect(engine.setSleepHoldMode(client: 1, mode: .active))
+    runner.dropNextSuccessfulSleepWrite = true
+    #expect(!engine.setSleepHoldMode(client: 1, mode: .released))
+    #expect(runner.sleepValue == true)
+    #expect(state.markers() == [.sleepDisabled])
+    #expect(!engine.isIdle)
+
+    engine.sleepTick()
+    #expect(runner.sleepValue == false)
+    #expect(state.markers().isEmpty)
+    #expect(engine.isIdle)
+}
+
+@Test func thermalSleepModesPreserveFalseOriginalAcrossTheWholeTransaction() {
+    let runner = FakeRunner(sleepValue: false)
+    let state = FakeRestoreState()
+    let engine = HelperEngine(
+        runner: runner,
+        state: state,
+        sleepSettingReader: runner
     )
 
     #expect(engine.setSleepHoldMode(client: 1, mode: .active))
@@ -285,12 +376,12 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 }
 
 @Test func thermalSleepModesPreserveTrueManualOriginal() {
-    let runner = FakeRunner()
+    let runner = FakeRunner(sleepValue: true)
     let state = FakeRestoreState()
     let engine = HelperEngine(
         runner: runner,
         state: state,
-        sleepSettingReader: FakeSleepSettingReader(true)
+        sleepSettingReader: runner
     )
 
     // This covers both manual-only released-to-suspended and a mixed
@@ -304,11 +395,11 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 }
 
 @Test func activeClientWinsOverSuspendedClients() {
-    let runner = FakeRunner()
+    let runner = FakeRunner(sleepValue: false)
     let engine = HelperEngine(
         runner: runner,
         state: FakeRestoreState(),
-        sleepSettingReader: FakeSleepSettingReader(false)
+        sleepSettingReader: runner
     )
 
     #expect(engine.setSleepHoldMode(client: 1, mode: .thermallySuspended))
@@ -319,12 +410,12 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 }
 
 @Test func failedThermalTransitionAndRestoreRetryOnSleepTick() {
-    let runner = FakeRunner()
+    let runner = FakeRunner(sleepValue: false)
     let state = FakeRestoreState()
     let engine = HelperEngine(
         runner: runner,
         state: state,
-        sleepSettingReader: FakeSleepSettingReader(false)
+        sleepSettingReader: runner
     )
 
     #expect(engine.setSleepHoldMode(client: 1, mode: .active))
@@ -344,12 +435,12 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 }
 
 @Test func manualChoiceDuringScopedHoldUpdatesTheRestoreBaseline() {
-    let runner = FakeRunner()
+    let runner = FakeRunner(sleepValue: false)
     let state = FakeRestoreState()
     let engine = HelperEngine(
         runner: runner,
         state: state,
-        sleepSettingReader: FakeSleepSettingReader(false)
+        sleepSettingReader: runner
     )
 
     #expect(engine.setSleepHoldMode(client: 1, mode: .active))
@@ -361,13 +452,12 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 }
 
 @Test func newSleepHoldPreservesAnUnsettledRestoreSnapshot() {
-    let runner = FakeRunner()
+    let runner = FakeRunner(sleepValue: false)
     let state = FakeRestoreState()
-    let reader = FakeSleepSettingReader(false)
     let engine = HelperEngine(
         runner: runner,
         state: state,
-        sleepSettingReader: reader
+        sleepSettingReader: runner
     )
     #expect(engine.setSleepHold(client: 1, holding: true))
 
@@ -377,7 +467,7 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 
     // The failed restore left the live setting at 1. A new hold must reuse the
     // saved original 0 instead of sampling that debt and replacing it with 1.
-    reader.value = true
+    runner.sleepValue = true
     #expect(engine.setSleepHold(client: 2, holding: true))
     #expect(state.sleepRestoreValue() == false)
     #expect(engine.setSleepHold(client: 2, holding: false))
@@ -388,14 +478,14 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 
 @Test func sleepHoldRefusesPMSetWhenRestoreJournalCannotBePersisted() {
     for failSnapshot in [true, false] {
-        let runner = FakeRunner()
+        let runner = FakeRunner(sleepValue: false)
         let state = FakeRestoreState()
         state.failSleepValueWrites = failSnapshot
         state.failMarkerWrites = !failSnapshot
         let engine = HelperEngine(
             runner: runner,
             state: state,
-            sleepSettingReader: FakeSleepSettingReader(false)
+            sleepSettingReader: runner
         )
 
         #expect(!engine.setSleepHold(client: 1, holding: true))
@@ -506,9 +596,13 @@ private struct CLILinkFixture {
 }
 
 @Test func restoreAtLaunchSettlesLeftoverMarkers() {
-    let runner = FakeRunner()
+    let runner = FakeRunner(sleepValue: true)
     let state = FakeRestoreState([.sleepDisabled, .awdlDown])
-    let engine = HelperEngine(runner: runner, state: state)
+    let engine = HelperEngine(
+        runner: runner,
+        state: state,
+        sleepSettingReader: runner
+    )
 
     engine.restoreAtLaunch()
     #expect(runner.commands.contains(sleepOff))
@@ -516,15 +610,23 @@ private struct CLILinkFixture {
     #expect(state.markers().isEmpty)
 
     // A clean launch restores nothing.
-    let cleanRunner = FakeRunner()
-    HelperEngine(runner: cleanRunner, state: FakeRestoreState()).restoreAtLaunch()
+    let cleanRunner = FakeRunner(sleepValue: false)
+    HelperEngine(
+        runner: cleanRunner,
+        state: FakeRestoreState(),
+        sleepSettingReader: cleanRunner
+    ).restoreAtLaunch()
     #expect(cleanRunner.commands.isEmpty)
 }
 
 @Test func restoreAtLaunchUsesThePersistedOriginalSleepValue() {
-    let runner = FakeRunner()
+    let runner = FakeRunner(sleepValue: false)
     let state = FakeRestoreState([.sleepDisabled], sleepRestoreValue: true)
-    let engine = HelperEngine(runner: runner, state: state)
+    let engine = HelperEngine(
+        runner: runner,
+        state: state,
+        sleepSettingReader: runner
+    )
 
     engine.restoreAtLaunch()
     #expect(runner.commands == [sleepOn])
@@ -533,14 +635,38 @@ private struct CLILinkFixture {
 }
 
 @Test func failedLaunchRestoreLeavesMarkersForAnotherRetry() {
-    let runner = FakeRunner()
+    let runner = FakeRunner(sleepValue: true)
     runner.failNext = true
     let state = FakeRestoreState([.sleepDisabled], sleepRestoreValue: false)
-    let engine = HelperEngine(runner: runner, state: state)
+    let engine = HelperEngine(
+        runner: runner,
+        state: state,
+        sleepSettingReader: runner
+    )
 
     engine.restoreAtLaunch()
     #expect(state.markers() == [.sleepDisabled])
     #expect(state.sleepRestoreValue() == false)
+}
+
+@Test func launchRestoreRequiresMatchingReadbackBeforeClearingDebt() {
+    let runner = FakeRunner(sleepValue: true)
+    runner.dropNextSuccessfulSleepWrite = true
+    let state = FakeRestoreState([.sleepDisabled], sleepRestoreValue: false)
+    let engine = HelperEngine(
+        runner: runner,
+        state: state,
+        sleepSettingReader: runner
+    )
+
+    engine.restoreAtLaunch()
+    #expect(state.markers() == [.sleepDisabled])
+    #expect(state.sleepRestoreValue() == false)
+    #expect(!engine.isIdle)
+
+    engine.sleepTick()
+    #expect(runner.sleepValue == false)
+    #expect(state.markers().isEmpty)
 }
 
 // MARK: - Fan holds

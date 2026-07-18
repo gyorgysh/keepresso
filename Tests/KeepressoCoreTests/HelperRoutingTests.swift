@@ -102,7 +102,7 @@ private final class FakeFallbackSleepWatchdog: SleepWatchdogLaunching, @unchecke
 @Test func routedSleepTransactionPinsItsBackendAcrossAvailabilityChanges() {
     let client = FakeHelperClient()
     let fallback = FakeFallbackSleepWatchdog()
-    let installed = LockedFlag(false)
+    let installed = LockedFlag(true)
     let routed = RoutedSleepWatchdog(
         daemon: HelperDaemonSleepWatchdog(helper: client),
         fallback: fallback,
@@ -111,11 +111,17 @@ private final class FakeFallbackSleepWatchdog: SleepWatchdogLaunching, @unchecke
 
     #expect(routed.startHelper(appPID: 1) == .applied)
     #expect(routed.setMode(.active))
-    installed.value = true
+    installed.value = false
     #expect(routed.setMode(.thermallySuspended))
     #expect(routed.setMode(.released))
-    #expect(fallback.modes == [.active, .thermallySuspended, .released])
-    #expect(client.calls == ["setSleepHold(false)"])
+    #expect(fallback.modes.isEmpty)
+    #expect(fallback.removeCalls == 1)
+    #expect(client.calls == [
+        "ping",
+        "setSleepHold(true)",
+        "setSleepHoldMode(thermallySuspended)",
+        "setSleepHold(false)"
+    ])
 }
 
 private final class FakeFallbackSleepControl: SleepSettingControlling, @unchecked Sendable {
@@ -152,7 +158,7 @@ private final class FakeFallbackSleepControl: SleepSettingControlling, @unchecke
     #expect(!fallback.flagPresent)
 }
 
-@Test func routedSleepWatchdogFallsBackWhenHelperMissing() {
+@Test func routedSleepWatchdogRequiresHelperAndOnlyCleansLegacyFallback() {
     let client = FakeHelperClient()
     let fallback = FakeFallbackSleepWatchdog()
     let routed = RoutedSleepWatchdog(
@@ -161,13 +167,16 @@ private final class FakeFallbackSleepControl: SleepSettingControlling, @unchecke
         helperInstalled: { false }
     )
 
-    #expect(routed.createFlag())
-    #expect(routed.startHelper(appPID: 1) == .applied)
-    #expect(routed.isFlagPresent())
+    #expect(!routed.createFlag())
+    #expect(routed.startHelper(appPID: 1) == .failed("The Keepresso helper isn't responding."))
+    #expect(!routed.isFlagPresent())
+
+    fallback.flagPresent = true
     routed.removeFlag()
 
-    #expect(fallback.startCalls == 1)
-    // Not installed and never held via the daemon: no XPC traffic at all.
+    #expect(!fallback.flagPresent)
+    #expect(fallback.startCalls == 0)
+    // No daemon and no safe transaction: no XPC traffic at all.
     #expect(client.calls.isEmpty)
 }
 
@@ -184,7 +193,7 @@ private final class FakeFallbackSleepControl: SleepSettingControlling, @unchecke
 
     #expect(routed.engageFailureMessage == "The Keepresso helper isn't responding.")
     installed.value = false
-    #expect(routed.engageFailureMessage == "Couldn't create the sleep watchdog flag file.")
+    #expect(routed.engageFailureMessage == "The Keepresso helper isn't responding.")
 }
 
 @Test func routedWatchdogReleasesADaemonHoldEvenAfterUninstall() {

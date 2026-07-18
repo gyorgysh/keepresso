@@ -150,7 +150,7 @@ public final class SessionController {
     /// battery-paused session may reactivate. A dead-band: without it a reading
     /// bouncing 19/20/19/20 around a threshold of 20 would force-stop and
     /// immediately restart every second.
-    static let batteryResumeMargin = 3
+    public static let batteryResumeMargin = 3
 
     /// Bumped each time ``start(mode:options:cause:)`` is refused by the
     /// battery pause, so the UI can nudge its explanation: the user just asked
@@ -463,6 +463,10 @@ public final class SessionController {
     ///     ``BatteryReading/discharging(_:)`` with the percentage otherwise;
     ///     internal reconciles default to ``BatteryReading/unknown``, which
     ///     leaves the pause latch untouched.
+    ///   - batterySafetyRecoveryPending: true while the closed-display backend
+    ///     is restoring its exact sleep snapshot after a battery pause. This
+    ///     keeps Agent work stopped even if the user disables battery
+    ///     auto-pause or plugs in before that restore is confirmed.
     ///   - thermal: the thermal guard's verdict, dwell and hysteresis already
     ///     applied there. `.unknown` (the internal-reconcile default) leaves
     ///     the thermal latch untouched, exactly like the battery reading.
@@ -470,6 +474,7 @@ public final class SessionController {
         now: Date? = nil,
         systemIdleSeconds: TimeInterval? = nil,
         battery: BatteryReading = .unknown,
+        batterySafetyRecoveryPending: Bool = false,
         thermal: ThermalReading = .unknown
     ) {
         let instant = now ?? self.now()
@@ -479,6 +484,23 @@ public final class SessionController {
             lastBatteryPercent = percent
         case .onAC, .unknown:
             lastBatteryPercent = nil
+        }
+
+        // Closed-display safety and session activation are two halves of one
+        // transaction. Never let a settings change or an AC edge clear the
+        // session latch until the privileged backend has confirmed that its
+        // exact pre-task sleep setting is restored.
+        if batterySafetyRecoveryPending {
+            pausedByBattery = true
+            cancelPendingEndAction()
+            if isActive {
+                stop(
+                    reason: L("Paused on low battery"),
+                    effects: .safetyPause(kind: .batteryPaused)
+                )
+            }
+            triggerGate?.tick()
+            return
         }
 
         if pauseBelowBatteryPercent == nil {

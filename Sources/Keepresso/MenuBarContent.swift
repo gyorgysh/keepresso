@@ -240,7 +240,10 @@ struct MenuBarContent: View {
         ), info: model.machineHasBattery
             ? L("Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.")
             : L("Stops the Mac from sleeping at all, even with no session running. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password."))
-        .disabled(model.closedDisplayBusy)
+        .disabled(model.closedDisplayBusy
+            || (!model.closedDisplayEnabled
+                && model.batteryAutoPauseEnabled
+                && !model.helperInstalled))
         if model.closedDisplayBusy {
             AdminAuthNote(purpose: model.machineHasBattery
                 ? L("keep the Mac awake with the lid closed")
@@ -267,11 +270,13 @@ struct MenuBarContent: View {
         ), info: model.machineHasBattery
             ? L("Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.")
             : L("Turns the sleep override on when a keep-awake session starts and off when it ends or Keepresso quits."))
-        .disabled(model.closedDisplayAutoBusy)
-        if model.closedDisplayAutoBusy && !model.helperInstalled {
-            AdminAuthNote(purpose: model.machineHasBattery
-                ? L("switch closed-display mode with the session")
-                : L("switch the sleep override with the session"))
+        .disabled(model.closedDisplayAutoBusy
+            || (!model.helperInstalled && !model.closedDisplayOnlyWhileBrewing))
+        if !model.helperInstalled {
+            Text(L("Install and approve the helper before relying on unattended wake or closed-lid work."))
+                .font(type.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         if let error = model.closedDisplayAutoError {
             Text(error)

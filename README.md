@@ -160,8 +160,11 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   The screen itself turns off when the lid closes, so it's not sitting lit
   inside a closed lid. An optional **"Only while brewing"** mode ties it to the
   session instead of leaving it on globally: on when a keep-awake session
-  starts, off when it ends (or the app quits, even after a crash), with the
-  password asked once per app run, or never with the administrator helper.
+  starts, off when it ends (or the app quits, even after a crash). This scoped
+  automatic mode requires the administrator helper, whose durable journal can
+  restore the exact original setting after an app crash, helper restart, or
+  Mac reboot. The persistent manual switch still has a one-time password
+  fallback.
   A thermal stop temporarily permits sleep inside the same scoped transaction,
   then restores the exact manual and automatic ownership after cooling.
 - 🔑 **One password, ever.** An optional **administrator helper**, a small
@@ -173,10 +176,11 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   and updates, and app updates replace the service automatically, never a
   reinstall. The helper can only flip those specific switches, restores
   everything if the app quits or crashes, puts the `keepresso` CLI on PATH
-  for DMG installs, and can be removed at any time. Without it, everything
-  still works the old way, with a once-per-run prompt (now always announced
-  by a notification), except the fan boost, which stays off rather than ever
-  prompting from a background safety action.
+  for DMG installs, and can be removed at any time. Without it, persistent
+  manual switches can still use the announced password fallback. Scheduled
+  wake, scoped closed-lid automation, unattended Agent work, and thermal fan
+  boost stay disabled because background safety and recovery must never rely
+  on a password prompt or a non-durable restore snapshot.
 - 🔔 **Reminders, end actions, and event hooks.** A "still brewing" notification
   (with an optional sound) after _N_ minutes, one-time or recurring, so a
   forgotten session can't quietly drain the battery. When a session ends on its

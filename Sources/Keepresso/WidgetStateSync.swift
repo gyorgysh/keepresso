@@ -34,9 +34,13 @@ final class WidgetStateSync {
     ) {
         let sharedChanged = state != lastState
         let statusChanged = sharedChanged || unattended != lastUnattendedStatus
-        guard statusChanged else { return }
-        lastState = state
-        lastUnattendedStatus = unattended
+        if statusChanged {
+            lastState = state
+            lastUnattendedStatus = unattended
+        }
+        let pid = ProcessInfo.processInfo.processIdentifier
+        // status.json is also a one-second liveness heartbeat. Keep writing it
+        // even when the UI state is unchanged; widget reloads remain change-only.
         StatusFile.write(StatusSnapshot(
             isActive: state.isActive,
             endsAt: state.endsAt,
@@ -48,9 +52,11 @@ final class WidgetStateSync {
             closedLidProtectionReady: unattended.closedLidProtectionReady,
             nextCodexRun: unattended.nextCodexRun,
             appVersion: appVersion,
-            pid: ProcessInfo.processInfo.processIdentifier,
+            pid: pid,
+            processStartToken: StatusProcessIdentity.startToken(pid: pid),
             writtenAt: Date()
         ))
+        guard statusChanged else { return }
         guard sharedChanged else { return }
         guard let defaults else { return }
         WidgetBridge.writeState(state, to: defaults)

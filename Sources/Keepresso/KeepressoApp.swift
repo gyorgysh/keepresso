@@ -140,6 +140,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         thermalSuppressionLatched: { [weak self] in
             self?.model.closedDisplayAuto.isThermallySuspended ?? false
         },
+        batterySuppressionLatched: { [weak self] in
+            self?.model.closedDisplayAuto.isBatterySuspended ?? false
+        },
+        onBatterySafetyChanged: { [weak self] isUnsafe in
+            self?.model.handleBatteryClosedDisplaySafety(isUnsafe: isUnsafe)
+        },
         onThermalEffects: { [weak self] in self?.model.handleThermalEffects($0) },
         onTick: { [weak self] in
             self?.model.agentLeaseTick()
@@ -204,23 +210,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.refreshClosedDisplay()
         // Any AWDL watchdog flag surviving from a previous process is stale
         // (the loop it kept alive has already exited via its pid check).
-        Task { await model.awdl.cleanupAtLaunch() }
-        // Same for the closed-display sleep watchdog's flag.
-        Task { await model.closedDisplayAuto.cleanupAtLaunch() }
-        // The helper daemon can be "enabled" yet unlaunchable (launchd's
-        // record goes stale after an app update plus a reboot); check it now,
-        // and repair the registration, before the first engage fails on it.
-        model.verifyHelper()
-        ticker.start()
-        // Register the global keep-awake toggle shortcut, if the user set one.
-        model.registerHotKey()
-        // Start a session right away if "Start keep-awake on launch" is on.
-        model.startOnLaunchIfNeeded()
-        // Re-sync wake schedules with the helper (settings survive; the system
-        // schedule is the source of truth for the machine).
-        model.refreshCodexAutomationPlan(force: true)
-        model.applyWakeScheduleToSystem()
-        model.refreshSystemWakeState()
+        // Cleanup is a startup barrier for every source that can request a new
+        // hold. Otherwise a stale release can race start-on-launch or a
+        // scheduled Agent demand and land after the new active mode.
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await model.awdl.cleanupAtLaunch()
+            await model.closedDisplayAuto.cleanupAtLaunch()
+            // The helper daemon can be "enabled" yet unlaunchable (launchd's
+            // record goes stale after an app update plus a reboot); check it
+            // before the first new engage.
+            model.verifyHelper()
+            ticker.start()
+            // Register the global keep-awake toggle shortcut, if the user set one.
+            model.registerHotKey()
+            // Start a session right away if "Start keep-awake on launch" is on.
+            model.startOnLaunchIfNeeded()
+            // Re-sync wake schedules with the helper (settings survive; the
+            // system schedule is the source of truth for the machine).
+            model.refreshCodexAutomationPlan(force: true)
+            model.applyWakeScheduleToSystem()
+            model.refreshSystemWakeState()
+        }
         // Wake-and-brew: a system wake near a Keepresso schedule can start a
         // session or apply a preset.
         NSWorkspace.shared.notificationCenter.addObserver(

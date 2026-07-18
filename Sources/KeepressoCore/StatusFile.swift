@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 /// A machine-readable mirror of the session state, written by the app to
 /// `~/Library/Application Support/Keepresso/status.json` whenever the state
@@ -6,8 +7,9 @@ import Foundation
 ///
 /// The App Group is Team-ID-scoped and sandbox-signed, so a plain file is the
 /// channel a separately invoked CLI can always read. The snapshot carries the
-/// writer's pid: readers use `kill(pid, 0)` to tell a live state from one left
-/// behind by a crash.
+/// writer's pid, process-start token, and heartbeat timestamp. Readers require
+/// all three, so a crash followed by PID reuse cannot authenticate stale
+/// closed-lid readiness.
 public struct StatusSnapshot: Codable, Equatable, Sendable {
     public var isActive: Bool
     /// When a timed session ends, or `nil` for indefinite/trigger-held ones.
@@ -29,6 +31,8 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
     public var appVersion: String?
     /// The writing app's process id.
     public var pid: Int32
+    /// Microseconds since the Unix epoch when that exact process started.
+    public var processStartToken: UInt64?
     public var writtenAt: Date
 
     public init(
@@ -43,6 +47,7 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
         nextCodexRun: Date? = nil,
         appVersion: String? = nil,
         pid: Int32,
+        processStartToken: UInt64? = nil,
         writtenAt: Date
     ) {
         self.isActive = isActive
@@ -56,7 +61,45 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
         self.nextCodexRun = nextCodexRun
         self.appVersion = appVersion
         self.pid = pid
+        self.processStartToken = processStartToken
         self.writtenAt = writtenAt
+    }
+}
+
+/// Authenticates a status heartbeat against the exact process instance.
+public enum StatusSnapshotLiveness {
+    public static let maximumHeartbeatAge: TimeInterval = 5
+    public static let maximumFutureSkew: TimeInterval = 2
+
+    public static func isLive(
+        _ snapshot: StatusSnapshot,
+        now: Date = Date(),
+        startTokenForPID: (Int32) -> UInt64? = StatusProcessIdentity.startToken
+    ) -> Bool {
+        let age = now.timeIntervalSince(snapshot.writtenAt)
+        guard age >= -maximumFutureSkew,
+              age <= maximumHeartbeatAge,
+              let expected = snapshot.processStartToken,
+              let actual = startTokenForPID(snapshot.pid),
+              expected == actual
+        else { return false }
+        return true
+    }
+}
+
+public enum StatusProcessIdentity {
+    /// Kernel process start time, stable for the process lifetime and changed
+    /// when the numeric PID is reused.
+    public static func startToken(pid: Int32) -> UInt64? {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else {
+            return nil
+        }
+        let seconds = info.pbi_start_tvsec
+        let microseconds = UInt64(info.pbi_start_tvusec)
+        guard seconds <= (UInt64.max - microseconds) / 1_000_000 else { return nil }
+        return seconds * 1_000_000 + microseconds
     }
 }
 

@@ -195,7 +195,7 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching, @unchecked Se
     ) -> String {
         let quotedFlagPath = Self.shellQuoted(flagPath)
         let quotedAckPath = Self.shellQuoted(ackPath ?? Self.ackPath(appPID: appPID))
-        let readSetting = "OUT=$(/usr/bin/pmset -g 2>/dev/null) && OBS=$(printf '%s\\n' \"$OUT\" | /usr/bin/awk 'tolower($1) == \"sleepdisabled\" || tolower($1) == \"disablesleep\" { print $2; found=1; exit } END { if (!found) exit 1 }')"
+        let readSetting = "OBS=; OUT=$(/usr/bin/pmset -g 2>/dev/null) && OBS=$(printf '%s\\n' \"$OUT\" | /usr/bin/awk 'tolower($1) == \"sleepdisabled\" || tolower($1) == \"disablesleep\" { print $2; found=1; exit } END { if (!found) exit 1 }')"
         return "( SET=; ORIG=; APPLIED=released; while :; do "
             + "if kill -0 \(appPID) 2>/dev/null; then ALIVE=1; else ALIVE=; fi; "
             + "GEN=; WANT=released; "
@@ -205,7 +205,9 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching, @unchecked Se
             + "if [ \"$WANT\" = active ]; then TARGET=1; elif [ \"$WANT\" = thermallySuspended ]; then TARGET=0; else TARGET=$ORIG; fi; "
             + "if [ \"$WANT\" = released ]; then "
             + "if [ -n \"$SET\" ]; then if /usr/bin/pmset -a disablesleep \"$TARGET\" && \(readSetting) && [ \"$OBS\" = \"$TARGET\" ]; then SET=; ORIG=; APPLIED=released; fi; else APPLIED=released; fi; "
-            + "elif [ -n \"$SET\" ] && [ \"$APPLIED\" != \"$WANT\" ]; then if /usr/bin/pmset -a disablesleep \"$TARGET\" && \(readSetting) && [ \"$OBS\" = \"$TARGET\" ]; then APPLIED=$WANT; fi; fi; "
+            + "elif [ -n \"$SET\" ]; then "
+            + "if \(readSetting) && [ \"$OBS\" = \"$TARGET\" ]; then APPLIED=$WANT; "
+            + "elif /usr/bin/pmset -a disablesleep \"$TARGET\" && \(readSetting) && [ \"$OBS\" = \"$TARGET\" ]; then APPLIED=$WANT; else APPLIED=; fi; fi; "
             + "if [ -n \"$GEN\" ] && [ \"$APPLIED\" = \"$WANT\" ]; then printf '%s %s\\n' \"$GEN\" \"$WANT\" > \(quotedAckPath) && chmod 644 \(quotedAckPath); fi; "
             + "if [ -z \"$ALIVE\" ] && [ -z \"$SET\" ]; then break; fi; sleep 2; done; "
             + "rm -f \(quotedFlagPath) \(quotedAckPath) ) </dev/null >/dev/null 2>&1 &"
@@ -242,7 +244,7 @@ public enum ClosedLidProtectionReadiness {
         manualProtectionActive: Bool = false
     ) -> Bool {
         hasUnattendedDemand
-            ? (automaticHoldActive || manualProtectionActive)
+            ? automaticHoldActive
             : (helperReady || manualProtectionActive)
     }
 }
@@ -270,7 +272,9 @@ public final class ClosedDisplayAutoController {
     /// manual global setting instead of a scoped transaction.
     public private(set) var isUsingManualProtection = false
     public var hasScopedTransaction: Bool {
-        confirmedMode != .released || desiredMode != .released
+        confirmedMode != .released
+            || desiredMode != .released
+            || backendStateNeedsReconcile
     }
 
     /// Message from the last failed attempt; `nil` after a success or a user
@@ -293,14 +297,27 @@ public final class ClosedDisplayAutoController {
     /// separate from the session state because asynchronous release and
     /// restore operations can overlap a session transition.
     public private(set) var isThermallySuspended = false
+    /// Battery safety uses the same exact-snapshot suspended backend state.
+    /// It stays latched until the backend confirms recovery, so the session
+    /// cannot resume while `disablesleep` is still in the safety state.
+    public private(set) var isBatterySuspended = false
+    public var isSafetySuspended: Bool {
+        isThermallySuspended || isBatterySuspended
+    }
 
     private var isAuthorizedForThisRun = false
     private var automaticDemand = false
     private var sleepAlreadyDisabled: Bool?
     private var desiredMode: SleepHoldMode = .released
+    /// True when a backend call may have landed after its revision became
+    /// stale, or returned an ambiguous failure. Cached confirmedMode cannot
+    /// close the transaction until the latest desired mode is written again.
+    private var backendStateNeedsReconcile = false
     private var revision = 0
-    private var resumePending = false
+    private var thermalResumePending = false
+    private var batteryResumePending = false
     private var thermalGateClosed = false
+    private var batteryGateClosed = false
     @ObservationIgnored private var reconcileTask: Task<Void, Never>?
 
     private let launcher: SleepWatchdogLaunching
@@ -323,10 +340,20 @@ public final class ClosedDisplayAutoController {
     /// process has already exited via its pid check, so a surviving flag is
     /// stale by definition.
     public func cleanupAtLaunch() async {
-        let launcher = self.launcher
-        _ = await Task.detached { launcher.setMode(.released) }.value
-        confirmedMode = .released
+        automaticDemand = false
+        isUsingManualProtection = false
+        thermalGateClosed = false
+        batteryGateClosed = false
+        thermalResumePending = false
+        batteryResumePending = false
+        // Invalidate any operation already in flight, even when released was
+        // also its desired mode. The reconcile loop then serializes cleanup
+        // with a concurrent launch session or safety transition.
+        revision &+= 1
         desiredMode = .released
+        backendStateNeedsReconcile = true
+        scheduleReconcile()
+        await waitForReconcile()
     }
 
     /// Pre-authorize the helper without touching the sleep setting: spawn it
@@ -344,7 +371,6 @@ public final class ClosedDisplayAutoController {
         let result = await Task.detached { launcher.startHelper(appPID: pid) }.value
         if case .applied = result {
             isAuthorizedForThisRun = true
-            _ = await Task.detached { launcher.setMode(.released) }.value
         }
         return result
     }
@@ -355,10 +381,12 @@ public final class ClosedDisplayAutoController {
         automaticDemand = false
         isUsingManualProtection = false
         thermalGateClosed = false
-        resumePending = false
+        batteryGateClosed = false
+        thermalResumePending = false
+        batteryResumePending = false
         heldOff = false
         setDesiredMode(.released)
-        finishThermalRecoveryIfConfirmed()
+        finishSafetyRecoveryIfConfirmed()
         scheduleReconcile()
         await waitForReconcile()
     }
@@ -376,7 +404,7 @@ public final class ClosedDisplayAutoController {
     /// stale revision is never published and the reconcile loop immediately
     /// converges to suspended.
     public func requestThermalSuspend() {
-        resumePending = false
+        thermalResumePending = false
         guard !thermalGateClosed else { return }
         isThermallySuspended = true
         thermalGateClosed = true
@@ -390,7 +418,24 @@ public final class ClosedDisplayAutoController {
     /// window.
     public func requestThermalResume() {
         guard isThermallySuspended else { return }
-        resumePending = true
+        thermalResumePending = true
+    }
+
+    /// Low battery has the same priority as thermal safety. Multiple safety
+    /// reasons compose: recovery cannot leave suspended mode until every gate
+    /// has cleared.
+    public func requestBatterySuspend() {
+        batteryResumePending = false
+        guard !batteryGateClosed else { return }
+        isBatterySuspended = true
+        batteryGateClosed = true
+        setDesiredMode(.thermallySuspended)
+        scheduleReconcile()
+    }
+
+    public func requestBatteryResume() {
+        guard isBatterySuspended else { return }
+        batteryResumePending = true
     }
 
     /// Feed the latest post-reconcile demand without creating one task per
@@ -403,13 +448,18 @@ public final class ClosedDisplayAutoController {
         automaticDemand = brewing
         self.sleepAlreadyDisabled = sleepAlreadyDisabled
         if !brewing || demandEdge { heldOff = false }
-        if resumePending {
-            resumePending = false
+        if thermalResumePending {
+            thermalResumePending = false
             thermalGateClosed = false
             heldOff = false
         }
+        if batteryResumePending {
+            batteryResumePending = false
+            batteryGateClosed = false
+            heldOff = false
+        }
         recomputeDesiredMode()
-        finishThermalRecoveryIfConfirmed()
+        finishSafetyRecoveryIfConfirmed()
         scheduleReconcile()
     }
 
@@ -426,7 +476,7 @@ public final class ClosedDisplayAutoController {
     }
 
     private func recomputeDesiredMode() {
-        if thermalGateClosed {
+        if thermalGateClosed || batteryGateClosed {
             isUsingManualProtection = false
             setDesiredMode(.thermallySuspended)
             return
@@ -436,19 +486,12 @@ public final class ClosedDisplayAutoController {
             setDesiredMode(.released)
             return
         }
-        // Once a thermal transaction exists, resume it directly. Otherwise a
-        // verified manual global setting already protects closed-lid work and
-        // should not be wrapped in another owner.
-        if confirmedMode != .released || desiredMode != .released {
-            isUsingManualProtection = false
-            setDesiredMode(.active)
-        } else if sleepAlreadyDisabled == false {
-            isUsingManualProtection = false
-            setDesiredMode(.active)
-        } else {
-            isUsingManualProtection = sleepAlreadyDisabled == true
-            setDesiredMode(.released)
-        }
+        // Automatic demand always owns a scoped transaction, even if a manual
+        // global setting is already on. The helper snapshots that manual value
+        // as the restore baseline, so changing it mid-task cannot create a
+        // manual-to-automatic handoff gap.
+        isUsingManualProtection = false
+        setDesiredMode(.active)
     }
 
     private func setDesiredMode(_ mode: SleepHoldMode) {
@@ -459,7 +502,7 @@ public final class ClosedDisplayAutoController {
 
     private func scheduleReconcile() {
         guard reconcileTask == nil,
-              confirmedMode != desiredMode,
+              (confirmedMode != desiredMode || backendStateNeedsReconcile),
               !(heldOff && desiredMode == .active)
         else { return }
         reconcileTask = Task { [weak self] in
@@ -470,9 +513,9 @@ public final class ClosedDisplayAutoController {
     private func runReconcileLoop() async {
         defer {
             reconcileTask = nil
-            finishThermalRecoveryIfConfirmed()
+            finishSafetyRecoveryIfConfirmed()
         }
-        while confirmedMode != desiredMode {
+        while confirmedMode != desiredMode || backendStateNeedsReconcile {
             let target = desiredMode
             let targetRevision = revision
             let launcher = self.launcher
@@ -507,24 +550,34 @@ public final class ClosedDisplayAutoController {
                 launcher.setMode(target)
             }.value
             isBusy = false
-            guard targetRevision == revision else { continue }
+            guard targetRevision == revision else {
+                // The call crossed an intent change. Even a false result can
+                // be ambiguous after a timeout, so force the newest target to
+                // the same pinned backend before trusting cached state.
+                backendStateNeedsReconcile = true
+                continue
+            }
             guard applied else {
+                backendStateNeedsReconcile = true
                 lastError = launcher.engageFailureMessage
                 return
             }
             confirmedMode = target
-            finishThermalRecoveryIfConfirmed()
+            backendStateNeedsReconcile = false
+            finishSafetyRecoveryIfConfirmed()
             lastError = nil
         }
     }
 
-    private func finishThermalRecoveryIfConfirmed() {
-        guard isThermallySuspended,
-              !thermalGateClosed,
+    private func finishSafetyRecoveryIfConfirmed() {
+        guard !thermalGateClosed,
+              !batteryGateClosed,
               confirmedMode == desiredMode,
+              !backendStateNeedsReconcile,
               reconcileTask == nil
         else { return }
         isThermallySuspended = false
+        isBatterySuspended = false
     }
 
     private func waitForReconcile() async {

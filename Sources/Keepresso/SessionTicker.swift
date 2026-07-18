@@ -21,6 +21,8 @@ final class SessionTicker {
     /// while the sleep override holds the Mac awake (the left-in-a-bag case).
     private let lid: LidStateReading
     private let thermalSuppressionLatched: () -> Bool
+    private let batterySuppressionLatched: () -> Bool
+    private let onBatterySafetyChanged: ((Bool) -> Void)?
     private var thermalArming = ThermalArming()
     /// Runs after each reconcile, e.g. to mirror session state to the widget.
     private let onTick: (() -> Void)?
@@ -34,6 +36,8 @@ final class SessionTicker {
         thermalGuard: ThermalGuardController? = nil,
         lid: LidStateReading = IORegistryLidState(),
         thermalSuppressionLatched: @escaping () -> Bool = { false },
+        batterySuppressionLatched: @escaping () -> Bool = { false },
+        onBatterySafetyChanged: ((Bool) -> Void)? = nil,
         onThermalEffects: (([ThermalEffect]) -> Void)? = nil,
         onTick: (() -> Void)? = nil
     ) {
@@ -44,6 +48,8 @@ final class SessionTicker {
         self.thermalGuard = thermalGuard
         self.lid = lid
         self.thermalSuppressionLatched = thermalSuppressionLatched
+        self.batterySuppressionLatched = batterySuppressionLatched
+        self.onBatterySafetyChanged = onBatterySafetyChanged
         self.onThermalEffects = onThermalEffects
         self.onTick = onTick
     }
@@ -61,13 +67,30 @@ final class SessionTicker {
                     // empty) the Mac isn't going to run flat, so auto-pause must
                     // not fire and any latched pause may lift.
                     var battery = SessionController.BatteryReading.unknown
+                    let batteryWasLatched = self?.batterySuppressionLatched() ?? false
                     if session.consumesBatteryReading, let power = self?.powerSource.current {
                         if power.provider == .battery, let percent = power.percentage {
                             battery = .discharging(percent)
+                            if let threshold = session.pauseBelowBatteryPercent {
+                                let latched = session.pausedByBattery
+                                    || (self?.batterySuppressionLatched() ?? false)
+                                let releaseAt = threshold + (latched
+                                    ? SessionController.batteryResumeMargin
+                                    : 0)
+                                self?.onBatterySafetyChanged?(percent < releaseAt)
+                            }
                         } else if power.provider == .ac {
                             battery = .onAC
+                            self?.onBatterySafetyChanged?(false)
                         }
+                    } else if !session.consumesBatteryReading {
+                        self?.onBatterySafetyChanged?(false)
                     }
+                    // The callback above requests backend recovery. Its latch
+                    // is intentionally sampled again afterwards: the session
+                    // cannot resume until that asynchronous restore confirms,
+                    // including when auto-pause was switched off mid-recovery.
+                    let batteryStillLatched = self?.batterySuppressionLatched() ?? false
                     // The thermal guard ticks whenever it's configured (its
                     // fan stage runs even with stop-brewing off, so this
                     // can't hide behind consumesThermalReading); the session
@@ -97,6 +120,7 @@ final class SessionTicker {
                     session.reconcile(
                         systemIdleSeconds: session.consumesIdleReading ? Self.systemIdleSeconds() : nil,
                         battery: battery,
+                        batterySafetyRecoveryPending: batteryWasLatched && batteryStillLatched,
                         thermal: thermal
                     )
                 }

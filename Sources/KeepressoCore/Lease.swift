@@ -646,7 +646,7 @@ public final class AgentLeaseCommandAdapter: LeaseCommanding {
         newestActiveAcquisition: Date?
     ) -> Bool? {
         guard let snapshot = StatusFile.read(),
-              kill(snapshot.pid, 0) == 0 || errno == EPERM
+              StatusSnapshotLiveness.isLive(snapshot)
         else { return nil }
         return reportedClosedLidProtectionReady(
             snapshot: snapshot,

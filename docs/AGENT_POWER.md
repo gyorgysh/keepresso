@@ -20,8 +20,10 @@ any source remains, then restores normal sleep after the final source ends.
 An `IOPMAssertion` prevents idle system sleep but cannot override clamshell
 sleep on its own. Keepresso's helper temporarily applies `pmset disablesleep`,
 records the exact prior value, and restores that value when the last protected
-session ends. The helper and fallback watchdog also restore it after a client
-crash. Keepresso never assumes the original value was zero.
+session ends. Its root-owned recovery journal survives a client crash, helper
+restart, and Mac reboot. The legacy password fallback is retained only for the
+persistent manual switch and stale-file cleanup. It cannot start a new scoped
+Agent transaction. Keepresso never assumes the original value was zero.
 
 During a thermal stop, the same scoped transaction enters a suspended mode. It
 forces `disablesleep` to zero while retaining the exact original snapshot and

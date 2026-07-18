@@ -13,7 +13,8 @@ import Security
 /// administrator credentials once when the user enables it in System Settings
 /// (Login Items, "Allow in the Background"), and every toggle after that, in
 /// this run or any future one, is a silent XPC call. The old osascript path
-/// stays as the fallback while the helper isn't installed.
+/// remains for manual switches and AWDL. New automatic sleep transactions
+/// require the daemon's durable restore journal.
 public enum HelperService {
     /// launchd label, mach service name, and the plist's base name; all three
     /// must agree with `sh.gyorgy.keepresso.helper.plist` in the app bundle.
@@ -36,7 +37,8 @@ public enum HelperService {
     /// 5: added `sleepNow` (`pmset sleepnow` for the session-end action).
     /// 6: added the wake-schedule verb (`applyWakeSchedule`, one composite
     ///    `pmset schedule` / `pmset repeat` step).
-    /// 7: added three-state scoped sleep holds for thermal suspension.
+    /// 7: added three-state scoped sleep holds and monotonic per-connection
+    ///    generations so reconnect replay cannot overwrite newer safety state.
     public static let protocolVersion = 7
 
     /// The code-signing requirement one side demands of the other: an
@@ -93,7 +95,12 @@ public enum HelperService {
     func setSleepHold(_ holding: Bool, reply: @escaping @Sendable (Bool) -> Void)
     /// Set this connection's exact scoped sleep mode. Raw values are defined
     /// by ``SleepHoldMode``.
-    func setSleepHoldMode(_ rawMode: Int, reply: @escaping @Sendable (Bool) -> Void)
+    func setSleepHoldMode(
+        _ rawMode: Int,
+        streamID: String,
+        generation: UInt64,
+        reply: @escaping @Sendable (Bool) -> Void
+    )
     /// Take or release this connection's hold on `awdl0 down` (the AWDL
     /// watchdog). While any hold is live the daemon re-downs the interface
     /// every few seconds, since macOS re-raises it on its own.
@@ -177,6 +184,8 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     private var connection: NSXPCConnection?
     /// What we currently want held, for re-assertion after an interruption.
     private var wantsSleepMode: SleepHoldMode = .released
+    private var wantsSleepGeneration: UInt64 = 0
+    private let sleepStreamID = UUID().uuidString.lowercased()
     private var wantsAWDLHold = false
     /// The wanted fan boost percent, or nil for no fan hold.
     private var wantsFanHold: Int?
@@ -215,8 +224,17 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     public func setSleepHoldMode(_ mode: SleepHoldMode) -> Bool {
         lock.lock()
         wantsSleepMode = mode
+        wantsSleepGeneration &+= 1
+        let generation = wantsSleepGeneration
         lock.unlock()
-        return call { proxy, done in proxy.setSleepHoldMode(mode.rawValue, reply: done) }
+        return call { proxy, done in
+            proxy.setSleepHoldMode(
+                mode.rawValue,
+                streamID: sleepStreamID,
+                generation: generation,
+                reply: done
+            )
+        }
     }
 
     public func setAWDLHold(_ holding: Bool) -> Bool {
@@ -340,10 +358,15 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
             HelperService.peerRequirement(identifier: HelperService.helperCodeSignIdentifier)
         )
         fresh.interruptionHandler = { [weak self] in self?.reassertHolds() }
-        fresh.invalidationHandler = { [weak self] in
-            guard let self else { return }
+        fresh.invalidationHandler = { [weak self, weak fresh] in
+            guard let self, let fresh else { return }
             self.lock.lock()
-            self.connection = nil
+            // An idle call can detach A under the lock, then invalidate A
+            // after a concurrent hold has already installed B. A's delayed
+            // handler must never erase B, whose connection owns live holds.
+            if self.connection === fresh {
+                self.connection = nil
+            }
             self.lock.unlock()
         }
         fresh.resume()
@@ -357,6 +380,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     private func reassertHolds() {
         lock.lock()
         let sleep = wantsSleepMode
+        let sleepGeneration = wantsSleepGeneration
         let awdl = wantsAWDLHold
         let fan = wantsFanHold
         lock.unlock()
@@ -364,7 +388,13 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
               let proxy = proxyForAsyncUse()
         else { return }
         if sleep != .released {
-            proxy.setSleepHoldMode(sleep.rawValue) { _ in }
+            // A newer direct call may overtake this replay. The daemon rejects
+            // this generation if that happens, including across reconnects.
+            proxy.setSleepHoldMode(
+                sleep.rawValue,
+                streamID: sleepStreamID,
+                generation: sleepGeneration
+            ) { _ in }
         }
         if awdl { proxy.setAWDLHold(true) { _ in } }
         if let fan { proxy.setFanHold(true, percent: fan) { _ in } }

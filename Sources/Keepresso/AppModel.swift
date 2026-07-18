@@ -49,8 +49,8 @@ final class AppModel {
     let closedDisplay: ClosedDisplayController
     /// Closed-display mode's "only while brewing" automation: flips
     /// `disablesleep` on when the session starts and off when it ends. Holds
-    /// go through the helper daemon when installed (never a prompt); the
-    /// fallback is the session-scoped root loop (one admin prompt per app run).
+    /// require the helper daemon because only its root-owned journal can
+    /// recover the exact prior setting after a reboot.
     let closedDisplayAuto: ClosedDisplayAutoController
     /// Backs the headless-readiness Setup screen. Populated on demand via
     /// ``refreshReadiness()``, empty until the Setup window first appears.
@@ -262,14 +262,10 @@ final class AppModel {
                 }
             }
         }
-        // With one of the auto features on and no helper installed, this run
-        // can hit a password prompt in the background (e.g. a trigger-started
-        // session engaging "Only while brewing"). Its "Keepresso needs your
-        // password" notification only shows if we're authorized to post it, so
-        // secure that now rather than in the same instant the prompt appears.
-        // A no-op once the user has decided either way.
-        if !helperManager.isInstalled,
-           loaded.closedDisplayOnlyWhileBrewing || loaded.awdlAutoWithGaming {
+        // AWDL auto mode may use the password fallback, so secure notification
+        // permission before it can prompt over a game. Automatic closed-lid
+        // transactions require the durable helper and never prompt.
+        if !helperManager.isInstalled, loaded.awdlAutoWithGaming {
             notifier.requestAuthorization()
         }
         // The thermal pause always announces itself in a notification (an
@@ -1394,6 +1390,10 @@ final class AppModel {
     var batteryAutoPauseEnabled: Bool {
         get { settings.pauseBelowBatteryPercent != nil }
         set {
+            if newValue, closedDisplayEnabled, !helperInstalled {
+                notifyClosedLidHelperRequired()
+                return
+            }
             settings.pauseBelowBatteryPercent = newValue
                 ? (settings.pauseBelowBatteryPercent ?? Self.defaultPauseBelowBatteryPercent)
                 : nil
@@ -1411,6 +1411,43 @@ final class AppModel {
             session.pauseBelowBatteryPercent = newValue
             persist()
         }
+    }
+
+    /// Low battery must release a scoped closed-display override before the
+    /// paused session can actually let the Mac sleep. Recovery remains
+    /// latched until the same backend confirms active or released state.
+    func handleBatteryClosedDisplaySafety(isUnsafe: Bool) {
+        guard isUnsafe else {
+            batteryHelperWarningShown = false
+            closedDisplayAuto.requestBatteryResume()
+            return
+        }
+        let followsCurrentWork = (settings.closedDisplayOnlyWhileBrewing || hasExternalWakeDemand)
+            && (session.isActive || hasExternalWakeDemand)
+        let needsSafetyTransaction = closedDisplayAuto.hasScopedTransaction
+            || closedDisplayEnabled
+            || followsCurrentWork
+        guard needsSafetyTransaction else { return }
+        // Never raise an authentication prompt from a low-battery safety
+        // path. Reliable automatic protection already requires this helper.
+        guard helperInstalled || closedDisplayAuto.hasScopedTransaction else {
+            if !batteryHelperWarningShown {
+                batteryHelperWarningShown = true
+                notifyClosedLidHelperRequired()
+            }
+            return
+        }
+        closedDisplayAuto.requestBatterySuspend()
+    }
+
+    @ObservationIgnored private var batteryHelperWarningShown = false
+
+    private func notifyClosedLidHelperRequired() {
+        notifier.notify(
+            title: L("Closed-lid protection needs the administrator helper."),
+            body: L("Install and approve the helper before relying on unattended wake or closed-lid work."),
+            sound: false
+        )
     }
 
     // MARK: - Thermal safety
@@ -2116,7 +2153,8 @@ final class AppModel {
 
     /// Unregister the helper daemon. Any live holds are released first, so
     /// nothing stays held by a service that's going away; the osascript
-    /// fallback takes over from the next engage.
+    /// fallback remains available for manual switches and AWDL. Automatic
+    /// closed-lid work stays disabled until the helper is reinstalled.
     func removeHelper() {
         Task {
             await fanDryRun.cancelAndWait()
@@ -2248,6 +2286,10 @@ final class AppModel {
     /// behind other windows, leaving the menu in a stuck-looking state. With
     /// the helper installed there is no dialog, so no focus grab either.
     func setClosedDisplay(_ on: Bool) {
+        if on, batteryAutoPauseEnabled, !helperInstalled {
+            notifyClosedLidHelperRequired()
+            return
+        }
         if !helperInstalled {
             NSApp.activate(ignoringOtherApps: true)
         }
@@ -2264,31 +2306,20 @@ final class AppModel {
     /// Whether closed-display mode follows the session instead of staying on
     /// until manually turned off (see
     /// ``ClosedDisplayAutoController/onlyWhileBrewing``). Persisted. Turning it
-    /// on pre-authorizes the root helper now, in this window, so the next
-    /// session start doesn't pop a password dialog out of nowhere. One prompt
-    /// here, prompt-free automation afterward. No-op if already authorized.
+    /// on requires the durable administrator helper. The legacy password
+    /// fallback is kept only for the persistent manual toggle because it
+    /// cannot journal an exact restore value across a reboot.
     var closedDisplayOnlyWhileBrewing: Bool {
         get { settings.closedDisplayOnlyWhileBrewing }
         set {
+            // A scoped automatic transaction must survive app and machine
+            // failures with an exact restore journal. The password fallback
+            // cannot provide that guarantee, so it remains manual-only.
+            guard !newValue || helperInstalled else { return }
             settings.closedDisplayOnlyWhileBrewing = newValue
             closedDisplayAuto.onlyWhileBrewing = newValue || hasExternalWakeDemand
             persist()
-            // Priming exists to front-load the fallback's password prompt into
-            // this window; with the helper installed no engage ever prompts,
-            // so there is nothing to pre-authorize (and priming through the
-            // daemon would flip the real setting on and off for nothing).
-            if newValue && !closedDisplayAuto.isAuthorized && !helperInstalled {
-                // A fallback engage may later need a password mid-session; be
-                // able to say so even behind other windows.
-                notifier.requestAuthorization()
-                NSApp.activate(ignoringOtherApps: true)
-                let window = NSApp.keyWindow
-                Task {
-                    await closedDisplayAuto.prime()
-                    NSApp.activate(ignoringOtherApps: true)
-                    window?.makeKeyAndOrderFront(nil)
-                }
-            } else if !newValue, !hasExternalWakeDemand {
+            if !newValue, !hasExternalWakeDemand {
                 // Turning it off mid-session: release the hold (autoTick won't,
                 // it early-returns once the feature's off), then re-read the
                 // system setting once the helper has had a cycle to apply it.
@@ -2307,7 +2338,6 @@ final class AppModel {
     /// True while the automation's administrator prompt is on screen.
     var closedDisplayAutoBusy: Bool { closedDisplayAuto.isBusy }
 
-    @ObservationIgnored private var wasBrewingForClosedDisplay = false
     @ObservationIgnored private var lastConfirmedClosedDisplayMode: SleepHoldMode = .released
     @ObservationIgnored private var sawClosedDisplayAutoError = false
 
@@ -2324,26 +2354,6 @@ final class AppModel {
         // ordinary session inactive. This lets recovery move directly from
         // suspended back to active when leases still require the machine.
         let brewing = session.isActive || hasExternalWakeDemand
-        // Without the helper, the first engage of an app run prompts for the
-        // password (e.g. auto mode was enabled in a previous run): become the
-        // active app on the session-start edge so the dialog is focused (same
-        // reason as ``setClosedDisplay(_:)``), and say what's happening in a
-        // notification, since the dialog itself is easy to miss and names
-        // "osascript", not Keepresso. Edge-only, so a cancelled prompt isn't
-        // followed by a focus steal every second for the rest of the session.
-        if brewing,
-           closedDisplay.isEnabled == false,
-           !wasBrewingForClosedDisplay,
-           !closedDisplayAuto.isAuthorized,
-           !helperInstalled {
-            NSApp.activate(ignoringOtherApps: true)
-            notifier.notify(
-                title: L("Keepresso needs your password"),
-                body: L("Enter your administrator password to switch closed-display mode on for this session."),
-                sound: true
-            )
-        }
-        wasBrewingForClosedDisplay = brewing
         // With the helper installed an engage should never fail; when one
         // does, suspect a stale daemon registration and check it (edge-only,
         // and the check dedupes and repairs at most once per run).

@@ -481,6 +481,50 @@ private final class StubGate: TriggerEvaluating {
 }
 
 @MainActor
+@Test func batteryBackendRecoveryBlocksResumeAfterAutoPauseIsDisabled() {
+    let (controller, fake, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.triggerGate = StubGate(true)
+    controller.reconcile(battery: .discharging(15))
+    #expect(controller.pausedByBattery)
+
+    controller.pauseBelowBatteryPercent = nil
+    controller.reconcile(
+        battery: .unknown,
+        batterySafetyRecoveryPending: true
+    )
+    #expect(controller.pausedByBattery)
+    #expect(controller.isActive == false)
+    #expect(fake.held.isEmpty)
+
+    controller.reconcile(batterySafetyRecoveryPending: false)
+    #expect(controller.pausedByBattery == false)
+    #expect(controller.isActive)
+    #expect(fake.held == [.system])
+}
+
+@MainActor
+@Test func batteryBackendRecoveryBlocksResumeOnACUntilConfirmed() {
+    let (controller, fake, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.triggerGate = StubGate(true)
+    controller.reconcile(battery: .discharging(15))
+
+    controller.reconcile(
+        battery: .onAC,
+        batterySafetyRecoveryPending: true
+    )
+    #expect(controller.pausedByBattery)
+    #expect(controller.isActive == false)
+    #expect(fake.held.isEmpty)
+
+    controller.reconcile(battery: .onAC)
+    #expect(controller.pausedByBattery == false)
+    #expect(controller.isActive)
+    #expect(fake.held == [.system])
+}
+
+@MainActor
 @Test func batteryPauseKeepsTickingTheTriggerGate() {
     let (controller, _, _) = makeController()
     controller.pauseBelowBatteryPercent = 20

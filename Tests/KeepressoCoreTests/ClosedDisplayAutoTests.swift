@@ -17,9 +17,11 @@ import Foundation
     #expect(command.contains("IFS=' ' read -r GEN WANT"))
     #expect(command.contains("active|thermallySuspended|released"))
     #expect(command.contains("OUT=$(/usr/bin/pmset -g"))
+    #expect(command.contains("OBS=; OUT=$(/usr/bin/pmset -g"))
     #expect(command.contains("tolower($1) == \"sleepdisabled\""))
     #expect(command.contains("tolower($1) == \"disablesleep\""))
     #expect(command.contains("if (!found) exit 1"))
+    #expect(command.contains("else APPLIED=; fi"))
     #expect(command.contains("WANT\" = thermallySuspended"))
     #expect(command.contains("TARGET=0"))
     #expect(command.contains("printf '%s %s\\n' \"$GEN\" \"$WANT\""))
@@ -80,7 +82,7 @@ import Foundation
         helperReady: true,
         automaticHoldActive: true
     ))
-    #expect(ClosedLidProtectionReadiness.resolve(
+    #expect(!ClosedLidProtectionReadiness.resolve(
         hasUnattendedDemand: true,
         helperReady: false,
         automaticHoldActive: false,
@@ -145,20 +147,20 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
 }
 
 @MainActor
-@Test func closedDisplayAutoUsesVerifiedManualProtectionWithoutWrappingIt() async {
+@Test func closedDisplayAutoScopesVerifiedManualProtectionAsRestoreBaseline() async {
     let launcher = FakeSleepWatchdogLauncher()
     let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
     controller.onlyWhileBrewing = true
 
     await controller.autoTick(brewing: true, sleepAlreadyDisabled: true)
-    #expect(!controller.isHolding)
-    #expect(controller.isUsingManualProtection)
-    #expect(launcher.startCalls == 0)
+    #expect(controller.isHolding)
+    #expect(!controller.isUsingManualProtection)
+    #expect(launcher.startCalls == 1)
 
-    // An unreadable global state is not permission to change it. A later
-    // verified false value lets the normal scoped hold engage.
+    // Once scoped, a transiently unreadable global state cannot drop the
+    // automatic owner or create a manual-to-automatic handoff gap.
     await controller.autoTick(brewing: true, sleepAlreadyDisabled: nil)
-    #expect(!controller.isHolding)
+    #expect(controller.isHolding)
     await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
     #expect(controller.isHolding)
     #expect(!controller.isUsingManualProtection)
@@ -202,6 +204,72 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     await controller.autoTick(brewing: false, sleepAlreadyDisabled: false)
     #expect(controller.confirmedMode == .released)
     #expect(Array(launcher.modes.suffix(2)) == [.thermallySuspended, .released])
+}
+
+@MainActor
+@Test func batterySafetySuspendsAgentDemandUntilBackendRecovery() async {
+    let launcher = FakeSleepWatchdogLauncher()
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+    controller.onlyWhileBrewing = true
+
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+    controller.requestBatterySuspend()
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: true)
+    #expect(controller.isBatterySuspended)
+    #expect(controller.confirmedMode == .thermallySuspended)
+
+    controller.requestBatteryResume()
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+    #expect(!controller.isBatterySuspended)
+    #expect(controller.confirmedMode == .active)
+    #expect(Array(launcher.modes.suffix(3)) == [
+        .active, .thermallySuspended, .active
+    ])
+}
+
+@MainActor
+@Test func batteryAndThermalSafetyComposeBeforeAgentDemandResumes() async {
+    let launcher = FakeSleepWatchdogLauncher()
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+    controller.onlyWhileBrewing = true
+
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+    controller.requestBatterySuspend()
+    controller.requestThermalSuspend()
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: true)
+
+    controller.requestBatteryResume()
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+    #expect(controller.isSafetySuspended)
+    #expect(controller.confirmedMode == .thermallySuspended)
+
+    controller.requestThermalResume()
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+    #expect(!controller.isSafetySuspended)
+    #expect(controller.confirmedMode == .active)
+}
+
+@MainActor
+@Test func batteryRecoveryFailureKeepsTheSafetyLatchClosed() async {
+    let launcher = FakeSleepWatchdogLauncher()
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+    controller.onlyWhileBrewing = true
+
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+    controller.requestBatterySuspend()
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: true)
+
+    launcher.createFlagSucceeds = false
+    controller.requestBatteryResume()
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+    #expect(controller.isBatterySuspended)
+    #expect(controller.confirmedMode == .thermallySuspended)
+    #expect(controller.hasScopedTransaction)
+
+    launcher.createFlagSucceeds = true
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+    #expect(!controller.isBatterySuspended)
+    #expect(controller.confirmedMode == .active)
 }
 
 @MainActor
@@ -249,6 +317,34 @@ private final class BlockingSleepWatchdogLauncher: SleepWatchdogLaunching, @unch
     }
 }
 
+private final class BlockingReleaseSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecked Sendable {
+    let releaseEntered = DispatchSemaphore(value: 0)
+    let allowReleaseToFinish = DispatchSemaphore(value: 0)
+    private let lock = NSLock()
+    private var modes: [SleepHoldMode] = []
+
+    func isFlagPresent() -> Bool { true }
+    func createFlag() -> Bool { setMode(.active) }
+    func removeFlag() { _ = setMode(.released) }
+    func startHelper(appPID: Int32) -> SleepSettingResult { .applied }
+    func setMode(_ mode: SleepHoldMode) -> Bool {
+        lock.lock()
+        modes.append(mode)
+        lock.unlock()
+        if mode == .released {
+            releaseEntered.signal()
+            _ = allowReleaseToFinish.wait(timeout: .now() + 2)
+        }
+        return true
+    }
+
+    var recordedModes: [SleepHoldMode] {
+        lock.lock()
+        defer { lock.unlock() }
+        return modes
+    }
+}
+
 @MainActor
 @Test func inFlightEngageConvergesToAConcurrentThermalSuspend() async {
     let launcher = BlockingSleepWatchdogLauncher()
@@ -264,6 +360,49 @@ private final class BlockingSleepWatchdogLauncher: SleepWatchdogLaunching, @unch
 
     #expect(controller.confirmedMode == .thermallySuspended)
     #expect(Array(launcher.recordedModes.suffix(2)) == [.active, .thermallySuspended])
+}
+
+@MainActor
+@Test func staleInFlightEngageIsCompensatedWhenDemandReturnsToReleased() async {
+    let launcher = BlockingSleepWatchdogLauncher()
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+    controller.onlyWhileBrewing = true
+
+    controller.updateAutomaticDemand(brewing: true, sleepAlreadyDisabled: false)
+    try? await Task.sleep(for: .milliseconds(20))
+    #expect(launcher.activeEntered.wait(timeout: .now() + 1) == .success)
+
+    // The cached confirmed mode is still released when demand ends. The old
+    // active request nevertheless lands, so the controller must issue an
+    // explicit compensating release instead of trusting its cached value.
+    controller.updateAutomaticDemand(brewing: false, sleepAlreadyDisabled: false)
+    launcher.allowActiveToFinish.signal()
+    await controller.autoTick(brewing: false, sleepAlreadyDisabled: false)
+
+    #expect(controller.confirmedMode == .released)
+    #expect(Array(launcher.recordedModes.suffix(2)) == [.active, .released])
+    #expect(!controller.hasScopedTransaction)
+}
+
+@MainActor
+@Test func launchCleanupCannotOverwriteConcurrentNewDemand() async {
+    let launcher = BlockingReleaseSleepWatchdogLauncher()
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+    controller.onlyWhileBrewing = true
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+
+    let cleanup = Task { @MainActor in
+        await controller.cleanupAtLaunch()
+    }
+    try? await Task.sleep(for: .milliseconds(20))
+    #expect(launcher.releaseEntered.wait(timeout: .now() + 1) == .success)
+    controller.updateAutomaticDemand(brewing: true, sleepAlreadyDisabled: false)
+    launcher.allowReleaseToFinish.signal()
+    await cleanup.value
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+
+    #expect(controller.confirmedMode == .active)
+    #expect(Array(launcher.recordedModes.suffix(2)) == [.released, .active])
 }
 
 @MainActor
@@ -296,6 +435,7 @@ private final class BlockingSleepWatchdogLauncher: SleepWatchdogLaunching, @unch
     #expect(controller.isAuthorized)
     #expect(controller.isHolding == false)   // sleep setting left untouched
     #expect(launcher.flagPresent == false)
+    #expect(launcher.modes.isEmpty)
     #expect(launcher.startCalls == 1)         // one prompt
 
     await controller.autoTick(brewing: true)

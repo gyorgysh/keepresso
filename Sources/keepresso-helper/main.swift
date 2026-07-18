@@ -20,15 +20,21 @@ import KeepressoCore
 final class HelperConnection: NSObject, HelperXPCProtocol {
     private let engine: HelperEngine
     private let clientID: Int
+    private let sleepGenerations: SleepModeGenerationRegistry
     private let onTerminateRequest: @Sendable () -> Void
+    private let legacySleepStreamID = UUID().uuidString.lowercased()
+    private let legacySleepLock = NSLock()
+    private var legacySleepGeneration: UInt64 = 0
 
     init(
         engine: HelperEngine,
         clientID: Int,
+        sleepGenerations: SleepModeGenerationRegistry,
         onTerminateRequest: @escaping @Sendable () -> Void
     ) {
         self.engine = engine
         self.clientID = clientID
+        self.sleepGenerations = sleepGenerations
         self.onTerminateRequest = onTerminateRequest
     }
 
@@ -41,15 +47,34 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
     }
 
     func setSleepHold(_ holding: Bool, reply: @escaping @Sendable (Bool) -> Void) {
-        reply(engine.setSleepHold(client: clientID, holding: holding))
+        legacySleepLock.lock()
+        legacySleepGeneration &+= 1
+        let generation = legacySleepGeneration
+        legacySleepLock.unlock()
+        reply(sleepGenerations.apply(
+            streamID: legacySleepStreamID,
+            generation: generation
+        ) {
+            engine.setSleepHold(client: clientID, holding: holding)
+        })
     }
 
-    func setSleepHoldMode(_ rawMode: Int, reply: @escaping @Sendable (Bool) -> Void) {
+    func setSleepHoldMode(
+        _ rawMode: Int,
+        streamID: String,
+        generation: UInt64,
+        reply: @escaping @Sendable (Bool) -> Void
+    ) {
         guard let mode = SleepHoldMode(rawValue: rawMode) else {
             reply(false)
             return
         }
-        reply(engine.setSleepHoldMode(client: clientID, mode: mode))
+        reply(sleepGenerations.apply(
+            streamID: streamID,
+            generation: generation
+        ) {
+            engine.setSleepHoldMode(client: clientID, mode: mode)
+        })
     }
 
     func setAWDLHold(_ holding: Bool, reply: @escaping @Sendable (Bool) -> Void) {
@@ -83,6 +108,7 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
 
 final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     private let engine: HelperEngine
+    private let sleepGenerations = SleepModeGenerationRegistry()
     private let lock = NSLock()
     private var nextClientID = 1
     private var liveConnections = 0
@@ -110,6 +136,7 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
         newConnection.exportedObject = HelperConnection(
             engine: engine,
             clientID: clientID,
+            sleepGenerations: sleepGenerations,
             onTerminateRequest: { [weak self] in self?.requestTerminate() }
         )
         // Invalidation is the connection's definitive end (interruption never

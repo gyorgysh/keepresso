@@ -26,8 +26,8 @@ Versions follow [Semantic Versioning](https://semver.org).
 ### Changed
 
 - Closed-display overrides now preserve and restore the exact preexisting
-  `pmset disablesleep` value through the helper and fallback watchdog, including
-  application crashes and restarts. Thermal protection uses a journaled
+  `pmset disablesleep` value through the helper, including application crashes,
+  helper restarts, and Mac reboots. Thermal protection uses a journaled
   suspended state that temporarily permits sleep without discarding the
   original manual or automatic ownership, then resumes or restores it only
   after the backend confirms the transition.
@@ -66,6 +66,16 @@ Versions follow [Semantic Versioning](https://semver.org).
   had a reading).
 
 ### Changed
+
+- **Durable helper required for unattended closed-lid work.** Automatic scoped
+  sleep overrides now start only through the administrator helper, whose
+  root-owned journal restores the exact original setting after client crashes,
+  helper restarts, and Mac reboots. The legacy password path remains available
+  for the persistent manual switch only.
+- **Battery pause waits for sleep-setting recovery.** A low-battery pause now
+  keeps Agent work stopped until the privileged backend confirms its exact
+  restore, even if the Mac is plugged in or battery auto-pause is disabled
+  during that recovery.
 
 - **The thermal safety net now guards the closed lid.** "Pause when running
   hot" is a protection for a Mac that cannot help itself: one held awake with
