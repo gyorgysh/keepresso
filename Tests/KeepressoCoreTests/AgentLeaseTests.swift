@@ -727,6 +727,40 @@ private func temporaryLeaseFile() throws -> (directory: URL, file: URL) {
     #expect(events.first?.timeoutCause == .maximumLifetime)
 }
 
+@MainActor
+@Test func watchdogPersistsTimeoutAfterWallClockRollsBackBeyondSkew() throws {
+    let fixture = try temporaryLeaseFile()
+    defer { try? FileManager.default.removeItem(at: fixture.directory) }
+    let start = Date(timeIntervalSince1970: 1_800_000_000)
+    let clock = LeaseClock(start)
+    var events: [AgentLeaseLifecycleEvent] = []
+    let store = FileAgentLeaseStore(fileURL: fixture.file)
+    let registry = try AgentLeaseRegistry(
+        persistence: store,
+        now: { clock.now },
+        onEvent: { events.append($0) }
+    )
+    let acquired = try registry.acquire(
+        owner: "clock-rollback",
+        ttl: 60 * 60,
+        maxLifetime: 24 * 60 * 60
+    )
+
+    clock.now = start.addingTimeInterval(-60 * 60)
+    let snapshot = try registry.watchdogTick()
+
+    #expect(!snapshot.shouldKeepAwake)
+    let saved = try #require(try store.load().leases.first)
+    #expect(saved.id == acquired.id)
+    #expect(saved.state == .timeout)
+    #expect(saved.completedAt == acquired.heartbeatAt)
+    let timeout = try #require(events.last)
+    #expect(timeout.kind == .timedOut)
+    #expect(timeout.date == clock.now)
+    #expect(timeout.lease.completedAt == acquired.heartbeatAt)
+    #expect(timeout.timeoutCause == .maximumLifetime)
+}
+
 @Test func fileStoreLeavesFutureSchemaUntouched() throws {
     let fixture = try temporaryLeaseFile()
     defer { try? FileManager.default.removeItem(at: fixture.directory) }

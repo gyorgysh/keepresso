@@ -1213,7 +1213,12 @@ public final class AgentLeaseRegistry {
             guard let cause else { continue }
             let previous = state.leases[index].state
             state.leases[index].state = .timeout
-            state.leases[index].completedAt = instant
+            // A wall-clock rollback can put a previously valid heartbeat in
+            // the future. The watchdog still expires that unsafe lease now,
+            // but its durable terminal timestamp must preserve the timeline
+            // invariant required by the file codec. The lifecycle event below
+            // keeps `instant` as the time the rollback was discovered.
+            state.leases[index].completedAt = max(instant, lease.heartbeatAt)
             events.append(AgentLeaseLifecycleEvent(
                 date: instant,
                 kind: .timedOut,
