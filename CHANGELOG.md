@@ -3,6 +3,13 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [1.16.1] - 2026-07-18
+
+### Fixed
+
+- **Improved performance and reduced CPU usage.** Animations and status
+  refreshes now pause whenever their window is closed or hidden.
+
 ## [1.16.0] - 2026-07-18
 
 ### Added
