@@ -198,7 +198,7 @@ APP = {
     "Idle": "Простій",
     "System can sleep": "Система може заснути",
     "No conditions yet": "Умов поки немає",
-    "Battery below %d%%, letting the Mac sleep": "Заряд нижче %d%%, Mac може заснути",
+    "Battery below %d%%, Keepresso sessions and Agent work paused until plugged in": "Заряд нижче %d%%, сеанси Keepresso та роботу агентів призупинено до підключення живлення",
     "Stops in %@": "Зупиниться через %@",
     "Awake for %@": "Не спить уже %@",
     "Active": "Активно",

@@ -198,7 +198,7 @@ APP = {
     'Idle': '閒置',
     'System can sleep': '系統可進入睡眠',
     'No conditions yet': '尚無條件',
-    'Battery below %d%%, letting the Mac sleep': '電量低於 %d%%，讓 Mac 進入睡眠',
+    'Battery below %d%%, Keepresso sessions and Agent work paused until plugged in': '電量低於 %d%%，Keepresso 工作階段與代理工作將暫停到接上電源為止',
     'Stops in %@': '%@ 後停止',
     'Awake for %@': '已保持喚醒 %@',
     'Active': '使用中',

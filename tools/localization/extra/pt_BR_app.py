@@ -198,7 +198,7 @@ APP = {
     "Idle": "Inativo",
     "System can sleep": "O sistema pode suspender",
     "No conditions yet": "Ainda não há condições",
-    "Battery below %d%%, letting the Mac sleep": "Bateria abaixo de %d%%, deixando o Mac suspender",
+    "Battery below %d%%, Keepresso sessions and Agent work paused until plugged in": "Bateria abaixo de %d%%, sessões do Keepresso e trabalho dos agentes em pausa até conectar à energia",
     "Stops in %@": "Para em %@",
     "Awake for %@": "Acordado há %@",
     "Active": "Ativo",

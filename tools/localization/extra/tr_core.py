@@ -75,7 +75,7 @@ CORE = {
     "Keepresso stopped": "Keepresso durdu",
     "Your keep-awake session has ended.": "Uyanık tutma oturumunuz sona erdi.",
     "Paused on low battery": "Düşük pilde duraklatıldı",
-    "Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge.": "Pil %d%%'de. Siz şarja takana kadar Keepresso, Mac'in uyumasına izin veriyor.",
+    "Battery is at %d%%. Keepresso sessions and Agent work are paused until you plug in to charge.": "Pil %d%% düzeyinde. Keepresso oturumları ve Agent işi, Mac'i güce bağlayana kadar duraklatıldı.",
     "Keepresso is still brewing": "Keepresso hâlâ demleniyor",
     "Your Mac is still awake. It's been %@.": "Mac'iniz hâlâ uyanık. %@ oldu.",
     "Your Mac has been kept awake for %@.": "Mac'iniz %@ süredir uyanık tutuluyor.",

@@ -93,7 +93,7 @@
 "Keepresso stops soon" = "Keepresso wkrótce się zatrzyma";
 "Your keep-awake session ends in about %@." = "Twoja sesja czuwania zakończy się za około %@.";
 "Paused on low battery" = "Wstrzymano z powodu niskiego poziomu baterii";
-"Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge." = "Poziom naładowania baterii wynosi %d%%. Keepresso pozwala Makowi zasnąć, dopóki nie podłączysz go do ładowania.";
+"Battery is at %d%%. Keepresso sessions and Agent work are paused until you plug in to charge." = "Poziom baterii wynosi %d%%. Sesje Keepresso i praca agentów są wstrzymane do czasu podłączenia zasilania.";
 "Keepresso is still brewing" = "Keepresso wciąż parzy";
 "Your Mac is still awake. It's been %@." = "Twój Mac wciąż nie śpi. Minęło już %@.";
 "Your Mac has been kept awake for %@." = "Twój Mac był utrzymywany w stanie czuwania przez %@.";

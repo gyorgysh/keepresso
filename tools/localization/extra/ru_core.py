@@ -75,7 +75,7 @@ CORE = {
     "Keepresso stopped": "Keepresso остановлен",
     "Your keep-awake session has ended.": "Ваш сеанс поддержания активности завершён.",
     "Paused on low battery": "Приостановлено из-за низкого заряда",
-    "Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge.": "Заряд батареи %d%%. Keepresso позволяет Mac заснуть, пока вы не подключите зарядку.",
+    "Battery is at %d%%. Keepresso sessions and Agent work are paused until you plug in to charge.": "Заряд батареи %d%%. Сеансы Keepresso и работа агентов приостановлены до подключения питания.",
     "Keepresso is still brewing": "Keepresso всё ещё заваривает",
     "Your Mac is still awake. It's been %@.": "Ваш Mac всё ещё не спит. Прошло %@.",
     "Your Mac has been kept awake for %@.": "Ваш Mac не давали заснуть в течение %@.",

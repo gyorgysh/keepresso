@@ -550,7 +550,7 @@ struct MenuBarContent: View {
         // Safety pauses override everything else: say so, or an otherwise
         // satisfied session looks stuck for no visible reason.
         if session.pausedByBattery {
-            return L("Battery below %d%%, letting the Mac sleep", model.pauseBelowBatteryPercent)
+            return L("Battery below %d%%, Keepresso sessions and Agent work paused until plugged in", model.pauseBelowBatteryPercent)
         }
         if session.pausedByThermal {
             if let celsius = model.thermalGuard.currentCelsius {

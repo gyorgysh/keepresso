@@ -198,7 +198,7 @@
 "Idle" = "Inattivo";
 "System can sleep" = "Il sistema può andare in stop";
 "No conditions yet" = "Ancora nessuna condizione";
-"Battery below %d%%, letting the Mac sleep" = "Batteria sotto il %d%%, il Mac può andare in stop";
+"Battery below %d%%, Keepresso sessions and Agent work paused until plugged in" = "Batteria sotto il %d%%, sessioni di Keepresso e lavoro degli agenti in pausa fino al collegamento all'alimentazione";
 "Stops in %@" = "Si ferma tra %@";
 "Awake for %@" = "Sveglio da %@";
 "Active" = "Attivo";

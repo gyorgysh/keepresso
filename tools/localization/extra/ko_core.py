@@ -75,7 +75,7 @@ CORE = {
     "Keepresso stopped": "Keepresso가 중지됨",
     "Your keep-awake session has ended.": "깨어 있게 유지 세션이 종료되었습니다.",
     "Paused on low battery": "배터리 부족으로 일시 정지됨",
-    "Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge.": "배터리가 %d%%입니다. 충전기를 연결할 때까지 Keepresso가 Mac을 잠들도록 둡니다.",
+    "Battery is at %d%%. Keepresso sessions and Agent work are paused until you plug in to charge.": "배터리가 %d%%입니다. Keepresso 세션과 에이전트 작업은 전원을 연결할 때까지 일시 정지됩니다.",
     "Keepresso is still brewing": "Keepresso가 아직 실행 중입니다",
     "Your Mac is still awake. It's been %@.": "Mac이 아직 깨어 있습니다. %@ 경과했습니다.",
     "Your Mac has been kept awake for %@.": "Mac이 %@ 동안 깨어 있게 유지되었습니다.",

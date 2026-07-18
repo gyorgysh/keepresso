@@ -93,7 +93,7 @@
 "Keepresso stops soon" = "Keepresso stops soon";
 "Your keep-awake session ends in about %@." = "Your keep-awake session ends in about %@.";
 "Paused on low battery" = "Paused on low battery";
-"Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge." = "Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge.";
+"Battery is at %d%%. Keepresso sessions and Agent work are paused until you plug in to charge." = "Battery is at %d%%. Keepresso sessions and Agent work are paused until you plug in to charge.";
 "Keepresso is still brewing" = "Keepresso is still brewing";
 "Your Mac is still awake. It's been %@." = "Your Mac is still awake. It's been %@.";
 "Your Mac has been kept awake for %@." = "Your Mac has been kept awake for %@.";

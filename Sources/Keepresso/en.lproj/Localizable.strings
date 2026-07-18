@@ -198,7 +198,7 @@
 "Idle" = "Idle";
 "System can sleep" = "System can sleep";
 "No conditions yet" = "No conditions yet";
-"Battery below %d%%, letting the Mac sleep" = "Battery below %d%%, letting the Mac sleep";
+"Battery below %d%%, Keepresso sessions and Agent work paused until plugged in" = "Battery below %d%%, Keepresso sessions and Agent work paused until plugged in";
 "Stops in %@" = "Stops in %@";
 "Awake for %@" = "Awake for %@";
 "Active" = "Active";

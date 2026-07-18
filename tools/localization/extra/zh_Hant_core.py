@@ -75,7 +75,7 @@ CORE = {
     'Keepresso stopped': 'Keepresso 已停止',
     'Your keep-awake session has ended.': '您的保持喚醒工作階段已結束。',
     'Paused on low battery': '因電量低而暫停',
-    'Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge.': '電量為 %d%%。Keepresso 將讓 Mac 進入睡眠，直到您接上電源充電為止。',
+    'Battery is at %d%%. Keepresso sessions and Agent work are paused until you plug in to charge.': '電量為 %d%%。Keepresso 工作階段與代理工作將暫停，直到您接上電源為止。',
     'Keepresso is still brewing': 'Keepresso 仍在運作中',
     "Your Mac is still awake. It's been %@.": '您的 Mac 仍處於喚醒狀態，已經過 %@。',
     'Your Mac has been kept awake for %@.': '您的 Mac 已保持喚醒 %@。',

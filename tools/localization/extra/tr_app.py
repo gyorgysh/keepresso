@@ -198,7 +198,7 @@ APP = {
     "Idle": "Boşta",
     "System can sleep": "Sistem uyuyabilir",
     "No conditions yet": "Henüz koşul yok",
-    "Battery below %d%%, letting the Mac sleep": "Pil %d%%'nin altında, Mac'in uyumasına izin veriliyor",
+    "Battery below %d%%, Keepresso sessions and Agent work paused until plugged in": "Pil %d%%'nin altında, Keepresso oturumları ve Agent işi güce bağlanana kadar duraklatıldı",
     "Stops in %@": "%@ içinde duracak",
     "Awake for %@": "%@ süredir uyanık",
     "Active": "Etkin",

@@ -198,7 +198,7 @@
 "Idle" = "空闲";
 "System can sleep" = "系统可以睡眠";
 "No conditions yet" = "尚无条件";
-"Battery below %d%%, letting the Mac sleep" = "电量低于 %d%%，让 Mac 睡眠";
+"Battery below %d%%, Keepresso sessions and Agent work paused until plugged in" = "电量低于 %d%%，Keepresso 会话和代理任务将暂停到接通电源为止";
 "Stops in %@" = "%@ 后停止";
 "Awake for %@" = "已唤醒 %@";
 "Active" = "已激活";

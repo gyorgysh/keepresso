@@ -198,7 +198,7 @@
 "Idle" = "Tétlen";
 "System can sleep" = "A rendszer elalhat";
 "No conditions yet" = "Még nincsenek feltételek";
-"Battery below %d%%, letting the Mac sleep" = "Az akkumulátor %d%% alatt, a Mac elalhat";
+"Battery below %d%%, Keepresso sessions and Agent work paused until plugged in" = "Az akkumulátor %d%% alatt, a Keepresso-munkamenetek és az ügynöki feladatok szünetelnek a töltő csatlakoztatásáig";
 "Stops in %@" = "Leáll %@ múlva";
 "Awake for %@" = "Ébren %@ ideje";
 "Active" = "Aktív";

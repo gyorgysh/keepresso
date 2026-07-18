@@ -198,7 +198,7 @@ APP = {
     "Idle": "アイドル",
     "System can sleep": "システムはスリープできます",
     "No conditions yet": "まだ条件がありません",
-    "Battery below %d%%, letting the Mac sleep": "バッテリーが %d%% 未満、Mac をスリープさせます",
+    "Battery below %d%%, Keepresso sessions and Agent work paused until plugged in": "バッテリーが %d%% 未満のため、Keepresso セッションとエージェント作業は電源接続まで一時停止",
     "Stops in %@": "%@ 後に停止",
     "Awake for %@": "%@ 間スリープ防止中",
     "Active": "アクティブ",

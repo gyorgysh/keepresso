@@ -198,7 +198,7 @@
 "Idle" = "Inactif";
 "System can sleep" = "Le système peut dormir";
 "No conditions yet" = "Aucune condition pour l’instant";
-"Battery below %d%%, letting the Mac sleep" = "Batterie sous %d%%, le Mac peut dormir";
+"Battery below %d%%, Keepresso sessions and Agent work paused until plugged in" = "Batterie sous %d%%, sessions Keepresso et travail des agents en pause jusqu’au branchement";
 "Stops in %@" = "S’arrête dans %@";
 "Awake for %@" = "Éveillé depuis %@";
 "Active" = "Actif";

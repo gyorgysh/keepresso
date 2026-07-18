@@ -529,7 +529,7 @@ public final class SessionController {
                         effects: .safetyPause(kind: .batteryPaused),
                         notice: (
                             title: L("Paused on low battery"),
-                            body: L("Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge.", percent)
+                            body: L("Battery is at %d%%. Keepresso sessions and Agent work are paused until you plug in to charge.", percent)
                         )
                     )
                 }

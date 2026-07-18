@@ -198,7 +198,7 @@ APP = {
     "Idle": "유휴",
     "System can sleep": "시스템이 잠들 수 있음",
     "No conditions yet": "아직 조건 없음",
-    "Battery below %d%%, letting the Mac sleep": "배터리가 %d%% 미만이어서 Mac이 잠들도록 함",
+    "Battery below %d%%, Keepresso sessions and Agent work paused until plugged in": "배터리가 %d%% 미만이어서 Keepresso 세션과 에이전트 작업이 전원 연결 시까지 일시 정지됨",
     "Stops in %@": "%@ 후 중지",
     "Awake for %@": "%@ 동안 깨어 있음",
     "Active": "활성",

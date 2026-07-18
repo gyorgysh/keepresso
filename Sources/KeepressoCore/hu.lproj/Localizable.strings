@@ -93,7 +93,7 @@
 "Keepresso stops soon" = "A Keepresso hamarosan leáll";
 "Your keep-awake session ends in about %@." = "Az ébrentartási munkamenet körülbelül %@ múlva véget ér.";
 "Paused on low battery" = "Szüneteltetve alacsony töltöttség miatt";
-"Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge." = "Az akkumulátor %d%%-on áll. A Keepresso hagyja elaludni a Macet, amíg nem csatlakoztatja töltőre.";
+"Battery is at %d%%. Keepresso sessions and Agent work are paused until you plug in to charge." = "Az akkumulátor %d%%-on áll. A Keepresso-munkamenetek és az ügynöki feladatok szünetelnek, amíg nem csatlakoztatja töltőre.";
 "Keepresso is still brewing" = "A Keepresso még főz";
 "Your Mac is still awake. It's been %@." = "A Mac még ébren van. Már %@ eltelt.";
 "Your Mac has been kept awake for %@." = "A Macet %@ ideje tartja ébren.";
