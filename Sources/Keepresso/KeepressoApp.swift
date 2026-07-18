@@ -143,6 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.model.awdlAutoTick()
             self?.model.closedDisplayAutoTick()
             self?.model.thermalAvailabilityTick()
+            self?.model.fireAgentIdleHookIfNeeded()
         }
     )
     /// Listens for the Control Center toggle's Darwin doorbell.
@@ -208,6 +209,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.registerHotKey()
         // Start a session right away if "Start keep-awake on launch" is on.
         model.startOnLaunchIfNeeded()
+        // Re-sync wake schedules with the helper (settings survive; the system
+        // schedule is the source of truth for the machine).
+        model.applyWakeScheduleToSystem()
+        model.refreshSystemWakeState()
+        // Wake-and-brew: a system wake near a Keepresso schedule can start a
+        // session or apply a preset.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak model] _ in
+            model?.handleSystemWake()
+        }
         // The Control Center toggle: consume a command that may have launched
         // us, then keep listening while running.
         widgetObserver = WidgetCommandObserver { [weak model] in model?.applyPendingWidgetCommand() }

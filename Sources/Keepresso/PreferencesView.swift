@@ -16,6 +16,7 @@ struct PreferencesView: View {
         case general = "General"
         case triggers = "Triggers"
         case reminder = "Reminder"
+        case automation = "Automation"
         case disk = "Disk"
         case display = "Display"
         case activity = "Activity"
@@ -26,6 +27,7 @@ struct PreferencesView: View {
             case .general: "gearshape"
             case .triggers: "bolt"
             case .reminder: "bell"
+            case .automation: "arrow.triangle.branch"
             case .disk: "externaldrive"
             case .display: "display"
             case .activity: "list.bullet.rectangle"
@@ -56,8 +58,8 @@ struct PreferencesView: View {
                 // A fast crossfade between sections; no sliding.
                 .animation(.easeOut(duration: 0.15), value: section)
         }
-        // 520 fits six labeled segments; 480 truncated them once Activity joined.
-        .frame(width: 520, height: 560)
+        // 580 fits seven labeled segments; 520 was enough for six.
+        .frame(width: 580, height: 560)
         .tint(.keepressoBrew)
         .glassWindowBackground()
         .centersAndFrontsWindow()
@@ -72,6 +74,7 @@ struct PreferencesView: View {
         case .general: GeneralTab(model: model)
         case .triggers: TriggersTab(model: model)
         case .reminder: ReminderTab(model: model)
+        case .automation: AutomationTab(model: model)
         case .disk: DiskTab(model: model)
         case .display: DisplayTab(model: model)
         case .activity: ActivityTab(model: model)
@@ -111,6 +114,43 @@ private struct ActivityTab: View {
             }
 
             Section {
+                let stats = model.awakeStats
+                if stats.totalHeldSeconds < 1 {
+                    Text("No held-awake time in the last week.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(stats.days.filter { $0.heldSeconds >= 1 }) { day in
+                        HStack {
+                            Text(day.dayStart, format: .dateTime.month(.abbreviated).day())
+                                .font(.callout)
+                            Spacer()
+                            if let battery = day.batteryConsumed {
+                                Text(L("−%d%% battery", battery))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(formatHeld(day.heldSeconds))
+                                .font(.callout.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    HStack {
+                        Text("Total")
+                            .font(.callout.weight(.medium))
+                        Spacer()
+                        Text(formatHeld(stats.totalHeldSeconds))
+                            .font(.callout.monospacedDigit().weight(.medium))
+                    }
+                }
+            } header: {
+                Text("Awake this week")
+            } footer: {
+                Text("How long Keepresso held the Mac awake each day, from the decision log. Battery drop is shown when both ends of a session had a reading.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 let events = model.session.log.events
                 if events.isEmpty {
                     Text("No session activity yet.")
@@ -123,15 +163,26 @@ private struct ActivityTab: View {
             } header: {
                 Text("Keepresso decisions")
             } footer: {
-                Text("Why each session started or stopped, newest first. Kept in memory; clears on relaunch.")
+                Text("Why each session started or stopped, newest first. Saved on disk and restored after a relaunch.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
-        .onAppear { assertions = model.currentAssertions() }
+        .onAppear {
+            assertions = model.currentAssertions()
+            model.refreshAwakeStats()
+        }
         .onReceive(tick) { _ in assertions = model.currentAssertions() }
+    }
+
+    private func formatHeld(_ seconds: TimeInterval) -> String {
+        let total = Int(seconds.rounded())
+        let h = total / 3600
+        let m = (total % 3600) / 60
+        if h > 0 { return L("%dh %dm", h, m) }
+        return L("%dm", max(m, 0))
     }
 
     private func assertionRow(_ assertion: PowerAssertionInfo) -> some View {
@@ -830,18 +881,10 @@ private struct ReminderTab: View {
                         }
                     }
                 }
-                Picker("On session end", selection: Binding(
-                    get: { model.endAction },
-                    set: { model.endAction = $0 }
-                )) {
-                    ForEach(SessionEndAction.allCases, id: \.self) { action in
-                        Text(action.label).tag(action)
-                    }
-                }
             } header: {
-                sectionHeader("Session end", info: L("These cover the times a session ends without you: a timer expiring, trigger conditions dropping, or a low-battery pause. Stopping it yourself stays silent, since you already know. The warning is a heads-up a few minutes before a timed session runs out, so you can extend it before the Mac drops off. The action runs when the session ends: sleep the display or start the screen saver, handy for a Mac you walk away from. It's off by default so a timed session never surprises you."))
+                sectionHeader("Session end", info: L("These cover the times a session ends without you: a timer expiring, or trigger conditions dropping. Stopping it yourself stays silent, since you already know. The warning is a heads-up a few minutes before a timed session runs out, so you can extend it before the Mac drops off. Actions that put the Mac to sleep live under Automation."))
             } footer: {
-                sectionFooter("Fires when a session ends on its own, not when you stop it yourself.")
+                sectionFooter("Notifications fire when a session ends on its own, not when you stop it yourself.")
             }
         }
         .formStyle(.grouped)
@@ -849,6 +892,544 @@ private struct ReminderTab: View {
         .animation(.snappy(duration: 0.25), value: model.reminderEnabled)
         .animation(.snappy(duration: 0.25), value: model.reminderRepeats)
         .animation(.snappy(duration: 0.25), value: model.endingSoonEnabled)
+    }
+}
+
+// MARK: - Automation (end action + outbound hooks + wake)
+
+private struct AutomationTab: View {
+    @Bindable var model: AppModel
+    @State private var draft: HookDraft?
+    @State private var editingID: UUID?
+
+    var body: some View {
+        Form {
+            endActionSection
+            scheduledWakeSection
+            eventHooksSection
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .animation(.snappy(duration: 0.25), value: model.endAction)
+        .animation(.snappy(duration: 0.25), value: model.wakeSchedule != nil)
+        .animation(.snappy(duration: 0.25), value: model.helperInstalled)
+        .animation(.snappy(duration: 0.25), value: model.helper.awaitingApproval)
+        .animation(.snappy(duration: 0.25), value: model.helper.daemonOutdated)
+        .sheet(item: $draft) { draft in
+            HookEditorSheet(
+                draft: draft,
+                title: editingID == nil ? L("Add Hook") : L("Edit Hook"),
+                onCancel: {
+                    model.hooksEditing = false
+                    self.draft = nil
+                    editingID = nil
+                },
+                onSave: { saved in
+                    commit(saved)
+                    model.hooksEditing = false
+                    self.draft = nil
+                    editingID = nil
+                }
+            )
+        }
+        .onAppear {
+            model.helper.refresh()
+            model.refreshSystemWakeState()
+        }
+        .onDisappear {
+            model.hooksEditing = false
+        }
+    }
+
+    // MARK: End action
+
+    private var endActionSection: some View {
+        Section {
+            Picker("On session end", selection: Binding(
+                get: { model.endAction },
+                set: { model.endAction = $0 }
+            )) {
+                ForEach(SessionEndAction.allCases, id: \.self) { action in
+                    Text(action.label).tag(action)
+                }
+            }
+            if let note = endActionAvailabilityNote {
+                Label(note, systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } header: {
+            sectionHeader("After the session ends", info: L("When a keep-awake session ends on its own (a timer expiring, or trigger conditions dropping), Keepresso can put the display to sleep, lock the screen, start the screen saver, or sleep the Mac. Off by default so a timed session never surprises you. Manual stops, and the battery and thermal safety pauses, never run this action. A brief debounce cancels it if the session restarts right away."))
+        } footer: {
+            sectionFooter("Fires a few seconds after a natural end, not on a manual stop or a safety pause.")
+        }
+    }
+
+    /// Contextual note under the end-action picker: only when the chosen
+    /// action has a privilege or TCC catch, so "Do nothing" stays quiet.
+    private var endActionAvailabilityNote: String? {
+        switch model.endAction {
+        case .none, .sleepDisplay, .startScreensaver:
+            return nil
+        case .lockScreen:
+            return L("Locks via System Events. macOS may ask once for Automation access for Keepresso.")
+        case .sleepMac:
+            if model.helperInstalled && !model.helper.daemonOutdated && !model.helper.awaitingApproval {
+                return L("Sleeps the Mac through the administrator helper (instant, no extra prompts).")
+            }
+            if model.helper.awaitingApproval {
+                return L("The helper is waiting for approval in System Settings. Until then, sleep falls back to System Events, which may ask for Automation access once.")
+            }
+            if model.helper.daemonOutdated {
+                return L("The helper is updating itself. Until that finishes, sleep falls back to System Events, which may ask for Automation access once.")
+            }
+            return L("Without the administrator helper, sleep uses System Events and may ask for Automation access once. Install the helper under Preferences ▸ General for instant, silent sleep.")
+        }
+    }
+
+    // MARK: Scheduled wake
+
+    private var scheduledWakeSection: some View {
+        Section {
+            switch model.wakeHelperGate {
+            case .ready:
+                wakeScheduleEditor
+            case .needsHelper, .awaitingApproval, .helperUpdating:
+                if model.wakeSchedule != nil {
+                    // Settings survived without a live helper: say so, do not
+                    // pretend the controls are live, offer clear + unlock.
+                    Label {
+                        Text(L("A wake schedule is saved, but it is not active on this Mac until the administrator helper is ready. The system will not wake from this plan."))
+                            .fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle")
+                            .foregroundStyle(.orange)
+                    }
+                    .foregroundStyle(.secondary)
+                    wakeScheduleSummary
+                    Button("Turn Off Wake Schedule", role: .destructive) {
+                        model.wakeSchedule = nil
+                    }
+                }
+                AutomationHelperLockedRow(model: model, context: .wakeSchedule)
+            }
+        } header: {
+            sectionHeader("Scheduled wake", info: L("Wake the Mac at a set time through the administrator helper (pmset schedule / repeat), then optionally start a keep-awake session so it does not fall back asleep before the job runs. Pair with an end-of-session action above for wake, work, sleep. Scheduled wake is reliable on AC power; on battery the firmware may skip it. macOS only allows one system-wide repeating power schedule, so enabling ours replaces whatever was there. The controls stay locked until the helper is installed and ready, the same rule as the thermal fan boost."))
+        } footer: {
+            wakeScheduleFooter
+        }
+    }
+
+    @ViewBuilder
+    private var wakeScheduleEditor: some View {
+        Toggle("Wake schedule", isOn: Binding(
+            get: { model.wakeSchedule != nil },
+            set: { on in
+                // Enabling is only offered when the helper is ready; the
+                // model also refuses a bare enable without it.
+                model.wakeSchedule = on ? (model.wakeSchedule ?? WakeScheduleConfig()) : nil
+            }
+        ))
+        if model.wakeSchedule != nil {
+            Toggle("One-shot wake", isOn: Binding(
+                get: { model.wakeSchedule?.oneShot != nil },
+                set: { on in
+                    updateWake {
+                        $0.oneShot = on
+                            ? ($0.oneShot ?? Date().addingTimeInterval(3600))
+                            : nil
+                    }
+                }
+            ))
+            if model.wakeSchedule?.oneShot != nil {
+                DatePicker(
+                    "Wake at",
+                    selection: Binding(
+                        get: { model.wakeSchedule?.oneShot ?? Date() },
+                        set: { date in updateWake { $0.oneShot = date } }
+                    ),
+                    displayedComponents: [.date, .hourAndMinute]
+                )
+            }
+            Toggle("Repeat daily / weekly", isOn: Binding(
+                get: { model.wakeSchedule?.repeatingEnabled ?? false },
+                set: { on in updateWake { $0.repeatingEnabled = on } }
+            ))
+            if model.wakeSchedule?.repeatingEnabled == true {
+                DatePicker(
+                    "Time",
+                    selection: Binding(
+                        get: {
+                            let secs = model.wakeSchedule?.repeatSecondsFromMidnight ?? 0
+                            return Calendar.current.startOfDay(for: Date())
+                                .addingTimeInterval(TimeInterval(secs))
+                        },
+                        set: { date in
+                            let start = Calendar.current.startOfDay(for: date)
+                            updateWake {
+                                $0.repeatSecondsFromMidnight = Int(date.timeIntervalSince(start))
+                            }
+                        }
+                    ),
+                    displayedComponents: [.hourAndMinute]
+                )
+                Text(L("Uses every day (MTWRFSU). macOS allows only one system-wide repeating power schedule."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Toggle("Start keep-awake on wake", isOn: Binding(
+                get: { model.wakeSchedule?.startSessionOnWake ?? true },
+                set: { on in updateWake { $0.startSessionOnWake = on } }
+            ))
+            if model.wakeSchedule?.startSessionOnWake == true {
+                Picker("Session length", selection: Binding(
+                    get: { model.wakeSchedule?.sessionDurationSeconds ?? 0 },
+                    set: { value in
+                        updateWake { $0.sessionDurationSeconds = value > 0 ? value : nil }
+                    }
+                )) {
+                    Text(L("Indefinite")).tag(TimeInterval(0))
+                    Text(L("30 minutes")).tag(30 * 60 as TimeInterval)
+                    Text(L("1 hour")).tag(60 * 60 as TimeInterval)
+                    Text(L("2 hours")).tag(2 * 60 * 60 as TimeInterval)
+                    Text(L("4 hours")).tag(4 * 60 * 60 as TimeInterval)
+                }
+                Text(L("When the Mac wakes near this schedule, Keepresso starts a session so it does not fall back asleep. Works best with triggers off for that window, or with a trigger that stays satisfied."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if model.wakeSchedule?.isActive != true {
+                Label(L("Turn on a one-shot time, a repeating time, or both. With neither, nothing is installed on the system."), systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// Compact read-only summary when the schedule is saved but inactive.
+    @ViewBuilder
+    private var wakeScheduleSummary: some View {
+        if let config = model.wakeSchedule {
+            VStack(alignment: .leading, spacing: 2) {
+                if let oneShot = config.oneShot {
+                    Text(L("One-shot: %@", oneShot.formatted(date: .abbreviated, time: .shortened)))
+                }
+                if config.repeatingEnabled {
+                    Text(L("Repeating: every day at %@", config.repeatTimeString))
+                }
+                if config.startSessionOnWake {
+                    Text(L("Starts keep-awake on wake"))
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func updateWake(_ body: (inout WakeScheduleConfig) -> Void) {
+        guard var config = model.wakeSchedule else { return }
+        body(&config)
+        model.wakeSchedule = config
+    }
+
+    @ViewBuilder
+    private var wakeScheduleFooter: some View {
+        // When locked, the row above already names the helper requirement.
+        // Only show the AC caveat and live system state once the editor is open.
+        if model.wakeHelperGate == .ready {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L("Reliable on AC power. On battery the firmware may skip the wake."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if !model.systemWakeState.scheduledWakes.isEmpty {
+                    let next = model.systemWakeState.scheduledWakes
+                        .map { $0.formatted(date: .abbreviated, time: .shortened) }
+                        .joined(separator: ", ")
+                    Text(L("System one-shot wakes: %@", next))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let repeating = model.systemWakeState.repeatingSummary {
+                    Text(L("System repeating: %@", repeating))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    // MARK: Event hooks
+
+    private var eventHooksSection: some View {
+        Section {
+            if model.eventHooks.isEmpty {
+                Text(L("No event hooks yet."))
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(model.eventHooks) { hook in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Toggle(isOn: Binding(
+                            get: { hook.enabled },
+                            set: { enabled in
+                                var hooks = model.eventHooks
+                                if let i = hooks.firstIndex(where: { $0.id == hook.id }) {
+                                    hooks[i].enabled = enabled
+                                    model.eventHooks = hooks
+                                }
+                            }
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(hook.event.label)
+                                Text(hook.action.label)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .toggleStyle(.switch)
+                        Spacer(minLength: 8)
+                        Button {
+                            beginEdit(hook)
+                        } label: {
+                            Image(systemName: "pencil")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Edit hook")
+                    }
+                }
+                .onDelete(perform: deleteHooks)
+            }
+            Button("Add Hook…") {
+                beginAdd()
+            }
+        } header: {
+            sectionHeader("Event hooks", info: L("When something happens in Keepresso, run a Shortcut, POST a webhook, or run a shell command. Useful for a push to your phone when an overnight agent finishes (ntfy, or a Shortcut that sends a notification). Hooks are suspended while you edit them, so a half-written command never runs. No administrator helper needed. User-authored shell commands are intentional in this unsandboxed app: only add commands you trust."))
+        } footer: {
+            sectionFooter("Run a Shortcut, post a webhook, or a shell command on session and trigger events. No helper required.")
+        }
+    }
+
+    private func beginAdd() {
+        model.hooksEditing = true
+        editingID = nil
+        draft = HookDraft(
+            event: .sessionEnded,
+            kind: .shortcut,
+            shortcutName: "",
+            webhookURL: "",
+            shellCommand: ""
+        )
+    }
+
+    private func beginEdit(_ hook: EventHook) {
+        model.hooksEditing = true
+        editingID = hook.id
+        draft = HookDraft(from: hook)
+    }
+
+    private func commit(_ draft: HookDraft) {
+        guard let action = draft.action else { return }
+        var hooks = model.eventHooks
+        if let id = editingID, let i = hooks.firstIndex(where: { $0.id == id }) {
+            hooks[i].event = draft.event
+            hooks[i].action = action
+        } else {
+            hooks.append(EventHook(event: draft.event, action: action))
+        }
+        model.eventHooks = hooks
+    }
+
+    private func deleteHooks(at offsets: IndexSet) {
+        var hooks = model.eventHooks
+        hooks.remove(atOffsets: offsets)
+        model.eventHooks = hooks
+    }
+}
+
+/// Locked stand-in for Automation features that need the administrator
+/// helper (scheduled wake). Same idea as ``ThermalHelperLockedRow``, but
+/// stacked: a side-by-side lock + long sentence + button squeezes the text
+/// into narrow columns and ugly mid-phrase wraps.
+private struct AutomationHelperLockedRow: View {
+    @Bindable var model: AppModel
+    enum Context { case wakeSchedule }
+    let context: Context
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label {
+                Text(statusText)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: statusSymbol)
+                    .foregroundStyle(statusSymbolColor)
+            }
+            if showsInstallButton {
+                Button("Install Helper…") { model.installHelper() }
+            } else if model.helper.awaitingApproval {
+                Button("Open Login Items") { model.helper.openApprovalSettings() }
+            }
+            if let error = model.helper.lastError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var showsInstallButton: Bool {
+        !model.helper.awaitingApproval && !model.helper.daemonOutdated
+    }
+
+    private var statusSymbol: String {
+        if model.helper.awaitingApproval { return "hourglass" }
+        if model.helper.daemonOutdated { return "arrow.triangle.2.circlepath" }
+        return "lock"
+    }
+
+    private var statusSymbolColor: Color {
+        model.helper.awaitingApproval ? .orange : .secondary
+    }
+
+    private var statusText: String {
+        if model.helper.awaitingApproval {
+            return L("One step left: allow Keepresso under Login Items in System Settings. Scheduled wake unlocks by itself.")
+        }
+        if model.helper.daemonOutdated {
+            return L("The helper is updating itself (no password). Scheduled wake unlocks when that finishes, usually under a minute.")
+        }
+        switch context {
+        case .wakeSchedule:
+            return L("Scheduled wake needs the administrator helper, the same one closed-display mode and fan boost use. Install once; macOS asks for approval in System Settings.")
+        }
+    }
+}
+
+/// Editable fields for one hook, independent of the live settings list.
+private struct HookDraft: Identifiable, Equatable {
+    enum Kind: String, CaseIterable, Identifiable {
+        case shortcut, webhook, shell
+        var id: String { rawValue }
+        /// Short enough for a three-way segmented control without clipping.
+        var label: String {
+            switch self {
+            case .shortcut: return L("Shortcut")
+            case .webhook:  return L("Webhook")
+            case .shell:    return L("Shell")
+            }
+        }
+    }
+
+    let id = UUID()
+    var event: HookEvent
+    var kind: Kind
+    var shortcutName: String
+    var webhookURL: String
+    var shellCommand: String
+
+    init(
+        event: HookEvent,
+        kind: Kind,
+        shortcutName: String,
+        webhookURL: String,
+        shellCommand: String
+    ) {
+        self.event = event
+        self.kind = kind
+        self.shortcutName = shortcutName
+        self.webhookURL = webhookURL
+        self.shellCommand = shellCommand
+    }
+
+    init(from hook: EventHook) {
+        self.event = hook.event
+        switch hook.action {
+        case .runShortcut(let name):
+            self.kind = .shortcut
+            self.shortcutName = name
+            self.webhookURL = ""
+            self.shellCommand = ""
+        case .webhook(let url):
+            self.kind = .webhook
+            self.shortcutName = ""
+            self.webhookURL = url
+            self.shellCommand = ""
+        case .shell(let command):
+            self.kind = .shell
+            self.shortcutName = ""
+            self.webhookURL = ""
+            self.shellCommand = command
+        }
+    }
+
+    var action: HookAction? {
+        switch kind {
+        case .shortcut:
+            let name = shortcutName.trimmingCharacters(in: .whitespacesAndNewlines)
+            return name.isEmpty ? nil : .runShortcut(name: name)
+        case .webhook:
+            let url = webhookURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            return url.isEmpty ? nil : .webhook(url: url)
+        case .shell:
+            let command = shellCommand.trimmingCharacters(in: .whitespacesAndNewlines)
+            return command.isEmpty ? nil : .shell(command: command)
+        }
+    }
+}
+
+private struct HookEditorSheet: View {
+    @State var draft: HookDraft
+    let title: String
+    let onCancel: () -> Void
+    let onSave: (HookDraft) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(title)
+                .font(.headline)
+            Form {
+                Picker("When", selection: $draft.event) {
+                    ForEach(HookEvent.allCases, id: \.self) { event in
+                        Text(event.label).tag(event)
+                    }
+                }
+                // Short labels only: "Run a Shortcut" / "POST a webhook" /
+                // "Run a shell command" overflow a three-way segment and clip
+                // to "hortcut" at this sheet width.
+                Picker("Do", selection: $draft.kind) {
+                    ForEach(HookDraft.Kind.allCases) { kind in
+                        Text(kind.label).tag(kind)
+                    }
+                }
+                .pickerStyle(.segmented)
+                switch draft.kind {
+                case .shortcut:
+                    TextField("Shortcut name", text: $draft.shortcutName)
+                        .textFieldStyle(.roundedBorder)
+                case .webhook:
+                    TextField("https://…", text: $draft.webhookURL)
+                        .textFieldStyle(.roundedBorder)
+                case .shell:
+                    TextField("/bin/sh -c …", text: $draft.shellCommand)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(.body, design: .monospaced))
+                }
+            }
+            .formStyle(.grouped)
+            HStack {
+                Spacer()
+                Button("Cancel", action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                Button("Save") { onSave(draft) }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(draft.action == nil)
+            }
+        }
+        .padding(20)
+        .frame(width: 440)
     }
 }
 

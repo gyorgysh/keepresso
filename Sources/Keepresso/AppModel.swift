@@ -50,6 +50,16 @@ final class AppModel {
     /// Registration and status of the privileged helper daemon, the one-time
     /// password alternative to the per-run osascript prompts.
     let helper: HelperManager
+    /// Outbound event hooks ("on session end, run a Shortcut").
+    let hookDispatcher: EventHookDispatcher
+    /// Decision log on disk (JSONL under Application Support).
+    let logPersister: DecisionLogPersister
+    /// Live `pmset -g sched` view for Preferences.
+    @ObservationIgnored private let wakeReader: WakeScheduleReading
+    /// Cached system wake schedule for the Automation tab.
+    private(set) var systemWakeState: SystemWakeState = .empty
+    /// Seven-day awake stats from the persisted log.
+    private(set) var awakeStats: AwakeStats = .empty
 
     private let store: SettingsStore
     private let notifier: UserNotificationReminder
@@ -57,6 +67,8 @@ final class AppModel {
     /// privileged features go through their Routed* controllers).
     @ObservationIgnored private let helperClient: PrivilegedHelperCalling
     private(set) var settings: KeepressoSettings
+    /// Avoid double-starting on a single system wake.
+    @ObservationIgnored private var lastWakeBrewAt: Date?
 
     /// The default reminder interval used when the feature is first enabled.
     static let defaultReminderAfter: TimeInterval = 30 * 60
@@ -113,7 +125,14 @@ final class AppModel {
         loaded.seedNewBuiltInPresets() // new built-ins reach existing users once
         loaded.refreshBuiltInPresets() // and changed ones stay current
         self.settings = loaded
-        self.session = SessionController(reminder: notifier)
+        // Session-end sleep prefers the helper's root `pmset sleepnow` when
+        // the daemon is up, then IOKit, then System Events.
+        let systemSleeper = CompositeSystemSleeper(preferred: { [helperClient, helperInstalled] in
+            guard helperInstalled() else { return false }
+            return helperClient.sleepNow()
+        })
+        let endActor = SystemEndActionPerformer(systemSleeper: systemSleeper)
+        self.session = SessionController(reminder: notifier, endActor: endActor)
         self.session.options = loaded.options
         self.session.reminderAfter = loaded.reminderAfter
         self.session.reminderRepeats = loaded.reminderRepeats
@@ -123,6 +142,15 @@ final class AppModel {
         self.session.endAction = loaded.endAction
         self.session.pauseBelowBatteryPercent = loaded.pauseBelowBatteryPercent
         self.session.pauseWhenHot = loaded.thermalSafety?.stopBrewing ?? false
+        let hooks = EventHookDispatcher(runner: SystemHookRunner())
+        hooks.hooks = loaded.eventHooks
+        self.hookDispatcher = hooks
+        let logPersister = DecisionLogPersister()
+        self.logPersister = logPersister
+        self.wakeReader = PMSetWakeScheduleReader()
+        // Rehydrate Activity from disk before any new events land.
+        self.session.log.load(logPersister.loadRecent())
+        self.awakeStats = AwakeStatsAggregator.summarize(events: logPersister.loadAll())
         // Raw config here (self isn't fully initialized yet for the
         // availability derivation); the first thermalAvailabilityTick one
         // second later nils an unavailable boost stage out.
@@ -134,6 +162,13 @@ final class AppModel {
         self.awdl.autoWithGaming = loaded.awdlAutoWithGaming
         self.gamingWatcher.grace = loaded.awdlGraceSeconds
         self.closedDisplayAuto.onlyWhileBrewing = loaded.closedDisplayOnlyWhileBrewing
+        // Decision log → outbound hooks + disk. After every stored property
+        // is initialized so weak self is legal.
+        self.session.log.onRecord = { [weak hooks, weak logPersister, weak self] event in
+            hooks?.handle(sessionEvent: event)
+            logPersister?.append(PersistedSessionEvent(event, batteryPercent: event.batteryPercent))
+            self?.refreshAwakeStats()
+        }
         // With one of the auto features on and no helper installed, this run
         // can hit a password prompt in the background (e.g. a trigger-started
         // session engaging "Only while brewing"). Its "Keepresso needs your
@@ -449,6 +484,157 @@ final class AppModel {
         }
     }
 
+    /// Outbound event hooks. Writing replaces the live dispatcher list too.
+    var eventHooks: [EventHook] {
+        get { settings.eventHooks }
+        set {
+            settings.eventHooks = newValue
+            hookDispatcher.hooks = newValue
+            persist()
+        }
+    }
+
+    /// Suspend hook execution while the Automation tab is mid-edit so a
+    /// half-written command never runs against a live event.
+    var hooksEditing: Bool {
+        get { hookDispatcher.isSuspended }
+        set { hookDispatcher.isSuspended = newValue }
+    }
+
+    /// Fire the agent-idle hook when a live agent trigger just flipped. Called
+    /// from the ticker after reconcile (the trigger's tick runs inside it).
+    func fireAgentIdleHookIfNeeded() {
+        if gate.agentJustWentIdle() {
+            hookDispatcher.fire(.agentWentIdle)
+        }
+    }
+
+    // MARK: - Wake schedules
+
+    /// Why scheduled-wake controls are locked or live. Same idea as
+    /// ``FanTestGate``: never grey a toggle silently.
+    enum WakeHelperGate: Equatable {
+        case ready
+        case needsHelper
+        case awaitingApproval
+        case helperUpdating
+    }
+
+    var wakeHelperGate: WakeHelperGate {
+        if helper.awaitingApproval { return .awaitingApproval }
+        if !helperInstalled { return .needsHelper }
+        if helper.daemonOutdated { return .helperUpdating }
+        return .ready
+    }
+
+    var canEditWakeSchedule: Bool { wakeHelperGate == .ready }
+
+    /// Desired wake schedule (nil = off / clear system schedules). Enabling
+    /// without a ready helper is refused so Preferences never looks live
+    /// when the system cannot install the schedule.
+    var wakeSchedule: WakeScheduleConfig? {
+        get { settings.wakeSchedule }
+        set {
+            // When the helper is not ready, only clearing (nil) is allowed so
+            // a saved-but-inactive plan can be discarded. Enabling or editing
+            // is refused; the UI already hides those controls.
+            if newValue != nil, !canEditWakeSchedule { return }
+            settings.wakeSchedule = newValue
+            persist()
+            applyWakeScheduleToSystem()
+        }
+    }
+
+    /// Push settings to the helper (or clear). Installing needs the helper;
+    /// clearing is attempted when it answers so a disable after reinstall
+    /// still drops system schedules.
+    func applyWakeScheduleToSystem() {
+        let config = settings.wakeSchedule ?? WakeScheduleConfig()
+        let client = helperClient
+        Task.detached { [weak self] in
+            let helperUp = client.ping()
+            let ok: Bool
+            if config.isActive {
+                guard helperUp else {
+                    await MainActor.run { [weak self] in
+                        self?.refreshSystemWakeState()
+                        self?.notifier.notify(
+                            title: L("Wake schedule not installed"),
+                            body: L("Installing a wake schedule needs the administrator helper (Preferences ▸ General)."),
+                            sound: false
+                        )
+                    }
+                    return
+                }
+                _ = client.clearWakeSchedules()
+                var step = true
+                if let date = config.oneShot {
+                    step = client.scheduleOneShotWake(
+                        at: WakeScheduleConfig.oneShotString(for: date)
+                    ) && step
+                }
+                if config.repeatingEnabled {
+                    step = client.scheduleRepeatingWake(
+                        days: config.repeatWeekdays,
+                        time: config.repeatTimeString
+                    ) && step
+                }
+                ok = step
+            } else if helperUp {
+                ok = client.clearWakeSchedules()
+            } else {
+                ok = true
+            }
+            await MainActor.run { [weak self] in
+                self?.refreshSystemWakeState()
+                if !ok {
+                    self?.notifier.notify(
+                        title: L("Wake schedule not installed"),
+                        body: L("The administrator helper could not update the system wake schedule."),
+                        sound: false
+                    )
+                }
+            }
+        }
+    }
+
+    /// Re-read `pmset -g sched` for the Automation footer.
+    func refreshSystemWakeState() {
+        systemWakeState = wakeReader.current()
+    }
+
+    func refreshAwakeStats() {
+        awakeStats = AwakeStatsAggregator.summarize(events: logPersister.loadAll())
+    }
+
+    /// React to ``NSWorkspace.didWakeNotification``: if the wake matches a
+    /// Keepresso schedule with wake-and-brew on, start a session (or apply a
+    /// preset).
+    func handleSystemWake() {
+        guard let config = settings.wakeSchedule,
+              WakeAndBrewPolicy.shouldStartSession(config: config, wakeDate: Date())
+        else { return }
+        let now = Date()
+        if let last = lastWakeBrewAt, now.timeIntervalSince(last) < 60 { return }
+        lastWakeBrewAt = now
+        if let presetID = config.presetID,
+           let preset = settings.presets.first(where: { $0.id == presetID }) {
+            applyPreset(preset)
+            return
+        }
+        if triggersEnabled {
+            // Gate owns activation; just ensure triggers are live.
+            return
+        }
+        let mode: SessionMode = {
+            if let duration = config.sessionDurationSeconds, duration > 0 {
+                return .timed(duration: duration)
+            }
+            return .indefinite
+        }()
+        session.start(mode: mode, cause: .command)
+    }
+
     // MARK: - Quick stop
 
     /// Convert the running manual session to end this long from now (the
@@ -623,6 +809,9 @@ final class AppModel {
     /// closed-display lift, and notifications. Called from the ticker on any
     /// tick that produced effects.
     func handleThermalEffects(_ effects: [ThermalEffect]) {
+        if !effects.isEmpty {
+            hookDispatcher.fire(.thermalStageChanged)
+        }
         for effect in effects {
             switch effect {
             case .boostFans(let percent):
@@ -954,6 +1143,8 @@ final class AppModel {
         session.endAction = newSettings.endAction
         session.pauseBelowBatteryPercent = newSettings.pauseBelowBatteryPercent
         session.pauseWhenHot = newSettings.thermalSafety?.stopBrewing ?? false
+        hookDispatcher.hooks = newSettings.eventHooks
+        applyWakeScheduleToSystem()
         // The guard's didSet queues fan/pause releases if it was mid-emergency.
         thermalGuard.config = effectiveThermalConfig(newSettings.thermalSafety)
         GlassClarity.shared.value = Double(newSettings.glassClarity) / 100

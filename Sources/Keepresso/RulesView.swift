@@ -236,23 +236,46 @@ struct RulesView: View {
         .onAppear { model.refreshClaudeHooksStatus() }
     }
 
-    /// In-place editor for an agent rule's idle grace.
+    /// In-place editor for an agent rule's idle grace and waiting policy.
     private func agentOptionsMenu(index: Int, agentRule: AgentRule) -> some View {
         Menu {
             Picker("Grace period", selection: Binding(
                 get: { agentRule.grace },
-                set: { model.updateRule(at: index, to: .agentActivity(AgentRule(grace: $0))) }
+                set: {
+                    model.updateRule(
+                        at: index,
+                        to: .agentActivity(AgentRule(
+                            grace: $0,
+                            countWaitingAsWorking: agentRule.countWaitingAsWorking
+                        ))
+                    )
+                }
             )) {
                 ForEach(Self.agentGracePresets, id: \.seconds) { preset in
                     Text(L(preset.label)).tag(preset.seconds)
                 }
             }
+            Toggle(
+                "Count waiting as working",
+                isOn: Binding(
+                    get: { agentRule.countWaitingAsWorking },
+                    set: {
+                        model.updateRule(
+                            at: index,
+                            to: .agentActivity(AgentRule(
+                                grace: agentRule.grace,
+                                countWaitingAsWorking: $0
+                            ))
+                        )
+                    }
+                )
+            )
         } label: {
             Image(systemName: "slider.horizontal.3")
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .help("Idle grace period")
+        .help("Agent rule options")
     }
 
     /// In-place editor for a CPU rule's threshold.
