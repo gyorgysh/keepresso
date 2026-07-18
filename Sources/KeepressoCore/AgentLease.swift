@@ -496,6 +496,10 @@ public typealias AgentLeaseSnapshotHandler = @MainActor (AgentLeaseSnapshot) -> 
 public final class AgentLeaseRegistry {
     public nonisolated static let defaultTTL: TimeInterval = 5 * 60
     public nonisolated static let defaultMaxLifetime: TimeInterval = 24 * 60 * 60
+    /// Hard safety ceiling for caller-supplied TTLs and maximum lifetimes.
+    /// A forgotten lease can therefore never become an effectively permanent
+    /// global sleep override, even if a client supplies a mistaken value.
+    public nonisolated static let maximumAllowedLifetime: TimeInterval = 7 * 24 * 60 * 60
     /// Maximum completed records kept in the shared file. Active records are
     /// never removed by retention pruning.
     public nonisolated static let defaultTerminalRetentionLimit = 256
@@ -519,10 +523,10 @@ public final class AgentLeaseRegistry {
         onEvent: AgentLeaseEventHandler? = nil,
         onSnapshotChange: AgentLeaseSnapshotHandler? = nil
     ) throws {
-        guard Self.isValidDuration(defaultTTL) else {
+        guard Self.isValidDuration(defaultTTL, atMost: Self.maximumAllowedLifetime) else {
             throw AgentLeaseRegistryError.invalidTTL
         }
-        guard Self.isValidDuration(defaultMaxLifetime) else {
+        guard Self.isValidDuration(defaultMaxLifetime, atMost: Self.maximumAllowedLifetime) else {
             throw AgentLeaseRegistryError.invalidMaxLifetime
         }
         guard terminalRetentionLimit >= 0 else {
@@ -585,10 +589,10 @@ public final class AgentLeaseRegistry {
         }
         let wantedTTL = ttl ?? defaultTTL
         let wantedMaximum = maxLifetime ?? defaultMaxLifetime
-        guard Self.isValidDuration(wantedTTL) else {
+        guard Self.isValidDuration(wantedTTL, atMost: Self.maximumAllowedLifetime) else {
             throw AgentLeaseRegistryError.invalidTTL
         }
-        guard Self.isValidDuration(wantedMaximum) else {
+        guard Self.isValidDuration(wantedMaximum, atMost: Self.maximumAllowedLifetime) else {
             throw AgentLeaseRegistryError.invalidMaxLifetime
         }
 
@@ -661,7 +665,7 @@ public final class AgentLeaseRegistry {
     /// maximum lifetime measured from acquisition.
     @discardableResult
     public func renew(_ id: UUID, ttl: TimeInterval) throws -> AgentWakeLease {
-        guard Self.isValidDuration(ttl) else {
+        guard Self.isValidDuration(ttl, atMost: Self.maximumAllowedLifetime) else {
             throw AgentLeaseRegistryError.invalidTTL
         }
         return try updateHeartbeat(id, newTTL: ttl, eventKind: .renewed)
@@ -996,7 +1000,10 @@ public final class AgentLeaseRegistry {
         }
     }
 
-    private static func isValidDuration(_ value: TimeInterval) -> Bool {
-        value.isFinite && value > 0
+    private static func isValidDuration(
+        _ value: TimeInterval,
+        atMost maximum: TimeInterval
+    ) -> Bool {
+        value.isFinite && value > 0 && value <= maximum
     }
 }

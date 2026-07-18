@@ -53,6 +53,12 @@ Use the `keepresso lease` CLI to declare the task lifecycle explicitly. Acquire 
 
 Leave the default as `failure` until the task has verifiably succeeded. Do not report `timeout` yourself. Keepresso records timeout automatically when the TTL or maximum lifetime expires.
 
+For a Codex automation started by Keepresso's scheduled handoff, identify the
+automation from its `automation.toml`. Use `--agent codex` and put its exact
+automation `id` in either `--owner` or `--task`. Keepresso requires this
+correlation before it replaces the scheduled wake demand with the new lease.
+An unrelated Agent lease acquired during the same window cannot claim the run.
+
 ## Inspect without disturbing other agents
 
 Use these read operations for recovery and diagnostics:

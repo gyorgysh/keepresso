@@ -27,7 +27,8 @@ crash. Keepresso never assumes the original value was zero.
 
 Acquire a lease immediately before protected work starts. Use a short TTL and
 heartbeat before half of it elapses. The maximum lifetime is an absolute upper
-bound that heartbeats cannot extend.
+bound that heartbeats cannot extend. Keepresso enforces a seven-day hard ceiling
+on both values so a malformed request cannot create a near-permanent hold.
 
 ```sh
 lease_json="$(keepresso lease acquire \
@@ -128,14 +129,15 @@ exposes these tools:
 
 Its standard output is reserved for protocol frames. Diagnostics go to standard
 error. Tool failures use MCP tool-result errors, while malformed JSON-RPC and
-unknown methods use protocol errors.
+unknown methods use protocol errors. The local stdio connection accepts messages
+up to 1 MiB and limits each client process to 120 tool calls per minute.
 
 ## Following Codex automations
 
 Enable Follow local Codex automations in Preferences > Automation. Keepresso
-reads only scheduling metadata from active local and worktree automation files.
-The task prompt and unknown fields are neither projected into memory nor written
-to its audit log.
+extracts only scheduling metadata from active local and worktree automation
+files. Task prompts and unknown fields are discarded during parsing. They are
+never retained in the model, displayed, or written to the audit log.
 
 For each nearest scheduled run, Keepresso:
 
@@ -145,7 +147,9 @@ For each nearest scheduled run, Keepresso:
 3. Waits for the configured power, battery, network, and Codex application
    requirements with bounded retry and timeout.
 4. Opens Codex and waits for each grouped automation to acquire an explicit
-   lease.
+   lease. The lease must use `agent=codex` and put the exact automation ID in
+   either `owner` or `task`, so an unrelated concurrent lease cannot claim the
+   scheduled handoff.
 5. Atomically replaces scheduled handoff demand with the new lease IDs, so
    there is no sleep gap.
 6. Releases failed or missing handoffs at the deadline. Valid leases continue

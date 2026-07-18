@@ -6,6 +6,8 @@ import Foundation
 @MainActor
 public final class KeepressoMCPServer {
     public static let protocolVersion = "2025-11-25"
+    public static let maximumMessageBytes = 1_048_576
+    public static let maximumToolCallsPerMinute = 120
 
     private static let supportedProtocolVersions = [
         "2025-11-25",
@@ -13,10 +15,17 @@ public final class KeepressoMCPServer {
     ]
 
     private let commander: LeaseCommanding
+    private let now: () -> Date
     private var lifecycle = MCPLifecycle.awaitingInitialize
+    private var toolWindowStartedAt: Date?
+    private var toolCallsInWindow = 0
 
-    public init(commander: LeaseCommanding) {
+    public init(
+        commander: LeaseCommanding,
+        now: @escaping () -> Date = Date.init
+    ) {
         self.commander = commander
+        self.now = now
     }
 
     public convenience init() throws {
@@ -26,6 +35,13 @@ public final class KeepressoMCPServer {
     /// Handle one newline-delimited JSON-RPC message.
     /// Notifications deliberately return nil because they have no response.
     public func handle(_ data: Data) -> Data? {
+        guard data.count <= Self.maximumMessageBytes else {
+            return Self.encode(Self.errorEnvelope(
+                id: NSNull(),
+                code: -32600,
+                message: "Request exceeds the maximum message size"
+            ))
+        }
         guard let value = try? JSONSerialization.jsonObject(with: data) else {
             return Self.encode(Self.errorEnvelope(id: NSNull(), code: -32700, message: "Parse error"))
         }
@@ -44,15 +60,13 @@ public final class KeepressoMCPServer {
             ))
         }
 
-        if method.hasPrefix("notifications/") {
+        let hasID = request.keys.contains("id")
+        guard hasID else {
             if method == "notifications/initialized", lifecycle == .awaitingInitialized {
                 lifecycle = .ready
             }
             return nil
         }
-
-        let hasID = request.keys.contains("id")
-        guard hasID else { return nil }
         let id = request["id"]
         guard Self.isValidRequestID(id) else {
             return Self.encode(Self.errorEnvelope(id: NSNull(), code: -32600, message: "Invalid Request"))
@@ -79,8 +93,20 @@ public final class KeepressoMCPServer {
                 return .error(-32600, "Server is already initialized")
             }
             guard let parameters = Self.parameters(params),
-                  let requestedVersion = parameters["protocolVersion"] as? String
-            else { return .error(-32602, "initialize requires protocolVersion") }
+                  let requestedVersion = parameters["protocolVersion"] as? String,
+                  !requestedVersion.isEmpty,
+                  parameters["capabilities"] is [String: Any],
+                  let clientInfo = parameters["clientInfo"] as? [String: Any],
+                  let clientName = clientInfo["name"] as? String,
+                  !clientName.isEmpty,
+                  let clientVersion = clientInfo["version"] as? String,
+                  !clientVersion.isEmpty
+            else {
+                return .error(
+                    -32602,
+                    "initialize requires protocolVersion, capabilities, and clientInfo name/version"
+                )
+            }
             let selectedVersion = Self.supportedProtocolVersions.contains(requestedVersion)
                 ? requestedVersion
                 : Self.protocolVersion
@@ -104,10 +130,27 @@ public final class KeepressoMCPServer {
             return .result(["tools": Self.toolDefinitions])
         case "tools/call":
             guard lifecycle == .ready else { return .error(-32002, "Server is not initialized") }
+            guard admitToolCall() else {
+                return .error(-32000, "Tool invocation rate limit exceeded")
+            }
             return callTool(params: params)
         default:
             return .error(-32601, "Method not found: \(method)")
         }
+    }
+
+    private func admitToolCall() -> Bool {
+        let instant = now()
+        if let start = toolWindowStartedAt,
+           instant >= start,
+           instant.timeIntervalSince(start) < 60 {
+            guard toolCallsInWindow < Self.maximumToolCallsPerMinute else { return false }
+            toolCallsInWindow += 1
+            return true
+        }
+        toolWindowStartedAt = instant
+        toolCallsInWindow = 1
+        return true
     }
 
     private func callTool(params: Any?) -> MCPMethodOutcome {
@@ -117,11 +160,7 @@ public final class KeepressoMCPServer {
         else { return .error(-32602, "tools/call requires a tool name") }
 
         guard let operation = Self.operationName(for: name) else {
-            return .result(Self.toolResult(.failure(
-                command: name,
-                code: "unknown_tool",
-                message: "Unknown tool: \(name)"
-            )))
+            return .error(-32602, "Unknown tool: \(name)")
         }
 
         let arguments: [String: Any]

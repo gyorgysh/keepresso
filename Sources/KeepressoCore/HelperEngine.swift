@@ -53,17 +53,31 @@ public final class PMSetSleepSettingReader: SleepSettingReading {
             guard process.terminationStatus == 0 else { return nil }
             let data = output.fileHandleForReading.readDataToEndOfFile()
             guard let text = String(data: data, encoding: .utf8) else { return nil }
-            for line in text.split(whereSeparator: \.isNewline) {
-                let fields = line.split(whereSeparator: \.isWhitespace)
-                guard let key = fields.firstIndex(of: "disablesleep"),
-                      fields.indices.contains(fields.index(after: key))
-                else { continue }
-                return fields[fields.index(after: key)] == "1"
-            }
-            return nil
+            return Self.parse(text)
         } catch {
             return nil
         }
+    }
+
+    /// `pmset` accepts the command argument `disablesleep`, but current macOS
+    /// prints the setting as `SleepDisabled`. Accept both spellings without
+    /// case sensitivity so older output remains compatible.
+    static func parse(_ text: String) -> Bool? {
+        let accepted = ["sleepdisabled", "disablesleep"]
+        for line in text.split(whereSeparator: \.isNewline) {
+            let fields = line.split(whereSeparator: \.isWhitespace)
+            guard let key = fields.firstIndex(where: {
+                accepted.contains($0.lowercased())
+            }) else { continue }
+            let valueIndex = fields.index(after: key)
+            guard fields.indices.contains(valueIndex) else { continue }
+            switch fields[valueIndex] {
+            case "0": return false
+            case "1": return true
+            default: continue
+            }
+        }
+        return nil
     }
 }
 
@@ -491,12 +505,19 @@ public final class HelperEngine: @unchecked Sendable {
     // MARK: - Union edges (call with the lock held)
 
     private func applySleepUnion(_ mutate: () -> Void) -> Bool {
+        let previousHolders = sleepHolders
         let before = !sleepHolders.isEmpty
         mutate()
         let after = !sleepHolders.isEmpty
         guard before != after else { return true }
         if after {
-            let original = sleepSettingReader.sleepIsDisabled() ?? false
+            guard let original = sleepSettingReader.sleepIsDisabled() else {
+                // Without an exact snapshot, changing a global setting could
+                // destroy user-owned state on release. Refuse this hold and
+                // retry later instead of guessing that sleep was enabled.
+                sleepHolders = previousHolders
+                return false
+            }
             persistSleepRestoreValue(original)
             // Record the debt before the write. A failed command may still
             // have changed state, and restoring the snapshot is harmless.

@@ -280,3 +280,143 @@ private func utc(
     #expect(plan?.scheduledWake == nil)
     #expect(plan?.requiresImmediatePreparation == true)
 }
+
+@Test func consumedManualOneShotRevealsLaterCodexWake() {
+    let manualWake = utc(20, 8, 0)
+    let codexWake = utc(20, 9, 0)
+    let manual = WakeScheduleConfig(
+        oneShot: manualWake,
+        repeatingEnabled: true,
+        repeatSecondsFromMidnight: 3 * 3600,
+        repeatWeekdays: "MWF"
+    )
+
+    let beforeManualWake = CodexWakeSchedulePolicy.effective(
+        manual: manual,
+        codexWake: codexWake,
+        codexEnabled: true,
+        at: utc(20, 7, 0)
+    )
+    #expect(beforeManualWake.oneShot == manualWake)
+
+    let afterManualWake = CodexWakeSchedulePolicy.effective(
+        manual: manual,
+        codexWake: codexWake,
+        codexEnabled: true,
+        at: utc(20, 8, 1)
+    )
+    #expect(afterManualWake.oneShot == codexWake)
+    #expect(afterManualWake.repeatingEnabled)
+    #expect(afterManualWake.repeatSecondsFromMidnight == 3 * 3600)
+    #expect(afterManualWake.repeatWeekdays == "MWF")
+
+    let afterBothWakes = CodexWakeSchedulePolicy.effective(
+        manual: manual,
+        codexWake: codexWake,
+        codexEnabled: true,
+        at: utc(20, 9, 1)
+    )
+    #expect(afterBothWakes.oneShot == nil)
+}
+
+@Test func scheduledHandoffAcceptsOnlyCorrelatedCodexLeases() throws {
+    let date = utc(20, 9, 0)
+    let runs = [
+        CodexAutomationQueuedRun(
+            automationID: "automation-one",
+            automationName: "One",
+            scheduledRun: date,
+            workingDirectories: []
+        ),
+        CodexAutomationQueuedRun(
+            automationID: "automation-two",
+            automationName: "Two",
+            scheduledRun: date,
+            workingDirectories: []
+        ),
+    ]
+    let baselineID = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000001"))
+    let claudeID = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000002"))
+    let unrelatedCodexID = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000003"))
+    let firstID = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000004"))
+    let secondID = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000005"))
+
+    func lease(
+        _ id: UUID,
+        owner: String,
+        agent: String,
+        task: String? = nil,
+        attributes: [String: String] = [:]
+    ) -> AgentWakeLease {
+        AgentWakeLease(
+            id: id,
+            metadata: AgentLeaseMetadata(
+                owner: owner,
+                agent: agent,
+                task: task,
+                attributes: attributes
+            ),
+            acquiredAt: date,
+            heartbeatAt: date,
+            expiresAt: date.addingTimeInterval(300),
+            ttl: 300,
+            maxLifetime: 3_600
+        )
+    }
+
+    let claims = CodexLeaseHandoffPolicy.matchedClaims(
+        runs: runs,
+        leases: [
+            lease(baselineID, owner: "automation-one", agent: "codex"),
+            lease(claudeID, owner: "automation-one", agent: "claude-code"),
+            lease(unrelatedCodexID, owner: "someone-else", agent: "codex"),
+            lease(firstID, owner: "automation-one", agent: "codex"),
+            lease(
+                secondID,
+                owner: "runner",
+                agent: "openai-codex",
+                attributes: ["automation_id": "automation-two"]
+            ),
+        ],
+        excluding: [baselineID]
+    )
+
+    #expect(claims == [
+        "automation-one": firstID,
+        "automation-two": secondID,
+    ])
+}
+
+@Test func oneLeaseCannotClaimTwoGroupedCodexRuns() throws {
+    let date = utc(20, 9, 0)
+    let leaseID = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000006"))
+    let lease = AgentWakeLease(
+        id: leaseID,
+        metadata: AgentLeaseMetadata(
+            owner: "first",
+            agent: "codex",
+            task: "second"
+        ),
+        acquiredAt: date,
+        heartbeatAt: date,
+        expiresAt: date.addingTimeInterval(300),
+        ttl: 300,
+        maxLifetime: 3_600
+    )
+    let runs = ["first", "second"].map {
+        CodexAutomationQueuedRun(
+            automationID: $0,
+            automationName: $0,
+            scheduledRun: date,
+            workingDirectories: []
+        )
+    }
+
+    let claims = CodexLeaseHandoffPolicy.matchedClaims(
+        runs: runs,
+        leases: [lease],
+        excluding: []
+    )
+    #expect(claims.count == 1)
+    #expect(Set(claims.values) == [leaseID])
+}

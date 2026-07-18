@@ -23,4 +23,13 @@ public struct UnattendedPowerPolicy: Codable, Equatable, Sendable {
     }
 
     public static let `default` = UnattendedPowerPolicy()
+
+    /// Resolve the live session action without letting a settings import
+    /// weaken an already armed unattended session.
+    public func effectiveEndAction(
+        interactive: SessionEndAction,
+        whileArmed armed: Bool
+    ) -> SessionEndAction {
+        armed ? endAction : interactive
+    }
 }

@@ -920,7 +920,9 @@ final class AppModel {
         currentScheduledRuns = codexWakePlanning.queuedRuns.filter {
             $0.scheduledRun <= nearest.scheduledRun.addingTimeInterval(groupingWindow)
         }
-        scheduledLeaseBaseline = Set(agentLeaseSnapshot.activeLeases.map(\.id))
+        // Capture every retained ID, not only active ones. A completed lease
+        // from before this handoff must not become a new claim later.
+        scheduledLeaseBaseline = Set(agentLeaseSnapshot.leases.map(\.id))
         scheduledHandoffLeaseIDs = []
         scheduledWakeDemands = Set(currentScheduledRuns.map {
             ScheduledWakeDemand(id: $0.automationID, phase: .preparation)
@@ -970,13 +972,14 @@ final class AppModel {
     private func codexLeaseHandoffIfNeeded(at date: Date) {
         if codexAgentPhase == .awaitingLease || codexAgentPhase == .preparing
             || codexAgentPhase == .launching {
-            let active = Set(agentLeaseSnapshot.activeLeases.map(\.id))
-            let acquiredForRun = active.subtracting(scheduledLeaseBaseline)
-            if !acquiredForRun.isEmpty {
-                scheduledHandoffLeaseIDs.formUnion(acquiredForRun)
-            }
+            let claims = CodexLeaseHandoffPolicy.matchedClaims(
+                runs: currentScheduledRuns,
+                leases: agentLeaseSnapshot.leases,
+                excluding: scheduledLeaseBaseline
+            )
+            scheduledHandoffLeaseIDs = Set(claims.values)
             let expectedLeaseCount = max(1, currentScheduledRuns.count)
-            if scheduledHandoffLeaseIDs.count >= expectedLeaseCount {
+            if claims.count >= expectedLeaseCount {
                 scheduledWakeDemands.removeAll()
                 codexAgentPhase = .leased
                 codexLeaseHandoffDeadline = nil
@@ -1013,7 +1016,7 @@ final class AppModel {
                 reconcileExternalWakeDemand(at: date)
                 notifier.notify(
                     title: L("Some Codex automations did not claim a wake lease"),
-                    body: L("Keepresso released the expired handoff requests. Active Agent leases remain protected."),
+                    body: L("Keepresso released the expired handoff requests. Any Agent leases still active remain protected."),
                     sound: false
                 )
                 refreshCodexAutomationPlan(force: true)
@@ -1057,14 +1060,13 @@ final class AppModel {
         }
     }
 
-    private func effectiveWakeSchedule() -> WakeScheduleConfig {
-        var config = settings.wakeSchedule ?? WakeScheduleConfig()
-        if settings.codexAutomation.enabled,
-           let codexWake = codexWakePlanning.wakePlan?.scheduledWake,
-           config.oneShot == nil || codexWake < config.oneShot! {
-            config.oneShot = codexWake
-        }
-        return config
+    private func effectiveWakeSchedule(at date: Date = Date()) -> WakeScheduleConfig {
+        CodexWakeSchedulePolicy.effective(
+            manual: settings.wakeSchedule,
+            codexWake: codexWakePlanning.wakePlan?.scheduledWake,
+            codexEnabled: settings.codexAutomation.enabled,
+            at: date
+        )
     }
 
     // MARK: - Wake schedules
@@ -1120,14 +1122,15 @@ final class AppModel {
     /// clearing is attempted when it answers so a disable after reinstall
     /// still drops system schedules.
     func applyWakeScheduleToSystem() {
+        let now = Date()
         // A one-shot whose moment has passed can never install again (pmset
         // refuses past dates); drop it so later applies don't fail on it
         // forever.
-        if let date = settings.wakeSchedule?.oneShot, date <= Date() {
+        if let date = settings.wakeSchedule?.oneShot, date <= now {
             settings.wakeSchedule?.oneShot = nil
             persist()
         }
-        let config = effectiveWakeSchedule()
+        let config = effectiveWakeSchedule(at: now)
         // Leave pmset alone when there is nothing to install and Keepresso
         // never installed anything: the system schedules belong to the user
         // or another tool, not to us.
@@ -1268,6 +1271,10 @@ final class AppModel {
                 }
             }
         }
+        // A consumed manual one-shot may have been the earlier of two pending
+        // wakes. Re-apply here so a later Codex wake becomes the system's next
+        // one-shot even though its discovery result itself did not change.
+        applyWakeScheduleToSystem()
         beginCodexPreparationIfNeeded(at: now)
     }
 
@@ -1808,7 +1815,10 @@ final class AppModel {
         session.reminderSound = newSettings.reminderSound
         session.notifyOnEnd = newSettings.notifyOnEnd
         session.endingSoonNotice = newSettings.endingSoonNoticeSeconds
-        session.endAction = newSettings.endAction
+        session.endAction = newSettings.unattendedPowerPolicy.effectiveEndAction(
+            interactive: newSettings.endAction,
+            whileArmed: unattendedSessionArmed
+        )
         session.pauseBelowBatteryPercent = newSettings.pauseBelowBatteryPercent
         session.pauseWhenHot = newSettings.thermalSafety?.stopBrewing ?? false
         hookDispatcher.hooks = newSettings.eventHooks

@@ -3,7 +3,8 @@ import Foundation
 @testable import KeepressoCore
 
 @Test func codexAutomationSettingsClampUnsafeImportedValues() throws {
-    let data = Data(#"{
+    let data = Data("""
+    {
         "enabled": true,
         "wakeLeadTime": -10,
         "readinessTimeout": 2,
@@ -12,7 +13,8 @@ import Foundation
         "requireExternalPower": false,
         "minimumBatteryPercentage": 2,
         "applicationBundleIdentifier": "   "
-    }"#.utf8)
+    }
+    """.utf8)
     let decoded = try JSONDecoder().decode(CodexAutomationSettings.self, from: data)
 
     #expect(decoded.wakeLeadTime == 0)
@@ -102,6 +104,14 @@ import Foundation
     let data = try JSONEncoder().encode(settings)
     let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: data)
     #expect(decoded.unattendedPowerPolicy == settings.unattendedPowerPolicy)
+    #expect(settings.unattendedPowerPolicy.effectiveEndAction(
+        interactive: .none,
+        whileArmed: true
+    ) == .lockScreen)
+    #expect(settings.unattendedPowerPolicy.effectiveEndAction(
+        interactive: .none,
+        whileArmed: false
+    ) == .none)
 }
 
 @Test func menuPanelExpandedDefaultsOnAndRoundTripsCollapsed() throws {

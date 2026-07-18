@@ -12,11 +12,12 @@ Versions follow [Semantic Versioning](https://semver.org).
   leases through the `keepresso` CLI, a bundled Skill, or a local stdio MCP
   server. Multiple leases form a union, with TTL and maximum-lifetime watchdogs
   for crashed or abandoned tasks.
-- **Unattended Codex automation orchestration.** Keepresso can discover enabled
-  local Codex schedules without reading task prompts, wake the Mac early, check
-  power, battery, network, and application readiness, launch Codex, and hand
-  wake ownership to explicit Agent leases. Failed readiness and lease-handoff
-  timeouts restore normal sleep safely.
+- **Unattended Codex automation orchestration.** Keepresso can extract enabled
+  local Codex scheduling metadata without retaining, displaying, or logging
+  task prompts, wake the Mac early, check power, battery, network, and
+  application readiness, launch Codex, and hand wake ownership to explicitly
+  correlated Agent leases. Failed readiness and lease-handoff timeouts restore
+  normal sleep safely.
 - **Secure unattended policy and diagnostics.** Background runs lock the screen,
   sleep the display, and sleep the Mac after the final task by default. The menu,
   Preferences, CLI status JSON, and Activity log expose active leases, deadlines,

@@ -6,7 +6,7 @@ public protocol CodexAutomationFileReading: Sendable {
     /// Exact `automation.toml` files one directory below `root`.
     func automationFiles(in root: URL) throws -> [URL]
     /// Read one discovered metadata file. Production discovery immediately
-    /// projects it down to an allow-list and never exposes the prompt.
+    /// projects it down to an allow-list and never retains or exposes prompts.
     func readAutomationFile(at url: URL) throws -> String
 }
 
@@ -145,8 +145,8 @@ public struct CodexAutomationDiscoveryResult: Equatable, Sendable {
 }
 
 /// Finds `$CODEX_HOME/automations/*/automation.toml` and returns enabled
-/// scheduling metadata only. Prompt text is never projected into the returned
-/// model, logged, or included in an error.
+/// scheduling metadata only. Prompt text is discarded during parsing and is
+/// never retained in the returned model, logged, or included in an error.
 public struct CodexAutomationDiscovery: Sendable {
     public let root: URL
     private let files: any CodexAutomationFileReading
@@ -958,6 +958,54 @@ public struct CodexAutomationQueuedRun: Equatable, Sendable {
     }
 }
 
+/// Correlates leases created during a scheduled Codex handoff with the exact
+/// automation that created them. A concurrent Claude or interactive Codex
+/// lease must never satisfy an unrelated scheduled run merely because it was
+/// acquired during the same time window.
+public enum CodexLeaseHandoffPolicy {
+    private static let acceptedAgents = Set(["codex", "codex-cli", "openai-codex"])
+
+    /// Returns at most one lease per run and at most one run per lease.
+    /// Scheduled Agents claim a run by setting `agent` to a recognized Codex
+    /// identity and putting the exact automation ID in `owner`, `task`, or the
+    /// forward-compatible `automation_id` metadata attribute.
+    public static func matchedClaims(
+        runs: [CodexAutomationQueuedRun],
+        leases: [AgentWakeLease],
+        excluding baseline: Set<UUID>
+    ) -> [String: UUID] {
+        var unused = leases
+            .filter { !baseline.contains($0.id) && isCodex($0.metadata.agent) }
+            .sorted {
+                if $0.acquiredAt != $1.acquiredAt { return $0.acquiredAt < $1.acquiredAt }
+                return $0.id.uuidString < $1.id.uuidString
+            }
+        var claims: [String: UUID] = [:]
+        let orderedRuns = runs.sorted {
+            if $0.scheduledRun != $1.scheduledRun { return $0.scheduledRun < $1.scheduledRun }
+            return $0.automationID < $1.automationID
+        }
+        for run in orderedRuns {
+            guard let index = unused.firstIndex(where: {
+                metadataClaims(runID: run.automationID, metadata: $0.metadata)
+            }) else { continue }
+            claims[run.automationID] = unused.remove(at: index).id
+        }
+        return claims
+    }
+
+    private static func isCodex(_ raw: String?) -> Bool {
+        guard let raw else { return false }
+        return acceptedAgents.contains(raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+    }
+
+    private static func metadataClaims(runID: String, metadata: AgentLeaseMetadata) -> Bool {
+        metadata.owner == runID
+            || metadata.task == runID
+            || metadata.attributes["automation_id"] == runID
+    }
+}
+
 public struct CodexAutomationWakePlanningResult: Equatable, Sendable {
     /// The single nearest wake suitable for the existing pmset helper seam.
     public var wakePlan: CodexAutomationWakePlan?
@@ -1043,5 +1091,29 @@ public struct CodexAutomationWakePlanner: Equatable, Sendable {
         var updated = existing
         updated.oneShot = plan?.scheduledWake
         return updated
+    }
+}
+
+/// Joins Keepresso's user-authored wake configuration with the next Codex
+/// one-shot. A consumed earlier manual wake must reveal a later Codex wake on
+/// the next apply instead of leaving the system with no pending one-shot.
+public enum CodexWakeSchedulePolicy {
+    public static func effective(
+        manual: WakeScheduleConfig?,
+        codexWake: Date?,
+        codexEnabled: Bool,
+        at date: Date
+    ) -> WakeScheduleConfig {
+        var config = manual ?? WakeScheduleConfig()
+        if let manualWake = config.oneShot, manualWake <= date {
+            config.oneShot = nil
+        }
+        if codexEnabled,
+           let codexWake,
+           codexWake > date,
+           config.oneShot == nil || codexWake < config.oneShot! {
+            config.oneShot = codexWake
+        }
+        return config
     }
 }

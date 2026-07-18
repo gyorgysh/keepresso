@@ -1207,9 +1207,9 @@ private struct AutomationTab: View {
                 AutomationHelperLockedRow(model: model, context: .wakeSchedule)
             }
         } header: {
-            sectionHeader("Codex automation wake", info: L("Keepresso reads only scheduling metadata from enabled local Codex automations. It wakes the Mac before the nearest run, waits for power, battery, network, and the Codex app, then holds the Mac until the Agent acquires an explicit lease or the handoff times out."))
+            sectionHeader("Codex automation wake", info: L("Keepresso extracts only scheduling metadata from enabled local Codex automations. It wakes the Mac before the nearest run, waits for power, battery, network, and the Codex app, then holds the Mac until the Agent acquires an explicit lease or the handoff times out."))
         } footer: {
-            sectionFooter("Automation prompts are never read or logged. Configure the Keepresso Skill or MCP server so each Agent acquires, renews, and releases its own lease.")
+            sectionFooter("Automation prompt text is discarded during parsing and is never retained, displayed, or logged. Configure the Keepresso Skill or MCP server so each Agent acquires, renews, and releases its own lease.")
         }
     }
 

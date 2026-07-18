@@ -107,6 +107,14 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 
 // MARK: - Holds
 
+@Test func sleepSettingReaderParsesRealAndLegacyPMSetKeys() {
+    #expect(PMSetSleepSettingReader.parse("System-wide power settings:\n SleepDisabled 1\n") == true)
+    #expect(PMSetSleepSettingReader.parse(" disablesleep 0\n") == false)
+    #expect(PMSetSleepSettingReader.parse(" sleepdisabled 1\n") == true)
+    #expect(PMSetSleepSettingReader.parse(" SleepDisabled unknown\n") == nil)
+    #expect(PMSetSleepSettingReader.parse(" displaysleep 10\n") == nil)
+}
+
 @Test func sleepHoldWritesOnlyOnUnionEdges() {
     let runner = FakeRunner()
     let state = FakeRestoreState()
@@ -208,6 +216,22 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 
     #expect(engine.setSleepHold(client: 1, holding: false))
     #expect(runner.commands == [sleepOn])
+    #expect(state.markers().isEmpty)
+    #expect(state.sleepRestoreValue() == nil)
+}
+
+@Test func sleepHoldRefusesToGuessWhenOriginalSettingIsUnreadable() {
+    let runner = FakeRunner()
+    let state = FakeRestoreState()
+    let engine = HelperEngine(
+        runner: runner,
+        state: state,
+        sleepSettingReader: FakeSleepSettingReader(nil)
+    )
+
+    #expect(!engine.setSleepHold(client: 1, holding: true))
+    #expect(engine.isIdle)
+    #expect(runner.commands.isEmpty)
     #expect(state.markers().isEmpty)
     #expect(state.sleepRestoreValue() == nil)
 }

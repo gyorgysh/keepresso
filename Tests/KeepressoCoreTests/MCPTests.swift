@@ -44,7 +44,11 @@ private func completeInitialization(
     _ = try callMCP(
         server,
         method: "initialize",
-        params: ["protocolVersion": version, "capabilities": [:], "clientInfo": [:]]
+        params: [
+            "protocolVersion": version,
+            "capabilities": [:],
+            "clientInfo": ["name": "Keepresso Tests", "version": "1.0"],
+        ]
     )
     let notification = try JSONSerialization.data(withJSONObject: [
         "jsonrpc": "2.0",
@@ -59,7 +63,11 @@ private func completeInitialization(
         let response = try callMCP(
             server,
             method: "initialize",
-            params: ["protocolVersion": version, "capabilities": [:], "clientInfo": [:]]
+            params: [
+                "protocolVersion": version,
+                "capabilities": [:],
+                "clientInfo": ["name": "Keepresso Tests", "version": "1.0"],
+            ]
         )
         let result = try #require(response["result"] as? [String: Any])
         #expect(result["protocolVersion"] as? String == version)
@@ -67,6 +75,21 @@ private func completeInitialization(
         #expect(capabilities["tools"] as? [String: Any] != nil)
         let info = try #require(result["serverInfo"] as? [String: Any])
         #expect(info["name"] as? String == "keepresso-mcp")
+    }
+}
+
+@Test @MainActor func mcpInitializeRejectsIncompleteClientMetadata() throws {
+    let cases: [[String: Any]] = [
+        ["protocolVersion": "2025-11-25", "clientInfo": ["name": "Client", "version": "1"]],
+        ["protocolVersion": "2025-11-25", "capabilities": [], "clientInfo": ["name": "Client", "version": "1"]],
+        ["protocolVersion": "2025-11-25", "capabilities": [:], "clientInfo": [:]],
+        ["protocolVersion": "2025-11-25", "capabilities": [:], "clientInfo": ["name": "Client"]],
+    ]
+    for parameters in cases {
+        let server = KeepressoMCPServer(commander: RecordingLeaseCommander())
+        let response = try callMCP(server, method: "initialize", params: parameters)
+        let error = try #require(response["error"] as? [String: Any])
+        #expect(error["code"] as? Int == -32602)
     }
 }
 
@@ -81,16 +104,23 @@ private func completeInitialization(
     #expect(response["result"] as? [String: Any] != nil)
 }
 
-@Test @MainActor func allMCPNotificationsHaveNoResponse() throws {
+@Test @MainActor func idLessMCPNotificationsHaveNoResponse() throws {
     let server = KeepressoMCPServer(commander: RecordingLeaseCommander())
     for method in ["notifications/initialized", "notifications/cancelled", "notifications/progress"] {
         let notification = try JSONSerialization.data(withJSONObject: [
             "jsonrpc": "2.0",
-            "id": 7,
             "method": method,
         ])
         #expect(server.handle(notification) == nil)
     }
+}
+
+@Test @MainActor func requestNamedLikeNotificationStillGetsProtocolError() throws {
+    let server = KeepressoMCPServer(commander: RecordingLeaseCommander())
+    let response = try callMCP(server, id: 7, method: "notifications/progress", params: [:])
+    let error = try #require(response["error"] as? [String: Any])
+    #expect(error["code"] as? Int == -32601)
+    #expect(response["id"] as? Int == 7)
 }
 
 @Test @MainActor func mcpListsExactlyTheWakeLeaseTools() throws {
@@ -186,7 +216,7 @@ private func completeInitialization(
     ])
 }
 
-@Test @MainActor func mcpArgumentAndUnknownToolErrorsAreToolResults() throws {
+@Test @MainActor func mcpArgumentErrorsAreToolResultsAndUnknownToolsAreProtocolErrors() throws {
     let commander = RecordingLeaseCommander()
     let server = KeepressoMCPServer(commander: commander)
     try completeInitialization(server)
@@ -203,11 +233,8 @@ private func completeInitialization(
         "name": "make_coffee",
         "arguments": [:],
     ])
-    #expect(unknown["error"] == nil)
-    let unknownResult = try #require(unknown["result"] as? [String: Any])
-    #expect(unknownResult["isError"] as? Bool == true)
-    let unknownStructured = try #require(unknownResult["structuredContent"] as? [String: Any])
-    #expect(unknownStructured["code"] as? String == "unknown_tool")
+    let unknownError = try #require(unknown["error"] as? [String: Any])
+    #expect(unknownError["code"] as? Int == -32602)
     #expect(commander.commands.isEmpty)
 }
 
@@ -221,4 +248,41 @@ private func completeInitialization(
     let malformed = try #require(JSONSerialization.jsonObject(with: malformedData) as? [String: Any])
     let parseError = try #require(malformed["error"] as? [String: Any])
     #expect(parseError["code"] as? Int == -32700)
+}
+
+@Test @MainActor func mcpBoundsMessageSizeAndToolInvocationRate() throws {
+    let commander = RecordingLeaseCommander()
+    let instant = Date(timeIntervalSince1970: 1_800_000_000)
+    let server = KeepressoMCPServer(commander: commander, now: { instant })
+    try completeInitialization(server)
+
+    for index in 0..<KeepressoMCPServer.maximumToolCallsPerMinute {
+        let response = try callMCP(
+            server,
+            id: index,
+            method: "tools/call",
+            params: ["name": "wake_status", "arguments": [:]]
+        )
+        #expect(response["result"] != nil)
+    }
+    let limited = try callMCP(
+        server,
+        id: "limited",
+        method: "tools/call",
+        params: ["name": "wake_status", "arguments": [:]]
+    )
+    let rateError = try #require(limited["error"] as? [String: Any])
+    #expect(rateError["code"] as? Int == -32000)
+    #expect(commander.commands.count == KeepressoMCPServer.maximumToolCallsPerMinute)
+
+    let oversized = Data(
+        repeating: 0x20,
+        count: KeepressoMCPServer.maximumMessageBytes + 1
+    )
+    let oversizedResponse = try #require(server.handle(oversized))
+    let envelope = try #require(
+        JSONSerialization.jsonObject(with: oversizedResponse) as? [String: Any]
+    )
+    let sizeError = try #require(envelope["error"] as? [String: Any])
+    #expect(sizeError["code"] as? Int == -32600)
 }

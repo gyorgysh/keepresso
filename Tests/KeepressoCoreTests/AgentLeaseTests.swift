@@ -593,8 +593,26 @@ private func temporaryLeaseFile() throws -> (directory: URL, file: URL) {
         }
     }
     do {
+        _ = try registry.acquire(
+            owner: "owner",
+            ttl: AgentLeaseRegistry.maximumAllowedLifetime + 1
+        )
+        Issue.record("A TTL above the hard safety ceiling was accepted")
+    } catch {
+        #expect(error as? AgentLeaseRegistryError == .invalidTTL)
+    }
+    do {
         _ = try registry.acquire(owner: "owner", maxLifetime: 0)
         Issue.record("An invalid maximum lifetime was accepted")
+    } catch {
+        #expect(error as? AgentLeaseRegistryError == .invalidMaxLifetime)
+    }
+    do {
+        _ = try registry.acquire(
+            owner: "owner",
+            maxLifetime: AgentLeaseRegistry.maximumAllowedLifetime + 1
+        )
+        Issue.record("A maximum lifetime above the hard safety ceiling was accepted")
     } catch {
         #expect(error as? AgentLeaseRegistryError == .invalidMaxLifetime)
     }
