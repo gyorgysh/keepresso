@@ -863,6 +863,7 @@ final class AppModel {
         )
         Task.detached {
             let result = CodexAutomationDiscovery().discover()
+            let disposition = CodexDiscoverySchedulePolicy.disposition(for: result)
             let planning = CodexAutomationWakePlanner(
                 leadTime: policy.wakeLeadTime
             ).plan(for: result.automations, after: searchAfter)
@@ -879,17 +880,26 @@ final class AppModel {
                     self.refreshCodexAutomationPlan(force: true)
                     return
                 }
-                let wasCurrent = self.codexWakeApplyFreshness.hasCurrentDiscovery
-                self.codexAutomations = result.automations
                 self.codexAutomationIssueCount = result.issues.count
-                self.codexWakePlanning = planning
-                self.codexWakeApplyFreshness.markDiscoveryCompleted()
                 self.unattendedAuditLog.record(UnattendedDiagnosticEvent(
                     date: Date(),
                     kind: result.issues.isEmpty ? .discoveryCompleted : .discoveryFailed,
                     automationCount: result.automations.count,
                     issueCount: result.issues.count
                 ))
+                let wasCurrent = self.codexWakeApplyFreshness.hasCurrentDiscovery
+                self.codexWakeApplyFreshness.recordDiscovery(disposition)
+                guard disposition == .applyCurrentResult else {
+                    // A partial or unreadable scan is not authoritative. Keep
+                    // both the last clean in-memory plan and the helper's
+                    // existing wake untouched, then let the minute throttle
+                    // retry. The handled-run guard below prevents a retained
+                    // plan from starting the same automation twice.
+                    self.beginCodexPreparationIfNeeded(at: Date())
+                    return
+                }
+                self.codexAutomations = result.automations
+                self.codexWakePlanning = planning
                 if let plan = planning.wakePlan {
                     self.unattendedAuditLog.record(plan.diagnosticEvent(at: Date()))
                 }
@@ -949,7 +959,10 @@ final class AppModel {
     private func beginCodexPreparationIfNeeded(at date: Date) {
         guard settings.codexAutomation.enabled,
               codexAgentPhase == .idle || codexAgentPhase == .readinessFailed,
-              let nearest = codexWakePlanning.queuedRuns.first
+              let nearest = codexWakePlanning.queuedRuns.first(where: { run in
+                  guard let lastHandledCodexRun else { return true }
+                  return run.scheduledRun > lastHandledCodexRun
+              })
         else { return }
         let policy = settings.codexAutomation
         let preparationStart = nearest.scheduledRun.addingTimeInterval(-policy.wakeLeadTime)
@@ -966,7 +979,8 @@ final class AppModel {
 
         let groupingWindow: TimeInterval = 60
         currentScheduledRuns = codexWakePlanning.queuedRuns.filter {
-            $0.scheduledRun <= nearest.scheduledRun.addingTimeInterval(groupingWindow)
+            $0.scheduledRun >= nearest.scheduledRun
+                && $0.scheduledRun <= nearest.scheduledRun.addingTimeInterval(groupingWindow)
         }
         // Capture every retained ID, not only active ones. A completed lease
         // from before this handoff must not become a new claim later.

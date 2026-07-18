@@ -40,3 +40,34 @@ public struct CodexWakeApplyFreshness: Equatable, Sendable {
         if codexEnabled { hasCurrentDiscovery = true }
     }
 }
+
+/// Whether one discovery pass is complete enough to replace the system wake
+/// schedule. A clean empty result is authoritative because every automation
+/// may have been deleted. Any issue makes the result incomplete, so the last
+/// installed wake remains untouched while discovery retries.
+public enum CodexDiscoveryScheduleDisposition: Equatable, Sendable {
+    case applyCurrentResult
+    case preserveExistingScheduleAndRetry
+}
+
+public enum CodexDiscoverySchedulePolicy {
+    public static func disposition(
+        for result: CodexAutomationDiscoveryResult
+    ) -> CodexDiscoveryScheduleDisposition {
+        result.issues.isEmpty
+            ? .applyCurrentResult
+            : .preserveExistingScheduleAndRetry
+    }
+}
+
+public extension CodexWakeApplyFreshness {
+    /// Record whether the latest pass is authoritative for the enabled policy.
+    /// Incomplete discovery explicitly closes the apply gate even when an
+    /// earlier clean pass was current.
+    mutating func recordDiscovery(
+        _ disposition: CodexDiscoveryScheduleDisposition
+    ) {
+        guard codexEnabled else { return }
+        hasCurrentDiscovery = disposition == .applyCurrentResult
+    }
+}
