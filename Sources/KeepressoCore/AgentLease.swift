@@ -866,6 +866,13 @@ public final class AgentLeaseRegistry {
         persisted.leases.contains { $0.isActive }
     }
 
+    func resolvedAcquireDurations(
+        ttl: TimeInterval?,
+        maxLifetime: TimeInterval?
+    ) -> (ttl: TimeInterval, maxLifetime: TimeInterval) {
+        (ttl ?? defaultTTL, maxLifetime ?? defaultMaxLifetime)
+    }
+
     /// Acquire a new lease. Supplying an id lets an adapter make retries
     /// idempotent by checking ``status(for:refreshFromDisk:)`` first.
     @discardableResult
@@ -881,8 +888,9 @@ public final class AgentLeaseRegistry {
         guard AgentLeaseLimits.validMetadata(metadata) else {
             throw AgentLeaseRegistryError.invalidMetadata
         }
-        let wantedTTL = ttl ?? defaultTTL
-        let wantedMaximum = maxLifetime ?? defaultMaxLifetime
+        let durations = resolvedAcquireDurations(ttl: ttl, maxLifetime: maxLifetime)
+        let wantedTTL = durations.ttl
+        let wantedMaximum = durations.maxLifetime
         guard Self.isValidDuration(wantedTTL, atMost: Self.maximumAllowedLifetime) else {
             throw AgentLeaseRegistryError.invalidTTL
         }
@@ -1020,12 +1028,16 @@ public final class AgentLeaseRegistry {
                 operationError = .leaseNotActive(id)
                 return
             }
+            var metadata = state.leases[index].metadata
+            if let message { metadata.attributes["message"] = message }
+            guard AgentLeaseLimits.validMetadata(metadata) else {
+                operationError = .invalidMetadata
+                return
+            }
             let previous = state.leases[index].state
             state.leases[index].state = outcome.state
             state.leases[index].completedAt = instant
-            if let message {
-                state.leases[index].metadata.attributes["message"] = message
-            }
+            state.leases[index].metadata = metadata
             result = state.leases[index]
             events.append(AgentLeaseLifecycleEvent(
                 date: instant,
@@ -1103,10 +1115,14 @@ public final class AgentLeaseRegistry {
                 operationError = .leaseNotActive(id)
                 return
             }
-            if let newTTL { state.leases[index].ttl = newTTL }
-            if let message {
-                state.leases[index].metadata.attributes["message"] = message
+            var metadata = state.leases[index].metadata
+            if let message { metadata.attributes["message"] = message }
+            guard AgentLeaseLimits.validMetadata(metadata) else {
+                operationError = .invalidMetadata
+                return
             }
+            if let newTTL { state.leases[index].ttl = newTTL }
+            state.leases[index].metadata = metadata
             state.leases[index].heartbeatAt = instant
             state.leases[index].expiresAt = min(
                 instant.addingTimeInterval(state.leases[index].ttl),

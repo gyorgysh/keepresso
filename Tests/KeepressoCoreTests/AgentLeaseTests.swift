@@ -266,6 +266,8 @@ private func temporaryLeaseFile() throws -> (directory: URL, file: URL) {
     let store = MemoryAgentLeaseStore()
     let service = try AgentLeaseCommandService(
         persistence: store,
+        defaultTTL: 75,
+        defaultMaxLifetime: 900,
         now: { clock.now }
     )
     let id = UUID()
@@ -278,14 +280,52 @@ private func temporaryLeaseFile() throws -> (directory: URL, file: URL) {
     let request = AgentLeaseCommand.acquire(
         id: id,
         metadata: metadata,
-        ttl: 300,
-        maxLifetime: 3_600
+        ttl: 75,
+        maxLifetime: 900
     )
 
     let first = try service.execute(request)
     let retry = try service.execute(request)
     #expect(first == retry)
     #expect(store.state.leases.count == 1)
+
+    let implicitDefaults = try service.execute(.acquire(
+        id: UUID(),
+        metadata: AgentLeaseMetadata(owner: "default-client"),
+        ttl: 75,
+        maxLifetime: 900
+    ))
+    guard case .lease(let defaultLease) = implicitDefaults else {
+        Issue.record("Acquire returned the wrong response")
+        return
+    }
+    #expect(try service.execute(.acquire(
+        id: defaultLease.id,
+        metadata: defaultLease.metadata,
+        ttl: nil,
+        maxLifetime: nil
+    )) == implicitDefaults)
+
+    for (ttl, maxLifetime) in [(120.0, 900.0), (75.0, 1_800.0)] {
+        let nonDefault = try service.execute(.acquire(
+            id: UUID(),
+            metadata: AgentLeaseMetadata(owner: "custom-duration-client"),
+            ttl: ttl,
+            maxLifetime: maxLifetime
+        ))
+        guard case .lease(let nonDefaultLease) = nonDefault else {
+            Issue.record("Acquire returned the wrong response")
+            return
+        }
+        #expect(throws: AgentLeaseRegistryError.leaseAlreadyExists(nonDefaultLease.id)) {
+            try service.execute(.acquire(
+                id: nonDefaultLease.id,
+                metadata: nonDefaultLease.metadata,
+                ttl: nil,
+                maxLifetime: nil
+            ))
+        }
+    }
 
     do {
         _ = try service.execute(.acquire(
@@ -808,6 +848,35 @@ private func temporaryLeaseFile() throws -> (directory: URL, file: URL) {
     #expect(throws: AgentLeaseRegistryError.invalidMetadata) {
         try registry.heartbeat(item.id, message: oversized)
     }
+
+    let maximumAttributes = Dictionary(
+        uniqueKeysWithValues: (0..<AgentLeaseLimits.maximumAttributeCount).map {
+            ("key-\($0)", "value")
+        }
+    )
+    let attributeBounded = try registry.acquire(
+        metadata: AgentLeaseMetadata(
+            owner: "attribute-bounded",
+            attributes: maximumAttributes
+        )
+    )
+    #expect(throws: AgentLeaseRegistryError.invalidMetadata) {
+        try registry.release(attributeBounded.id, message: "one-too-many")
+    }
+    #expect(try registry.status(for: attributeBounded.id)?.isActive == true)
+    #expect(try registry.status(for: attributeBounded.id)?.metadata.attributes == maximumAttributes)
+
+    let byteBoundedMetadata = AgentLeaseMetadata(
+        owner: String(repeating: "o", count: AgentLeaseLimits.maximumFieldBytes),
+        agent: String(repeating: "a", count: AgentLeaseLimits.maximumFieldBytes),
+        task: String(repeating: "t", count: AgentLeaseLimits.maximumFieldBytes),
+        attributes: ["seed": String(repeating: "x", count: 1_019)]
+    )
+    let byteBounded = try registry.acquire(metadata: byteBoundedMetadata)
+    #expect(throws: AgentLeaseRegistryError.invalidMetadata) {
+        try registry.heartbeat(byteBounded.id, message: "overflow")
+    }
+    #expect(try registry.status(for: byteBounded.id)?.metadata == byteBoundedMetadata)
 
     let fullState = AgentLeasePersistenceState(leases: (0..<AgentLeaseLimits.maximumActiveLeaseCount).map {
         lease(owner: "owner-\($0)")

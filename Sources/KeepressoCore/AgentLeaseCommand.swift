@@ -224,12 +224,16 @@ public final class AgentLeaseCommandService: AgentLeaseCommandServing {
         switch command {
         case .acquire(let id, let metadata, let ttl, let maxLifetime):
             let wantedID = id ?? UUID()
+            let durations = registry.resolvedAcquireDurations(
+                ttl: ttl,
+                maxLifetime: maxLifetime
+            )
             do {
                 return .lease(try registry.acquire(
                     id: wantedID,
                     metadata: metadata,
-                    ttl: ttl,
-                    maxLifetime: maxLifetime
+                    ttl: durations.ttl,
+                    maxLifetime: durations.maxLifetime
                 ))
             } catch AgentLeaseRegistryError.leaseAlreadyExists where id != nil {
                 // A caller-selected identifier makes acquire safe to retry
@@ -239,8 +243,8 @@ public final class AgentLeaseCommandService: AgentLeaseCommandServing {
                 guard let existing = try registry.status(for: wantedID),
                       existing.isActive,
                       existing.metadata == metadata,
-                      ttl == nil || existing.ttl == ttl,
-                      maxLifetime == nil || existing.maxLifetime == maxLifetime
+                      existing.ttl == durations.ttl,
+                      existing.maxLifetime == durations.maxLifetime
                 else {
                     throw AgentLeaseRegistryError.leaseAlreadyExists(wantedID)
                 }
