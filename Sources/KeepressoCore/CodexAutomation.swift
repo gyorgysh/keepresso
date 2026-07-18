@@ -247,8 +247,13 @@ public struct CodexAutomationDiscovery: Sendable {
         guard let raw,
               let type = SafeAutomationTOML.inlineString(named: "type", in: raw)
         else { return nil }
-        let projectID = SafeAutomationTOML.inlineString(named: "project_id", in: raw)
-        if type == "project", let projectID, projectID.hasPrefix("local-") {
+        let projectID = SafeAutomationTOML.inlineString(named: "project_id", in: raw)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        // The execution_environment field is the authority for whether a run
+        // is local. Codex project IDs are opaque and may be either the older
+        // local-* form or a UUID, so filtering on an ID prefix drops valid
+        // local automations.
+        if type == "project", let projectID, !projectID.isEmpty {
             return CodexAutomation.LocalTarget(type: type, projectID: projectID)
         }
         return nil

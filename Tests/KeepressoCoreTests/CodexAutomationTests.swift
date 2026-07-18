@@ -60,13 +60,19 @@ private func automationTOML(
     let worktree = automationURL("worktree")
     let paused = automationURL("paused")
     let cloud = automationURL("cloud")
-    let remoteTarget = automationURL("remote-target")
+    let uuidTarget = automationURL("uuid-target")
+    let blankTarget = automationURL("blank-target")
     let files = FakeAutomationFiles(contents: [
         local: automationTOML(id: "local-id", name: "Local"),
         worktree: automationTOML(id: "worktree-id", name: "Worktree", environment: "worktree"),
         paused: automationTOML(id: "paused-id", name: "Paused", status: "PAUSED"),
         cloud: automationTOML(id: "cloud-id", name: "Cloud", environment: "cloud"),
-        remoteTarget: automationTOML(id: "remote-id", name: "Remote", projectID: "remote-project"),
+        uuidTarget: automationTOML(
+            id: "uuid-id",
+            name: "UUID",
+            projectID: "2171288b-bc3a-43bc-96b1-77ea587d1d3e"
+        ),
+        blankTarget: automationTOML(id: "blank-id", name: "Blank", projectID: ""),
     ])
 
     let result = CodexAutomationDiscovery(
@@ -74,11 +80,11 @@ private func automationTOML(
         files: files
     ).discover()
 
-    #expect(result.automations.map(\.id) == ["local-id", "worktree-id"])
+    #expect(result.automations.map(\.id) == ["local-id", "uuid-id", "worktree-id"])
     #expect(result.automations[0].workingDirectories == ["/tmp/one", "/tmp/two"])
     #expect(result.automations[0].executionEnvironment == "local")
-    #expect(result.automations[1].executionEnvironment == "worktree")
-    #expect(result.automations.allSatisfy { $0.target.projectID?.hasPrefix("local-") == true })
+    #expect(result.automations[1].target.projectID == "2171288b-bc3a-43bc-96b1-77ea587d1d3e")
+    #expect(result.automations[2].executionEnvironment == "worktree")
     #expect(result.automations.contains { $0.id == "must-not-escape-prompt" } == false)
     #expect(result.issues.isEmpty)
 }
