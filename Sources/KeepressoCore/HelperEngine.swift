@@ -45,6 +45,7 @@ public final class SleepModeGenerationRegistry: @unchecked Sendable {
     private struct StreamState {
         var generation: UInt64
         var ownerClientID: Int?
+        var highestClientID: Int
     }
 
     private let lock = NSLock()
@@ -67,13 +68,14 @@ public final class SleepModeGenerationRegistry: @unchecked Sendable {
         defer { lock.unlock() }
         if let state = statesByStream[streamID] {
             guard generation >= state.generation else { return false }
-            // Listener client IDs increase with connection acceptance. When
-            // reconnect B retries the same generation, a delayed request from
-            // older connection A must not migrate the logical stream back.
-            if generation == state.generation,
-               let owner = state.ownerClientID,
-               clientID < owner {
-                return false
+            if generation == state.generation {
+                // The live owner may retry its exact intent. Any takeover of
+                // this generation must come from a strictly newer listener
+                // connection, including after the owner disconnected.
+                let isLiveOwnerRetry = state.ownerClientID == clientID
+                guard isLiveOwnerRetry || clientID > state.highestClientID else {
+                    return false
+                }
             }
         } else {
             guard statesByStream.count < maximumStreams else { return false }
@@ -85,7 +87,12 @@ public final class SleepModeGenerationRegistry: @unchecked Sendable {
         // its system reconciliation one indivisible operation to disconnect.
         statesByStream[streamID] = StreamState(
             generation: generation,
-            ownerClientID: clientID
+            ownerClientID: clientID,
+            // A higher generation starts a new connection-order epoch. At
+            // the same generation, accepted reconnect IDs only increase.
+            highestClientID: generation == statesByStream[streamID]?.generation
+                ? max(statesByStream[streamID]?.highestClientID ?? clientID, clientID)
+                : clientID
         )
         return operation(previousClientID)
     }
@@ -119,6 +126,9 @@ public final class SleepModeGenerationRegistry: @unchecked Sendable {
         for streamID in ownedStreamIDs {
             statesByStream[streamID]?.ownerClientID = nil
         }
+        // `highestClientID` remains in the tombstone. The disconnected owner
+        // and all older connections stay fenced, while a later connection
+        // with a larger listener client ID may take over the same generation.
         // Keep the registry lock through the engine release. A reconnect
         // cannot claim the stream between the ownership check and cleanup.
         operation()

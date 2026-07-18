@@ -203,6 +203,87 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     #expect(oldDisconnectCleanups == 0)
 }
 
+@Test func disconnectedOwnerTombstoneStillRejectsAnOlderSameGenerationReplay() {
+    let registry = SleepModeGenerationRegistry()
+    var cleanups = 0
+    var previousOwnerForC: Int?
+
+    #expect(registry.apply(
+        streamID: "process-stream",
+        generation: 4,
+        clientID: 10
+    ) { _ in true })
+    #expect(registry.apply(
+        streamID: "process-stream",
+        generation: 4,
+        clientID: 11
+    ) { previousClientID in
+        previousClientID == 10
+    })
+    registry.clientDisconnected(11) { cleanups += 1 }
+
+    #expect(cleanups == 1)
+    #expect(!registry.apply(
+        streamID: "process-stream",
+        generation: 4,
+        clientID: 10
+    ) { _ in
+        Issue.record("older connection A must remain fenced by B's tombstone")
+        return true
+    })
+    #expect(!registry.apply(
+        streamID: "process-stream",
+        generation: 4,
+        clientID: 11
+    ) { _ in
+        Issue.record("disconnected owner B must not retry its tombstoned generation")
+        return true
+    })
+
+    // A genuinely newer reconnect C may retry generation 4. It receives B as
+    // the previous logical owner, whose engine holder cleanup is idempotent.
+    #expect(registry.apply(
+        streamID: "process-stream",
+        generation: 4,
+        clientID: 12
+    ) { previousClientID in
+        previousOwnerForC = previousClientID
+        return true
+    })
+    #expect(previousOwnerForC == nil)
+    #expect(registry.apply(
+        streamID: "process-stream",
+        generation: 4,
+        clientID: 12
+    ) { previousClientID in
+        previousClientID == 12
+    })
+
+    // A higher generation starts a new connection-order epoch, so its first
+    // accepted request need not have a client ID above generation 4's C.
+    #expect(registry.apply(
+        streamID: "process-stream",
+        generation: 5,
+        clientID: 10
+    ) { previousClientID in
+        previousClientID == 12
+    })
+    registry.clientDisconnected(10) { cleanups += 1 }
+    #expect(!registry.apply(
+        streamID: "process-stream",
+        generation: 5,
+        clientID: 10
+    ) { _ in true })
+    #expect(registry.apply(
+        streamID: "process-stream",
+        generation: 5,
+        clientID: 11
+    ) { previousClientID in
+        previousClientID == nil
+    })
+    #expect(cleanups == 2)
+}
+
 @Test func reconnectMigrationPreservesSleepAWDLAndFanLogicalHolders() {
     let runner = FakeRunner(sleepValue: false)
     let state = FakeRestoreState()
