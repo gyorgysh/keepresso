@@ -20,6 +20,10 @@ final class SessionTicker {
     /// Feeds the guard's arming: the net only escalates with the lid closed
     /// while the sleep override holds the Mac awake (the left-in-a-bag case).
     private let lid: LidStateReading
+    /// Authoritative automatic-backend verdict when scoped, otherwise the
+    /// manually managed `pmset` state. Injected so the source selection stays
+    /// explicit and testable instead of coupling arming to a cache refresh.
+    private let thermalSleepOverrideActive: () -> Bool?
     private let thermalSuppressionLatched: () -> Bool
     private let batterySuppressionLatched: () -> Bool
     private let onBatterySafetyChanged: ((Bool) -> Void)?
@@ -35,6 +39,7 @@ final class SessionTicker {
         powerSource: PowerSourceMonitoring = IOKitPowerSourceMonitor(),
         thermalGuard: ThermalGuardController? = nil,
         lid: LidStateReading = IORegistryLidState(),
+        thermalSleepOverrideActive: (() -> Bool?)? = nil,
         thermalSuppressionLatched: @escaping () -> Bool = { false },
         batterySuppressionLatched: @escaping () -> Bool = { false },
         onBatterySafetyChanged: ((Bool) -> Void)? = nil,
@@ -47,6 +52,8 @@ final class SessionTicker {
         self.powerSource = powerSource
         self.thermalGuard = thermalGuard
         self.lid = lid
+        self.thermalSleepOverrideActive = thermalSleepOverrideActive
+            ?? { [weak closedDisplay] in closedDisplay?.isEnabled }
         self.thermalSuppressionLatched = thermalSuppressionLatched
         self.batterySuppressionLatched = batterySuppressionLatched
         self.onBatterySafetyChanged = onBatterySafetyChanged
@@ -95,16 +102,16 @@ final class SessionTicker {
                     // fan stage runs even with stop-brewing off, so this
                     // can't hide behind consumesThermalReading); the session
                     // only reads its verdict when the pause stage is on.
-                    // Armed only with the lid shut and the sleep override on:
-                    // closedDisplay.isEnabled is read at launch and refreshed
-                    // on every toggle and menu open, so it's current by the
-                    // time a lid can close on a configured override.
+                    // Armed only with the lid shut and an authoritative sleep
+                    // override verdict. Automatic holds come from the scoped
+                    // backend acknowledgement. Only persistent manual mode
+                    // relies on the asynchronous pmset cache.
                     var thermal = ThermalReading.unknown
                     if let guard_ = self?.thermalGuard, let self {
                         let suppressionLatched = self.thermalSuppressionLatched()
                         let armed = self.thermalArming.update(
                             lidClosed: self.lid.isClosed(),
-                            sleepOverrideActive: closedDisplay?.isEnabled,
+                            sleepOverrideActive: self.thermalSleepOverrideActive(),
                             thermalSuppressionLatched: suppressionLatched
                         )
                         let effects = guard_.tick(armed: armed)

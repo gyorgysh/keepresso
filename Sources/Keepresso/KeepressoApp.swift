@@ -137,6 +137,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         disk: model.disk,
         closedDisplay: model.closedDisplay,
         thermalGuard: model.thermalGuard,
+        thermalSleepOverrideActive: { [weak self] in
+            guard let model = self?.model else { return nil }
+            return ThermalSleepOverrideVerdict.resolve(
+                hasScopedAutomaticTransaction: model.closedDisplayAuto.hasScopedTransaction,
+                hasConfirmedAutomaticProtection: model.closedDisplayAuto.hasConfirmedAutomaticProtection,
+                manualPersistentProtection: model.closedDisplay.isEnabled
+            )
+        },
         thermalSuppressionLatched: { [weak self] in
             self?.model.closedDisplayAuto.isThermallySuspended ?? false
         },

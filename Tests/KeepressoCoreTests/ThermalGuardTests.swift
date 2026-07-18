@@ -246,6 +246,51 @@ private let pressureConfig = ThermalSafetyConfig(
     #expect(!stillOpen)
 }
 
+@Test func automaticThermalOverrideIgnoresAnUnreadablePMSetCache() {
+    let override = ThermalSleepOverrideVerdict.resolve(
+        hasScopedAutomaticTransaction: true,
+        hasConfirmedAutomaticProtection: true,
+        manualPersistentProtection: nil
+    )
+    var arming = ThermalArming()
+    #expect(override == true)
+    #expect(arming.update(lidClosed: true, sleepOverrideActive: override))
+}
+
+@Test func suspendedOrReleasedAutomaticOverrideDoesNotArm() {
+    var arming = ThermalArming()
+    #expect(arming.update(lidClosed: true, sleepOverrideActive: true))
+
+    let suspended = ThermalSleepOverrideVerdict.resolve(
+        hasScopedAutomaticTransaction: true,
+        hasConfirmedAutomaticProtection: false,
+        manualPersistentProtection: true
+    )
+    #expect(suspended == false)
+    #expect(!arming.update(lidClosed: true, sleepOverrideActive: suspended))
+
+    #expect(arming.update(lidClosed: true, sleepOverrideActive: true))
+    let released = ThermalSleepOverrideVerdict.resolve(
+        hasScopedAutomaticTransaction: false,
+        hasConfirmedAutomaticProtection: false,
+        manualPersistentProtection: false
+    )
+    #expect(released == false)
+    #expect(!arming.update(lidClosed: true, sleepOverrideActive: released))
+}
+
+@Test func manualPersistentOverrideArmsOnlyWithTheLidClosed() {
+    let override = ThermalSleepOverrideVerdict.resolve(
+        hasScopedAutomaticTransaction: false,
+        hasConfirmedAutomaticProtection: false,
+        manualPersistentProtection: true
+    )
+    var arming = ThermalArming()
+    #expect(override == true)
+    #expect(arming.update(lidClosed: true, sleepOverrideActive: override))
+    #expect(!arming.update(lidClosed: false, sleepOverrideActive: override))
+}
+
 @Test func thermalSuppressionKeepsArmingLatchedUntilTheLidOpens() {
     var arming = ThermalArming()
     #expect(arming.update(

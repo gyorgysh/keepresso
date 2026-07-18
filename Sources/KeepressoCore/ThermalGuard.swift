@@ -204,14 +204,31 @@ public enum ThermalGuard {
     }
 }
 
+/// Chooses the authoritative sleep-override reading for the thermal ticker.
+/// A scoped automatic transaction is acknowledged by its backend, so a stale
+/// or failed `pmset` cache must neither hide an active hold nor revive one
+/// after a safety suspension. Only a Mac outside a scoped transaction falls
+/// back to the manually managed persistent setting.
+public enum ThermalSleepOverrideVerdict {
+    public static func resolve(
+        hasScopedAutomaticTransaction: Bool,
+        hasConfirmedAutomaticProtection: Bool,
+        manualPersistentProtection: Bool?
+    ) -> Bool? {
+        if hasScopedAutomaticTransaction {
+            return hasConfirmedAutomaticProtection
+        }
+        return manualPersistentProtection
+    }
+}
+
 /// Decides, once per tick, whether the safety net is armed: lid closed while
 /// the `pmset disablesleep` override holds the Mac awake. Both inputs can
-/// read `nil` transiently (`AppleClamshellState` flutters, `pmset -g` can
-/// fail), so each latches its last known value: a failed read must never
-/// release a latched safety measure, mirroring how a `nil` thermal sample
-/// freezes the guard. A backend thermal-suppression latch also keeps arming
-/// true after that safety action intentionally changes the observed override
-/// from on to off.
+/// read `nil` transiently (`AppleClamshellState` flutters, a manual `pmset -g`
+/// read can fail), so each latches its last known value. An explicit false
+/// verdict from the automatic backend clears the override immediately. A
+/// backend thermal-suppression latch keeps an already-fired heat emergency
+/// monitoring its cool-down after that safety action releases the override.
 public struct ThermalArming: Sendable, Equatable {
     private var lidClosed = false
     private var overrideActive = false
