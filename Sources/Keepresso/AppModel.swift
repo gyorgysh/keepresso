@@ -153,6 +153,9 @@ final class AppModel {
     @ObservationIgnored private var codexOrchestration: UnattendedOrchestrationController?
     @ObservationIgnored private let wakeIntentBox = AppWakeIntentBox()
     @ObservationIgnored private var codexDiscoveryGate = CoalescedForceRunGate()
+    /// Prevent startup helper verification from clearing an existing Codex wake
+    /// before the first asynchronous discovery has rebuilt its plan.
+    @ObservationIgnored private var codexWakeApplyFreshness = CodexWakeApplyFreshness()
     @ObservationIgnored private var lastCodexDiscoveryAt: Date?
     @ObservationIgnored private var lastInstalledCodexWake: Date?
     @ObservationIgnored private var wakeApplyPump =
@@ -221,6 +224,9 @@ final class AppModel {
         loaded.seedNewBuiltInPresets() // new built-ins reach existing users once
         loaded.refreshBuiltInPresets() // and changed ones stay current
         self.settings = loaded
+        self.codexWakeApplyFreshness = CodexWakeApplyFreshness(
+            codexEnabled: loaded.codexAutomation.enabled
+        )
         // Session-end sleep prefers the helper's root `pmset sleepnow` when
         // the daemon is up, then IOKit, then System Events.
         let systemSleeper = CompositeSystemSleeper(preferred: { [helperClient, helperInstalled] in
@@ -818,6 +824,9 @@ final class AppModel {
             if newValue.enabled, !canEditWakeSchedule { return }
             let previous = settings.codexAutomation
             settings.codexAutomation = newValue
+            if newValue != previous {
+                codexWakeApplyFreshness.policyDidChange(codexEnabled: newValue.enabled)
+            }
             persist()
             if !newValue.enabled {
                 cancelCodexPreparation(at: Date())
@@ -843,6 +852,7 @@ final class AppModel {
     func refreshCodexAutomationPlan(force: Bool = false) {
         let policy = settings.codexAutomation
         guard policy.enabled else { return }
+        if force { codexWakeApplyFreshness.invalidateIfEnabled() }
         let now = Date()
         if !force, let last = lastCodexDiscoveryAt,
            now.timeIntervalSince(last) < 60 { return }
@@ -869,9 +879,11 @@ final class AppModel {
                     self.refreshCodexAutomationPlan(force: true)
                     return
                 }
+                let wasCurrent = self.codexWakeApplyFreshness.hasCurrentDiscovery
                 self.codexAutomations = result.automations
                 self.codexAutomationIssueCount = result.issues.count
                 self.codexWakePlanning = planning
+                self.codexWakeApplyFreshness.markDiscoveryCompleted()
                 self.unattendedAuditLog.record(UnattendedDiagnosticEvent(
                     date: Date(),
                     kind: result.issues.isEmpty ? .discoveryCompleted : .discoveryFailed,
@@ -882,7 +894,7 @@ final class AppModel {
                     self.unattendedAuditLog.record(plan.diagnosticEvent(at: Date()))
                 }
                 let wake = planning.wakePlan?.scheduledWake
-                if wake != self.lastInstalledCodexWake {
+                if !wasCurrent || wake != self.lastInstalledCodexWake {
                     self.applyWakeScheduleToSystem()
                 }
                 self.beginCodexPreparationIfNeeded(at: Date())
@@ -1166,6 +1178,10 @@ final class AppModel {
     /// clearing is attempted when it answers so a disable after reinstall
     /// still drops system schedules.
     func applyWakeScheduleToSystem(retryAttempt: Int = 0) {
+        // Helper verification runs before the first asynchronous Codex scan at
+        // launch. Preserve the prior system wake until that scan explicitly
+        // returns; disabling Codex opens this gate and clears immediately.
+        guard codexWakeApplyFreshness.permitsSystemReconcile else { return }
         if retryAttempt == 0 {
             wakeApplyRetry?.cancel()
             wakeApplyRetry = nil
@@ -1961,6 +1977,9 @@ final class AppModel {
     private func apply(_ newSettings: KeepressoSettings) {
         if !hasExternalWakeDemand { session.stop() }
         settings = newSettings
+        codexWakeApplyFreshness.policyDidChange(
+            codexEnabled: newSettings.codexAutomation.enabled
+        )
         session.options = newSettings.options
         session.reminderAfter = newSettings.reminderAfter
         session.reminderRepeats = newSettings.reminderRepeats
