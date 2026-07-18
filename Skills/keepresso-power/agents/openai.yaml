@@ -1,0 +1,4 @@
+interface:
+  display_name: "Keepresso Power"
+  short_description: "Manage wake leases for unattended AI tasks"
+  default_prompt: "Use $keepresso-power to hold my Mac awake safely while this task runs."
