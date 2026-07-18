@@ -78,14 +78,27 @@ struct MenuBarContent: View {
 
             heldByLine
 
-            if model.triggersEnabled && !model.triggersPaused {
+            if model.hasExternalWakeDemand {
+                agentWorkSummary
+                    .transition(.opacity)
+            } else if model.triggersEnabled && !model.triggersPaused {
                 triggerSummary
                     .transition(.opacity)
             }
 
             Divider()
 
-            if model.triggersEnabled && !model.triggersPaused {
+            if model.hasExternalWakeDemand {
+                Label {
+                    Text(L("Agent work owns keep-awake until every lease and scheduled handoff finishes."))
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "cpu")
+                        .foregroundStyle(Color.keepressoBrew)
+                }
+                .font(type.caption)
+                .foregroundStyle(.secondary)
+            } else if model.triggersEnabled && !model.triggersPaused {
                 Text("Activation is controlled by triggers.\nEdit them in Preferences.")
                     .font(type.caption)
                     .foregroundStyle(.secondary)
@@ -177,6 +190,8 @@ struct MenuBarContent: View {
         .animation(.snappy(duration: 0.25), value: session.isActive)
         .animation(.snappy(duration: 0.25), value: model.triggersEnabled)
         .animation(.snappy(duration: 0.25), value: model.triggersPaused)
+        .animation(.snappy(duration: 0.25), value: model.agentLeaseSnapshot.activeCount)
+        .animation(.snappy(duration: 0.25), value: model.codexAgentPhase)
         .animation(.snappy(duration: 0.25), value: model.closedDisplayEnabled)
         .animation(.snappy(duration: 0.25), value: model.batteryAutoPauseEnabled)
         .animation(.snappy(duration: 0.25), value: model.closedDisplayError)
@@ -538,6 +553,12 @@ struct MenuBarContent: View {
             }
             return L("Running hot, letting the Mac cool down")
         }
+        if model.hasExternalWakeDemand {
+            if model.agentLeaseSnapshot.activeCount > 0 {
+                return L("Held by %d Agent lease(s)", model.agentLeaseSnapshot.activeCount)
+            }
+            return codexPhaseText
+        }
         if model.triggersEnabled && !model.triggersPaused {
             return model.triggerSummary() ?? L("No conditions yet")
         }
@@ -567,6 +588,61 @@ struct MenuBarContent: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var agentWorkSummary: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            ForEach(Array(model.activeAgentLeases.prefix(3))) { lease in
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.shield.fill")
+                        .foregroundStyle(.green)
+                        .font(type.caption)
+                    Text(lease.metadata.task ?? lease.metadata.agent ?? lease.metadata.owner)
+                        .font(type.caption)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 4)
+                    Text(lease.expiresAt, style: .relative)
+                        .font(type.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if model.activeAgentLeases.count > 3 {
+                Text(L("+%d more Agent lease(s)", model.activeAgentLeases.count - 3))
+                    .font(type.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if model.codexAgentPhase != .idle, model.codexAgentPhase != .leased {
+                Label(codexPhaseText, systemImage: "clock.arrow.circlepath")
+                    .font(type.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if model.wakeHelperGate != .ready {
+                Label(
+                    L("Closed-lid protection needs the administrator helper."),
+                    systemImage: "exclamationmark.triangle"
+                )
+                .font(type.caption)
+                .foregroundStyle(.orange)
+            }
+            if let error = model.agentLeaseError {
+                Text(error)
+                    .font(type.caption)
+                    .foregroundStyle(.orange)
+            }
+        }
+    }
+
+    private var codexPhaseText: String {
+        switch model.codexAgentPhase {
+        case .idle: return L("Codex automation idle")
+        case .preparing: return L("Waiting for power, network, and Codex")
+        case .launching: return L("Opening Codex")
+        case .awaitingLease: return L("Waiting for the scheduled Agent lease")
+        case .leased: return L("Scheduled Agent lease active")
+        case .readinessFailed: return L("Codex automation readiness failed")
         }
     }
 

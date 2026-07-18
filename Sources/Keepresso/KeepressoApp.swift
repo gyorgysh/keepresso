@@ -139,6 +139,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         thermalGuard: model.thermalGuard,
         onThermalEffects: { [weak self] in self?.model.handleThermalEffects($0) },
         onTick: { [weak self] in
+            self?.model.agentLeaseTick()
+            self?.model.codexAutomationTick()
             self?.model.syncWidgetState()
             self?.model.awdlAutoTick()
             self?.model.closedDisplayAutoTick()
@@ -148,6 +150,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
     /// Listens for the Control Center toggle's Darwin doorbell.
     private var widgetObserver: WidgetCommandObserver?
+    /// Listens for CLI and MCP lease mutations.
+    private var agentLeaseObserver: AgentLeaseChangeObserver?
     /// Set when this launch is a duplicate handing over to an already running
     /// copy (see ``yieldIfDuplicateInstance()``). The terminate that follows
     /// must not run the usual quit chores, they belong to the copy staying up.
@@ -211,6 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.startOnLaunchIfNeeded()
         // Re-sync wake schedules with the helper (settings survive; the system
         // schedule is the source of truth for the machine).
+        model.refreshCodexAutomationPlan(force: true)
         model.applyWakeScheduleToSystem()
         model.refreshSystemWakeState()
         // Wake-and-brew: a system wake near a Keepresso schedule can start a
@@ -220,11 +225,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { [weak model] _ in
-            model?.handleSystemWake()
+            Task { @MainActor in model?.handleSystemWake() }
         }
         // The Control Center toggle: consume a command that may have launched
         // us, then keep listening while running.
         widgetObserver = WidgetCommandObserver { [weak model] in model?.applyPendingWidgetCommand() }
+        agentLeaseObserver = AgentLeaseChangeObserver { [weak model] in model?.agentLeaseTick() }
         model.applyPendingWidgetCommand()
         model.syncWidgetState()
     }

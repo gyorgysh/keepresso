@@ -69,6 +69,18 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   is, a pending permission prompt counts as working (so the Mac waits for your
   answer), and background subagents count too. The menu lists every session with
   a live working / idle state and where it runs.
+- 🔐 **Explicit Agent wake leases.** Codex, Claude Code, Gemini CLI, and other
+  agents can acquire, heartbeat, and release a bounded wake lease through the
+  CLI, bundled Skill, or local MCP server. Leases compose across concurrent
+  agents, so Keepresso sleeps only after the final task releases. TTL and maximum
+  lifetime watchdogs recover from crashes and forgotten cleanup, while the
+  Activity pane keeps a prompt-free structured audit trail.
+- ⏰ **Unattended Codex automations.** Keepresso can follow enabled local Codex
+  schedules, wake the Mac five minutes early, hold a system assertion, wait for
+  power, battery, network, and the Codex app, then hand ownership to the Agent's
+  explicit lease. When the final lease completes or the handoff times out, it
+  restores normal sleep and sleeps the Mac. The screen is locked and turned off
+  by default while background work continues.
 - ⏹️ **Stop in 15, one click.** A row of quick "Stop in" buttons (15 min, 30 min,
   1 h out of the box, editable) turns a running session into a timed one, so the
   Mac goes back to sleeping on its own without you remembering to toggle off.
@@ -349,6 +361,39 @@ keepresso -u                 # wake the display now
 The standalone holds work even when the app is not running; `keepresso help`
 lists everything. Installed from a DMG instead of Homebrew? Symlink it
 yourself: `ln -s /Applications/Keepresso.app/Contents/Helpers/keepresso /usr/local/bin/`.
+
+### Agent wake leases, Skill, and MCP
+
+An Agent should declare its lifecycle instead of asking Keepresso to infer it
+from a process name, CPU use, or log activity. A minimal shell lifecycle is:
+
+```sh
+lease_json="$(keepresso lease acquire \
+  --owner "$USER" --agent codex --task "nightly-refactor" \
+  --ttl 300 --max-lifetime 14400)"
+lease_id="$(printf '%s' "$lease_json" | \
+  /usr/bin/plutil -extract lease.id raw -o - -)"
+
+keepresso lease heartbeat "$lease_id" --ttl 300
+keepresso lease release "$lease_id" --result success
+```
+
+Every command returns a stable JSON envelope. A lease heartbeat extends its TTL
+but never its absolute maximum lifetime. Release only the ID owned by the current
+task. Other agents remain protected independently.
+
+The app also embeds:
+
+- `Keepresso.app/Contents/Helpers/keepresso-mcp`, a local stdio MCP server with
+  `acquire`, `renew`, `heartbeat`, `release`, `list`, and `status` tools.
+- `Keepresso.app/Contents/Resources/keepresso-power`, a Codex-compatible Skill
+  containing the complete acquire, heartbeat, and cleanup workflow.
+
+Preferences > Automation shows the exact MCP path and can reveal the bundled
+Skill. It can also follow enabled local Codex automations. Install and approve
+the administrator helper before relying on scheduled wake or lid-closed work.
+See [Agent power orchestration](docs/AGENT_POWER.md) for setup and recovery
+details.
 
 ## Why not the Mac App Store?
 

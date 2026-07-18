@@ -115,6 +115,18 @@ func runStatus(json: Bool) -> Never {
             line += " until \(formatter.string(from: endsAt))"
         }
         line += "."
+        if let count = snapshot.activeAgentLeaseCount, count > 0 {
+            line += count == 1
+                ? " 1 Agent wake lease is active."
+                : " \(count) Agent wake leases are active."
+        }
+        if let phase = snapshot.unattendedPhase, !phase.isEmpty {
+            line += " Unattended phase: \(phase)."
+        }
+        if snapshot.closedLidProtectionReady == false,
+           (snapshot.activeAgentLeaseCount ?? 0) > 0 {
+            line += " Closed-lid protection is not ready."
+        }
         if snapshot.triggersPaused { line += " Triggers are paused." }
         print(line)
     } else {

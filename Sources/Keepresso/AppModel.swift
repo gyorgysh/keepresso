@@ -3,6 +3,32 @@ import Observation
 import UserNotifications
 import KeepressoCore
 
+private final class AppWakeIntentBox: WakeKeepAliveIntentControlling, @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+
+    var isIntended: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+
+    func setKeepAliveIntended(_ intended: Bool) {
+        lock.lock()
+        value = intended
+        lock.unlock()
+    }
+}
+
+enum CodexAgentPhase: String, Equatable {
+    case idle
+    case preparing
+    case launching
+    case awaitingLease
+    case leased
+    case readinessFailed
+}
+
 /// App-level glue around ``SessionController``: owns persisted settings, builds
 /// the live trigger engine from saved rules, and keeps the two in sync.
 ///
@@ -54,10 +80,32 @@ final class AppModel {
     let hookDispatcher: EventHookDispatcher
     /// Decision log on disk (JSONL under Application Support).
     let logPersister: DecisionLogPersister
+    /// Structured Agent lease and unattended orchestration audit log.
+    @ObservationIgnored let unattendedAuditLog = UnattendedAuditLog()
     /// Live `pmset -g sched` view for Preferences.
     @ObservationIgnored private let wakeReader: WakeScheduleReading
     /// Cached system wake schedule for the Automation tab.
     private(set) var systemWakeState: SystemWakeState = .empty
+    /// Active and recently completed explicit Agent wake leases.
+    private(set) var agentLeaseSnapshot = AgentLeaseSnapshot(
+        capturedAt: .distantPast,
+        leases: []
+    )
+    /// Last registry read or persistence error, if the lease channel is down.
+    private(set) var agentLeaseError: String?
+    /// Enabled local Codex automation metadata. Prompts never enter this model.
+    private(set) var codexAutomations: [CodexAutomation] = []
+    /// Safe discovery issues, reported as a count without file contents.
+    private(set) var codexAutomationIssueCount = 0
+    /// Nearest wake plus the full queue of enabled local runs.
+    private(set) var codexWakePlanning = CodexAutomationWakePlanningResult(
+        wakePlan: nil,
+        queuedRuns: []
+    )
+    /// Live preparation, launch, and lease-handoff phase.
+    private(set) var codexAgentPhase: CodexAgentPhase = .idle
+    /// Final time a scheduled run may wait for its first explicit lease.
+    private(set) var codexLeaseHandoffDeadline: Date?
     /// Seven-day awake stats from the persisted log.
     private(set) var awakeStats: AwakeStats = .empty
 
@@ -69,6 +117,26 @@ final class AppModel {
     /// Direct line to the helper daemon for the thermal fan boost (the other
     /// privileged features go through their Routed* controllers).
     @ObservationIgnored private let helperClient: PrivilegedHelperCalling
+    /// Durable lease union shared with CLI, Skill, and MCP clients.
+    @ObservationIgnored private var agentLeaseRegistry: AgentLeaseRegistry?
+    /// Pure ownership state for manual sessions, user gates, and external work.
+    @ObservationIgnored private var externalWakeCoordinator = ExternalWakeDemandCoordinator()
+    /// External source joined with the existing user trigger engine.
+    @ObservationIgnored private let externalWakeTrigger = MutableTriggerEvaluator()
+    /// Scheduled preparation and handoff sources in the external wake union.
+    @ObservationIgnored private var scheduledWakeDemands: Set<ScheduledWakeDemand> = []
+    /// Lease IDs already active before the current scheduled preparation.
+    @ObservationIgnored private var scheduledLeaseBaseline: Set<UUID> = []
+    @ObservationIgnored private var currentScheduledRuns: [CodexAutomationQueuedRun] = []
+    @ObservationIgnored private var scheduledHandoffLeaseIDs: Set<UUID> = []
+    @ObservationIgnored private var lastHandledCodexRun: Date?
+    /// Preparation pipeline for power, network, application launch, and timeout.
+    @ObservationIgnored private var codexOrchestration: UnattendedOrchestrationController?
+    @ObservationIgnored private let wakeIntentBox = AppWakeIntentBox()
+    @ObservationIgnored private var codexDiscoveryInFlight = false
+    @ObservationIgnored private var lastCodexDiscoveryAt: Date?
+    @ObservationIgnored private var lastInstalledCodexWake: Date?
+    @ObservationIgnored private var externalPrivacyApplied = false
     private(set) var settings: KeepressoSettings
     /// Avoid double-starting on a single system wake.
     @ObservationIgnored private var lastWakeBrewAt: Date?
@@ -211,9 +279,39 @@ final class AppModel {
         // Give the decision log the satisfied rule labels when the gate flips
         // the session on ("Triggers: Camera in use").
         session.triggerDescriber = { [weak self] in
-            guard let states = self?.ruleStates() else { return nil }
-            let held = states.filter(\.satisfied).map(\.rule.label)
+            guard let self else { return nil }
+            var held: [String] = []
+            if self.agentLeaseSnapshot.activeCount > 0 {
+                held.append(L("%d active Agent lease(s)", self.agentLeaseSnapshot.activeCount))
+            }
+            if !self.scheduledWakeDemands.isEmpty {
+                held.append(L("Codex automation preparation"))
+            }
+            if let states = self.ruleStates() {
+                held.append(contentsOf: states.filter(\.satisfied).map(\.rule.label))
+            }
             return held.isEmpty ? nil : held.joined(separator: ", ")
+        }
+        do {
+            let registry = try AgentLeaseRegistry()
+            self.agentLeaseRegistry = registry
+            registry.onEvent = { [weak self] event in
+                self?.handleAgentLeaseEvent(event)
+            }
+            registry.onSnapshotChange = { [weak self] snapshot in
+                self?.adoptAgentLeaseSnapshot(snapshot, at: snapshot.capturedAt)
+            }
+            for lease in registry.currentSnapshot.activeLeases {
+                unattendedAuditLog.recordLeaseEvent(AgentLeaseLifecycleEvent(
+                    date: Date(),
+                    kind: .restored,
+                    source: .recovery,
+                    lease: lease
+                ))
+            }
+            adoptAgentLeaseSnapshot(registry.currentSnapshot, at: Date())
+        } catch {
+            agentLeaseError = L("The Agent lease registry could not be opened.")
         }
     }
 
@@ -237,6 +335,30 @@ final class AppModel {
         return currentAssertions().first { $0.effect != nil && $0.pid != myPID }
     }
 
+    func recentUnattendedAudit(limit: Int = 30) -> [UnattendedAuditRecord] {
+        unattendedAuditLog.loadRecent(limit: limit)
+    }
+
+    var unattendedAuditLogPath: String { unattendedAuditLog.fileURL.path }
+
+    var bundledMCPServerPath: String {
+        Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Helpers/keepresso-mcp", isDirectory: false)
+            .path
+    }
+
+    func revealBundledAgentSkill() {
+        guard let resources = Bundle.main.resourceURL else { return }
+        let candidates = [
+            resources.appendingPathComponent("keepresso-power", isDirectory: true),
+            resources.appendingPathComponent("Skills/keepresso-power", isDirectory: true),
+        ]
+        guard let skill = candidates.first(where: {
+            FileManager.default.fileExists(atPath: $0.appendingPathComponent("SKILL.md").path)
+        }) else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([skill])
+    }
+
     // MARK: - Manual activation
 
     /// Flip keep-awake by hand (the global hotkey and the menu switch), starting
@@ -252,6 +374,7 @@ final class AppModel {
     /// a no-op when triggers are off or already paused, so the menu switch (only
     /// reachable in those states) behaves exactly as before.
     func toggleManual() {
+        guard !hasExternalWakeDemand else { return }
         let wasActive = session.isActive
         pauseTriggers()
         if wasActive {
@@ -266,6 +389,7 @@ final class AppModel {
     /// lands on the chosen time; the choice is deliberately not persisted as
     /// the default mode (a saved "until 18:00" would go stale by tomorrow).
     func startUntil(hour: Int, minute: Int) {
+        guard !hasExternalWakeDemand else { return }
         guard let mode = SessionMode.until(hour: hour, minute: minute) else { return }
         session.start(mode: mode)
     }
@@ -312,8 +436,9 @@ final class AppModel {
             // Stop on both transitions: turning gating on hands activation to
             // the gate; turning it off would otherwise leave a gate-held
             // session running as a "manual" one with a stale duration.
-            session.stop()
+            if !hasExternalWakeDemand { session.stop() }
             applyTriggerGate()
+            if hasExternalWakeDemand { session.reconcile() }
             persist()
         }
     }
@@ -337,7 +462,7 @@ final class AppModel {
         guard settings.triggersEnabled, !triggersPaused else { return }
         triggersPaused = true
         applyTriggerGate()
-        session.stop(cause: cause)
+        if !hasExternalWakeDemand { session.stop(cause: cause) }
     }
 
     /// Hand activation back to the trigger engine. No-op if not currently paused.
@@ -405,7 +530,17 @@ final class AppModel {
             combine: settings.ruleSet.combine,
             enabled: settings.triggersEnabled
         )
-        session.triggerGate = (settings.triggersEnabled && !triggersPaused) ? gate.engine : nil
+        let userGate: (any TriggerEvaluating)? =
+            (settings.triggersEnabled && !triggersPaused) ? gate.engine : nil
+        if externalWakeTrigger.isOn {
+            if let userGate {
+                session.triggerGate = AnyTriggerEvaluator([userGate, externalWakeTrigger])
+            } else {
+                session.triggerGate = externalWakeTrigger
+            }
+        } else {
+            session.triggerGate = userGate
+        }
     }
 
     /// Live satisfaction of each saved rule, aligned with ``rules`` order, or
@@ -540,6 +675,398 @@ final class AppModel {
         }
     }
 
+    // MARK: - Explicit Agent wake leases
+
+    var activeAgentLeases: [AgentWakeLease] { agentLeaseSnapshot.activeLeases }
+
+    var hasExternalWakeDemand: Bool { !externalWakeCoordinator.demand.isEmpty }
+
+    var unattendedStatusPhase: String? {
+        if codexAgentPhase != .idle { return codexAgentPhase.rawValue }
+        if agentLeaseSnapshot.activeCount > 0 { return CodexAgentPhase.leased.rawValue }
+        return nil
+    }
+
+    /// Poll the cross-process lease registry and apply TTL watchdog deadlines.
+    /// Called from the existing one-second ticker.
+    func agentLeaseTick() {
+        guard let agentLeaseRegistry else { return }
+        do {
+            let snapshot = try agentLeaseRegistry.watchdogTick()
+            adoptAgentLeaseSnapshot(snapshot, at: snapshot.capturedAt)
+        } catch {
+            agentLeaseError = L("The Agent lease registry could not be read.")
+        }
+    }
+
+    private func handleAgentLeaseEvent(_ event: AgentLeaseLifecycleEvent) {
+        unattendedAuditLog.recordLeaseEvent(event)
+        if event.kind == .timedOut {
+            notifier.notify(
+                title: L("Agent wake lease expired"),
+                body: L("An Agent stopped renewing its lease. Keepresso released that task's wake request safely."),
+                sound: false
+            )
+        }
+    }
+
+    private func adoptAgentLeaseSnapshot(_ snapshot: AgentLeaseSnapshot, at date: Date) {
+        agentLeaseSnapshot = snapshot
+        agentLeaseError = nil
+        reconcileExternalWakeDemand(at: date)
+        codexLeaseHandoffIfNeeded(at: date)
+    }
+
+    /// Reconcile every external source atomically, then translate the pure Core
+    /// ownership decision into the existing SessionController seams.
+    private func reconcileExternalWakeDemand(at date: Date) {
+        let userGateInstalled = settings.triggersEnabled && !triggersPaused
+        let demand = ExternalWakeDemandSnapshot(
+            activeLeaseIDs: Set(agentLeaseSnapshot.activeLeases.map(\.id)),
+            scheduled: scheduledWakeDemands
+        )
+        let decision = externalWakeCoordinator.update(
+            demand,
+            session: ExternalWakeSessionObservation(
+                isSessionActive: session.isActive,
+                isUserTriggerGateInstalled: userGateInstalled
+            ),
+            at: date
+        )
+
+        if case .began = decision.lifecycle {
+            externalPrivacyApplied = false
+            prepareUnattendedPowerPolicy()
+        }
+
+        externalWakeTrigger.isOn = !demand.isEmpty
+        closedDisplayAuto.onlyWhileBrewing = settings.closedDisplayOnlyWhileBrewing || !demand.isEmpty
+        applyTriggerGate()
+
+        if demand.isEmpty {
+            externalPrivacyApplied = false
+            switch decision.sessionAction {
+            case .preserveManualSession:
+                disarmUnattendedPowerPolicy()
+                session.reconcile(now: date)
+            case .returnToUserTriggerGate:
+                if userGateInstalled {
+                    session.reconcile(now: date)
+                    if session.isActive { disarmUnattendedPowerPolicy() }
+                } else {
+                    finishExternalSession(at: date)
+                }
+            case .finishUnattendedSession:
+                if userGateInstalled {
+                    session.reconcile(now: date)
+                    if session.isActive { disarmUnattendedPowerPolicy() }
+                } else {
+                    finishExternalSession(at: date)
+                }
+            case .none, .ensureSessionActive:
+                break
+            }
+            if case .ended = decision.lifecycle,
+               !settings.closedDisplayOnlyWhileBrewing {
+                Task { await closedDisplayAuto.stopIfHolding() }
+            }
+            return
+        }
+
+        if decision.sessionAction == .ensureSessionActive {
+            prepareUnattendedPowerPolicy()
+            session.reconcile(now: date)
+        }
+        if session.isActive, !externalPrivacyApplied {
+            performUnattendedPrivacyActions()
+            externalPrivacyApplied = true
+        }
+    }
+
+    private func finishExternalSession(at date: Date) {
+        if session.isActive {
+            session.finishUnattended(reason: "All Agent and scheduled work finished")
+        } else {
+            disarmUnattendedPowerPolicy()
+        }
+        session.reconcile(now: date)
+    }
+
+    // MARK: - Codex automation wake handoff
+
+    var codexAutomation: CodexAutomationSettings {
+        get { settings.codexAutomation }
+        set {
+            if newValue.enabled, !canEditWakeSchedule { return }
+            let wasEnabled = settings.codexAutomation.enabled
+            settings.codexAutomation = newValue
+            persist()
+            if !newValue.enabled {
+                cancelCodexPreparation(at: Date())
+                codexAutomations = []
+                codexAutomationIssueCount = 0
+                codexWakePlanning = CodexAutomationWakePlanningResult(
+                    wakePlan: nil,
+                    queuedRuns: []
+                )
+                lastInstalledCodexWake = nil
+                applyWakeScheduleToSystem()
+            } else {
+                refreshCodexAutomationPlan(force: !wasEnabled)
+            }
+        }
+    }
+
+    /// Read active local Codex schedules off the main actor, then derive the
+    /// nearest system wake and the complete next-run queue.
+    func refreshCodexAutomationPlan(force: Bool = false) {
+        let policy = settings.codexAutomation
+        guard policy.enabled else { return }
+        let now = Date()
+        if !force, let last = lastCodexDiscoveryAt,
+           now.timeIntervalSince(last) < 60 { return }
+        guard !codexDiscoveryInFlight else { return }
+        codexDiscoveryInFlight = true
+        let searchAfter = max(
+            now,
+            lastHandledCodexRun?.addingTimeInterval(1) ?? now
+        )
+        Task.detached {
+            let result = CodexAutomationDiscovery().discover()
+            let planning = CodexAutomationWakePlanner(
+                leadTime: policy.wakeLeadTime
+            ).plan(for: result.automations, after: searchAfter)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.codexDiscoveryInFlight = false
+                self.lastCodexDiscoveryAt = Date()
+                guard self.settings.codexAutomation.enabled else { return }
+                self.codexAutomations = result.automations
+                self.codexAutomationIssueCount = result.issues.count
+                self.codexWakePlanning = planning
+                self.unattendedAuditLog.record(UnattendedDiagnosticEvent(
+                    date: Date(),
+                    kind: result.issues.isEmpty ? .discoveryCompleted : .discoveryFailed,
+                    automationCount: result.automations.count,
+                    issueCount: result.issues.count
+                ))
+                if let plan = planning.wakePlan {
+                    self.unattendedAuditLog.record(plan.diagnosticEvent(at: Date()))
+                }
+                let wake = planning.wakePlan?.scheduledWake
+                if wake != self.lastInstalledCodexWake {
+                    self.lastInstalledCodexWake = wake
+                    self.applyWakeScheduleToSystem()
+                }
+                self.beginCodexPreparationIfNeeded(at: Date())
+            }
+        }
+    }
+
+    /// Per-second orchestration pulse. Discovery itself is rate-limited to a
+    /// minute; readiness and task state use the injected host tick.
+    func codexAutomationTick() {
+        let now = Date()
+        guard settings.codexAutomation.enabled else { return }
+        if codexAgentPhase == .idle || codexAgentPhase == .readinessFailed {
+            refreshCodexAutomationPlan()
+            beginCodexPreparationIfNeeded(at: now)
+        }
+        guard let orchestration = codexOrchestration else {
+            codexLeaseHandoffIfNeeded(at: now)
+            return
+        }
+        orchestration.tick(at: now)
+        switch orchestration.state {
+        case .preparing:
+            codexAgentPhase = .preparing
+        case .running:
+            codexAgentPhase = .launching
+        case .completed:
+            enterCodexLeaseHandoff(at: now)
+        case .readinessFailed:
+            failCodexPreparation(
+                title: L("Codex automation was not started"),
+                body: L("Power, network, or the Codex application did not become ready in time."),
+                at: now
+            )
+        case .cancelled:
+            cancelCodexPreparation(at: now)
+        case .idle:
+            break
+        }
+        codexLeaseHandoffIfNeeded(at: now)
+    }
+
+    private func beginCodexPreparationIfNeeded(at date: Date) {
+        guard settings.codexAutomation.enabled,
+              codexAgentPhase == .idle || codexAgentPhase == .readinessFailed,
+              let nearest = codexWakePlanning.queuedRuns.first
+        else { return }
+        let policy = settings.codexAutomation
+        let preparationStart = nearest.scheduledRun.addingTimeInterval(-policy.wakeLeadTime)
+        let handoffEnd = nearest.scheduledRun.addingTimeInterval(policy.leaseHandoffTimeout)
+        guard date >= preparationStart, date <= handoffEnd else { return }
+        guard wakeHelperGate == .ready else {
+            failCodexPreparation(
+                title: L("Codex automation needs the administrator helper"),
+                body: L("Install and approve the helper before relying on unattended wake or closed-lid work."),
+                at: date
+            )
+            return
+        }
+
+        let groupingWindow: TimeInterval = 60
+        currentScheduledRuns = codexWakePlanning.queuedRuns.filter {
+            $0.scheduledRun <= nearest.scheduledRun.addingTimeInterval(groupingWindow)
+        }
+        scheduledLeaseBaseline = Set(agentLeaseSnapshot.activeLeases.map(\.id))
+        scheduledHandoffLeaseIDs = []
+        scheduledWakeDemands = Set(currentScheduledRuns.map {
+            ScheduledWakeDemand(id: $0.automationID, phase: .preparation)
+        })
+        codexLeaseHandoffDeadline = currentScheduledRuns
+            .map { $0.scheduledRun.addingTimeInterval(policy.leaseHandoffTimeout) }
+            .max()
+        codexAgentPhase = .preparing
+        reconcileExternalWakeDemand(at: date)
+
+        let launchTask = UnattendedTaskDefinition(
+            id: "launch-codex-app",
+            name: "Open Codex",
+            automationID: nearest.automationID,
+            target: .application(bundleIdentifier: policy.applicationBundleIdentifier),
+            timeout: min(60, policy.readinessTimeout)
+        )
+        let requirements = WakeReadinessRequirements(
+            tasks: [launchTask],
+            powerPolicy: WakePowerPolicy(
+                requireExternalPower: policy.requireExternalPower,
+                minimumBatteryPercentage: policy.minimumBatteryPercentage
+            ),
+            networkRequired: policy.requireNetwork
+        )
+        let orchestration = UnattendedOrchestrationController(
+            intent: wakeIntentBox,
+            probe: SystemWakeReadinessProbe(),
+            launcher: SystemUnattendedTaskLauncher(),
+            readinessPolicy: WakeReadinessPolicy(timeout: policy.readinessTimeout),
+            diagnostics: unattendedAuditLog
+        )
+        codexOrchestration = orchestration
+        orchestration.begin(tasks: [launchTask], requirements: requirements, at: date)
+    }
+
+    private func enterCodexLeaseHandoff(at date: Date) {
+        guard codexAgentPhase != .awaitingLease, codexAgentPhase != .leased else { return }
+        scheduledWakeDemands = Set(currentScheduledRuns.map {
+            ScheduledWakeDemand(id: $0.automationID, phase: .handoff)
+        })
+        codexAgentPhase = .awaitingLease
+        codexOrchestration = nil
+        reconcileExternalWakeDemand(at: date)
+    }
+
+    private func codexLeaseHandoffIfNeeded(at date: Date) {
+        if codexAgentPhase == .awaitingLease || codexAgentPhase == .preparing
+            || codexAgentPhase == .launching {
+            let active = Set(agentLeaseSnapshot.activeLeases.map(\.id))
+            let acquiredForRun = active.subtracting(scheduledLeaseBaseline)
+            if !acquiredForRun.isEmpty {
+                scheduledHandoffLeaseIDs.formUnion(acquiredForRun)
+            }
+            let expectedLeaseCount = max(1, currentScheduledRuns.count)
+            if scheduledHandoffLeaseIDs.count >= expectedLeaseCount {
+                scheduledWakeDemands.removeAll()
+                codexAgentPhase = .leased
+                codexLeaseHandoffDeadline = nil
+                codexOrchestration?.cancel(at: date)
+                codexOrchestration = nil
+                markCurrentCodexRunsHandled()
+                // The new lease IDs and removed scheduled sources enter the
+                // ownership coordinator in one snapshot, with no sleep gap.
+                reconcileExternalWakeDemand(at: date)
+                refreshCodexAutomationPlan(force: true)
+                return
+            }
+        }
+
+        if codexAgentPhase == .leased {
+            let active = Set(agentLeaseSnapshot.activeLeases.map(\.id))
+            if active.isDisjoint(with: scheduledHandoffLeaseIDs) {
+                scheduledHandoffLeaseIDs = []
+                currentScheduledRuns = []
+                codexAgentPhase = .idle
+                refreshCodexAutomationPlan(force: true)
+            }
+            return
+        }
+
+        if let deadline = codexLeaseHandoffDeadline,
+           date >= deadline,
+           !scheduledWakeDemands.isEmpty {
+            if !scheduledHandoffLeaseIDs.isEmpty {
+                scheduledWakeDemands.removeAll()
+                codexLeaseHandoffDeadline = nil
+                codexAgentPhase = .leased
+                markCurrentCodexRunsHandled()
+                reconcileExternalWakeDemand(at: date)
+                notifier.notify(
+                    title: L("Some Codex automations did not claim a wake lease"),
+                    body: L("Keepresso released the expired handoff requests. Active Agent leases remain protected."),
+                    sound: false
+                )
+                refreshCodexAutomationPlan(force: true)
+                return
+            }
+            failCodexPreparation(
+                title: L("Codex automation did not claim a wake lease"),
+                body: L("The handoff window expired, so Keepresso restored normal sleep safely."),
+                at: date
+            )
+        }
+    }
+
+    private func failCodexPreparation(title: String, body: String, at date: Date) {
+        guard codexAgentPhase != .readinessFailed || !scheduledWakeDemands.isEmpty else { return }
+        codexOrchestration?.cancel(at: date)
+        codexOrchestration = nil
+        scheduledWakeDemands.removeAll()
+        codexLeaseHandoffDeadline = nil
+        markCurrentCodexRunsHandled()
+        codexAgentPhase = .readinessFailed
+        reconcileExternalWakeDemand(at: date)
+        notifier.notify(title: title, body: body, sound: false)
+        refreshCodexAutomationPlan(force: true)
+    }
+
+    private func cancelCodexPreparation(at date: Date) {
+        codexOrchestration?.cancel(at: date)
+        codexOrchestration = nil
+        scheduledWakeDemands.removeAll()
+        scheduledHandoffLeaseIDs = []
+        codexLeaseHandoffDeadline = nil
+        currentScheduledRuns = []
+        codexAgentPhase = .idle
+        reconcileExternalWakeDemand(at: date)
+    }
+
+    private func markCurrentCodexRunsHandled() {
+        if let latest = currentScheduledRuns.map(\.scheduledRun).max() {
+            lastHandledCodexRun = max(lastHandledCodexRun ?? latest, latest)
+        }
+    }
+
+    private func effectiveWakeSchedule() -> WakeScheduleConfig {
+        var config = settings.wakeSchedule ?? WakeScheduleConfig()
+        if settings.codexAutomation.enabled,
+           let codexWake = codexWakePlanning.wakePlan?.scheduledWake,
+           config.oneShot == nil || codexWake < config.oneShot! {
+            config.oneShot = codexWake
+        }
+        return config
+    }
+
     // MARK: - Wake schedules
 
     /// Why scheduled-wake controls are locked or live. Same idea as
@@ -600,7 +1127,7 @@ final class AppModel {
             settings.wakeSchedule?.oneShot = nil
             persist()
         }
-        let config = settings.wakeSchedule ?? WakeScheduleConfig()
+        let config = effectiveWakeSchedule()
         // Leave pmset alone when there is nothing to install and Keepresso
         // never installed anything: the system schedules belong to the user
         // or another tool, not to us.
@@ -713,36 +1240,35 @@ final class AppModel {
     /// Keepresso schedule with wake-and-brew on, start a session (or apply a
     /// preset).
     func handleSystemWake() {
-        guard let config = settings.wakeSchedule,
-              WakeAndBrewPolicy.shouldStartSession(config: config, wakeDate: Date())
-        else { return }
         let now = Date()
-        if let last = lastWakeBrewAt, now.timeIntervalSince(last) < 60 { return }
-        lastWakeBrewAt = now
-        prepareUnattendedPowerPolicy()
-        if let presetID = config.presetID,
-           let preset = settings.presets.first(where: { $0.id == presetID }) {
-            applyPreset(preset)
-            performUnattendedPrivacyActions()
-            return
-        }
-        if triggersEnabled {
-            // Gate owns activation; just ensure triggers are live.
-            performUnattendedPrivacyActions()
-            return
-        }
-        let mode: SessionMode = {
-            if let duration = config.sessionDurationSeconds, duration > 0 {
-                return .timed(duration: duration)
+        if let config = settings.wakeSchedule,
+           WakeAndBrewPolicy.shouldStartSession(config: config, wakeDate: now),
+           lastWakeBrewAt.map({ now.timeIntervalSince($0) >= 60 }) ?? true {
+            lastWakeBrewAt = now
+            prepareUnattendedPowerPolicy()
+            if let presetID = config.presetID,
+               let preset = settings.presets.first(where: { $0.id == presetID }) {
+                applyPreset(preset)
+                performUnattendedPrivacyActions()
+            } else if triggersEnabled {
+                // Gate owns activation; just ensure triggers are live.
+                performUnattendedPrivacyActions()
+            } else {
+                let mode: SessionMode = {
+                    if let duration = config.sessionDurationSeconds, duration > 0 {
+                        return .timed(duration: duration)
+                    }
+                    return .indefinite
+                }()
+                session.start(mode: mode, cause: .command)
+                if session.isActive {
+                    performUnattendedPrivacyActions()
+                } else {
+                    disarmUnattendedPowerPolicy()
+                }
             }
-            return .indefinite
-        }()
-        session.start(mode: mode, cause: .command)
-        if session.isActive {
-            performUnattendedPrivacyActions()
-        } else {
-            disarmUnattendedPowerPolicy()
         }
+        beginCodexPreparationIfNeeded(at: now)
     }
 
     /// Apply the secure defaults before an unattended task can show content.
@@ -1274,7 +1800,7 @@ final class AppModel {
     /// must not linger as a manual one with a stale duration once the rules
     /// that were holding it are gone).
     private func apply(_ newSettings: KeepressoSettings) {
-        session.stop()
+        if !hasExternalWakeDemand { session.stop() }
         settings = newSettings
         session.options = newSettings.options
         session.reminderAfter = newSettings.reminderAfter
@@ -1293,16 +1819,27 @@ final class AppModel {
         disk.config = newSettings.diskKeepAlive
         virtualDisplay.config = newSettings.virtualDisplay
         awdl.autoWithGaming = newSettings.awdlAutoWithGaming
-        closedDisplayAuto.onlyWhileBrewing = newSettings.closedDisplayOnlyWhileBrewing
-        if !newSettings.closedDisplayOnlyWhileBrewing {
+        closedDisplayAuto.onlyWhileBrewing =
+            newSettings.closedDisplayOnlyWhileBrewing || hasExternalWakeDemand
+        if !newSettings.closedDisplayOnlyWhileBrewing, !hasExternalWakeDemand {
             // An import that turns the automation off must also release any
             // hold it had (autoTick won't, it early-returns once it's off).
             Task { await closedDisplayAuto.stopIfHolding() }
         }
         triggersPaused = false // a fresh config always comes in unpaused, like launch
         applyTriggerGate()
+        if hasExternalWakeDemand { session.reconcile() }
         registerHotKey()
         persist()
+        if newSettings.codexAutomation.enabled {
+            refreshCodexAutomationPlan(force: true)
+        } else {
+            cancelCodexPreparation(at: Date())
+            codexWakePlanning = CodexAutomationWakePlanningResult(
+                wakePlan: nil,
+                queuedRuns: []
+            )
+        }
     }
 
     // MARK: - Control Center widget bridge
@@ -1319,23 +1856,41 @@ final class AppModel {
         let endsAt = session.remaining.map {
             Date(timeIntervalSinceReferenceDate: (Date().timeIntervalSinceReferenceDate + $0).rounded())
         }
-        widgetSync.write(SharedSessionState(
-            isActive: session.isActive,
-            endsAt: endsAt,
-            triggersEnabled: settings.triggersEnabled,
-            triggersPaused: triggersPaused
-        ))
+        widgetSync.write(
+            SharedSessionState(
+                isActive: session.isActive,
+                endsAt: endsAt,
+                triggersEnabled: settings.triggersEnabled,
+                triggersPaused: triggersPaused
+            ),
+            unattended: UnattendedStatusMetadata(
+                activeLeaseCount: agentLeaseSnapshot.activeCount,
+                nextLeaseDeadline: agentLeaseSnapshot.nextDeadline,
+                phase: unattendedStatusPhase,
+                closedLidProtectionReady: wakeHelperGate == .ready,
+                nextCodexRun: codexWakePlanning.wakePlan?.scheduledRun
+            )
+        )
     }
 
     /// On quit, leave the widgets showing "off": the session's assertions die
     /// with this process, and a stale "Brewing" tile would lie until the next
     /// launch.
     func writeWidgetStateStopped() {
-        widgetSync.write(SharedSessionState(
-            isActive: false,
-            triggersEnabled: settings.triggersEnabled,
-            triggersPaused: triggersPaused
-        ))
+        widgetSync.write(
+            SharedSessionState(
+                isActive: false,
+                triggersEnabled: settings.triggersEnabled,
+                triggersPaused: triggersPaused
+            ),
+            unattended: UnattendedStatusMetadata(
+                activeLeaseCount: agentLeaseSnapshot.activeCount,
+                nextLeaseDeadline: agentLeaseSnapshot.nextDeadline,
+                phase: unattendedStatusPhase,
+                closedLidProtectionReady: false,
+                nextCodexRun: codexWakePlanning.wakePlan?.scheduledRun
+            )
+        )
     }
 
     /// Consume a pending widget command, if any, and drive the app through the
@@ -1369,6 +1924,9 @@ final class AppModel {
     /// command on the next once-a-second reconcile, turning it into a no-op
     /// with no feedback to the script that fired it.
     func handle(_ command: URLCommand) {
+        // Manual and remote controls never weaken a lease or a scheduled
+        // preparation. The owning Agent must release its own lease.
+        guard !hasExternalWakeDemand else { return }
         // Capture before pausing: pauseTriggers() stops the session. Pass
         // .command so pausing a trigger-held session logs the stop as the
         // command that caused it, not "Stopped manually".
@@ -1685,7 +2243,7 @@ final class AppModel {
         get { settings.closedDisplayOnlyWhileBrewing }
         set {
             settings.closedDisplayOnlyWhileBrewing = newValue
-            closedDisplayAuto.onlyWhileBrewing = newValue
+            closedDisplayAuto.onlyWhileBrewing = newValue || hasExternalWakeDemand
             persist()
             // Priming exists to front-load the fallback's password prompt into
             // this window; with the helper installed no engage ever prompts,
@@ -1702,7 +2260,7 @@ final class AppModel {
                     NSApp.activate(ignoringOtherApps: true)
                     window?.makeKeyAndOrderFront(nil)
                 }
-            } else if !newValue {
+            } else if !newValue, !hasExternalWakeDemand {
                 // Turning it off mid-session: release the hold (autoTick won't,
                 // it early-returns once the feature's off), then re-read the
                 // system setting once the helper has had a cycle to apply it.
@@ -1729,7 +2287,9 @@ final class AppModel {
     /// automation. The guard keeps the per-tick task from spawning while the
     /// feature is off.
     func closedDisplayAutoTick() {
-        guard settings.closedDisplayOnlyWhileBrewing else { return }
+        let shouldFollowSession = settings.closedDisplayOnlyWhileBrewing || hasExternalWakeDemand
+        closedDisplayAuto.onlyWhileBrewing = shouldFollowSession
+        guard shouldFollowSession else { return }
         let brewing = session.isActive
         // Without the helper, the first engage of an app run prompts for the
         // password (e.g. auto mode was enabled in a previous run): become the

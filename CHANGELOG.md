@@ -3,6 +3,31 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+### Added
+
+- **Explicit AI Agent wake leases.** Codex, Claude Code, Gemini CLI, and other
+  clients can acquire, heartbeat, renew, inspect, and release bounded wake
+  leases through the `keepresso` CLI, a bundled Skill, or a local stdio MCP
+  server. Multiple leases form a union, with TTL and maximum-lifetime watchdogs
+  for crashed or abandoned tasks.
+- **Unattended Codex automation orchestration.** Keepresso can discover enabled
+  local Codex schedules without reading task prompts, wake the Mac early, check
+  power, battery, network, and application readiness, launch Codex, and hand
+  wake ownership to explicit Agent leases. Failed readiness and lease-handoff
+  timeouts restore normal sleep safely.
+- **Secure unattended policy and diagnostics.** Background runs lock the screen,
+  sleep the display, and sleep the Mac after the final task by default. The menu,
+  Preferences, CLI status JSON, and Activity log expose active leases, deadlines,
+  orchestration phase, next Codex run, and closed-lid protection readiness.
+
+### Changed
+
+- Closed-display overrides now preserve and restore the exact preexisting
+  `pmset disablesleep` value through the helper and fallback watchdog, including
+  application crashes and restarts.
+
 ## [1.16.1] - 2026-07-18
 
 ### Fixed

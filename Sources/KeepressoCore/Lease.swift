@@ -254,8 +254,8 @@ public protocol AgentLeaseAppSignaling: AnyObject {
 /// remain reserved for their machine-readable protocols.
 @MainActor
 public final class SystemAgentLeaseAppSignaler: AgentLeaseAppSignaling {
-    public static let appBundleIdentifier = "sh.gyorgy.keepresso"
-    public static let notificationName = "sh.gyorgy.keepresso.agent-lease-changed"
+    public nonisolated static let appBundleIdentifier = "sh.gyorgy.keepresso"
+    public nonisolated static let notificationName = "sh.gyorgy.keepresso.agent-lease-changed"
 
     public init() {}
 

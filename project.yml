@@ -22,6 +22,11 @@ targets:
       - path: Sources/Keepresso
         excludes:
           - sh.gyorgy.keepresso.helper.plist
+      # Ship the Agent-facing skill with the app, preserving its folder layout
+      # for Codex and other clients that consume SKILL.md packages.
+      - path: Skills/keepresso-power
+        type: folder
+        buildPhase: resources
       # The privileged helper's launchd plist. SMAppService.daemon(plistName:)
       # requires it at Contents/Library/LaunchDaemons inside the app bundle.
       - path: Sources/Keepresso/sh.gyorgy.keepresso.helper.plist
@@ -42,6 +47,15 @@ targets:
       # a case-insensitive filesystem `keepresso` there would overwrite the
       # `Keepresso` app executable.
       - target: keepresso-cli
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
+      # Local stdio MCP server for explicit Agent wake leases. It shares the
+      # authoritative lease registry with the CLI and is safe to configure by
+      # absolute path from clients that do not inherit Homebrew's PATH.
+      - target: keepresso-mcp
         embed: true
         codeSign: true
         copy:
@@ -131,6 +145,25 @@ targets:
         ENABLE_HARDENED_RUNTIME: true
         CODE_SIGN_STYLE: Automatic
         # Embedded in the app; not an install product of its own.
+        SKIP_INSTALL: true
+
+  # Newline-delimited JSON-RPC MCP server. Like the CLI, it is a signed helper
+  # inside the app bundle and has no AppKit or network transport of its own.
+  keepresso-mcp:
+    type: tool
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/keepresso-mcp
+    dependencies:
+      - package: KeepressoCore
+        product: KeepressoCore
+    settings:
+      base:
+        PRODUCT_NAME: keepresso-mcp
+        SWIFT_VERSION: "5.9"
+        ENABLE_HARDENED_RUNTIME: true
+        CODE_SIGN_STYLE: Automatic
         SKIP_INSTALL: true
 
   # The privileged helper daemon: registered by the app as an SMAppService

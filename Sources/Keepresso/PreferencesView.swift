@@ -91,6 +91,7 @@ private struct ActivityTab: View {
 
     /// Live assertions, refreshed while the pane is visible.
     @State private var assertions: [PowerAssertionInfo] = []
+    @State private var unattendedRecords: [UnattendedAuditRecord] = []
     @State private var windowVisible = true
     private let tick = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
@@ -168,12 +169,31 @@ private struct ActivityTab: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section {
+                if unattendedRecords.isEmpty {
+                    Text("No Agent or unattended activity yet.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(unattendedRecords.reversed()) { record in
+                        unattendedRecordRow(record)
+                    }
+                }
+            } header: {
+                Text("Agent and unattended log")
+            } footer: {
+                Text(L("Structured events only, with no automation prompts or command arguments. Saved at %@", model.unattendedAuditLogPath))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .onAppear {
             assertions = model.currentAssertions()
             model.refreshAwakeStats()
+            unattendedRecords = model.recentUnattendedAudit()
         }
         // The closed window keeps this content alive (see WindowVisibilityReader),
         // so the poll would keep enumerating assertions unseen. Pause it while
@@ -183,10 +203,12 @@ private struct ActivityTab: View {
             guard visible else { return }
             assertions = model.currentAssertions()
             model.refreshAwakeStats()
+            unattendedRecords = model.recentUnattendedAudit()
         }
         .onReceive(tick) { _ in
             guard windowVisible else { return }
             assertions = model.currentAssertions()
+            unattendedRecords = model.recentUnattendedAudit()
         }
     }
 
@@ -234,6 +256,53 @@ private struct ActivityTab: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 1)
+    }
+
+    private func unattendedRecordRow(_ record: UnattendedAuditRecord) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: record.type == .agentLeaseLifecycle
+                ? "checkmark.shield"
+                : "clock.arrow.circlepath")
+                .foregroundStyle(.secondary)
+                .font(.caption)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(unattendedRecordTitle(record))
+                    .font(.callout)
+                    .lineLimit(2)
+                if let detail = unattendedRecordDetail(record) {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+            Spacer()
+            Text(record.recordedAt, format: .dateTime.hour().minute().second())
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 1)
+    }
+
+    private func unattendedRecordTitle(_ record: UnattendedAuditRecord) -> String {
+        if let event = record.leaseLifecycle {
+            return L("Agent lease: %@", event.kind.rawValue)
+        }
+        if let event = record.unattendedDiagnostic {
+            return L("Unattended work: %@", event.kind.rawValue)
+        }
+        return L("Unattended event")
+    }
+
+    private func unattendedRecordDetail(_ record: UnattendedAuditRecord) -> String? {
+        if let event = record.leaseLifecycle {
+            return event.lease.metadata.task
+                ?? event.lease.metadata.agent
+                ?? event.lease.metadata.owner
+        }
+        return record.unattendedDiagnostic?.automationID
+            ?? record.unattendedDiagnostic?.taskID
     }
 }
 
@@ -918,6 +987,7 @@ private struct AutomationTab: View {
     var body: some View {
         Form {
             unattendedPolicySection
+            codexAutomationSection
             endActionSection
             scheduledWakeSection
             eventHooksSection
@@ -926,6 +996,7 @@ private struct AutomationTab: View {
         .scrollContentBackground(.hidden)
         .animation(.snappy(duration: 0.25), value: model.endAction)
         .animation(.snappy(duration: 0.25), value: model.unattendedPowerPolicy)
+        .animation(.snappy(duration: 0.25), value: model.codexAutomation)
         .animation(.snappy(duration: 0.25), value: model.wakeSchedule != nil)
         .animation(.snappy(duration: 0.25), value: model.helperInstalled)
         .animation(.snappy(duration: 0.25), value: model.helper.awaitingApproval)
@@ -1016,6 +1087,136 @@ private struct AutomationTab: View {
         } footer: {
             sectionFooter("Fires a few seconds after a natural end, not on a manual stop or a safety pause.")
         }
+    }
+
+    // MARK: Codex automation
+
+    private var codexAutomationSection: some View {
+        Section {
+            if model.wakeHelperGate == .ready {
+                Toggle("Follow local Codex automations", isOn: Binding(
+                    get: { model.codexAutomation.enabled },
+                    set: { enabled in updateCodex { $0.enabled = enabled } }
+                ))
+                if model.codexAutomation.enabled {
+                    Picker("Wake before run", selection: Binding(
+                        get: { model.codexAutomation.wakeLeadTime },
+                        set: { value in updateCodex { $0.wakeLeadTime = value } }
+                    )) {
+                        Text(L("1 minute")).tag(60 as TimeInterval)
+                        Text(L("5 minutes")).tag(5 * 60 as TimeInterval)
+                        Text(L("10 minutes")).tag(10 * 60 as TimeInterval)
+                        Text(L("15 minutes")).tag(15 * 60 as TimeInterval)
+                    }
+                    Picker("Readiness timeout", selection: Binding(
+                        get: { model.codexAutomation.readinessTimeout },
+                        set: { value in updateCodex { $0.readinessTimeout = value } }
+                    )) {
+                        Text(L("1 minute")).tag(60 as TimeInterval)
+                        Text(L("2 minutes")).tag(2 * 60 as TimeInterval)
+                        Text(L("5 minutes")).tag(5 * 60 as TimeInterval)
+                        Text(L("10 minutes")).tag(10 * 60 as TimeInterval)
+                    }
+                    Picker("Wait for Agent lease", selection: Binding(
+                        get: { model.codexAutomation.leaseHandoffTimeout },
+                        set: { value in updateCodex { $0.leaseHandoffTimeout = value } }
+                    )) {
+                        Text(L("5 minutes")).tag(5 * 60 as TimeInterval)
+                        Text(L("10 minutes")).tag(10 * 60 as TimeInterval)
+                        Text(L("20 minutes")).tag(20 * 60 as TimeInterval)
+                        Text(L("30 minutes")).tag(30 * 60 as TimeInterval)
+                    }
+                    Toggle("Require network", isOn: Binding(
+                        get: { model.codexAutomation.requireNetwork },
+                        set: { enabled in updateCodex { $0.requireNetwork = enabled } }
+                    ))
+                    Toggle("Require external power", isOn: Binding(
+                        get: { model.codexAutomation.requireExternalPower },
+                        set: { enabled in updateCodex { $0.requireExternalPower = enabled } }
+                    ))
+                    if model.machineHasBattery, !model.codexAutomation.requireExternalPower {
+                        Toggle("Require minimum battery", isOn: Binding(
+                            get: { model.codexAutomation.minimumBatteryPercentage != nil },
+                            set: { enabled in
+                                updateCodex { $0.minimumBatteryPercentage = enabled ? 30 : nil }
+                            }
+                        ))
+                        if let minimum = model.codexAutomation.minimumBatteryPercentage {
+                            Picker("Minimum battery", selection: Binding(
+                                get: { minimum },
+                                set: { value in
+                                    updateCodex { $0.minimumBatteryPercentage = value }
+                                }
+                            )) {
+                                ForEach([20, 30, 40, 50, 60, 80], id: \.self) { percent in
+                                    Text(L("%d%%", percent)).tag(percent)
+                                }
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(L("%d active local automation(s)", model.codexAutomations.count))
+                        if let plan = model.codexWakePlanning.wakePlan {
+                            Text(L("Next run: %@", plan.scheduledRun.formatted(
+                                date: .abbreviated,
+                                time: .shortened
+                            )))
+                            if let wake = plan.scheduledWake {
+                                Text(L("Next wake: %@", wake.formatted(
+                                    date: .abbreviated,
+                                    time: .shortened
+                                )))
+                            } else {
+                                Text(L("Preparation window is open now"))
+                            }
+                        } else {
+                            Text(L("No enabled local Codex automation found"))
+                        }
+                        if model.codexAutomationIssueCount > 0 {
+                            Text(L("%d automation file(s) could not be used", model.codexAutomationIssueCount))
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                    LabeledContent("MCP server") {
+                        Text(model.bundledMCPServerPath)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Button("Reveal Keepresso Agent Skill") {
+                        model.revealBundledAgentSkill()
+                    }
+                }
+            } else {
+                if model.codexAutomation.enabled {
+                    Label(
+                        L("Codex automation wake is saved but inactive until the administrator helper is ready."),
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .foregroundStyle(.secondary)
+                    Button("Turn Off Codex Automation Wake", role: .destructive) {
+                        updateCodex { $0.enabled = false }
+                    }
+                }
+                AutomationHelperLockedRow(model: model, context: .wakeSchedule)
+            }
+        } header: {
+            sectionHeader("Codex automation wake", info: L("Keepresso reads only scheduling metadata from enabled local Codex automations. It wakes the Mac before the nearest run, waits for power, battery, network, and the Codex app, then holds the Mac until the Agent acquires an explicit lease or the handoff times out."))
+        } footer: {
+            sectionFooter("Automation prompts are never read or logged. Configure the Keepresso Skill or MCP server so each Agent acquires, renews, and releases its own lease.")
+        }
+    }
+
+    private func updateCodex(_ body: (inout CodexAutomationSettings) -> Void) {
+        var policy = model.codexAutomation
+        body(&policy)
+        model.codexAutomation = policy
     }
 
     /// Contextual note under the end-action picker: only when the chosen

@@ -25,12 +25,42 @@ public struct UnattendedAuditRecord: Codable, Equatable, Identifiable, Sendable 
         id: UUID = UUID(),
         leaseLifecycle event: AgentLeaseLifecycleEvent
     ) {
+        let event = Self.privacySanitized(event)
         self.schemaVersion = Self.currentSchemaVersion
         self.id = id
         self.recordedAt = event.date
         self.type = .agentLeaseLifecycle
         self.leaseLifecycle = event
         self.unattendedDiagnostic = nil
+    }
+
+    /// Lease transport messages and terminal reasons are caller-authored text.
+    /// They are useful in the direct CLI response but never belong in the
+    /// persistent unattended audit trail.
+    private static func privacySanitized(
+        _ event: AgentLeaseLifecycleEvent
+    ) -> AgentLeaseLifecycleEvent {
+        var lease = event.lease
+        lease.metadata.attributes = [:]
+        lease.state = sanitized(lease.state)
+        return AgentLeaseLifecycleEvent(
+            date: event.date,
+            kind: event.kind,
+            source: event.source,
+            lease: lease,
+            previousState: event.previousState.map(sanitized),
+            timeoutCause: event.timeoutCause
+        )
+    }
+
+    private static func sanitized(_ state: AgentLeaseState) -> AgentLeaseState {
+        switch state {
+        case .active: return .active
+        case .success: return .success
+        case .failure: return .failure(reason: nil)
+        case .timeout: return .timeout
+        case .cancelled: return .cancelled(reason: nil)
+        }
     }
 
     public init(

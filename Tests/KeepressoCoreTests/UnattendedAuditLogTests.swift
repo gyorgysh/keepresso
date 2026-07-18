@@ -78,6 +78,26 @@ private func temporaryAuditLocation() throws -> (directory: URL, file: URL) {
     #expect(object["unattendedDiagnostic"] == nil)
     #expect(object["prompt"] == nil)
     #expect(object["arguments"] == nil)
+    #expect(String(decoding: leaseLine, as: UTF8.self).contains("thread-1") == false)
+}
+
+@Test func unattendedAuditStripsLeaseMessagesAndTerminalReasons() throws {
+    let date = Date(timeIntervalSince1970: 1_800_000_000)
+    var event = auditLeaseEvent(date: date, kind: .released)
+    event.lease.metadata.attributes = ["message": "sensitive transport text"]
+    event.lease.state = .failure(reason: "sensitive terminal reason")
+    event.previousState = .cancelled(reason: "sensitive previous reason")
+
+    let line = try UnattendedAuditLogCodec.encodeLine(
+        UnattendedAuditRecord(leaseLifecycle: event)
+    )
+    let text = String(decoding: line, as: UTF8.self)
+    #expect(text.contains("sensitive") == false)
+
+    let decoded = try #require(UnattendedAuditLogCodec.decode(line).first?.leaseLifecycle)
+    #expect(decoded.lease.metadata.attributes.isEmpty)
+    #expect(decoded.lease.state == .failure(reason: nil))
+    #expect(decoded.previousState == .cancelled(reason: nil))
 }
 
 @Test func unattendedAuditDecoderSkipsOnlyTheCorruptLine() throws {
