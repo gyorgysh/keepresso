@@ -17,6 +17,8 @@ public enum CLIRequest: Equatable, Sendable {
     case remote(RemoteCommand)
     /// Hold this process's own power assertion, caffeinate-style.
     case hold(Hold)
+    /// Manage agent-owned wake leases in the standalone JSON store.
+    case lease(LeaseCommand)
     /// Record an agent-hook event delivered on stdin (Claude Code hooks).
     /// Hidden from the help text: installed hook commands are its only
     /// intended caller.
@@ -101,6 +103,8 @@ public enum CLIRequest: Equatable, Sendable {
                 throw CLIUsageError("'status' takes only --json")
             }
             return .status(json: rest.first == "--json")
+        case "lease":
+            return .lease(try LeaseCLIParser.parse(Array(arguments.dropFirst())))
         case "start":
             return .remote(try parseStart(Array(arguments.dropFirst())))
         case "stop", "toggle":

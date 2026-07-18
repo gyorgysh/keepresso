@@ -24,6 +24,15 @@ Standalone holds (this process holds the assertion, caffeinate-style):
   keepresso -d                  also keep the display awake (combinable)
   keepresso -u                  declare user activity: wake the display now
 
+Agent wake leases (stable JSON output):
+  keepresso lease acquire --owner <owner> --agent <agent> --task <task>
+      [--ttl <seconds>] [--max-lifetime <seconds>] [--message <text>]
+  keepresso lease renew <id> [--ttl <seconds>] [--message <text>]
+  keepresso lease heartbeat <id> [--ttl <seconds>] [--message <text>]
+  keepresso lease release <id> [--result <result>] [--message <text>]
+  keepresso lease list [--owner <owner>] [--agent <agent>] [--task <task>] [--all]
+  keepresso lease status [id]
+
 Other:
   keepresso help | version
 
@@ -186,12 +195,34 @@ func runAgentHook(event: String) -> Never {
     exit(0)
 }
 
+// MARK: - Agent wake leases
+
+func writeLeaseResponse(_ response: LeaseCommandResponse, exitCode: Int32? = nil) -> Never {
+    guard let data = LeaseJSON.encode(response) else {
+        fail("could not encode the lease response", code: 1)
+    }
+    FileHandle.standardOutput.write(data)
+    exit(exitCode ?? (response.ok ? 0 : 1))
+}
+
+func runLease(_ command: LeaseCommand) -> Never {
+    writeLeaseResponse(FileLeaseCommander().execute(command))
+}
+
 // MARK: - Entry
 
+let cliArguments = Array(CommandLine.arguments.dropFirst())
 let request: CLIRequest
 do {
-    request = try CLIRequest.parse(Array(CommandLine.arguments.dropFirst()))
+    request = try CLIRequest.parse(cliArguments)
 } catch let error as CLIUsageError {
+    if cliArguments.first == "lease" {
+        let command = cliArguments.dropFirst().first ?? "lease"
+        writeLeaseResponse(
+            .failure(command: command, code: "usage_error", message: error.message),
+            exitCode: 64
+        )
+    }
     fail(error.message, code: 64)
 }
 
@@ -206,6 +237,8 @@ case .remote(let command):
     runRemote(command)
 case .hold(let hold):
     runHold(hold)
+case .lease(let command):
+    runLease(command)
 case .agentHook(let event):
     runAgentHook(event: event)
 }
