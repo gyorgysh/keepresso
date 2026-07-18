@@ -1035,8 +1035,9 @@ public final class AgentLeaseRegistry {
                 return
             }
             let previous = state.leases[index].state
+            let logicalCompletion = max(instant, state.leases[index].heartbeatAt)
             state.leases[index].state = outcome.state
-            state.leases[index].completedAt = instant
+            state.leases[index].completedAt = logicalCompletion
             state.leases[index].metadata = metadata
             result = state.leases[index]
             events.append(AgentLeaseLifecycleEvent(
@@ -1123,9 +1124,17 @@ public final class AgentLeaseRegistry {
             }
             if let newTTL { state.leases[index].ttl = newTTL }
             state.leases[index].metadata = metadata
-            state.leases[index].heartbeatAt = instant
+            // Preserve the durable timeline across a tolerated wall-clock
+            // rollback. Lifecycle events still use the real observation time,
+            // while persisted lease dates never move backward and remain
+            // accepted by the file codec.
+            let logicalInstant = max(
+                instant,
+                max(state.leases[index].heartbeatAt, state.leases[index].acquiredAt)
+            )
+            state.leases[index].heartbeatAt = logicalInstant
             state.leases[index].expiresAt = min(
-                instant.addingTimeInterval(state.leases[index].ttl),
+                logicalInstant.addingTimeInterval(state.leases[index].ttl),
                 state.leases[index].maxLifetimeAt
             )
             result = state.leases[index]

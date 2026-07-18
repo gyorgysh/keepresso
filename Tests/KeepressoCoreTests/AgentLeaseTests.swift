@@ -761,6 +761,60 @@ private func temporaryLeaseFile() throws -> (directory: URL, file: URL) {
     #expect(timeout.timeoutCause == .maximumLifetime)
 }
 
+@MainActor
+@Test(arguments: [TimeInterval(1), TimeInterval(4 * 60)])
+func toleratedWallClockRollbackKeepsHeartbeatRenewAndReleasePersistable(
+    rollback: TimeInterval
+) throws {
+    let fixture = try temporaryLeaseFile()
+    defer { try? FileManager.default.removeItem(at: fixture.directory) }
+    let start = Date(timeIntervalSince1970: 1_800_000_000)
+    let clock = LeaseClock(start)
+    var events: [AgentLeaseLifecycleEvent] = []
+    let store = FileAgentLeaseStore(fileURL: fixture.file)
+    let registry = try AgentLeaseRegistry(
+        persistence: store,
+        now: { clock.now },
+        onEvent: { events.append($0) }
+    )
+    let heartbeatLease = try registry.acquire(
+        owner: "rollback-heartbeat",
+        ttl: 60 * 60,
+        maxLifetime: 24 * 60 * 60
+    )
+    let renewedLease = try registry.acquire(
+        owner: "rollback-renew",
+        ttl: 60 * 60,
+        maxLifetime: 24 * 60 * 60
+    )
+    let releasedLease = try registry.acquire(
+        owner: "rollback-release",
+        ttl: 60 * 60,
+        maxLifetime: 24 * 60 * 60
+    )
+    events.removeAll()
+
+    clock.now = start.addingTimeInterval(-rollback)
+    let heartbeat = try registry.heartbeat(heartbeatLease.id, message: "still running")
+    let renewed = try registry.renew(renewedLease.id, ttl: 2 * 60 * 60)
+    let released = try registry.release(releasedLease.id, outcome: .success)
+
+    #expect(heartbeat.heartbeatAt == start)
+    #expect(heartbeat.expiresAt == start.addingTimeInterval(60 * 60))
+    #expect(renewed.heartbeatAt == start)
+    #expect(renewed.ttl == 2 * 60 * 60)
+    #expect(renewed.expiresAt == start.addingTimeInterval(2 * 60 * 60))
+    #expect(released.completedAt == start)
+    #expect(events.map(\.kind) == [.heartbeat, .renewed, .released])
+    #expect(events.allSatisfy { $0.date == clock.now })
+
+    let persisted = try store.load()
+    #expect(persisted.leases.count == 3)
+    #expect(persisted.leases.first { $0.id == heartbeatLease.id }?.heartbeatAt == start)
+    #expect(persisted.leases.first { $0.id == renewedLease.id }?.heartbeatAt == start)
+    #expect(persisted.leases.first { $0.id == releasedLease.id }?.completedAt == start)
+}
+
 @Test func fileStoreLeavesFutureSchemaUntouched() throws {
     let fixture = try temporaryLeaseFile()
     defer { try? FileManager.default.removeItem(at: fixture.directory) }
