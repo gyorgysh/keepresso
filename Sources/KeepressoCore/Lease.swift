@@ -465,6 +465,13 @@ public final class AgentLeaseCommandAdapter: LeaseCommanding {
                         lease: lease
                     )
                 }
+                // Unlike status(id), list, and every mutation, aggregate status
+                // has no other service operation. Refresh once as its primary
+                // read so a long-lived MCP process observes external CLI or app
+                // writes, then build the response from that synchronized state.
+                guard case .snapshot = try service.execute(.snapshot) else {
+                    throw LeaseAdapterError.unexpectedResponse
+                }
                 return try success(
                     command: "status",
                     message: "Wake lease status reported."

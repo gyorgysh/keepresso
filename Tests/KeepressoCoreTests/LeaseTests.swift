@@ -224,6 +224,31 @@ private func testAdapter(
     #expect(store.updateCount == 2)
 }
 
+@Test @MainActor func aggregateStatusRefreshesExternalWritesInALongLivedAdapter() throws {
+    let instant = Date(timeIntervalSince1970: 1_800_000_000)
+    let clock = LeaseTestClock(instant)
+    let store = AdapterLeaseStore()
+    let adapter = try testAdapter(store: store, clock: clock)
+
+    // The adapter's registry has already loaded an empty snapshot. Simulate a
+    // separate CLI process committing a lease through the same shared store.
+    let external = try AgentLeaseRegistry(
+        persistence: store,
+        now: { clock.now }
+    )
+    _ = try external.acquire(
+        owner: "external",
+        agent: "claude-code",
+        task: "shared-store"
+    )
+
+    let response = adapter.execute(.status(id: nil))
+
+    #expect(response.ok)
+    #expect(response.status?.wakeRequired == true)
+    #expect(response.status?.activeCount == 1)
+}
+
 @Test @MainActor func leaseWarnsWhenClosedLidProtectionIsNotReady() throws {
     let instant = Date(timeIntervalSince1970: 1_800_000_000)
     let store = AdapterLeaseStore()
