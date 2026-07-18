@@ -115,3 +115,19 @@ private enum PumpValue: Equatable, Sendable {
     #expect(!noFurtherRerun)
     #expect(!gate.isRunning)
 }
+
+@Test func forcedRunGateLetsConsumerDiscardAnObsoleteCompletion() {
+    var gate = CoalescedForceRunGate()
+    #expect(gate.begin(force: false))
+    #expect(!gate.begin(force: true))
+
+    var committedObsoleteResult = false
+    let replacementRequired = gate.finish()
+    if !replacementRequired {
+        committedObsoleteResult = true
+    }
+
+    #expect(replacementRequired)
+    #expect(!committedObsoleteResult)
+    #expect(gate.begin(force: true))
+}

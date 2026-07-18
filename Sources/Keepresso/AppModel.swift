@@ -816,7 +816,7 @@ final class AppModel {
         get { settings.codexAutomation }
         set {
             if newValue.enabled, !canEditWakeSchedule { return }
-            let wasEnabled = settings.codexAutomation.enabled
+            let previous = settings.codexAutomation
             settings.codexAutomation = newValue
             persist()
             if !newValue.enabled {
@@ -829,8 +829,11 @@ final class AppModel {
                 )
                 lastInstalledCodexWake = nil
                 applyWakeScheduleToSystem()
-            } else {
-                refreshCodexAutomationPlan(force: !wasEnabled)
+            } else if newValue != previous {
+                // Every enabled policy edit invalidates the captured planning
+                // inputs of an in-flight discovery, not only the off-to-on
+                // transition. A forced request is retained by the gate.
+                refreshCodexAutomationPlan(force: true)
             }
         }
     }
@@ -858,6 +861,14 @@ final class AppModel {
                 let rerunForced = self.codexDiscoveryGate.finish()
                 self.lastCodexDiscoveryAt = Date()
                 guard self.settings.codexAutomation.enabled else { return }
+                // A forced refresh means an input changed while this detached
+                // scan was running. Do not briefly install its obsolete wake
+                // plan or start preparation with its obsolete policy before
+                // the replacement scan completes.
+                guard !rerunForced, self.settings.codexAutomation == policy else {
+                    self.refreshCodexAutomationPlan(force: true)
+                    return
+                }
                 self.codexAutomations = result.automations
                 self.codexAutomationIssueCount = result.issues.count
                 self.codexWakePlanning = planning
@@ -875,9 +886,6 @@ final class AppModel {
                     self.applyWakeScheduleToSystem()
                 }
                 self.beginCodexPreparationIfNeeded(at: Date())
-                if rerunForced {
-                    self.refreshCodexAutomationPlan(force: true)
-                }
             }
         }
     }
