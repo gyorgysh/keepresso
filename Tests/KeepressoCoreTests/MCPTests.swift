@@ -229,6 +229,7 @@ private func completeInitialization(
         params: [
             "name": "acquire_wake_lease",
             "arguments": [
+                "lease_id": "ae21d9ee-c5c7-4dff-8664-b29d73ac9b11",
                 "owner": "quasar",
                 "agent": "codex",
                 "task": "fix-tests",
@@ -239,6 +240,7 @@ private func completeInitialization(
         ]
     )
     #expect(commander.commands == [.acquire(
+        id: "ae21d9ee-c5c7-4dff-8664-b29d73ac9b11",
         owner: "quasar",
         agent: "codex",
         task: "fix-tests",

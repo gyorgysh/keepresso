@@ -1122,7 +1122,7 @@ final class AppModel {
         return ClosedLidProtectionReadiness.resolve(
             hasUnattendedDemand: hasExternalWakeDemand,
             helperReady: wakeHelperGate == .ready,
-            automaticHoldActive: closedDisplayAuto.isHolding,
+            automaticHoldActive: closedDisplayAuto.hasConfirmedAutomaticProtection,
             manualProtectionActive: manualProtectionActive
         )
     }
@@ -1251,7 +1251,20 @@ final class AppModel {
         case .helperUpdating:
             reapplyWakeScheduleWhenHelperReady()
         case .helperMissing:
-            if request.value.config.isActive {
+            let recovery = WakeApplyRecoveryPolicy.action(
+                helperInstalled: helperInstalled,
+                helperGateNeedsInstallation: wakeHelperGate == .needsHelper
+            )
+            if recovery == .verifyAndRetry {
+                // An enabled helper may be starting, temporarily unreachable,
+                // or serving the previous protocol image. Keep the newest
+                // desired revision alive while the normal repair path runs.
+                verifyHelper()
+                scheduleWakeApplyRetry(
+                    attempt: request.retryAttempt + 1,
+                    expectedRevision: request.revision
+                )
+            } else if request.value.config.isActive {
                 notifier.notify(
                     title: L("Wake schedule not installed"),
                     body: L("Installing a wake schedule needs the administrator helper (Preferences ▸ General)."),
@@ -2286,6 +2299,13 @@ final class AppModel {
         Task { await verifyHelperAndFollowUp() }
     }
 
+    /// Launch-time barrier for wake scheduling. The first wake apply must not
+    /// race the helper version handshake, especially while an older daemon
+    /// image is retiring after an app update.
+    func verifyHelperAndWait() async {
+        await verifyHelperAndFollowUp()
+    }
+
     private func verifyHelperAndFollowUp() async {
         // First clear any previous copy of the app that an update pushed into
         // the Trash: BTM's bookmark keeps resolving the helper's record into
@@ -2295,6 +2315,7 @@ final class AppModel {
         switch await helper.verifyAndRepairIfNeeded() {
         case .healthy:
             helperAttention = nil
+            applyWakeScheduleToSystem()
         case .notApplicable:
             // Mid-reinstall the status parks at requiresApproval; keep the
             // window on the approval step rather than declaring success.
@@ -2305,6 +2326,7 @@ final class AppModel {
             helperAttention = nil
             closedDisplayAuto.retryEngage()
             awdl.retryEngage()
+            applyWakeScheduleToSystem()
         case .needsApproval:
             helperAttention = .needsApproval
             // Also say so in a notification: the attention window can land

@@ -149,6 +149,173 @@ import Foundation
     #expect(runner.commands.contains { $0.contains("repeat wakeorpoweron MWF 07:00:00") })
 }
 
+@Test func mismatchedRepeatingWakeIsRejectedBeforeJournalOrPMSetMutation() {
+    let runner = RecordingRunner()
+    let state = FakeMarkerState()
+    let engine = HelperEngine(runner: runner, state: state)
+
+    let missingTime = engine.applyWakeSchedule(
+        oneShot: "08/01/26 06:30:00",
+        repeatDays: "MWF",
+        repeatTime: nil
+    )
+    let missingDays = engine.applyWakeSchedule(
+        oneShot: "08/01/26 06:30:00",
+        repeatDays: nil,
+        repeatTime: "07:00:00"
+    )
+
+    #expect(!missingTime)
+    #expect(!missingDays)
+    #expect(state.snapshot()?.wakeTransaction == nil)
+    #expect(runner.commands.isEmpty)
+    #expect(engine.isIdle)
+}
+
+@Test func newerWakeScheduleArrivingBeforeTimedOutOldApplyWins() {
+    let registry = SleepModeGenerationRegistry()
+    let runner = RecordingRunner()
+    let engine = HelperEngine(runner: runner, state: FakeMarkerState())
+    let oldA = "08/01/26 06:30:00"
+    let newB = "08/02/26 07:45:00"
+
+    // B reaches the helper after A timed out on the app side but before A's
+    // delayed XPC delivery. Its newer generation becomes the tombstone.
+    #expect(fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 2,
+        generation: 2,
+        oneShot: newB
+    ))
+    let commandsAfterB = runner.commands
+
+    #expect(!fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 1,
+        generation: 1,
+        oneShot: oldA
+    ))
+    #expect(runner.commands == commandsAfterB)
+    #expect(runner.commands.last == "/usr/bin/pmset schedule wake \(newB)")
+}
+
+@Test func newerWakeClearArrivingBeforeTimedOutOldApplyWins() {
+    let registry = SleepModeGenerationRegistry()
+    let runner = RecordingRunner()
+    let engine = HelperEngine(runner: runner, state: FakeMarkerState())
+
+    #expect(fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 2,
+        generation: 2,
+        oneShot: nil
+    ))
+    let commandsAfterClear = runner.commands
+
+    #expect(!fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 1,
+        generation: 1,
+        oneShot: "08/01/26 06:30:00"
+    ))
+    #expect(runner.commands == commandsAfterClear)
+    #expect(runner.commands.last == "/usr/bin/pmset repeat cancel")
+}
+
+@Test func newerWakeScheduleUltimatelyWinsWhenOldApplyArrivesFirst() {
+    let registry = SleepModeGenerationRegistry()
+    let runner = RecordingRunner()
+    let engine = HelperEngine(runner: runner, state: FakeMarkerState())
+    let oldA = "08/01/26 06:30:00"
+    let newB = "08/02/26 07:45:00"
+
+    #expect(fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 1,
+        generation: 1,
+        oneShot: oldA
+    ))
+    #expect(fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 2,
+        generation: 2,
+        oneShot: newB
+    ))
+    #expect(runner.commands.last == "/usr/bin/pmset schedule wake \(newB)")
+}
+
+@Test func newerWakeClearUltimatelyWinsWhenOldApplyArrivesFirst() {
+    let registry = SleepModeGenerationRegistry()
+    let runner = RecordingRunner()
+    let engine = HelperEngine(runner: runner, state: FakeMarkerState())
+
+    #expect(fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 1,
+        generation: 1,
+        oneShot: "08/01/26 06:30:00"
+    ))
+    #expect(fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 2,
+        generation: 2,
+        oneShot: nil
+    ))
+    #expect(runner.commands.last == "/usr/bin/pmset repeat cancel")
+}
+
+@Test func wakeDisconnectKeepsScheduleAndGenerationTombstone() {
+    let registry = SleepModeGenerationRegistry()
+    let runner = RecordingRunner()
+    let engine = HelperEngine(runner: runner, state: FakeMarkerState())
+    let desired = "08/02/26 07:45:00"
+
+    #expect(fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 10,
+        generation: 4,
+        oneShot: desired
+    ))
+    // The live connection may retry the exact generation.
+    #expect(fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 10,
+        generation: 4,
+        oneShot: desired
+    ))
+    let commandsBeforeDisconnect = runner.commands
+
+    registry.clientDisconnected(10) {}
+    #expect(runner.commands == commandsBeforeDisconnect)
+    #expect(!fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 10,
+        generation: 4,
+        oneShot: desired
+    ))
+    // A later listener connection may retry the same generation after the
+    // earlier reply was lost. Connection IDs are monotonic in the helper.
+    #expect(fencedWakeApply(
+        registry: registry,
+        engine: engine,
+        clientID: 11,
+        generation: 4,
+        oneShot: desired
+    ))
+    #expect(runner.commands.last == "/usr/bin/pmset schedule wake \(desired)")
+}
+
 @Test func failedClearIsAcceptedAsDurablePendingWork() {
     let runner = RecordingRunner()
     runner.failAll = true
@@ -233,7 +400,7 @@ import Foundation
     #expect(runner.commands.contains { $0.contains("schedule wake") })
 }
 
-@Test func wakeMarkerFailureRunsNoPMSetAndThePersistedPlanCanRetry() {
+@Test func wakeIntentCommitFailureRunsNoPMSetAndTheSamePlanCanRetry() {
     let runner = RecordingRunner()
     let state = FakeMarkerState()
     state.failMarkerWrites = true
@@ -244,7 +411,7 @@ import Foundation
     ))
     #expect(runner.commands.isEmpty)
     #expect(state.markers().isEmpty)
-    #expect(state.wakeTransaction()?.oneShot == "08/01/26 06:30:00")
+    #expect(state.snapshot()?.wakeTransaction == nil)
 
     state.failMarkerWrites = false
     #expect(engine.applyWakeSchedule(
@@ -263,11 +430,11 @@ import Foundation
         oneShot: "08/01/26 06:30:00", repeatDays: nil, repeatTime: nil
     ))
     #expect(state.markers().contains(.wakeClearPending))
-    #expect(state.wakeTransaction()?.phase == .pendingApply)
+    #expect(state.snapshot()?.wakeTransaction?.phase == .pendingApply)
     state.failAppliedWrites = false
     engine.wakeTick()
     #expect(state.markers().isEmpty)
-    #expect(state.wakeTransaction() == nil)
+    #expect(state.snapshot()?.wakeTransaction == nil)
     #expect(runner.commands.filter { $0.contains("schedule wake") }.count == 2)
 }
 
@@ -286,7 +453,7 @@ import Foundation
     #expect(engine.isIdle)
 }
 
-@Test func failedWakeMarkerClearIsRetriedWithoutReportingSuccess() {
+@Test func wakeJournalCleanupFailureRetainsAppliedDebtWithoutRepeatingPMSet() {
     let runner = RecordingRunner()
     let state = FakeMarkerState()
     state.failClears = true
@@ -312,18 +479,19 @@ import Foundation
     let transaction = HelperWakeTransaction(
         oneShot: "08/01/26 06:30:00",
         repeatDays: "MWF",
-        repeatTime: "07:00:00"
+        repeatTime: "07:00:00",
+        phase: .pendingApply
     )
     let state = FakeMarkerState([.wakeClearPending], wakeTransaction: transaction)
     let engine = HelperEngine(runner: runner, state: state)
 
     engine.restoreAtLaunch()
     #expect(state.markers().contains(.wakeClearPending))
-    #expect(state.wakeTransaction()?.phase == .pendingApply)
+    #expect(state.snapshot()?.wakeTransaction?.phase == .pendingApply)
     runner.failMatching = nil
     engine.wakeTick()
     #expect(!state.markers().contains(.wakeClearPending))
-    #expect(state.wakeTransaction() == nil)
+    #expect(state.snapshot()?.wakeTransaction == nil)
     #expect(runner.commands.contains { $0.contains("schedule wake") })
     #expect(runner.commands.contains { $0.contains("wakeorpoweron") })
 }
@@ -381,6 +549,28 @@ import Foundation
 
 // MARK: - Fakes
 
+private func fencedWakeApply(
+    registry: SleepModeGenerationRegistry,
+    engine: HelperEngine,
+    clientID: Int,
+    generation: UInt64,
+    oneShot: String?
+) -> Bool {
+    registry.apply(
+        streamID: "wake-process-stream",
+        generation: generation,
+        clientID: clientID
+    ) { _ in
+        // This matches the helper's lock scope: the complete engine apply is
+        // the registry operation, not just a generation check before it.
+        engine.applyWakeSchedule(
+            oneShot: oneShot,
+            repeatDays: nil,
+            repeatTime: nil
+        )
+    }
+}
+
 private final class RecordingRunner: HelperCommandRunning, @unchecked Sendable {
     private(set) var commands: [String] = []
     var failAll = false
@@ -420,9 +610,8 @@ private final class BlockingWakeRunner: HelperCommandRunning, @unchecked Sendabl
     }
 }
 
-private final class FakeMarkerState: HelperWakeTransactionPersisting, @unchecked Sendable {
-    private var stored: Set<HelperRestoreMarker>
-    private var storedWakeTransaction: HelperWakeTransaction?
+private final class FakeMarkerState: HelperRestoreStatePersisting, @unchecked Sendable {
+    private var stored: HelperRestoreSnapshot
     var failWrites = false
     var failClears = false
     var failMarkerWrites = false
@@ -431,28 +620,46 @@ private final class FakeMarkerState: HelperWakeTransactionPersisting, @unchecked
         _ initial: Set<HelperRestoreMarker> = [],
         wakeTransaction: HelperWakeTransaction? = nil
     ) {
-        stored = initial
-        storedWakeTransaction = wakeTransaction
-    }
-    func markers() -> Set<HelperRestoreMarker> { stored }
-    @discardableResult
-    func set(_ marker: HelperRestoreMarker, present: Bool) -> Bool {
-        guard !failWrites,
-              !failMarkerWrites,
-              !(!present && failClears)
-        else { return false }
-        if present { stored.insert(marker) } else { stored.remove(marker) }
-        return true
+        let pendingWake = wakeTransaction ?? (initial.contains(.wakeClearPending)
+            ? HelperWakeTransaction(
+                oneShot: nil,
+                repeatDays: nil,
+                repeatTime: nil,
+                phase: .pendingApply
+            )
+            : nil)
+        stored = HelperRestoreSnapshot(
+            sleepOriginalDisablesleep: initial.contains(.sleepDisabled) ? false : nil,
+            sleepRestorePending: initial.contains(.sleepDisabled),
+            awdlRestorePending: initial.contains(.awdlDown),
+            fanRestorePending: initial.contains(.fanForced),
+            wakeTransaction: pendingWake
+        )
     }
 
-    func wakeTransaction() -> HelperWakeTransaction? { storedWakeTransaction }
+    func snapshot() -> HelperRestoreSnapshot? { stored }
 
     @discardableResult
-    func setWakeTransaction(_ transaction: HelperWakeTransaction?) -> Bool {
-        guard !failWrites,
-              !(transaction?.phase == .applied && failAppliedWrites)
-        else { return false }
-        storedWakeTransaction = transaction
+    func update(_ mutation: (inout HelperRestoreSnapshot) -> Void) -> Bool {
+        var next = stored
+        mutation(&next)
+        guard next.isValid, !failWrites else { return false }
+        if failMarkerWrites,
+           stored.wakeTransaction == nil,
+           next.wakeTransaction != nil {
+            return false
+        }
+        if failAppliedWrites,
+           stored.wakeTransaction?.phase == .pendingApply,
+           next.wakeTransaction?.phase == .applied {
+            return false
+        }
+        if failClears,
+           stored.wakeTransaction != nil,
+           next.wakeTransaction == nil {
+            return false
+        }
+        stored = next
         return true
     }
 }

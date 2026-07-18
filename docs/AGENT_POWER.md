@@ -39,7 +39,9 @@ bound that heartbeats cannot extend. Keepresso enforces a seven-day hard ceiling
 on both values so a malformed request cannot create a near-permanent hold.
 
 ```sh
+lease_request_id="$(/usr/bin/uuidgen | /usr/bin/tr '[:upper:]' '[:lower:]')"
 lease_json="$(keepresso lease acquire \
+  --lease-id "$lease_request_id" \
   --owner "${USER:-automation}" \
   --agent codex \
   --task "repository-task" \
@@ -68,6 +70,11 @@ done
 verify_task_result
 lease_result=success
 ```
+
+The caller-generated UUID is an idempotency key. If stdout is lost, retry the
+same acquire request with the same UUID. Keepresso returns the existing active
+lease only when its metadata and supplied durations match, and rejects any
+conflicting reuse.
 
 Leave the result as `failure` until the task has verifiably succeeded. Allowed
 release results are `success`, `failure`, and `cancelled`. Timeout is reserved
@@ -135,7 +142,8 @@ required = true
 The server supports MCP protocol versions `2025-06-18` and `2025-11-25`, and
 exposes these tools:
 
-- `acquire_wake_lease`
+- `acquire_wake_lease` (accepts an optional caller-generated `lease_id` UUID
+  for idempotent retries)
 - `renew_wake_lease`
 - `heartbeat_wake_lease`
 - `release_wake_lease`

@@ -128,43 +128,54 @@ private final class BlockingRunner: HelperCommandRunning, SleepSettingReading, @
 
 private final class FakeRestoreState: HelperSleepRestoreValuePersisting, @unchecked Sendable {
     private let lock = NSLock()
-    private var stored: Set<HelperRestoreMarker> = []
-    private var storedSleepValue: Bool?
+    private var stored: HelperRestoreSnapshot
     var failMarkerWrites = false
     var failSleepValueWrites = false
+    var available = true
 
     init(_ initial: Set<HelperRestoreMarker> = [], sleepRestoreValue: Bool? = nil) {
-        stored = initial
-        storedSleepValue = sleepRestoreValue
+        stored = HelperRestoreSnapshot(
+            sleepOriginalDisablesleep: initial.contains(.sleepDisabled)
+                ? (sleepRestoreValue ?? false)
+                : nil,
+            sleepRestorePending: initial.contains(.sleepDisabled),
+            awdlRestorePending: initial.contains(.awdlDown),
+            fanRestorePending: initial.contains(.fanForced),
+            wakeTransaction: initial.contains(.wakeClearPending)
+                ? HelperWakeTransaction(
+                    oneShot: nil,
+                    repeatDays: nil,
+                    repeatTime: nil,
+                    phase: .pendingApply
+                )
+                : nil
+        )
     }
 
-    func markers() -> Set<HelperRestoreMarker> {
+    func snapshot() -> HelperRestoreSnapshot? {
         lock.lock()
         defer { lock.unlock() }
-        return stored
+        return available ? stored : nil
     }
 
     @discardableResult
-    func set(_ marker: HelperRestoreMarker, present: Bool) -> Bool {
+    func update(_ mutation: (inout HelperRestoreSnapshot) -> Void) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        guard !failMarkerWrites else { return false }
-        if present { stored.insert(marker) } else { stored.remove(marker) }
-        return true
-    }
-
-    func sleepRestoreValue() -> Bool? {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedSleepValue
-    }
-
-    @discardableResult
-    func setSleepRestoreValue(_ value: Bool?) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !failSleepValueWrites else { return false }
-        storedSleepValue = value
+        guard available else { return false }
+        var next = stored
+        mutation(&next)
+        let markerChanged = next.sleepRestorePending != stored.sleepRestorePending
+            || next.awdlRestorePending != stored.awdlRestorePending
+            || next.fanRestorePending != stored.fanRestorePending
+            || next.wakeTransaction != stored.wakeTransaction
+        let sleepValueChanged = next.sleepOriginalDisablesleep
+            != stored.sleepOriginalDisablesleep
+        guard !(markerChanged && failMarkerWrites),
+              !(sleepValueChanged && failSleepValueWrites),
+              next.isValid
+        else { return false }
+        stored = next
         return true
     }
 }
@@ -252,6 +263,217 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     #expect(!registry.apply(streamID: "second", generation: 1) { true })
     #expect(!registry.apply(streamID: "", generation: 1) { true })
     #expect(!registry.apply(streamID: String(repeating: "x", count: 129), generation: 1) { true })
+}
+
+@Test func streamOwnershipMigrationRejectsTheOldConnectionsSameGeneration() {
+    let registry = SleepModeGenerationRegistry()
+    var previousOwners: [Int?] = []
+    var oldDisconnectCleanups = 0
+
+    #expect(registry.apply(
+        streamID: "process-stream",
+        generation: 4,
+        clientID: 10
+    ) { previousClientID in
+        previousOwners.append(previousClientID)
+        return true
+    })
+    #expect(registry.apply(
+        streamID: "process-stream",
+        generation: 4,
+        clientID: 11
+    ) { previousClientID in
+        previousOwners.append(previousClientID)
+        return true
+    })
+
+    // A delayed request on old connection 10 cannot reclaim generation 4.
+    #expect(!registry.apply(
+        streamID: "process-stream",
+        generation: 4,
+        clientID: 10
+    ) { _ in
+        Issue.record("the old connection operation must not run")
+        return true
+    })
+    registry.clientDisconnected(10) { oldDisconnectCleanups += 1 }
+
+    #expect(previousOwners.count == 2)
+    #expect(previousOwners[0] == nil)
+    #expect(previousOwners[1] == 10)
+    #expect(oldDisconnectCleanups == 0)
+}
+
+@Test func disconnectedOwnerTombstoneStillRejectsAnOlderSameGenerationReplay() {
+    let registry = SleepModeGenerationRegistry()
+    var cleanups = 0
+    var previousOwnerForC: Int?
+
+    #expect(registry.apply(
+        streamID: "process-stream",
+        generation: 4,
+        clientID: 10
+    ) { _ in true })
+    #expect(registry.apply(
+        streamID: "process-stream",
+        generation: 4,
+        clientID: 11
+    ) { previousClientID in
+        previousClientID == 10
+    })
+    registry.clientDisconnected(11) { cleanups += 1 }
+
+    #expect(cleanups == 1)
+    #expect(!registry.apply(
+        streamID: "process-stream",
+        generation: 4,
+        clientID: 10
+    ) { _ in
+        Issue.record("older connection A must remain fenced by B's tombstone")
+        return true
+    })
+    #expect(!registry.apply(
+        streamID: "process-stream",
+        generation: 4,
+        clientID: 11
+    ) { _ in
+        Issue.record("disconnected owner B must not retry its tombstoned generation")
+        return true
+    })
+
+    // A genuinely newer reconnect C may retry generation 4. It receives B as
+    // the previous logical owner, whose engine holder cleanup is idempotent.
+    #expect(registry.apply(
+        streamID: "process-stream",
+        generation: 4,
+        clientID: 12
+    ) { previousClientID in
+        previousOwnerForC = previousClientID
+        return true
+    })
+    #expect(previousOwnerForC == 11)
+    #expect(registry.apply(
+        streamID: "process-stream",
+        generation: 4,
+        clientID: 12
+    ) { previousClientID in
+        previousClientID == 12
+    })
+
+    // A higher generation starts a new connection-order epoch, so its first
+    // accepted request need not have a client ID above generation 4's C.
+    #expect(registry.apply(
+        streamID: "process-stream",
+        generation: 5,
+        clientID: 10
+    ) { previousClientID in
+        previousClientID == 12
+    })
+    registry.clientDisconnected(10) { cleanups += 1 }
+    #expect(!registry.apply(
+        streamID: "process-stream",
+        generation: 5,
+        clientID: 10
+    ) { _ in true })
+    #expect(registry.apply(
+        streamID: "process-stream",
+        generation: 5,
+        clientID: 11
+    ) { previousClientID in
+        previousClientID == 10
+    })
+    #expect(cleanups == 2)
+}
+
+@Test func reconnectMigrationPreservesSleepAWDLAndFanLogicalHolders() {
+    let runner = FakeRunner(sleepValue: false)
+    let state = FakeRestoreState()
+    let fans = FakeFanControl()
+    let engine = HelperEngine(
+        runner: runner,
+        state: state,
+        fans: fans,
+        sleepSettingReader: runner
+    )
+    let sleepRegistry = SleepModeGenerationRegistry()
+    let awdlRegistry = SleepModeGenerationRegistry()
+    let fanRegistry = SleepModeGenerationRegistry()
+
+    func setSleep(client: Int, generation: UInt64, mode: SleepHoldMode) -> Bool {
+        sleepRegistry.apply(
+            streamID: "sleep-stream",
+            generation: generation,
+            clientID: client
+        ) { previousClientID in
+            engine.setSleepHoldMode(
+                client: client,
+                replacing: previousClientID,
+                mode: mode
+            )
+        }
+    }
+    func setAWDL(client: Int, generation: UInt64, holding: Bool) -> Bool {
+        awdlRegistry.apply(
+            streamID: "awdl-stream",
+            generation: generation,
+            clientID: client
+        ) { previousClientID in
+            engine.setAWDLHold(
+                client: client,
+                replacing: previousClientID,
+                holding: holding
+            )
+        }
+    }
+    func setFan(client: Int, generation: UInt64, holding: Bool) -> Bool {
+        fanRegistry.apply(
+            streamID: "fan-stream",
+            generation: generation,
+            clientID: client
+        ) { previousClientID in
+            engine.setFanHold(
+                client: client,
+                replacing: previousClientID,
+                holding: holding,
+                percent: 80
+            )
+        }
+    }
+
+    #expect(setSleep(client: 1, generation: 1, mode: .active))
+    #expect(setAWDL(client: 1, generation: 1, holding: true))
+    #expect(setFan(client: 1, generation: 1, holding: true))
+    #expect(runner.commands == [sleepOn, awdlDown])
+    #expect(fans.forcedPercents == [80])
+
+    // Reconnect B retries the same intent. Each logical holder moves from A
+    // to B without a second union edge or a duplicate fan write.
+    #expect(setSleep(client: 2, generation: 1, mode: .active))
+    #expect(setAWDL(client: 2, generation: 1, holding: true))
+    #expect(setFan(client: 2, generation: 1, holding: true))
+    #expect(runner.commands == [sleepOn, awdlDown])
+    #expect(fans.forcedPercents == [80])
+
+    sleepRegistry.clientDisconnected(1) { engine.sleepClientDisconnected(1) }
+    awdlRegistry.clientDisconnected(1) { engine.awdlClientDisconnected(1) }
+    fanRegistry.clientDisconnected(1) { engine.fanClientDisconnected(1) }
+    #expect(runner.commands == [sleepOn, awdlDown])
+    #expect(fans.restoreCalls == 0)
+
+    // The newest releases win. A delayed generation-1 replay cannot revive
+    // any of the three privileged holds afterward.
+    #expect(setSleep(client: 2, generation: 2, mode: .released))
+    #expect(setAWDL(client: 2, generation: 2, holding: false))
+    #expect(setFan(client: 2, generation: 2, holding: false))
+    #expect(runner.commands == [sleepOn, awdlDown, sleepOff, awdlUp])
+    #expect(fans.restoreCalls == 1)
+
+    #expect(!setSleep(client: 1, generation: 1, mode: .active))
+    #expect(!setAWDL(client: 1, generation: 1, holding: true))
+    #expect(!setFan(client: 1, generation: 1, holding: true))
+    #expect(runner.commands == [sleepOn, awdlDown, sleepOff, awdlUp])
+    #expect(fans.forcedPercents == [80])
+    #expect(engine.isIdle)
 }
 
 @Test func sleepSettingReaderParsesRealAndLegacyPMSetKeys() {
@@ -771,6 +993,87 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     }
 }
 
+@Test func unavailableRestoreJournalFailsEveryDurableDomainClosed() {
+    let runner = FakeRunner(sleepValue: false)
+    let state = FakeRestoreState()
+    state.available = false
+    let fans = FakeFanControl()
+    let engine = HelperEngine(
+        runner: runner,
+        state: state,
+        fans: fans,
+        sleepSettingReader: runner
+    )
+
+    engine.restoreAtLaunch()
+    #expect(!engine.setSleepDisabled(true))
+    #expect(!engine.setSleepHold(client: 1, holding: true))
+    #expect(!engine.setAWDLHold(client: 1, holding: true))
+    #expect(!engine.setFanHold(client: 1, holding: true, percent: 80))
+    #expect(!engine.applyWakeSchedule(
+        oneShot: "08/01/26 06:30:00",
+        repeatDays: nil,
+        repeatTime: nil
+    ))
+    engine.sleepTick()
+    engine.awdlTick()
+    engine.fanTick()
+
+    #expect(runner.commands.isEmpty)
+    #expect(fans.forcedPercents.isEmpty)
+    #expect(fans.restoreCalls == 0)
+    #expect(!engine.isIdle)
+}
+
+@Test func reconnectReleaseDuringJournalOutageDoesNotStrandOldDomainHolders() {
+    let runner = FakeRunner()
+    let state = FakeRestoreState()
+    let fans = FakeFanControl()
+    let engine = HelperEngine(runner: runner, state: state, fans: fans)
+
+    #expect(engine.setAWDLHold(client: 1, holding: true))
+    #expect(engine.setFanHold(client: 1, holding: true, percent: 80))
+    state.available = false
+
+    #expect(!engine.setAWDLHold(client: 2, replacing: 1, holding: false))
+    #expect(!engine.setFanHold(
+        client: 2,
+        replacing: 1,
+        holding: false,
+        percent: 0
+    ))
+    #expect(runner.commands == [awdlDown])
+    #expect(fans.restoreCalls == 0)
+
+    state.available = true
+    engine.awdlTick()
+    engine.fanTick()
+    #expect(runner.commands.last == awdlUp)
+    #expect(fans.restoreCalls == 1)
+    #expect(engine.isIdle)
+}
+
+@Test func failedAWDLAndFanDebtCommitsDoNotTouchTheSystem() {
+    let runner = FakeRunner()
+    let state = FakeRestoreState()
+    state.failMarkerWrites = true
+    let fans = FakeFanControl()
+    let engine = HelperEngine(runner: runner, state: state, fans: fans)
+
+    #expect(!engine.setAWDLHold(client: 1, holding: true))
+    #expect(!engine.setFanHold(client: 1, holding: true, percent: 80))
+    #expect(runner.commands.isEmpty)
+    #expect(fans.forcedPercents.isEmpty)
+
+    // Failed durable commits roll the proposed holders back, so once storage
+    // recovers each request still produces its required union edge.
+    state.failMarkerWrites = false
+    #expect(engine.setAWDLHold(client: 1, holding: true))
+    #expect(engine.setFanHold(client: 1, holding: true, percent: 80))
+    #expect(runner.commands == [awdlDown])
+    #expect(fans.forcedPercents == [80])
+}
+
 // MARK: - Manual set and restore
 
 @Test func manualSetIsPlainAndNeverMarked() {
@@ -1140,8 +1443,112 @@ private struct CLILinkFixture {
     engine.fanTick()
     #expect(fans.forcedPercents.count == writesAfterDrop)
 
-    // A fresh hold gets a fresh chance and clears the dropped flag.
-    _ = engine.setFanHold(client: 2, holding: true, percent: 50)
+    // Another client gets a fresh chance, but cannot erase client 1's
+    // surrendered status. Client 1 must explicitly release before retrying.
+    fans.results = []
+    #expect(engine.setFanHold(client: 2, holding: true, percent: 50))
+    #expect(!engine.fanHoldDropped(client: 2))
+    #expect(engine.fanHoldDropped(client: 1))
+    #expect(engine.fanHoldDropped)
+    #expect(!engine.setFanHold(client: 1, holding: true, percent: 80))
+    #expect(engine.setFanHold(client: 1, holding: false, percent: 0))
+    #expect(!engine.fanHoldDropped)
+}
+
+@Test func surrenderedFanStatusMigratesAcrossReconnectUntilExplicitRelease() {
+    let fans = FakeFanControl()
+    let engine = HelperEngine(runner: FakeRunner(), state: FakeRestoreState(), fans: fans)
+    let registry = SleepModeGenerationRegistry()
+
+    #expect(registry.apply(
+        streamID: "fan-stream",
+        generation: 1,
+        clientID: 1
+    ) { previousClientID in
+        engine.setFanHold(
+            client: 1,
+            replacing: previousClientID,
+            holding: true,
+            percent: 80
+        )
+    })
+    fans.results = Array(repeating: .failed, count: HelperEngine.maxFanFailures)
+    for _ in 0..<HelperEngine.maxFanFailures { engine.fanTick() }
+    #expect(engine.fanHoldDropped(client: 1))
+
+    registry.clientDisconnected(1) { engine.fanClientDisconnected(1) }
+    // Reconnect B replays the exact acquire generation. Registry ownership
+    // migrates, but the engine refuses to revive the surrendered hold.
+    #expect(!registry.apply(
+        streamID: "fan-stream",
+        generation: 1,
+        clientID: 2
+    ) { previousClientID in
+        engine.setFanHold(
+            client: 2,
+            replacing: previousClientID,
+            holding: true,
+            percent: 80
+        )
+    })
+    #expect(!engine.fanHoldDropped(client: 1))
+    #expect(engine.fanHoldDropped(client: 2))
+
+    #expect(registry.apply(
+        streamID: "fan-stream",
+        generation: 2,
+        clientID: 2
+    ) { previousClientID in
+        engine.setFanHold(
+            client: 2,
+            replacing: previousClientID,
+            holding: false,
+            percent: 0
+        )
+    })
+    #expect(!engine.fanHoldDropped(client: 2))
+
+    fans.results = []
+    #expect(registry.apply(
+        streamID: "fan-stream",
+        generation: 3,
+        clientID: 2
+    ) { previousClientID in
+        engine.setFanHold(
+            client: 2,
+            replacing: previousClientID,
+            holding: true,
+            percent: 80
+        )
+    })
+    #expect(!engine.fanHoldDropped(client: 2))
+}
+
+@Test func fanSurrenderTracksEveryHolderWithoutBlockingANewClient() {
+    let fans = FakeFanControl()
+    let engine = HelperEngine(runner: FakeRunner(), state: FakeRestoreState(), fans: fans)
+    #expect(engine.setFanHold(client: 1, holding: true, percent: 60))
+    #expect(engine.setFanHold(client: 2, holding: true, percent: 80))
+
+    fans.results = Array(repeating: .failed, count: HelperEngine.maxFanFailures)
+    for _ in 0..<HelperEngine.maxFanFailures { engine.fanTick() }
+    #expect(engine.fanHoldDropped(client: 1))
+    #expect(engine.fanHoldDropped(client: 2))
+
+    fans.results = []
+    #expect(engine.setFanHold(client: 3, holding: true, percent: 70))
+    #expect(!engine.fanHoldDropped(client: 3))
+    #expect(!engine.setFanHold(
+        client: 4,
+        replacing: 2,
+        holding: true,
+        percent: 80
+    ))
+    #expect(!engine.fanHoldDropped(client: 2))
+    #expect(engine.fanHoldDropped(client: 4))
+
+    #expect(engine.setFanHold(client: 4, holding: false, percent: 0))
+    #expect(engine.setFanHold(client: 1, holding: false, percent: 0))
     #expect(!engine.fanHoldDropped)
 }
 

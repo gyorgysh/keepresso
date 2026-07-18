@@ -223,12 +223,33 @@ public final class AgentLeaseCommandService: AgentLeaseCommandServing {
     public func execute(_ command: AgentLeaseCommand) throws -> AgentLeaseCommandResponse {
         switch command {
         case .acquire(let id, let metadata, let ttl, let maxLifetime):
-            return .lease(try registry.acquire(
-                id: id ?? UUID(),
-                metadata: metadata,
+            let wantedID = id ?? UUID()
+            let durations = registry.resolvedAcquireDurations(
                 ttl: ttl,
                 maxLifetime: maxLifetime
-            ))
+            )
+            do {
+                return .lease(try registry.acquire(
+                    id: wantedID,
+                    metadata: metadata,
+                    ttl: durations.ttl,
+                    maxLifetime: durations.maxLifetime
+                ))
+            } catch AgentLeaseRegistryError.leaseAlreadyExists where id != nil {
+                // A caller-selected identifier makes acquire safe to retry
+                // after a response is lost. Return the same active lease only
+                // when the full supplied request agrees, otherwise surface a
+                // conflict instead of silently adopting unrelated work.
+                guard let existing = try registry.status(for: wantedID),
+                      existing.isActive,
+                      existing.metadata == metadata,
+                      existing.ttl == durations.ttl,
+                      existing.maxLifetime == durations.maxLifetime
+                else {
+                    throw AgentLeaseRegistryError.leaseAlreadyExists(wantedID)
+                }
+                return .lease(existing)
+            }
         case .heartbeat(let id, let message):
             return .lease(try registry.heartbeat(id, message: message))
         case .renew(let id, let ttl, let message):

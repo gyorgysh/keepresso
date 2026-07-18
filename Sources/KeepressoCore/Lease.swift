@@ -119,6 +119,7 @@ public struct LeaseListFilter: Equatable, Sendable {
 /// A parsed lease operation shared by the CLI and MCP adapter.
 public enum LeaseCommand: Equatable, Sendable {
     case acquire(
+        id: String? = nil,
         owner: String,
         agent: String,
         task: String,
@@ -351,11 +352,11 @@ public final class AgentLeaseCommandAdapter: LeaseCommanding {
     public func execute(_ command: LeaseCommand) -> LeaseCommandResponse {
         do {
             switch command {
-            case .acquire(let owner, let agent, let task, let ttl, let maximum, let message):
+            case .acquire(let rawID, let owner, let agent, let task, let ttl, let maximum, let message):
                 var attributes: [String: String] = [:]
                 if let message { attributes["message"] = message }
                 let response = try service.execute(.acquire(
-                    id: nil,
+                    id: try rawID.map(parseID),
                     metadata: AgentLeaseMetadata(
                         owner: owner,
                         agent: agent,
@@ -550,12 +551,19 @@ public final class AgentLeaseCommandAdapter: LeaseCommanding {
                 message: "timeout is recorded automatically by the lease watchdog."
             )
         case AgentLeaseRegistryError.invalidOwner,
+             AgentLeaseRegistryError.invalidMetadata,
              AgentLeaseRegistryError.invalidTTL,
              AgentLeaseRegistryError.invalidMaxLifetime:
             return .failure(
                 command: command,
                 code: "invalid_arguments",
-                message: "lease owner and durations must be valid."
+                message: "lease metadata and durations must be valid and within their limits."
+            )
+        case AgentLeaseRegistryError.activeLeaseLimitReached:
+            return .failure(
+                command: command,
+                code: "capacity_reached",
+                message: "The active wake lease limit has been reached."
             )
         case AgentLeaseRegistryError.leaseNotFound:
             return .failure(command: command, code: "not_found", message: "Wake lease not found.")
@@ -697,8 +705,12 @@ public enum LeaseCLIParser {
     private static func parseAcquire(_ arguments: [String]) throws -> LeaseCommand {
         var options = try parseOptions(
             arguments,
-            valued: ["--owner", "--agent", "--task", "--ttl", "--max-lifetime", "--message"]
+            valued: [
+                "--lease-id", "--owner", "--agent", "--task", "--ttl",
+                "--max-lifetime", "--message",
+            ]
         )
+        let id = take("--lease-id", from: &options)
         let owner = try required("--owner", from: &options)
         let agent = try required("--agent", from: &options)
         let task = try required("--task", from: &options)
@@ -708,6 +720,7 @@ public enum LeaseCLIParser {
         let message = take("--message", from: &options)
         try rejectLeftovers(options)
         return .acquire(
+            id: id,
             owner: owner,
             agent: agent,
             task: task,

@@ -14,9 +14,11 @@ private enum PumpValue: Equatable, Sendable {
     #expect(first?.value == .activeA)
     #expect(pump.current == first)
 
-    #expect(pump.submit(.activeB) == nil)
+    let queuedB = pump.submit(.activeB)
+    #expect(queuedB == nil)
     #expect(pump.pending?.value == .activeB)
-    #expect(pump.submit(.activeC) == nil)
+    let queuedC = pump.submit(.activeC)
+    #expect(queuedC == nil)
     #expect(pump.pending?.value == .activeC)
 
     let firstCompletion = pump.complete(first!)
@@ -26,7 +28,8 @@ private enum PumpValue: Equatable, Sendable {
     #expect(pump.pending == nil)
 
     // Duplicate or delayed callbacks cannot release the new current slot.
-    #expect(pump.complete(first!) == nil)
+    let duplicate = pump.complete(first!)
+    #expect(duplicate == nil)
     let final = pump.current!
     let finalCompletion = pump.complete(final)
     #expect(finalCompletion?.wasLatest == true)
@@ -37,7 +40,8 @@ private enum PumpValue: Equatable, Sendable {
 @Test func serializedPumpOrdersDisableClearAfterActiveInstall() {
     var pump = SerializedLatestRequestPump<PumpValue>()
     let active = pump.submit(.activeA)!
-    #expect(pump.submit(.clear) == nil)
+    let queuedClear = pump.submit(.clear)
+    #expect(queuedClear == nil)
 
     let completion = pump.complete(active)
     #expect(completion?.next?.value == .clear)
@@ -45,7 +49,8 @@ private enum PumpValue: Equatable, Sendable {
     #expect(!pump.isIdle)
 
     let clear = pump.current!
-    #expect(pump.complete(clear)?.wasLatest == true)
+    let clearCompletion = pump.complete(clear)
+    #expect(clearCompletion?.wasLatest == true)
     #expect(pump.isIdle)
 }
 
@@ -53,10 +58,12 @@ private enum PumpValue: Equatable, Sendable {
     var pump = SerializedLatestRequestPump<PumpValue>()
     let first = pump.submit(.activeA)!
     let firstRevision = pump.latestRevision
-    #expect(pump.submit(.activeA) == nil)
+    let duplicate = pump.submit(.activeA)
+    #expect(duplicate == nil)
     #expect(pump.latestRevision == firstRevision)
 
-    #expect(pump.complete(first)?.wasLatest == true)
+    let completion = pump.complete(first)
+    #expect(completion?.wasLatest == true)
     let retry = pump.submit(.activeA, retryAttempt: 1)
     #expect(retry?.retryAttempt == 1)
     #expect(retry?.revision == firstRevision + 1)
@@ -65,7 +72,8 @@ private enum PumpValue: Equatable, Sendable {
 @Test func onlyLatestCompletionMayCommitDesiredBookkeepingOrScheduleRetry() {
     var pump = SerializedLatestRequestPump<PumpValue>()
     let activeA = pump.submit(.activeA)!
-    #expect(pump.submit(.activeB) == nil)
+    let queuedB = pump.submit(.activeB)
+    #expect(queuedB == nil)
 
     var committed: PumpValue?
     var retryRevision: UInt64?
@@ -90,13 +98,20 @@ private enum PumpValue: Equatable, Sendable {
 
 @Test func forcedRunGateNeverLosesForceDuringDiscovery() {
     var gate = CoalescedForceRunGate()
-    #expect(gate.begin(force: false))
-    #expect(!gate.begin(force: false))
-    #expect(!gate.begin(force: true))
-    #expect(!gate.begin(force: false))
-    #expect(gate.finish())
+    let began = gate.begin(force: false)
+    #expect(began)
+    let skippedRegular = gate.begin(force: false)
+    #expect(!skippedRegular)
+    let queuedForce = gate.begin(force: true)
+    #expect(!queuedForce)
+    let stillSkipped = gate.begin(force: false)
+    #expect(!stillSkipped)
+    let rerun = gate.finish()
+    #expect(rerun)
 
-    #expect(gate.begin(force: true))
-    #expect(!gate.finish())
+    let beganForced = gate.begin(force: true)
+    #expect(beganForced)
+    let noFurtherRerun = gate.finish()
+    #expect(!noFurtherRerun)
     #expect(!gate.isRunning)
 }

@@ -76,6 +76,10 @@ Versions follow [Semantic Versioning](https://semver.org).
   keeps Agent work stopped until the privileged backend confirms its exact
   restore, even if the Mac is plugged in or battery auto-pause is disabled
   during that recovery.
+- **Retry-safe and bounded Agent leases.** CLI and MCP acquire calls accept a
+  caller-generated UUID as an idempotency key. Exact retries recover the same
+  active lease, conflicting reuse is rejected, active lease count and metadata
+  are bounded, and the shared JSON file is written atomically with mode `0600`.
 
 - **The thermal safety net now guards the closed lid.** "Pause when running
   hot" is a protection for a Mac that cannot help itself: one held awake with

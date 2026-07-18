@@ -268,6 +268,16 @@ public final class ClosedDisplayAutoController {
     /// the Mac awake.
     public private(set) var confirmedMode: SleepHoldMode = .released
     public var isHolding: Bool { confirmedMode == .active }
+    /// Fail-closed readiness for unattended callers. A cached active mode is
+    /// not sufficient while a safety transition, stale backend call, or
+    /// compensating reconcile is still in flight.
+    public var hasConfirmedAutomaticProtection: Bool {
+        confirmedMode == .active
+            && desiredMode == .active
+            && !isSafetySuspended
+            && !backendStateNeedsReconcile
+            && reconcileTask == nil
+    }
     /// True only when current automatic demand deliberately relies on a live
     /// manual global setting instead of a scoped transaction.
     public private(set) var isUsingManualProtection = false

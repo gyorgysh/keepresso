@@ -42,8 +42,14 @@ public protocol SleepSettingReading: AnyObject, Sendable {
 /// exported connection objects, so a delayed reconnect replay cannot revive
 /// an older active hold after suspension or release already won.
 public final class SleepModeGenerationRegistry: @unchecked Sendable {
+    private struct StreamState {
+        var generation: UInt64
+        var ownerClientID: Int?
+        var highestClientID: Int
+    }
+
     private let lock = NSLock()
-    private var latestByStream: [String: UInt64] = [:]
+    private var statesByStream: [String: StreamState] = [:]
     private let maximumStreams: Int
 
     public init(maximumStreams: Int = 1_024) {
@@ -54,21 +60,84 @@ public final class SleepModeGenerationRegistry: @unchecked Sendable {
     public func apply(
         streamID: String,
         generation: UInt64,
-        operation: () -> Bool
+        clientID: Int,
+        operation: (_ previousClientID: Int?) -> Bool
     ) -> Bool {
         guard !streamID.isEmpty, streamID.utf8.count <= 128 else { return false }
         lock.lock()
         defer { lock.unlock() }
-        if let latest = latestByStream[streamID], generation < latest {
-            return false
+        if let state = statesByStream[streamID] {
+            guard generation >= state.generation else { return false }
+            if generation == state.generation {
+                // The live owner may retry its exact intent. Any takeover of
+                // this generation must come from a strictly newer listener
+                // connection, including after the owner disconnected.
+                let isLiveOwnerRetry = state.ownerClientID == clientID
+                guard isLiveOwnerRetry || clientID > state.highestClientID else {
+                    return false
+                }
+            }
+        } else {
+            guard statesByStream.count < maximumStreams else { return false }
         }
-        guard latestByStream[streamID] != nil || latestByStream.count < maximumStreams else {
-            return false
+
+        let previousState = statesByStream[streamID]
+        // After disconnect, the live owner is nil but the last accepted
+        // client remains the logical predecessor. Passing it lets domain
+        // state such as a surrendered fan hold migrate to the new connection.
+        let previousClientID = previousState?.ownerClientID
+            ?? previousState?.highestClientID
+        // Advance ownership before applying. The registry lock remains held
+        // while the engine moves the holder, making connection migration and
+        // its system reconciliation one indivisible operation to disconnect.
+        statesByStream[streamID] = StreamState(
+            generation: generation,
+            ownerClientID: clientID,
+            // A higher generation starts a new connection-order epoch. At
+            // the same generation, accepted reconnect IDs only increase.
+            highestClientID: generation == statesByStream[streamID]?.generation
+                ? max(statesByStream[streamID]?.highestClientID ?? clientID, clientID)
+                : clientID
+        )
+        return operation(previousClientID)
+    }
+
+    /// Compatibility form for callers that only need monotonic ordering.
+    public func apply(
+        streamID: String,
+        generation: UInt64,
+        operation: () -> Bool
+    ) -> Bool {
+        apply(streamID: streamID, generation: generation, clientID: 0) { _ in
+            operation()
         }
-        // Advance before applying. Even an ambiguous operation failure must
-        // fence older requests while the caller retries a newer generation.
-        latestByStream[streamID] = generation
-        return operation()
+    }
+
+    /// Release this connection's domain holder only if it still owns at
+    /// least one logical stream. Entries remain as generation tombstones, so
+    /// a delayed pre-release replay cannot revive a hold after disconnect.
+    public func clientDisconnected(
+        _ clientID: Int,
+        operation: () -> Void
+    ) {
+        lock.lock()
+        let ownedStreamIDs = statesByStream.compactMap { streamID, state in
+            state.ownerClientID == clientID ? streamID : nil
+        }
+        guard !ownedStreamIDs.isEmpty else {
+            lock.unlock()
+            return
+        }
+        for streamID in ownedStreamIDs {
+            statesByStream[streamID]?.ownerClientID = nil
+        }
+        // `highestClientID` remains in the tombstone. The disconnected owner
+        // and all older connections stay fenced, while a later connection
+        // with a larger listener client ID may take over the same generation.
+        // Keep the registry lock through the engine release. A reconnect
+        // cannot claim the stream between the ownership check and cleanup.
+        operation()
+        lock.unlock()
     }
 }
 
@@ -153,176 +222,6 @@ public final class NullFanControl: FanControlling {
     public func restoreAuto() -> Bool { false }
 }
 
-/// What the daemon still owes the system if it dies mid-hold: markers persist
-/// on disk (root-owned, under `/var/db`) and are settled on the next daemon
-/// launch, including the launchd `RunAtLoad` start after a reboot or crash.
-public enum HelperRestoreMarker: String, CaseIterable, Sendable {
-    /// We set `pmset disablesleep 1` for a hold and haven't set it back.
-    case sleepDisabled = "sleep-disabled"
-    /// We took `awdl0` down for a hold and haven't raised it.
-    case awdlDown = "awdl-down"
-    /// We forced the fans for a hold and haven't restored auto control.
-    case fanForced = "fan-forced"
-    /// A clear of wake schedules was requested but did not finish. Next
-    /// daemon launch retries the cancel so a disable cannot leave system
-    /// schedules behind after a crash. Successful schedules do not set this
-    /// (they are meant to survive reboots).
-    case wakeClearPending = "wake-clear-pending"
-}
-
-/// Persistence seam for the restore markers.
-public protocol HelperRestoreStatePersisting: AnyObject, Sendable {
-    func markers() -> Set<HelperRestoreMarker>
-    /// Persist or clear one recovery debt. A failed journal write must be
-    /// observable so callers never change privileged system state without a
-    /// durable recovery path.
-    @discardableResult
-    func set(_ marker: HelperRestoreMarker, present: Bool) -> Bool
-}
-
-/// Optional extension used by current helpers to remember the value that a
-/// scoped sleep hold must restore. Older marker stores remain compatible and
-/// fall back to `false`, matching the behavior of previous releases.
-public protocol HelperSleepRestoreValuePersisting: HelperRestoreStatePersisting {
-    func sleepRestoreValue() -> Bool?
-    @discardableResult
-    func setSleepRestoreValue(_ value: Bool?) -> Bool
-}
-
-/// Durable wake transaction written before the helper touches `pmset`.
-/// `pendingApply` means the desired schedule still needs a full clear and
-/// install. `applied` means the system commands all succeeded and only
-/// journal cleanup remains, so recovery must not cancel the schedule again.
-public struct HelperWakeTransaction: Codable, Equatable, Sendable {
-    public enum Phase: String, Codable, Sendable {
-        case pendingApply
-        case applied
-    }
-
-    public var oneShot: String?
-    public var repeatDays: String?
-    public var repeatTime: String?
-    public var phase: Phase
-
-    public init(
-        oneShot: String?,
-        repeatDays: String?,
-        repeatTime: String?,
-        phase: Phase = .pendingApply
-    ) {
-        self.oneShot = oneShot
-        self.repeatDays = repeatDays
-        self.repeatTime = repeatTime
-        self.phase = phase
-    }
-}
-
-/// Optional extension for helpers new enough to recover the full desired
-/// wake schedule, including after a daemon crash between apply and cleanup.
-public protocol HelperWakeTransactionPersisting: HelperRestoreStatePersisting {
-    func wakeTransaction() -> HelperWakeTransaction?
-    @discardableResult
-    func setWakeTransaction(_ transaction: HelperWakeTransaction?) -> Bool
-}
-
-/// Real marker store: one empty file per marker in a root-owned directory.
-public final class FileRestoreState:
-    HelperSleepRestoreValuePersisting,
-    HelperWakeTransactionPersisting
-{
-    private let directory: URL
-
-    public init(directory: URL = URL(fileURLWithPath: "/var/db/sh.gyorgy.keepresso.helper")) {
-        self.directory = directory
-    }
-
-    public func markers() -> Set<HelperRestoreMarker> {
-        Set(HelperRestoreMarker.allCases.filter {
-            FileManager.default.fileExists(atPath: url(for: $0).path)
-        })
-    }
-
-    @discardableResult
-    public func set(_ marker: HelperRestoreMarker, present: Bool) -> Bool {
-        let markerURL = url(for: marker)
-        do {
-            if present {
-                if FileManager.default.fileExists(atPath: markerURL.path) { return true }
-                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-                try Data().write(to: markerURL, options: .atomic)
-            } else if FileManager.default.fileExists(atPath: markerURL.path) {
-                try FileManager.default.removeItem(at: markerURL)
-            }
-            return true
-        } catch {
-            return false
-        }
-    }
-
-    public func sleepRestoreValue() -> Bool? {
-        guard let data = try? Data(contentsOf: sleepRestoreURL),
-              let value = String(data: data, encoding: .utf8)
-        else { return nil }
-        switch value.trimmingCharacters(in: .whitespacesAndNewlines) {
-        case "1": return true
-        case "0": return false
-        default: return nil
-        }
-    }
-
-    @discardableResult
-    public func setSleepRestoreValue(_ value: Bool?) -> Bool {
-        do {
-            guard let value else {
-                if FileManager.default.fileExists(atPath: sleepRestoreURL.path) {
-                    try FileManager.default.removeItem(at: sleepRestoreURL)
-                }
-                return true
-            }
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try Data((value ? "1" : "0").utf8).write(to: sleepRestoreURL, options: .atomic)
-            return true
-        } catch {
-            return false
-        }
-    }
-
-    public func wakeTransaction() -> HelperWakeTransaction? {
-        guard let data = try? Data(contentsOf: wakeTransactionURL) else { return nil }
-        return try? JSONDecoder().decode(HelperWakeTransaction.self, from: data)
-    }
-
-    @discardableResult
-    public func setWakeTransaction(_ transaction: HelperWakeTransaction?) -> Bool {
-        do {
-            guard let transaction else {
-                if FileManager.default.fileExists(atPath: wakeTransactionURL.path) {
-                    try FileManager.default.removeItem(at: wakeTransactionURL)
-                }
-                return true
-            }
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let data = try JSONEncoder().encode(transaction)
-            try data.write(to: wakeTransactionURL, options: .atomic)
-            return true
-        } catch {
-            return false
-        }
-    }
-
-    private func url(for marker: HelperRestoreMarker) -> URL {
-        directory.appendingPathComponent(marker.rawValue, isDirectory: false)
-    }
-
-    private var sleepRestoreURL: URL {
-        directory.appendingPathComponent("sleep-restore-value", isDirectory: false)
-    }
-
-    private var wakeTransactionURL: URL {
-        directory.appendingPathComponent("wake-transaction.json", isDirectory: false)
-    }
-}
-
 /// When the helper daemon process may exit, kept pure so it's testable (the
 /// daemon's timer feeds in its counters).
 ///
@@ -348,6 +247,69 @@ public enum HelperShutdownPolicy {
     }
 }
 
+/// Atomically coordinates XPC connection acceptance with daemon shutdown.
+/// Once an idle exit is claimed, later connections are rejected instead of
+/// being accepted in the gap between a client-count sample and `exit(0)`.
+public final class HelperShutdownGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var nextClientID = 1
+    private var liveConnections = 0
+    private var terminateRequested = false
+    private var consecutiveIdleChecks = 0
+    private var shuttingDown = false
+
+    public init() {}
+
+    /// Register an accepted listener connection and return its monotonic ID.
+    /// Nil means shutdown already won and the listener must reject it.
+    public func acceptConnection() -> Int? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !shuttingDown else { return nil }
+        let clientID = nextClientID
+        nextClientID += 1
+        liveConnections += 1
+        consecutiveIdleChecks = 0
+        return clientID
+    }
+
+    public func connectionEnded() {
+        lock.lock()
+        liveConnections = max(0, liveConnections - 1)
+        lock.unlock()
+    }
+
+    public func requestTermination() {
+        lock.lock()
+        terminateRequested = true
+        lock.unlock()
+    }
+
+    /// Check engine idleness while connection acceptance is blocked by this
+    /// gate's lock. A successful decision permanently closes the gate.
+    public func claimExitIfAllowed(holdsIdle: () -> Bool) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !shuttingDown else { return true }
+        guard liveConnections == 0, holdsIdle() else {
+            consecutiveIdleChecks = 0
+            return false
+        }
+        consecutiveIdleChecks += 1
+        guard terminateRequested || consecutiveIdleChecks >= 2 else {
+            return false
+        }
+        shuttingDown = true
+        return true
+    }
+
+    public var isShuttingDown: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return shuttingDown
+    }
+}
+
 /// The helper daemon's whole brain, kept out of the executable target so it
 /// can be unit-tested (the `keepresso-helper` binary is just XPC wiring around
 /// this). Tracks which client connections hold the sleep and AWDL switches,
@@ -370,19 +332,27 @@ public final class HelperEngine: @unchecked Sendable {
     private var awdlHolders: Set<Int> = []
     /// Client → wanted fan boost percent; the effective target is the max.
     private var fanHolders: [Int: Int] = [:]
+    /// Clients whose fan hold was surrendered after repeated firmware errors.
+    /// This status follows reconnect ownership and survives disconnect until
+    /// an explicit release, preventing same-intent replay from re-engaging it.
+    private var droppedFanClients: Set<Int> = []
     /// Consecutive failed fan writes; past the cap the engine surrenders the
     /// hold instead of fighting the firmware forever.
     private var fanFailureStreak = 0
     /// How many consecutive failed writes drop the fan hold.
     static let maxFanFailures = 5
-    /// Set once ``fanTick()`` gave up on a hold, so the state is inspectable
-    /// (and the app can tell "boost silently ended" from "still boosting").
-    private var fanHoldDroppedValue = false
-
+    /// Compatibility aggregate for tests and diagnostics. XPC callers query
+    /// their own connection through ``fanHoldDropped(client:)``.
     public var fanHoldDropped: Bool {
         lock.lock()
         defer { lock.unlock() }
-        return fanHoldDroppedValue
+        return !droppedFanClients.isEmpty
+    }
+
+    public func fanHoldDropped(client: Int) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return droppedFanClients.contains(client)
     }
 
     public init(
@@ -405,6 +375,7 @@ public final class HelperEngine: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         appliedSleepTarget = nil
+        guard state.snapshot() != nil else { return }
         _ = reconcileSleepTargetLocked()
         _ = reconcileAWDLLocked(reassertWhileHeld: false)
         _ = reconcileFanLocked(reassertWhileHeld: false)
@@ -417,13 +388,17 @@ public final class HelperEngine: @unchecked Sendable {
     public func setSleepDisabled(_ disabled: Bool) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        if state.markers().contains(.sleepDisabled) {
+        guard let snapshot = state.snapshot() else { return false }
+        if !sleepHolders.isEmpty || snapshot.sleepRestorePending {
             // A manual choice made during a scoped transaction becomes the
             // new restore baseline. The current active or suspended target
             // remains in force until the transaction closes. A marker, not
             // a live holder, defines the transaction because a failed final
             // restore has no holder left but still owns the saved baseline.
-            guard persistSleepRestoreValue(disabled) else { return false }
+            guard state.update({ value in
+                value.sleepOriginalDisablesleep = disabled
+                value.sleepRestorePending = true
+            }) else { return false }
             return reconcileSleepTargetLocked()
         }
         return runner.run("/usr/bin/pmset", ["-a", "disablesleep", disabled ? "1" : "0"])
@@ -440,7 +415,9 @@ public final class HelperEngine: @unchecked Sendable {
     public func scheduleOneShotWake(at dateString: String) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        guard !state.markers().contains(.wakeClearPending) else { return false }
+        guard let snapshot = state.snapshot(), snapshot.wakeTransaction == nil else {
+            return false
+        }
         return scheduleOneShotWakeLocked(at: dateString)
     }
 
@@ -448,7 +425,9 @@ public final class HelperEngine: @unchecked Sendable {
     public func scheduleRepeatingWake(days: String, time: String) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        guard !state.markers().contains(.wakeClearPending) else { return false }
+        guard let snapshot = state.snapshot(), snapshot.wakeTransaction == nil else {
+            return false
+        }
         return scheduleRepeatingWakeLocked(days: days, time: time)
     }
 
@@ -457,24 +436,12 @@ public final class HelperEngine: @unchecked Sendable {
     /// failure (say, the repeating pair surviving a failed `repeat cancel`)
     /// is retried at the next daemon launch instead of reported as done.
     public func clearWakeSchedules() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        let transaction = HelperWakeTransaction(
-            oneShot: nil,
-            repeatDays: nil,
-            repeatTime: nil
-        )
-        guard beginWakeTransactionLocked(transaction) else { return false }
-        // Once the durable intent and debt marker exist, the helper owns
-        // completion. A transient pmset or cleanup failure is retried by the
-        // periodic tick and must not make the app resubmit the same intent.
-        _ = retryWakeTransactionLocked()
-        return true
+        applyWakeSchedule(oneShot: nil, repeatDays: nil, repeatTime: nil)
     }
 
     /// Apply a full desired schedule in one step: clear previous installs,
     /// then install what remains. `nil` parts are not wanted; all `nil`
-    /// clears everything. Returns whether every required step succeeded.
+    /// clears everything. Returns once the desired transaction is durable.
     /// This is the one place that owns the clear-then-install ordering; the
     /// app calls it through a single XPC verb rather than sequencing the
     /// primitives itself. Returns true once the durable desired transaction
@@ -482,13 +449,17 @@ public final class HelperEngine: @unchecked Sendable {
     public func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        let wantsRepeat = repeatDays != nil && repeatTime != nil
+        guard (repeatDays == nil) == (repeatTime == nil) else { return false }
         let transaction = HelperWakeTransaction(
             oneShot: oneShot,
-            repeatDays: wantsRepeat ? repeatDays : nil,
-            repeatTime: wantsRepeat ? repeatTime : nil
+            repeatDays: repeatDays,
+            repeatTime: repeatTime,
+            phase: .pendingApply
         )
-        guard beginWakeTransactionLocked(transaction) else { return false }
+        guard state.update({ $0.wakeTransaction = transaction }) else { return false }
+        // Once the desired transaction is durable, the periodic tick owns
+        // completion. A transient command or cleanup failure must not invite
+        // the app to resubmit an already accepted intent.
         _ = retryWakeTransactionLocked()
         return true
     }
@@ -503,6 +474,35 @@ public final class HelperEngine: @unchecked Sendable {
         )
     }
 
+    /// Retry a wake transaction left by a failed command, crash, or journal
+    /// cleanup. The daemon timer may call this repeatedly; an applied phase
+    /// performs no further system mutation.
+    @discardableResult
+    public func recoverWakeTransaction() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return retryWakeTransactionLocked()
+    }
+
+    private func executeWakeTransaction(_ transaction: HelperWakeTransaction) -> Bool {
+        // cancelall drops every one-shot; repeat cancel drops the one system
+        // pair. Desired entries are installed only after both clears land.
+        guard cancelWakeSchedulesLocked() else { return false }
+        if let oneShot = transaction.oneShot,
+           !runner.run("/usr/bin/pmset", ["schedule", "wake", oneShot]) {
+            return false
+        }
+        if let repeatDays = transaction.repeatDays,
+           let repeatTime = transaction.repeatTime,
+           !runner.run(
+                "/usr/bin/pmset",
+                ["repeat", "wakeorpoweron", repeatDays, repeatTime]
+           ) {
+            return false
+        }
+        return true
+    }
+
     /// Take or release `client`'s hold on `disablesleep`. Writes the system
     /// only when the union of holders becomes non-empty or empty.
     public func setSleepHold(client: Int, holding: Bool) -> Bool {
@@ -513,9 +513,27 @@ public final class HelperEngine: @unchecked Sendable {
     /// clients coexist. The first non-released mode opens one journaled
     /// transaction; only the last release restores and clears its snapshot.
     public func setSleepHoldMode(client: Int, mode: SleepHoldMode) -> Bool {
+        setSleepHoldMode(client: client, replacing: nil, mode: mode)
+    }
+
+    /// Move one logical sleep stream from an older XPC connection to this
+    /// client and apply its latest mode under one engine lock. The registry
+    /// calls this while holding its own ownership lock, so invalidation of the
+    /// previous connection cannot remove the migrated holder.
+    public func setSleepHoldMode(
+        client: Int,
+        replacing previousClient: Int?,
+        mode: SleepHoldMode
+    ) -> Bool {
         lock.lock()
         defer { lock.unlock() }
+
+        let transactionWasOpen = !sleepHolders.isEmpty
+        if let previousClient, previousClient != client {
+            sleepHolders.removeValue(forKey: previousClient)
+        }
         if mode != .released,
+           !transactionWasOpen,
            sleepHolders.isEmpty,
            !beginSleepTransactionLocked() {
             return false
@@ -530,9 +548,22 @@ public final class HelperEngine: @unchecked Sendable {
 
     /// Take or release `client`'s hold on `awdl0 down`.
     public func setAWDLHold(client: Int, holding: Bool) -> Bool {
+        setAWDLHold(client: client, replacing: nil, holding: holding)
+    }
+
+    /// Move one logical AWDL stream between connections without creating a
+    /// second union holder or an up/down edge during reconnect.
+    public func setAWDLHold(
+        client: Int,
+        replacing previousClient: Int?,
+        holding: Bool
+    ) -> Bool {
         lock.lock()
         defer { lock.unlock() }
         return applyAWDLUnion {
+            if let previousClient, previousClient != client {
+                awdlHolders.remove(previousClient)
+            }
             if holding { awdlHolders.insert(client) } else { awdlHolders.remove(client) }
         }
     }
@@ -541,15 +572,38 @@ public final class HelperEngine: @unchecked Sendable {
     /// holders the hottest request wins (the max percent). Writes only when
     /// the effective target changes.
     public func setFanHold(client: Int, holding: Bool, percent: Int) -> Bool {
+        setFanHold(client: client, replacing: nil, holding: holding, percent: percent)
+    }
+
+    /// Move one logical fan stream between connections while preserving the
+    /// union's effective target across a reconnect retry.
+    public func setFanHold(
+        client: Int,
+        replacing previousClient: Int?,
+        holding: Bool,
+        percent: Int
+    ) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        return applyFanUnion {
-            if holding {
+        if let previousClient, previousClient != client,
+           droppedFanClients.remove(previousClient) != nil {
+            droppedFanClients.insert(client)
+        }
+        if !holding {
+            droppedFanClients.remove(client)
+        }
+        let replayingDroppedHold = holding && droppedFanClients.contains(client)
+        let reconciled = applyFanUnion {
+            if let previousClient, previousClient != client {
+                fanHolders.removeValue(forKey: previousClient)
+            }
+            if holding, !replayingDroppedHold {
                 fanHolders[client] = max(30, min(percent, 100))
             } else {
                 fanHolders.removeValue(forKey: client)
             }
         }
+        return replayingDroppedHold ? false : reconciled
     }
 
     /// A client connection died (app quit or crashed): release everything it
@@ -562,6 +616,31 @@ public final class HelperEngine: @unchecked Sendable {
         _ = reconcileSleepTargetLocked()
         _ = applyAWDLUnion { awdlHolders.remove(client) }
         _ = applyFanUnion { fanHolders.removeValue(forKey: client) }
+    }
+
+    /// Domain-specific disconnects let stream registries guard each cleanup
+    /// independently. A connection that no longer owns a migrated stream is
+    /// never allowed to remove that stream's new holder.
+    public func sleepClientDisconnected(_ client: Int) {
+        lock.lock()
+        sleepHolders.removeValue(forKey: client)
+        _ = reconcileSleepTargetLocked()
+        lock.unlock()
+    }
+
+    public func awdlClientDisconnected(_ client: Int) {
+        lock.lock()
+        _ = applyAWDLUnion { awdlHolders.remove(client) }
+        lock.unlock()
+    }
+
+    public func fanClientDisconnected(_ client: Int) {
+        lock.lock()
+        // Keep a surrendered status as a reconnect tombstone. A later owner
+        // receives this client as `replacing` and migrates the status. Only an
+        // explicit release clears it.
+        _ = applyFanUnion { fanHolders.removeValue(forKey: client) }
+        lock.unlock()
     }
 
     /// Re-down `awdl0` while any hold is live: macOS re-raises the interface
@@ -607,10 +686,12 @@ public final class HelperEngine: @unchecked Sendable {
     /// it on demand).
     public var isIdle: Bool {
         lock.lock()
-        let holdsEmpty = sleepHolders.isEmpty && awdlHolders.isEmpty && fanHolders.isEmpty
-        let debtsEmpty = state.markers().isEmpty
-        lock.unlock()
-        return holdsEmpty && debtsEmpty
+        defer { lock.unlock() }
+        let holdsEmpty = sleepHolders.isEmpty
+            && awdlHolders.isEmpty
+            && fanHolders.isEmpty
+        guard let snapshot = state.snapshot() else { return false }
+        return holdsEmpty && !snapshot.hasRecoveryDebt
     }
 
     // MARK: - CLI symlink
@@ -645,21 +726,19 @@ public final class HelperEngine: @unchecked Sendable {
     // MARK: - Union edges (call with the lock held)
 
     private func beginSleepTransactionLocked() -> Bool {
-        if state.markers().contains(.sleepDisabled) {
+        guard let snapshot = state.snapshot() else { return false }
+        if snapshot.sleepRestorePending {
             // Reuse an unsettled debt. Sampling the currently stuck value here
             // would overwrite the real original and make it permanent.
-            return true
+            return snapshot.sleepOriginalDisablesleep != nil
         }
         guard let original = sleepSettingReader.sleepIsDisabled() else {
             return false
         }
-        guard persistSleepRestoreValue(original) else { return false }
-        guard state.set(.sleepDisabled, present: true) else {
-            if state.set(.sleepDisabled, present: false) {
-                _ = (state as? HelperSleepRestoreValuePersisting)?.setSleepRestoreValue(nil)
-            }
-            return false
-        }
+        guard state.update({ value in
+            value.sleepOriginalDisablesleep = original
+            value.sleepRestorePending = true
+        }) else { return false }
         appliedSleepTarget = original
         return true
     }
@@ -673,20 +752,21 @@ public final class HelperEngine: @unchecked Sendable {
     }
 
     private func reconcileSleepTargetLocked() -> Bool {
+        guard let snapshot = state.snapshot() else { return false }
         let mode = effectiveSleepModeLocked()
         if mode == .released {
-            guard state.markers().contains(.sleepDisabled) else {
+            guard snapshot.sleepRestorePending else {
                 appliedSleepTarget = nil
                 return true
             }
-            let original = persistedSleepRestoreValue() ?? false
+            guard let original = snapshot.sleepOriginalDisablesleep else { return false }
             guard applyAndConfirmSleepTargetLocked(original) else { return false }
             guard clearPersistedSleepRestore() else { return false }
             appliedSleepTarget = nil
             return true
         }
 
-        if !state.markers().contains(.sleepDisabled),
+        if !snapshot.sleepRestorePending,
            !beginSleepTransactionLocked() {
             return false
         }
@@ -718,58 +798,61 @@ public final class HelperEngine: @unchecked Sendable {
     }
 
     private func applyAWDLUnion(_ mutate: () -> Void) -> Bool {
-        let original = awdlHolders
+        let originalHolders = awdlHolders
         let before = !awdlHolders.isEmpty
         mutate()
         let after = !awdlHolders.isEmpty
         guard before != after else { return true }
-        if after, !state.set(.awdlDown, present: true) {
-            awdlHolders = original
+        guard let snapshot = state.snapshot() else {
+            // A new engage cannot proceed without first recording debt. A
+            // release keeps its holder removal, so reconnect ownership does
+            // not strand the old connection while the existing debt waits
+            // for storage to recover.
+            if !before, after { awdlHolders = originalHolders }
+            return false
+        }
+        if after,
+           !state.update({ $0.awdlRestorePending = true }) {
+            awdlHolders = originalHolders
+            return false
+        }
+        if !after, !snapshot.awdlRestorePending {
+            awdlHolders = originalHolders
             return false
         }
         let ok = runner.run("/sbin/ifconfig", ["awdl0", after ? "down" : "up"])
-        guard ok else { return false }
-        if !after { return state.set(.awdlDown, present: false) }
-        return true
+        if !after, ok {
+            return state.update { $0.awdlRestorePending = false }
+        }
+        return ok
     }
 
     private func reconcileAWDLLocked(reassertWhileHeld: Bool) -> Bool {
+        guard let snapshot = state.snapshot() else { return false }
         if !awdlHolders.isEmpty {
             guard reassertWhileHeld else { return true }
-            if !state.markers().contains(.awdlDown),
-               !state.set(.awdlDown, present: true) {
+            if !snapshot.awdlRestorePending,
+               !state.update({ $0.awdlRestorePending = true }) {
                 return false
             }
             return runner.run("/sbin/ifconfig", ["awdl0", "down"])
         }
-        guard state.markers().contains(.awdlDown) else { return true }
+        guard snapshot.awdlRestorePending else { return true }
         guard runner.run("/sbin/ifconfig", ["awdl0", "up"]) else { return false }
-        return state.set(.awdlDown, present: false)
-    }
-
-    private func persistedSleepRestoreValue() -> Bool? {
-        (state as? HelperSleepRestoreValuePersisting)?.sleepRestoreValue()
-    }
-
-    private func persistSleepRestoreValue(_ value: Bool) -> Bool {
-        guard let persistence = state as? HelperSleepRestoreValuePersisting else {
-            // Legacy stores can safely restore the historical default only.
-            return value == false
-        }
-        return persistence.setSleepRestoreValue(value)
+        return state.update { $0.awdlRestorePending = false }
     }
 
     private func clearPersistedSleepRestore() -> Bool {
-        // Keep the exact snapshot until the marker itself is gone. A crash
-        // between these operations then still has enough information to retry.
-        guard state.set(.sleepDisabled, present: false) else { return false }
-        return (state as? HelperSleepRestoreValuePersisting)?.setSleepRestoreValue(nil) ?? true
+        state.update { snapshot in
+            snapshot.sleepRestorePending = false
+            snapshot.sleepOriginalDisablesleep = nil
+        }
     }
 
     /// Fan version of the union edge: the effective target is the max percent
     /// across holders, and a change in that target (including to or from
-    /// nothing) is what writes hardware. Engaging resets the failure streak
-    /// and the dropped flag: a fresh hold gets a fresh chance.
+    /// nothing) is what writes hardware. Engaging resets the failure streak;
+    /// surrendered status is client-scoped and clears only on release.
     ///
     /// The restore marker is debt-by-attempt, not debt-by-success: a forced
     /// write can partially land (mode set on one fan, refused on the next)
@@ -778,34 +861,45 @@ public final class HelperEngine: @unchecked Sendable {
     /// restore that actually succeeded. A spurious restore of already-auto
     /// fans is harmless, forced fans with no marker are not.
     private func applyFanUnion(_ mutate: () -> Void) -> Bool {
-        let original = fanHolders
+        let originalHolders = fanHolders
         let before = fanHolders.values.max()
         mutate()
         let after = fanHolders.values.max()
         guard before != after else { return true }
+        guard let snapshot = state.snapshot() else {
+            // Roll back only a brand-new forced state. Existing targets and
+            // releases already have recovery debt, so keeping the migrated
+            // ownership lets a later tick finish after storage recovers.
+            if before == nil, after != nil { fanHolders = originalHolders }
+            return false
+        }
         if let target = after {
-            if !state.markers().contains(.fanForced),
-               !state.set(.fanForced, present: true) {
-                fanHolders = original
+            if !snapshot.fanRestorePending,
+               !state.update({ $0.fanRestorePending = true }) {
+                if before == nil { fanHolders = originalHolders }
                 return false
             }
             fanFailureStreak = 0
-            fanHoldDroppedValue = false
             return writeFanTarget(target)
         }
+        guard snapshot.fanRestorePending else {
+            fanHolders = originalHolders
+            return false
+        }
         guard fans.restoreAuto() else { return false }
-        return state.set(.fanForced, present: false)
+        return state.update { $0.fanRestorePending = false }
     }
 
     private func reconcileFanLocked(reassertWhileHeld: Bool) -> Bool {
+        guard let snapshot = state.snapshot() else { return false }
         guard let target = fanHolders.values.max() else {
-            guard state.markers().contains(.fanForced) else { return true }
+            guard snapshot.fanRestorePending else { return true }
             guard fans.restoreAuto() else { return false }
-            return state.set(.fanForced, present: false)
+            return state.update { $0.fanRestorePending = false }
         }
         guard reassertWhileHeld else { return true }
-        if !state.markers().contains(.fanForced),
-           !state.set(.fanForced, present: true) {
+        if !snapshot.fanRestorePending,
+           !state.update({ $0.fanRestorePending = true }) {
             return false
         }
         if writeFanTarget(target) {
@@ -814,11 +908,11 @@ public final class HelperEngine: @unchecked Sendable {
         }
         fanFailureStreak += 1
         guard fanFailureStreak >= Self.maxFanFailures else { return false }
+        droppedFanClients.formUnion(fanHolders.keys)
         fanHolders.removeAll()
         fanFailureStreak = 0
-        fanHoldDroppedValue = true
         guard fans.restoreAuto() else { return false }
-        return state.set(.fanForced, present: false)
+        return state.update { $0.fanRestorePending = false }
     }
 
     private func scheduleOneShotWakeLocked(at dateString: String) -> Bool {
@@ -839,54 +933,19 @@ public final class HelperEngine: @unchecked Sendable {
         return oneShots && repeating
     }
 
-    private func beginWakeTransactionLocked(_ transaction: HelperWakeTransaction) -> Bool {
-        guard persistWakeTransactionLocked(transaction) else { return false }
-        guard state.set(.wakeClearPending, present: true) else { return false }
-        return true
-    }
-
     private func retryWakeTransactionLocked() -> Bool {
-        guard state.markers().contains(.wakeClearPending) else { return true }
-        let persistence = state as? HelperWakeTransactionPersisting
-        var transaction = persistence?.wakeTransaction() ?? HelperWakeTransaction(
-            oneShot: nil,
-            repeatDays: nil,
-            repeatTime: nil
-        )
+        guard let snapshot = state.snapshot() else { return false }
+        guard var transaction = snapshot.wakeTransaction else { return true }
         if transaction.phase == .pendingApply {
-            guard cancelWakeSchedulesLocked() else { return false }
-            var ok = true
-            if let oneShot = transaction.oneShot {
-                ok = scheduleOneShotWakeLocked(at: oneShot) && ok
-            }
-            if let repeatDays = transaction.repeatDays,
-               let repeatTime = transaction.repeatTime {
-                ok = scheduleRepeatingWakeLocked(days: repeatDays, time: repeatTime) && ok
-            }
-            guard ok else { return false }
+            guard executeWakeTransaction(transaction) else { return false }
             transaction.phase = .applied
-            if let persistence {
-                // Persist confirmation before marker cleanup. If unlinking
-                // the marker fails, every later tick skips the pmset writes
-                // and retries cleanup only, including after daemon restart.
-                guard persistence.setWakeTransaction(transaction) else { return false }
-            }
+            // Persist confirmation before cleanup. If cleanup fails, every
+            // later tick skips system writes and retries only the journal.
+            guard state.update({ value in
+                value.wakeTransaction = transaction
+            }) else { return false }
         }
-        guard state.set(.wakeClearPending, present: false) else { return false }
-        _ = persistence?.setWakeTransaction(nil)
-        return true
-    }
-
-    private func persistWakeTransactionLocked(_ transaction: HelperWakeTransaction) -> Bool {
-        guard let persistence = state as? HelperWakeTransactionPersisting else {
-            // A legacy store can safely represent only a pending clear via
-            // the marker itself. Installing a schedule without its durable
-            // desired value would make crash recovery erase it permanently.
-            return transaction.oneShot == nil
-                && transaction.repeatDays == nil
-                && transaction.repeatTime == nil
-        }
-        return persistence.setWakeTransaction(transaction)
+        return state.update { $0.wakeTransaction = nil }
     }
 
     /// One forced write, with the single unlock-and-retry newer firmware

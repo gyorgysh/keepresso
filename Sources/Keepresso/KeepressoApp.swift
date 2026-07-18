@@ -220,7 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // The helper daemon can be "enabled" yet unlaunchable (launchd's
             // record goes stale after an app update plus a reboot); check it
             // before the first new engage.
-            model.verifyHelper()
+            await model.verifyHelperAndWait()
             ticker.start()
             // Register the global keep-awake toggle shortcut, if the user set one.
             model.registerHotKey()

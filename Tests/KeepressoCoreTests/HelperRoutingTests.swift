@@ -180,6 +180,22 @@ private final class FakeFallbackSleepControl: SleepSettingControlling, @unchecke
     #expect(client.calls.isEmpty)
 }
 
+@Test func routedSleepBackendSelectionSamplesHelperAvailabilityOnce() {
+    let client = FakeHelperClient()
+    let fallback = FakeFallbackSleepWatchdog()
+    let availability = SequencedAvailability([true, false])
+    let routed = RoutedSleepWatchdog(
+        daemon: HelperDaemonSleepWatchdog(helper: client),
+        fallback: fallback,
+        helperInstalled: { availability.next() }
+    )
+
+    #expect(routed.setMode(.active))
+    #expect(availability.callCount == 1)
+    #expect(client.calls == ["setSleepHold(true)"])
+    #expect(fallback.modes.isEmpty)
+}
+
 @Test func routedWatchdogFailureMessageNamesTheActiveBackend() {
     // A failed engage through the daemon is an XPC failure, not a file-write
     // one; the message must match whichever backend is actually in use.
@@ -284,5 +300,22 @@ private final class LockedFlag: @unchecked Sendable {
     var value: Bool {
         get { lock.lock(); defer { lock.unlock() }; return stored }
         set { lock.lock(); stored = newValue; lock.unlock() }
+    }
+}
+
+private final class SequencedAvailability: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [Bool]
+    private(set) var callCount = 0
+
+    init(_ values: [Bool]) {
+        self.values = values
+    }
+
+    func next() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        callCount += 1
+        return values.isEmpty ? false : values.removeFirst()
     }
 }

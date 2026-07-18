@@ -26,6 +26,52 @@ public struct AgentLeaseMetadata: Codable, Equatable, Hashable, Sendable {
     }
 }
 
+/// Resource ceilings for data accepted from local CLI and MCP clients.
+/// Leases are intentionally generous for normal task labels and messages, but
+/// bounded so a forgotten or hostile local client cannot grow the shared file
+/// without limit or force every status read to allocate arbitrary memory.
+public enum AgentLeaseLimits {
+    public static let maximumActiveLeaseCount = 256
+    public static let maximumTerminalRetentionLimit = 1_024
+    public static let maximumAttributeCount = 16
+    public static let maximumMetadataBytes = 4_096
+    public static let maximumFieldBytes = 1_024
+    public static let maximumAttributeKeyBytes = 128
+    public static let maximumAttributeValueBytes = 2_048
+    public static let maximumPersistenceBytes = 4 * 1_024 * 1_024
+
+    static func validMetadata(_ metadata: AgentLeaseMetadata) -> Bool {
+        let owner = metadata.owner.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !owner.isEmpty,
+              metadata.attributes.count <= maximumAttributeCount,
+              validField(metadata.owner),
+              metadata.agent.map(validField) ?? true,
+              metadata.task.map(validField) ?? true
+        else { return false }
+
+        var total = metadata.owner.utf8.count
+            + (metadata.agent?.utf8.count ?? 0)
+            + (metadata.task?.utf8.count ?? 0)
+        for (key, value) in metadata.attributes {
+            guard !key.isEmpty,
+                  key.utf8.count <= maximumAttributeKeyBytes,
+                  value.utf8.count <= maximumAttributeValueBytes
+            else { return false }
+            total += key.utf8.count + value.utf8.count
+            guard total <= maximumMetadataBytes else { return false }
+        }
+        return total <= maximumMetadataBytes
+    }
+
+    static func validMessage(_ message: String?) -> Bool {
+        message.map { $0.utf8.count <= maximumAttributeValueBytes } ?? true
+    }
+
+    private static func validField(_ value: String) -> Bool {
+        value.utf8.count <= maximumFieldBytes
+    }
+}
+
 /// The live or terminal state of an explicit AI keep-awake lease.
 public enum AgentLeaseState: Equatable, Hashable, Sendable {
     case active
@@ -223,6 +269,12 @@ public protocol AgentLeasePersisting: AnyObject {
 public enum FileAgentLeaseStoreError: Error, Equatable, Sendable {
     case cannotOpenLock(path: String, errorNumber: Int32)
     case cannotLock(path: String, errorNumber: Int32)
+    case cannotSetPermissions(path: String, errorNumber: Int32)
+    case cannotCreateTemporary(path: String, errorNumber: Int32)
+    case cannotRead(path: String, errorNumber: Int32)
+    case cannotWrite(path: String, errorNumber: Int32)
+    case cannotReplace(path: String, errorNumber: Int32)
+    case persistenceTooLarge(path: String, bytes: Int)
     case unsupportedSchemaVersion(Int)
     case cannotQuarantine(path: String)
 }
@@ -230,6 +282,8 @@ public enum FileAgentLeaseStoreError: Error, Equatable, Sendable {
 public enum AgentLeasePersistenceValidationError: Error, Equatable, Sendable {
     case duplicateLeaseID(UUID)
     case invalidLease(UUID)
+    case tooManyLeases(Int)
+    case persistenceTooLarge(Int)
 }
 
 /// Stable JSON codec shared by the app, CLI, Skill, and MCP adapters.
@@ -238,10 +292,17 @@ public enum AgentLeasePersistenceValidationError: Error, Equatable, Sendable {
 public enum AgentLeaseFileCodec {
     public static func encode(_ state: AgentLeasePersistenceState) throws -> Data {
         try validate(state)
-        return try encoder.encode(state)
+        let data = try encoder.encode(state)
+        guard data.count <= AgentLeaseLimits.maximumPersistenceBytes else {
+            throw AgentLeasePersistenceValidationError.persistenceTooLarge(data.count)
+        }
+        return data
     }
 
     public static func decode(_ data: Data) throws -> AgentLeasePersistenceState {
+        guard data.count <= AgentLeaseLimits.maximumPersistenceBytes else {
+            throw AgentLeasePersistenceValidationError.persistenceTooLarge(data.count)
+        }
         let state = try decoder.decode(AgentLeasePersistenceState.self, from: data)
         guard state.schemaVersion == AgentLeasePersistenceState.currentSchemaVersion else {
             throw FileAgentLeaseStoreError.unsupportedSchemaVersion(state.schemaVersion)
@@ -251,12 +312,19 @@ public enum AgentLeaseFileCodec {
     }
 
     private static func validate(_ state: AgentLeasePersistenceState) throws {
+        let maximumRecords = AgentLeaseLimits.maximumActiveLeaseCount
+            + AgentLeaseLimits.maximumTerminalRetentionLimit
+        guard state.leases.count <= maximumRecords else {
+            throw AgentLeasePersistenceValidationError.tooManyLeases(state.leases.count)
+        }
+        guard state.leases.count(where: \.isActive) <= AgentLeaseLimits.maximumActiveLeaseCount else {
+            throw AgentLeasePersistenceValidationError.tooManyLeases(state.leases.count)
+        }
         var identifiers: Set<UUID> = []
         for lease in state.leases {
             guard identifiers.insert(lease.id).inserted else {
                 throw AgentLeasePersistenceValidationError.duplicateLeaseID(lease.id)
             }
-            let owner = lease.metadata.owner.trimmingCharacters(in: .whitespacesAndNewlines)
             let timestamps = [
                 lease.acquiredAt,
                 lease.heartbeatAt,
@@ -280,7 +348,15 @@ public enum AgentLeaseFileCodec {
             } else {
                 completionIsConsistent = false
             }
-            guard !owner.isEmpty,
+            let terminalReasonIsValid: Bool
+            switch lease.state {
+            case .failure(let reason), .cancelled(let reason):
+                terminalReasonIsValid = AgentLeaseLimits.validMessage(reason)
+            case .active, .success, .timeout:
+                terminalReasonIsValid = true
+            }
+            guard AgentLeaseLimits.validMetadata(lease.metadata),
+                  terminalReasonIsValid,
                   timestampsAreFinite,
                   maximumDeadline.timeIntervalSinceReferenceDate.isFinite,
                   ttlDeadline.timeIntervalSinceReferenceDate.isFinite,
@@ -394,7 +470,11 @@ public final class FileAgentLeaseStore: AgentLeasePersisting, @unchecked Sendabl
         let directory = fileURL.deletingLastPathComponent()
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
 
-        let descriptor = Darwin.open(lockURL.path, O_CREAT | O_RDWR, mode_t(0o600))
+        let descriptor = Darwin.open(
+            lockURL.path,
+            O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW,
+            mode_t(0o600)
+        )
         guard descriptor >= 0 else {
             throw FileAgentLeaseStoreError.cannotOpenLock(
                 path: lockURL.path,
@@ -402,6 +482,13 @@ public final class FileAgentLeaseStore: AgentLeasePersisting, @unchecked Sendabl
             )
         }
         defer { Darwin.close(descriptor) }
+
+        guard Darwin.fchmod(descriptor, mode_t(0o600)) == 0 else {
+            throw FileAgentLeaseStoreError.cannotSetPermissions(
+                path: lockURL.path,
+                errorNumber: errno
+            )
+        }
 
         guard flock(descriptor, LOCK_EX) == 0 else {
             throw FileAgentLeaseStoreError.cannotLock(
@@ -415,7 +502,13 @@ public final class FileAgentLeaseStore: AgentLeasePersisting, @unchecked Sendabl
 
     private func loadLocked() throws -> AgentLeasePersistenceState {
         guard fileManager.fileExists(atPath: fileURL.path) else { return .empty }
-        let data = try Data(contentsOf: fileURL)
+        let data: Data
+        do {
+            data = try readLockedData()
+        } catch FileAgentLeaseStoreError.persistenceTooLarge {
+            try quarantineLocked()
+            return .empty
+        }
         guard !data.isEmpty else {
             try quarantineLocked()
             return .empty
@@ -433,11 +526,139 @@ public final class FileAgentLeaseStore: AgentLeasePersisting, @unchecked Sendabl
 
     private func writeLocked(_ state: AgentLeasePersistenceState) throws {
         let data = try AgentLeaseFileCodec.encode(state)
-        try data.write(to: fileURL, options: .atomic)
-        try? fileManager.setAttributes(
-            [.posixPermissions: 0o600],
-            ofItemAtPath: fileURL.path
+        let temporary = fileURL.deletingLastPathComponent().appendingPathComponent(
+            ".\(fileURL.lastPathComponent).tmp-\(UUID().uuidString)",
+            isDirectory: false
         )
+        let descriptor = Darwin.open(
+            temporary.path,
+            O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC,
+            mode_t(0o600)
+        )
+        guard descriptor >= 0 else {
+            throw FileAgentLeaseStoreError.cannotCreateTemporary(
+                path: temporary.path,
+                errorNumber: errno
+            )
+        }
+        var descriptorOpen = true
+        var replaced = false
+        defer {
+            if descriptorOpen { Darwin.close(descriptor) }
+            if !replaced { _ = Darwin.unlink(temporary.path) }
+        }
+
+        guard Darwin.fchmod(descriptor, mode_t(0o600)) == 0 else {
+            throw FileAgentLeaseStoreError.cannotSetPermissions(
+                path: temporary.path,
+                errorNumber: errno
+            )
+        }
+        try data.withUnsafeBytes { bytes in
+            var offset = 0
+            while offset < bytes.count {
+                let written = Darwin.write(
+                    descriptor,
+                    bytes.baseAddress?.advanced(by: offset),
+                    bytes.count - offset
+                )
+                if written < 0, errno == EINTR { continue }
+                guard written > 0 else {
+                    throw FileAgentLeaseStoreError.cannotWrite(
+                        path: temporary.path,
+                        errorNumber: errno
+                    )
+                }
+                offset += written
+            }
+        }
+        guard Darwin.fsync(descriptor) == 0 else {
+            throw FileAgentLeaseStoreError.cannotWrite(
+                path: temporary.path,
+                errorNumber: errno
+            )
+        }
+        guard Darwin.close(descriptor) == 0 else {
+            descriptorOpen = false
+            throw FileAgentLeaseStoreError.cannotWrite(
+                path: temporary.path,
+                errorNumber: errno
+            )
+        }
+        descriptorOpen = false
+        guard Darwin.rename(temporary.path, fileURL.path) == 0 else {
+            throw FileAgentLeaseStoreError.cannotReplace(
+                path: fileURL.path,
+                errorNumber: errno
+            )
+        }
+        replaced = true
+
+        // Persist the rename itself when the filesystem supports directory
+        // fsync. A failure here does not make the already-atomic file unsafe.
+        let directoryPath = fileURL.deletingLastPathComponent().path
+        let directoryDescriptor = Darwin.open(directoryPath, O_RDONLY | O_CLOEXEC)
+        if directoryDescriptor >= 0 {
+            _ = Darwin.fsync(directoryDescriptor)
+            Darwin.close(directoryDescriptor)
+        }
+    }
+
+    private func readLockedData() throws -> Data {
+        let descriptor = Darwin.open(fileURL.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)
+        guard descriptor >= 0 else {
+            throw FileAgentLeaseStoreError.cannotRead(
+                path: fileURL.path,
+                errorNumber: errno
+            )
+        }
+        defer { Darwin.close(descriptor) }
+
+        guard Darwin.fchmod(descriptor, mode_t(0o600)) == 0 else {
+            throw FileAgentLeaseStoreError.cannotSetPermissions(
+                path: fileURL.path,
+                errorNumber: errno
+            )
+        }
+
+        var status = stat()
+        guard Darwin.fstat(descriptor, &status) == 0 else {
+            throw FileAgentLeaseStoreError.cannotRead(
+                path: fileURL.path,
+                errorNumber: errno
+            )
+        }
+        guard status.st_size <= AgentLeaseLimits.maximumPersistenceBytes else {
+            throw FileAgentLeaseStoreError.persistenceTooLarge(
+                path: fileURL.path,
+                bytes: Int(status.st_size)
+            )
+        }
+
+        var data = Data()
+        data.reserveCapacity(Int(status.st_size))
+        var buffer = [UInt8](repeating: 0, count: 64 * 1_024)
+        while true {
+            let count = buffer.withUnsafeMutableBytes {
+                Darwin.read(descriptor, $0.baseAddress, $0.count)
+            }
+            if count < 0, errno == EINTR { continue }
+            guard count >= 0 else {
+                throw FileAgentLeaseStoreError.cannotRead(
+                    path: fileURL.path,
+                    errorNumber: errno
+                )
+            }
+            if count == 0 { break }
+            data.append(contentsOf: buffer.prefix(count))
+            guard data.count <= AgentLeaseLimits.maximumPersistenceBytes else {
+                throw FileAgentLeaseStoreError.persistenceTooLarge(
+                    path: fileURL.path,
+                    bytes: data.count
+                )
+            }
+        }
+        return data
     }
 
     private func quarantineLocked() throws {
@@ -531,9 +752,11 @@ public struct AgentLeaseSnapshot: Codable, Equatable, Sendable {
 
 public enum AgentLeaseRegistryError: Error, Equatable, Sendable {
     case invalidOwner
+    case invalidMetadata
     case invalidTTL
     case invalidMaxLifetime
     case invalidTerminalRetentionLimit
+    case activeLeaseLimitReached
     case leaseAlreadyExists(UUID)
     case leaseNotFound(UUID)
     case leaseNotActive(UUID)
@@ -593,7 +816,9 @@ public final class AgentLeaseRegistry {
         guard Self.isValidDuration(defaultMaxLifetime, atMost: Self.maximumAllowedLifetime) else {
             throw AgentLeaseRegistryError.invalidMaxLifetime
         }
-        guard terminalRetentionLimit >= 0 else {
+        guard terminalRetentionLimit >= 0,
+              terminalRetentionLimit <= AgentLeaseLimits.maximumTerminalRetentionLimit
+        else {
             throw AgentLeaseRegistryError.invalidTerminalRetentionLimit
         }
 
@@ -641,6 +866,13 @@ public final class AgentLeaseRegistry {
         persisted.leases.contains { $0.isActive }
     }
 
+    func resolvedAcquireDurations(
+        ttl: TimeInterval?,
+        maxLifetime: TimeInterval?
+    ) -> (ttl: TimeInterval, maxLifetime: TimeInterval) {
+        (ttl ?? defaultTTL, maxLifetime ?? defaultMaxLifetime)
+    }
+
     /// Acquire a new lease. Supplying an id lets an adapter make retries
     /// idempotent by checking ``status(for:refreshFromDisk:)`` first.
     @discardableResult
@@ -653,8 +885,12 @@ public final class AgentLeaseRegistry {
         guard !metadata.owner.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw AgentLeaseRegistryError.invalidOwner
         }
-        let wantedTTL = ttl ?? defaultTTL
-        let wantedMaximum = maxLifetime ?? defaultMaxLifetime
+        guard AgentLeaseLimits.validMetadata(metadata) else {
+            throw AgentLeaseRegistryError.invalidMetadata
+        }
+        let durations = resolvedAcquireDurations(ttl: ttl, maxLifetime: maxLifetime)
+        let wantedTTL = durations.ttl
+        let wantedMaximum = durations.maxLifetime
         guard Self.isValidDuration(wantedTTL, atMost: Self.maximumAllowedLifetime) else {
             throw AgentLeaseRegistryError.invalidTTL
         }
@@ -675,6 +911,10 @@ public final class AgentLeaseRegistry {
             events.append(contentsOf: Self.expireDueLeases(in: &state, at: instant))
             guard !state.leases.contains(where: { $0.id == id }) else {
                 operationError = .leaseAlreadyExists(id)
+                return
+            }
+            guard state.leases.count(where: \.isActive) < AgentLeaseLimits.maximumActiveLeaseCount else {
+                operationError = .activeLeaseLimitReached
                 return
             }
             let lease = AgentWakeLease(
@@ -761,6 +1001,14 @@ public final class AgentLeaseRegistry {
         outcome: AgentLeaseReleaseOutcome = .success,
         message: String? = nil
     ) throws -> AgentWakeLease {
+        let outcomeReason: String?
+        switch outcome {
+        case .success: outcomeReason = nil
+        case .failure(let reason), .cancelled(let reason): outcomeReason = reason
+        }
+        guard AgentLeaseLimits.validMessage(message),
+              AgentLeaseLimits.validMessage(outcomeReason)
+        else { throw AgentLeaseRegistryError.invalidMetadata }
         let instant = now()
         var result: AgentWakeLease?
         var operationError: AgentLeaseRegistryError?
@@ -780,12 +1028,16 @@ public final class AgentLeaseRegistry {
                 operationError = .leaseNotActive(id)
                 return
             }
+            var metadata = state.leases[index].metadata
+            if let message { metadata.attributes["message"] = message }
+            guard AgentLeaseLimits.validMetadata(metadata) else {
+                operationError = .invalidMetadata
+                return
+            }
             let previous = state.leases[index].state
             state.leases[index].state = outcome.state
             state.leases[index].completedAt = instant
-            if let message {
-                state.leases[index].metadata.attributes["message"] = message
-            }
+            state.leases[index].metadata = metadata
             result = state.leases[index]
             events.append(AgentLeaseLifecycleEvent(
                 date: instant,
@@ -841,6 +1093,9 @@ public final class AgentLeaseRegistry {
         message: String?,
         eventKind: AgentLeaseEventKind
     ) throws -> AgentWakeLease {
+        guard AgentLeaseLimits.validMessage(message) else {
+            throw AgentLeaseRegistryError.invalidMetadata
+        }
         let instant = now()
         var result: AgentWakeLease?
         var operationError: AgentLeaseRegistryError?
@@ -860,10 +1115,14 @@ public final class AgentLeaseRegistry {
                 operationError = .leaseNotActive(id)
                 return
             }
-            if let newTTL { state.leases[index].ttl = newTTL }
-            if let message {
-                state.leases[index].metadata.attributes["message"] = message
+            var metadata = state.leases[index].metadata
+            if let message { metadata.attributes["message"] = message }
+            guard AgentLeaseLimits.validMetadata(metadata) else {
+                operationError = .invalidMetadata
+                return
             }
+            if let newTTL { state.leases[index].ttl = newTTL }
+            state.leases[index].metadata = metadata
             state.leases[index].heartbeatAt = instant
             state.leases[index].expiresAt = min(
                 instant.addingTimeInterval(state.leases[index].ttl),

@@ -5,8 +5,8 @@ import Security
 /// (`keepresso-helper`), a `SMAppService` LaunchDaemon bundled inside the app
 /// at `Contents/MacOS/keepresso-helper` and registered from Preferences.
 ///
-/// Why it exists: the two privileged features (closed-display mode's
-/// `pmset disablesleep` and the AWDL watchdog's `ifconfig awdl0 down`) used to
+/// Why it exists: privileged features such as closed-display mode's
+/// `pmset disablesleep` and the AWDL watchdog's `ifconfig awdl0 down` used to
 /// run through `osascript`'s "with administrator privileges", which asks for
 /// the password on every app run, sometimes with no visible cue that a dialog
 /// is waiting. The daemon moves that to a single approval: macOS asks for
@@ -37,9 +37,13 @@ public enum HelperService {
     /// 5: added `sleepNow` (`pmset sleepnow` for the session-end action).
     /// 6: added the wake-schedule verb (`applyWakeSchedule`, one composite
     ///    `pmset schedule` / `pmset repeat` step).
-    /// 7: added three-state scoped sleep holds and monotonic per-connection
+    /// 7: added three-state scoped sleep holds and monotonic per-process
     ///    generations so reconnect replay cannot overwrite newer safety state.
-    public static let protocolVersion = 7
+    /// 8: extended stream generations and logical-owner migration to AWDL
+    ///    and fan holds, including release fencing across reconnects.
+    /// 9: added stream generations to wake-schedule applies, so a request
+    ///    that outlives the caller's timeout cannot overwrite newer intent.
+    public static let protocolVersion = 9
 
     /// The code-signing requirement one side demands of the other: an
     /// Apple-issued certificate, the expected identifier, and the same team as
@@ -76,8 +80,8 @@ public enum HelperService {
     }
 }
 
-/// The daemon's XPC surface. Deliberately tiny and fixed-verb: two reversible
-/// power/radio switches and nothing generic (no "run this command"), so a
+/// The daemon's XPC surface. Deliberately tiny and fixed-verb: reversible
+/// power, radio, and fan controls with nothing generic, so a
 /// compromised caller can't do more than the features themselves.
 ///
 /// Holds versus sets: a *hold* is scoped to the XPC connection that took it;
@@ -104,12 +108,23 @@ public enum HelperService {
     /// Take or release this connection's hold on `awdl0 down` (the AWDL
     /// watchdog). While any hold is live the daemon re-downs the interface
     /// every few seconds, since macOS re-raises it on its own.
-    func setAWDLHold(_ holding: Bool, reply: @escaping @Sendable (Bool) -> Void)
+    func setAWDLHold(
+        _ holding: Bool,
+        streamID: String,
+        generation: UInt64,
+        reply: @escaping @Sendable (Bool) -> Void
+    )
     /// Take or release this connection's forced-fan hold at `percent` of the
     /// fans' range (the thermal safety net's boost). Boost only, never below
     /// what auto control had; while any hold is live the daemon re-writes the
     /// target every few seconds, since the system re-takes fan control.
-    func setFanHold(_ holding: Bool, percent: Int, reply: @escaping @Sendable (Bool) -> Void)
+    func setFanHold(
+        _ holding: Bool,
+        percent: Int,
+        streamID: String,
+        generation: UInt64,
+        reply: @escaping @Sendable (Bool) -> Void
+    )
     /// Whether the daemon surrendered a forced-fan hold on its own (repeated
     /// firmware refusals), so the app can stop claiming a boost the hardware
     /// no longer has and release its side of the hold.
@@ -124,7 +139,16 @@ public enum HelperService {
     /// strings mean "not wanted"; all empty clears everything. One composite
     /// verb so the clear-then-install ordering runs inside the daemon and a
     /// mid-sequence restart can't leave a cleared-but-not-reinstalled state.
-    func applyWakeSchedule(oneShot: String, repeatDays: String, repeatTime: String, reply: @escaping @Sendable (Bool) -> Void)
+    /// The stable stream and monotonic generation fence delayed calls from an
+    /// earlier connection after the caller's timeout.
+    func applyWakeSchedule(
+        oneShot: String,
+        repeatDays: String,
+        repeatTime: String,
+        streamID: String,
+        generation: UInt64,
+        reply: @escaping @Sendable (Bool) -> Void
+    )
     /// Ask the daemon to exit at its first fully idle moment, without the
     /// ordinary exit's extra grace period (see ``HelperShutdownPolicy``), so
     /// launchd relaunches the binary currently in the bundle on the next call.
@@ -155,7 +179,7 @@ public protocol PrivilegedHelperCalling: AnyObject, Sendable {
     /// Ask the daemon to put the Mac to sleep (`pmset sleepnow`).
     func sleepNow() -> Bool
     /// Apply the full desired wake schedule (see
-    /// ``HelperXPCProtocol/applyWakeSchedule(oneShot:repeatDays:repeatTime:reply:)``).
+    /// ``HelperXPCProtocol/applyWakeSchedule(oneShot:repeatDays:repeatTime:streamID:generation:reply:)``).
     /// `nil` parts are not wanted; all `nil` clears everything.
     func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool
 }
@@ -187,8 +211,17 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     private var wantsSleepGeneration: UInt64 = 0
     private let sleepStreamID = UUID().uuidString.lowercased()
     private var wantsAWDLHold = false
+    private var wantsAWDLGeneration: UInt64 = 0
+    private let awdlStreamID = UUID().uuidString.lowercased()
     /// The wanted fan boost percent, or nil for no fan hold.
     private var wantsFanHold: Int?
+    private var wantsFanGeneration: UInt64 = 0
+    private let fanStreamID = UUID().uuidString.lowercased()
+    /// Wake applies are not connection-scoped holds, but they still share a
+    /// stable process stream so a timed-out request on an old connection is
+    /// fenced by every newer apply, including a clear.
+    private var wakeGeneration: UInt64 = 0
+    private let wakeStreamID = UUID().uuidString.lowercased()
 
     /// How long a call may wait on the daemon before counting as failed.
     /// Generous enough for launchd to spawn it on first contact.
@@ -240,15 +273,34 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     public func setAWDLHold(_ holding: Bool) -> Bool {
         lock.lock()
         wantsAWDLHold = holding
+        wantsAWDLGeneration &+= 1
+        let generation = wantsAWDLGeneration
         lock.unlock()
-        return call { proxy, done in proxy.setAWDLHold(holding, reply: done) }
+        return call { proxy, done in
+            proxy.setAWDLHold(
+                holding,
+                streamID: awdlStreamID,
+                generation: generation,
+                reply: done
+            )
+        }
     }
 
     public func setFanHold(_ holding: Bool, percent: Int) -> Bool {
         lock.lock()
         wantsFanHold = holding ? percent : nil
+        wantsFanGeneration &+= 1
+        let generation = wantsFanGeneration
         lock.unlock()
-        return call { proxy, done in proxy.setFanHold(holding, percent: percent, reply: done) }
+        return call { proxy, done in
+            proxy.setFanHold(
+                holding,
+                percent: percent,
+                streamID: fanStreamID,
+                generation: generation,
+                reply: done
+            )
+        }
     }
 
     public func fanHoldDropped() -> Bool? {
@@ -270,11 +322,17 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool {
-        call { proxy, done in
+        lock.lock()
+        wakeGeneration &+= 1
+        let generation = wakeGeneration
+        lock.unlock()
+        return call { proxy, done in
             proxy.applyWakeSchedule(
                 oneShot: oneShot ?? "",
                 repeatDays: repeatDays ?? "",
                 repeatTime: repeatTime ?? "",
+                streamID: wakeStreamID,
+                generation: generation,
                 reply: done
             )
         }
@@ -382,7 +440,9 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         let sleep = wantsSleepMode
         let sleepGeneration = wantsSleepGeneration
         let awdl = wantsAWDLHold
+        let awdlGeneration = wantsAWDLGeneration
         let fan = wantsFanHold
+        let fanGeneration = wantsFanGeneration
         lock.unlock()
         guard sleep != .released || awdl || fan != nil,
               let proxy = proxyForAsyncUse()
@@ -396,8 +456,21 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
                 generation: sleepGeneration
             ) { _ in }
         }
-        if awdl { proxy.setAWDLHold(true) { _ in } }
-        if let fan { proxy.setFanHold(true, percent: fan) { _ in } }
+        if awdl {
+            proxy.setAWDLHold(
+                true,
+                streamID: awdlStreamID,
+                generation: awdlGeneration
+            ) { _ in }
+        }
+        if let fan {
+            proxy.setFanHold(
+                true,
+                percent: fan,
+                streamID: fanStreamID,
+                generation: fanGeneration
+            ) { _ in }
+        }
     }
 }
 
