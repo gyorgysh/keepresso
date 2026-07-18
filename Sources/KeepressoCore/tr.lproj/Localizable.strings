@@ -193,3 +193,5 @@
 "Paused on high temperature" = "Yüksek sıcaklıkta duraklatıldı";
 "Paused, the Mac is running hot" = "Duraklatıldı, Mac aşırı ısınıyor";
 "Serious" = "Ciddi";
+"All Agent and scheduled work finished" = "Tüm Agent işleri ve zamanlanmış işler tamamlandı";
+"All unattended work finished" = "Tüm gözetimsiz işler tamamlandı";

@@ -193,3 +193,5 @@
 "Paused on high temperature" = "En pausa por temperatura alta";
 "Paused, the Mac is running hot" = "En pausa, el Mac está muy caliente";
 "Serious" = "Grave";
+"All Agent and scheduled work finished" = "Finalizaron todas las tareas de los agentes y las tareas programadas";
+"All unattended work finished" = "Finalizó todo el trabajo sin supervisión";

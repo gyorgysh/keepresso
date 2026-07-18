@@ -84,8 +84,63 @@ def merge_extra_langs():
         merge_overlay(WIDGET, lang, core_mod.WIDGET, "WIDGET")
 
 
+def merge_release_strings():
+    """Merge strings added after the main and per-language catalogs shipped."""
+    from v117_main_strings import APP as main_app
+    from v117_main_strings import CORE as main_core
+    from v117_main_strings import validate as validate_main
+    from v117_east_strings import APP as east_app
+    from v117_east_strings import CORE as east_core
+    from v117_east_strings import validate as validate_east
+    from v117_west_strings import APP as west_app
+    from v117_west_strings import CORE as west_core
+    from v117_west_strings import validate as validate_west
+
+    validate_main()
+    validate_east()
+    validate_west()
+
+    for name, catalog, overlays in (
+        ("APP", APP, (main_app, east_app, west_app)),
+        ("CORE", CORE, (main_core, east_core, west_core)),
+    ):
+        expected_keys = set(overlays[0])
+        for overlay in overlays[1:]:
+            actual_keys = set(overlay)
+            if actual_keys != expected_keys:
+                missing = sorted(expected_keys - actual_keys)
+                unknown = sorted(actual_keys - expected_keys)
+                raise SystemExit(
+                    f"v1.17 {name}: {len(missing)} missing / {len(unknown)} unknown keys, "
+                    f"e.g. {(missing + unknown)[:3]!r}"
+                )
+
+        duplicate_keys = sorted(expected_keys.intersection(catalog))
+        if duplicate_keys:
+            raise SystemExit(
+                f"v1.17 {name}: release keys already exist in the main catalog, "
+                f"e.g. {duplicate_keys[:3]!r}"
+            )
+
+        for key in overlays[0]:
+            translations = {}
+            for overlay in overlays:
+                translations.update(overlay[key])
+            actual_languages = set(translations)
+            expected_languages = set(LANGS)
+            if actual_languages != expected_languages:
+                missing = sorted(expected_languages - actual_languages)
+                unknown = sorted(actual_languages - expected_languages)
+                raise SystemExit(
+                    f"v1.17 {name} {key!r}: languages missing {missing!r}, "
+                    f"unknown {unknown!r}"
+                )
+            catalog[key] = translations
+
+
 if __name__ == "__main__":
     merge_extra_langs()
+    merge_release_strings()
     emit(APP_DIR, APP)
     emit(CORE_DIR, CORE)
     emit(WIDGET_DIR, WIDGET)

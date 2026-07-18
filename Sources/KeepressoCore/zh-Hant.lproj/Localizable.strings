@@ -193,3 +193,5 @@
 "Paused on high temperature" = "因溫度過高而暫停";
 "Paused, the Mac is running hot" = "已暫停，Mac 過熱";
 "Serious" = "嚴重";
+"All Agent and scheduled work finished" = "所有代理工作與排定工作均已完成";
+"All unattended work finished" = "所有無人值守工作均已完成";
