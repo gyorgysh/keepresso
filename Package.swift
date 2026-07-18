@@ -37,7 +37,8 @@ let package = Package(
         .executableTarget(
             name: "keepresso-helper",
             dependencies: ["KeepressoCore"],
-            path: "Sources/keepresso-helper"
+            path: "Sources/keepresso-helper",
+            exclude: ["Info.plist"]
         ),
         .testTarget(
             name: "KeepressoCoreTests",
