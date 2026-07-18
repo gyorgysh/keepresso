@@ -1,7 +1,8 @@
-import Darwin
+import CoreFoundation
 import Foundation
 
-/// The terminal outcome an agent supplies when releasing a wake lease.
+/// Stable transport result for a terminal lease. Callers may release with
+/// success, failure, or cancellation. Timeout is emitted only by the watchdog.
 public enum LeaseCompletionResult: String, Codable, CaseIterable, Sendable {
     case success
     case failure
@@ -237,398 +238,364 @@ public enum LeaseJSON {
 }
 
 /// The small command seam used by the CLI executable and MCP server.
+@MainActor
 public protocol LeaseCommanding: AnyObject {
     func execute(_ command: LeaseCommand) -> LeaseCommandResponse
 }
 
-/// Atomic read, modify, and write access to persisted leases.
-public protocol LeaseRecordStoring: AnyObject {
-    func update(_ transform: (inout [AgentWakeLeaseRecord]) throws -> Void) throws
+/// Cross-process signal sent after a lease mutation commits.
+@MainActor
+public protocol AgentLeaseAppSignaling: AnyObject {
+    func leaseStateDidChange(launchIfNeeded: Bool)
 }
 
-public enum LeaseFileStoreError: Error, LocalizedError {
-    case cannotOpenLock
-    case cannotLock
-    case invalidDocument
+/// Wakes the menu-bar app for new work and posts a Darwin notification for
+/// every mutation. Child process output is discarded so CLI and MCP stdout
+/// remain reserved for their machine-readable protocols.
+@MainActor
+public final class SystemAgentLeaseAppSignaler: AgentLeaseAppSignaling {
+    public static let appBundleIdentifier = "sh.gyorgy.keepresso"
+    public static let notificationName = "sh.gyorgy.keepresso.agent-lease-changed"
 
-    public var errorDescription: String? {
-        switch self {
-        case .cannotOpenLock: return "Could not open the lease store lock."
-        case .cannotLock: return "Could not lock the lease store."
-        case .invalidDocument: return "The lease store is not valid JSON."
+    public init() {}
+
+    public func leaseStateDidChange(launchIfNeeded: Bool) {
+        if launchIfNeeded {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            process.arguments = ["-g", "-b", Self.appBundleIdentifier]
+            process.standardInput = FileHandle.nullDevice
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            do {
+                try process.run()
+                process.waitUntilExit()
+            } catch {
+                // The lease is already durable. App launch is best effort so a
+                // missing bundle cannot turn a successful mutation into a lie.
+            }
         }
-    }
-}
 
-private struct LeaseFileDocument: Codable {
-    var schemaVersion: Int
-    var leases: [AgentWakeLeaseRecord]
-
-    init(leases: [AgentWakeLeaseRecord]) {
-        schemaVersion = 1
-        self.leases = leases
-    }
-}
-
-/// A standalone JSON lease store shared by `keepresso` and `keepresso-mcp`.
-/// A sibling advisory-lock file protects read-modify-write cycles across processes.
-public final class JSONLeaseFileStore: LeaseRecordStoring {
-    public let fileURL: URL
-    private let lockURL: URL
-
-    public init(fileURL: URL = JSONLeaseFileStore.defaultURL()) {
-        self.fileURL = fileURL
-        self.lockURL = fileURL.appendingPathExtension("lock")
-    }
-
-    public static func defaultURL(fileManager: FileManager = .default) -> URL {
-        fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Keepresso", isDirectory: true)
-            .appendingPathComponent("wake-leases.json", isDirectory: false)
-    }
-
-    public func update(_ transform: (inout [AgentWakeLeaseRecord]) throws -> Void) throws {
-        try FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let descriptor = Darwin.open(lockURL.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
-        guard descriptor >= 0 else { throw LeaseFileStoreError.cannotOpenLock }
-        defer { Darwin.close(descriptor) }
-        var lock = flock(
-            l_start: 0,
-            l_len: 0,
-            l_pid: 0,
-            l_type: Int16(F_WRLCK),
-            l_whence: Int16(SEEK_SET)
+        CFNotificationCenterPostNotification(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            CFNotificationName(Self.notificationName as CFString),
+            nil,
+            nil,
+            true
         )
-        guard fcntl(descriptor, F_SETLKW, &lock) == 0 else {
-            throw LeaseFileStoreError.cannotLock
-        }
-        defer {
-            lock.l_type = Int16(F_UNLCK)
-            _ = fcntl(descriptor, F_SETLK, &lock)
-        }
-
-        var leases = try loadUnlocked()
-        try transform(&leases)
-        try encodeDocument(leases).write(to: fileURL, options: .atomic)
-    }
-
-    private func loadUnlocked() throws -> [AgentWakeLeaseRecord] {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return [] }
-        guard let data = try? Data(contentsOf: fileURL) else {
-            throw LeaseFileStoreError.invalidDocument
-        }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        guard let document = try? decoder.decode(LeaseFileDocument.self, from: data),
-              document.schemaVersion == 1
-        else { throw LeaseFileStoreError.invalidDocument }
-        return document.leases
-    }
-
-    private func encodeDocument(_ leases: [AgentWakeLeaseRecord]) throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        return try encoder.encode(LeaseFileDocument(leases: leases))
     }
 }
 
-/// Default lease command implementation over the standalone JSON store.
-public final class FileLeaseCommander: LeaseCommanding {
-    public static let defaultTTLSeconds = 5 * 60
-    public static let defaultMaxLifetimeSeconds = 24 * 60 * 60
-
-    private let store: LeaseRecordStoring
-    private let now: () -> Date
-    private let makeID: () -> String
+/// CLI and MCP adapter over the authoritative lease command service.
+///
+/// This type deliberately contains no persistence and no deadline logic. It
+/// only validates transport values, maps stable DTOs, and signals the app after
+/// a durable lifecycle mutation succeeds.
+@MainActor
+public final class AgentLeaseCommandAdapter: LeaseCommanding {
+    private let service: AgentLeaseCommandServing
+    private let appSignaler: AgentLeaseAppSignaling
 
     public init(
-        store: LeaseRecordStoring = JSONLeaseFileStore(),
-        now: @escaping () -> Date = Date.init,
-        makeID: @escaping () -> String = { UUID().uuidString.lowercased() }
+        service: AgentLeaseCommandServing,
+        appSignaler: AgentLeaseAppSignaling
     ) {
-        self.store = store
-        self.now = now
-        self.makeID = makeID
+        self.service = service
+        self.appSignaler = appSignaler
+    }
+
+    public convenience init(
+        persistence: AgentLeasePersisting,
+        appSignaler: AgentLeaseAppSignaling
+    ) throws {
+        try self.init(
+            service: AgentLeaseCommandService(persistence: persistence),
+            appSignaler: appSignaler
+        )
+    }
+
+    public convenience init(
+        persistence: AgentLeasePersisting = FileAgentLeaseStore()
+    ) throws {
+        try self.init(
+            persistence: persistence,
+            appSignaler: SystemAgentLeaseAppSignaler()
+        )
     }
 
     public func execute(_ command: LeaseCommand) -> LeaseCommandResponse {
-        let instant = now()
         do {
             switch command {
-            case .acquire(let owner, let agent, let task, let ttl, let maxLifetime, let message):
-                return try acquire(
-                    owner: owner,
-                    agent: agent,
-                    task: task,
-                    ttlSeconds: ttl ?? Self.defaultTTLSeconds,
-                    maxLifetimeSeconds: maxLifetime ?? Self.defaultMaxLifetimeSeconds,
-                    message: message,
-                    at: instant
+            case .acquire(let owner, let agent, let task, let ttl, let maximum, let message):
+                var attributes: [String: String] = [:]
+                if let message { attributes["message"] = message }
+                let response = try service.execute(.acquire(
+                    id: nil,
+                    metadata: AgentLeaseMetadata(
+                        owner: owner,
+                        agent: agent,
+                        task: task,
+                        attributes: attributes
+                    ),
+                    ttl: ttl.map(TimeInterval.init),
+                    maxLifetime: maximum.map(TimeInterval.init)
+                ))
+                let lease = try requireLease(response)
+                appSignaler.leaseStateDidChange(launchIfNeeded: true)
+                return try success(
+                    command: "acquire",
+                    message: "Wake lease acquired.",
+                    lease: lease
                 )
-            case .renew(let id, let ttl, let message):
-                return try extend(id: id, ttlSeconds: ttl, message: message, operation: "renew", at: instant)
-            case .heartbeat(let id, let ttl, let message):
-                return try extend(id: id, ttlSeconds: ttl, message: message, operation: "heartbeat", at: instant)
-            case .release(let id, let result, let message):
-                return try release(id: id, result: result, message: message, at: instant)
+
+            case .renew(let rawID, let ttl, _):
+                let id = try parseID(rawID)
+                let wantedTTL = try ttl.map(TimeInterval.init) ?? existingTTL(for: id)
+                let lease = try requireLease(service.execute(.renew(id: id, ttl: wantedTTL)))
+                appSignaler.leaseStateDidChange(launchIfNeeded: true)
+                return try success(
+                    command: "renew",
+                    message: "Wake lease renewed.",
+                    lease: lease
+                )
+
+            case .heartbeat(let rawID, let ttl, _):
+                let id = try parseID(rawID)
+                let serviceResponse: AgentLeaseCommandResponse
+                if let ttl {
+                    serviceResponse = try service.execute(.renew(id: id, ttl: TimeInterval(ttl)))
+                } else {
+                    serviceResponse = try service.execute(.heartbeat(id: id))
+                }
+                let lease = try requireLease(serviceResponse)
+                appSignaler.leaseStateDidChange(launchIfNeeded: true)
+                return try success(
+                    command: "heartbeat",
+                    message: "Wake lease heartbeat accepted.",
+                    lease: lease
+                )
+
+            case .release(let rawID, let result, let message):
+                let id = try parseID(rawID)
+                let outcome: AgentLeaseReleaseOutcome
+                switch result {
+                case .success:
+                    outcome = .success
+                case .failure:
+                    outcome = .failure(reason: message)
+                case .cancelled:
+                    outcome = .cancelled(reason: message)
+                case .timeout:
+                    throw LeaseAdapterError.callerCannotDeclareTimeout
+                }
+                let lease = try requireLease(service.execute(.release(id: id, outcome: outcome)))
+                appSignaler.leaseStateDidChange(launchIfNeeded: false)
+                return try success(
+                    command: "release",
+                    message: "Wake lease released.",
+                    lease: lease
+                )
+
             case .list(let filter):
-                return try list(filter: filter, at: instant)
-            case .status(let id):
-                return try status(id: id, at: instant)
+                let leases = try requireLeases(service.execute(
+                    .list(includeTerminal: filter.includeInactive)
+                )).filter { lease in
+                    (filter.owner == nil || lease.metadata.owner == filter.owner)
+                        && (filter.agent == nil || lease.metadata.agent == filter.agent)
+                        && (filter.task == nil || lease.metadata.task == filter.task)
+                }
+                return try success(
+                    command: "list",
+                    message: "Wake leases listed.",
+                    leases: leases
+                )
+
+            case .status(let rawID):
+                if let rawID {
+                    let id = try parseID(rawID)
+                    let lease = try requireStatus(service.execute(.status(id: id)))
+                    guard let lease else {
+                        return try failureWithStatus(
+                            command: "status",
+                            code: "not_found",
+                            message: "Wake lease not found."
+                        )
+                    }
+                    return try success(
+                        command: "status",
+                        message: "Wake lease found.",
+                        lease: lease
+                    )
+                }
+                return try success(
+                    command: "status",
+                    message: "Wake lease status reported."
+                )
             }
         } catch {
+            return failure(command: command.operation, error: error)
+        }
+    }
+
+    private func success(
+        command: String,
+        message: String,
+        lease: AgentWakeLease? = nil,
+        leases: [AgentWakeLease]? = nil
+    ) throws -> LeaseCommandResponse {
+        let snapshot = try requireSnapshot(service.execute(.snapshot))
+        return LeaseCommandResponse(
+            ok: true,
+            command: command,
+            code: "ok",
+            message: message,
+            lease: lease.map(Self.record),
+            leases: leases.map { $0.map(Self.record) },
+            status: Self.summary(snapshot.leases)
+        )
+    }
+
+    private func failureWithStatus(
+        command: String,
+        code: String,
+        message: String
+    ) throws -> LeaseCommandResponse {
+        let snapshot = try requireSnapshot(service.execute(.snapshot))
+        var response = LeaseCommandResponse.failure(command: command, code: code, message: message)
+        response.status = Self.summary(snapshot.leases)
+        return response
+    }
+
+    private func existingTTL(for id: UUID) throws -> TimeInterval {
+        guard let lease = try requireStatus(service.execute(.status(id: id))) else {
+            throw AgentLeaseRegistryError.leaseNotFound(id)
+        }
+        return lease.ttl
+    }
+
+    private func parseID(_ value: String) throws -> UUID {
+        guard let id = UUID(uuidString: value) else { throw LeaseAdapterError.invalidLeaseID }
+        return id
+    }
+
+    private func requireLease(_ response: AgentLeaseCommandResponse) throws -> AgentWakeLease {
+        guard case .lease(let lease) = response else { throw LeaseAdapterError.unexpectedResponse }
+        return lease
+    }
+
+    private func requireLeases(_ response: AgentLeaseCommandResponse) throws -> [AgentWakeLease] {
+        guard case .leases(let leases) = response else { throw LeaseAdapterError.unexpectedResponse }
+        return leases
+    }
+
+    private func requireStatus(_ response: AgentLeaseCommandResponse) throws -> AgentWakeLease? {
+        guard case .status(let lease) = response else { throw LeaseAdapterError.unexpectedResponse }
+        return lease
+    }
+
+    private func requireSnapshot(_ response: AgentLeaseCommandResponse) throws -> AgentLeaseSnapshot {
+        guard case .snapshot(let snapshot) = response else { throw LeaseAdapterError.unexpectedResponse }
+        return snapshot
+    }
+
+    private func failure(command: String, error: Error) -> LeaseCommandResponse {
+        switch error {
+        case LeaseAdapterError.invalidLeaseID:
             return .failure(
-                command: command.operation,
+                command: command,
+                code: "invalid_arguments",
+                message: "lease id must be a UUID."
+            )
+        case LeaseAdapterError.callerCannotDeclareTimeout:
+            return .failure(
+                command: command,
+                code: "invalid_arguments",
+                message: "timeout is recorded automatically by the lease watchdog."
+            )
+        case AgentLeaseRegistryError.invalidOwner,
+             AgentLeaseRegistryError.invalidTTL,
+             AgentLeaseRegistryError.invalidMaxLifetime:
+            return .failure(
+                command: command,
+                code: "invalid_arguments",
+                message: "lease owner and durations must be valid."
+            )
+        case AgentLeaseRegistryError.leaseNotFound:
+            return .failure(command: command, code: "not_found", message: "Wake lease not found.")
+        case AgentLeaseRegistryError.leaseNotActive:
+            return .failure(command: command, code: "not_active", message: "Wake lease is not active.")
+        case AgentLeaseRegistryError.leaseAlreadyExists:
+            return .failure(command: command, code: "already_exists", message: "Wake lease already exists.")
+        default:
+            return .failure(
+                command: command,
                 code: "store_error",
                 message: error.localizedDescription
             )
         }
     }
 
-    private func acquire(
-        owner: String,
-        agent: String,
-        task: String,
-        ttlSeconds: Int,
-        maxLifetimeSeconds: Int,
-        message: String?,
-        at instant: Date
-    ) throws -> LeaseCommandResponse {
-        guard isPresent(owner), isPresent(agent), isPresent(task) else {
-            return .failure(
-                command: "acquire", code: "invalid_arguments",
-                message: "owner, agent, and task must be non-empty."
-            )
+    private static func record(_ lease: AgentWakeLease) -> AgentWakeLeaseRecord {
+        let state: AgentWakeLeaseState
+        let result: LeaseCompletionResult?
+        let reason: String?
+        switch lease.state {
+        case .active:
+            state = .active
+            result = nil
+            reason = nil
+        case .success:
+            state = .released
+            result = .success
+            reason = nil
+        case .failure(let value):
+            state = .released
+            result = .failure
+            reason = value
+        case .timeout:
+            state = .expired
+            result = .timeout
+            reason = nil
+        case .cancelled(let value):
+            state = .released
+            result = .cancelled
+            reason = value
         }
-        guard ttlSeconds > 0, maxLifetimeSeconds > 0, ttlSeconds <= maxLifetimeSeconds else {
-            return .failure(
-                command: "acquire", code: "invalid_arguments",
-                message: "ttl must be positive and no greater than max-lifetime."
-            )
-        }
-
-        var acquired: AgentWakeLeaseRecord?
-        var snapshot: [AgentWakeLeaseRecord] = []
-        try store.update { leases in
-            Self.expireLeases(&leases, at: instant)
-            let maxExpiry = instant.addingTimeInterval(TimeInterval(maxLifetimeSeconds))
-            let expiry = min(
-                instant.addingTimeInterval(TimeInterval(ttlSeconds)),
-                maxExpiry
-            )
-            let lease = AgentWakeLeaseRecord(
-                id: makeID(),
-                owner: owner,
-                agent: agent,
-                task: task,
-                ttlSeconds: ttlSeconds,
-                maxLifetimeSeconds: maxLifetimeSeconds,
-                acquiredAt: instant,
-                renewedAt: instant,
-                expiresAt: expiry,
-                maxExpiresAt: maxExpiry,
-                message: message
-            )
-            leases.append(lease)
-            acquired = lease
-            snapshot = leases
-        }
-        return LeaseCommandResponse(
-            ok: true,
-            command: "acquire",
-            code: "ok",
-            message: "Wake lease acquired.",
-            lease: acquired,
-            status: Self.summary(snapshot)
+        return AgentWakeLeaseRecord(
+            id: lease.id.uuidString.lowercased(),
+            owner: lease.metadata.owner,
+            agent: lease.metadata.agent ?? "",
+            task: lease.metadata.task ?? "",
+            state: state,
+            ttlSeconds: Int(lease.ttl),
+            maxLifetimeSeconds: Int(lease.maxLifetime),
+            acquiredAt: lease.acquiredAt,
+            renewedAt: lease.heartbeatAt,
+            expiresAt: lease.expiresAt,
+            maxExpiresAt: lease.maxLifetimeAt,
+            releasedAt: lease.completedAt,
+            result: result,
+            message: reason ?? lease.metadata.attributes["message"]
         )
     }
 
-    private func extend(
-        id: String,
-        ttlSeconds: Int?,
-        message: String?,
-        operation: String,
-        at instant: Date
-    ) throws -> LeaseCommandResponse {
-        guard isPresent(id), ttlSeconds == nil || ttlSeconds! > 0 else {
-            return .failure(
-                command: operation, code: "invalid_arguments",
-                message: "lease id and ttl must be valid."
-            )
-        }
-        var found: AgentWakeLeaseRecord?
-        var failure: LeaseCommandResponse?
-        var snapshot: [AgentWakeLeaseRecord] = []
-        try store.update { leases in
-            Self.expireLeases(&leases, at: instant)
-            guard let index = leases.firstIndex(where: { $0.id == id }) else {
-                failure = .failure(command: operation, code: "not_found", message: "Wake lease not found.")
-                snapshot = leases
-                return
-            }
-            guard leases[index].state == .active else {
-                failure = .failure(
-                    command: operation,
-                    code: leases[index].state == .expired ? "expired" : "not_active",
-                    message: leases[index].state == .expired
-                        ? "Wake lease has expired."
-                        : "Wake lease is not active."
-                )
-                found = leases[index]
-                snapshot = leases
-                return
-            }
-            let ttl = ttlSeconds ?? leases[index].ttlSeconds
-            let expiry = min(
-                instant.addingTimeInterval(TimeInterval(ttl)),
-                leases[index].maxExpiresAt
-            )
-            guard expiry > instant else {
-                leases[index].state = .expired
-                leases[index].result = .timeout
-                failure = .failure(command: operation, code: "expired", message: "Wake lease has expired.")
-                found = leases[index]
-                snapshot = leases
-                return
-            }
-            leases[index].ttlSeconds = ttl
-            leases[index].renewedAt = instant
-            leases[index].expiresAt = expiry
-            if let message { leases[index].message = message }
-            found = leases[index]
-            snapshot = leases
-        }
-        if var failure {
-            failure.lease = found
-            failure.status = Self.summary(snapshot)
-            return failure
-        }
-        return LeaseCommandResponse(
-            ok: true,
-            command: operation,
-            code: "ok",
-            message: operation == "heartbeat" ? "Wake lease heartbeat accepted." : "Wake lease renewed.",
-            lease: found,
-            status: Self.summary(snapshot)
-        )
-    }
-
-    private func release(
-        id: String,
-        result: LeaseCompletionResult,
-        message: String?,
-        at instant: Date
-    ) throws -> LeaseCommandResponse {
-        guard isPresent(id) else {
-            return .failure(command: "release", code: "invalid_arguments", message: "lease id is required.")
-        }
-        var found: AgentWakeLeaseRecord?
-        var missing = false
-        var snapshot: [AgentWakeLeaseRecord] = []
-        try store.update { leases in
-            Self.expireLeases(&leases, at: instant)
-            guard let index = leases.firstIndex(where: { $0.id == id }) else {
-                missing = true
-                snapshot = leases
-                return
-            }
-            if leases[index].state == .active {
-                leases[index].state = .released
-                leases[index].releasedAt = instant
-                leases[index].result = result
-                if let message { leases[index].message = message }
-            }
-            found = leases[index]
-            snapshot = leases
-        }
-        if missing {
-            return .failure(command: "release", code: "not_found", message: "Wake lease not found.")
-        }
-        return LeaseCommandResponse(
-            ok: true,
-            command: "release",
-            code: "ok",
-            message: "Wake lease released.",
-            lease: found,
-            status: Self.summary(snapshot)
-        )
-    }
-
-    private func list(filter: LeaseListFilter, at instant: Date) throws -> LeaseCommandResponse {
-        var matching: [AgentWakeLeaseRecord] = []
-        var snapshot: [AgentWakeLeaseRecord] = []
-        try store.update { leases in
-            Self.expireLeases(&leases, at: instant)
-            matching = leases.filter { lease in
-                (filter.includeInactive || lease.state == .active)
-                    && (filter.owner == nil || lease.owner == filter.owner)
-                    && (filter.agent == nil || lease.agent == filter.agent)
-                    && (filter.task == nil || lease.task == filter.task)
-            }
-            snapshot = leases
-        }
-        return LeaseCommandResponse(
-            ok: true,
-            command: "list",
-            code: "ok",
-            message: "Wake leases listed.",
-            leases: matching,
-            status: Self.summary(snapshot)
-        )
-    }
-
-    private func status(id: String?, at instant: Date) throws -> LeaseCommandResponse {
-        var found: AgentWakeLeaseRecord?
-        var snapshot: [AgentWakeLeaseRecord] = []
-        try store.update { leases in
-            Self.expireLeases(&leases, at: instant)
-            if let id { found = leases.first(where: { $0.id == id }) }
-            snapshot = leases
-        }
-        if id != nil, found == nil {
-            var response = LeaseCommandResponse.failure(
-                command: "status", code: "not_found", message: "Wake lease not found."
-            )
-            response.status = Self.summary(snapshot)
-            return response
-        }
-        return LeaseCommandResponse(
-            ok: true,
-            command: "status",
-            code: "ok",
-            message: id == nil ? "Wake lease status reported." : "Wake lease found.",
-            lease: found,
-            status: Self.summary(snapshot)
-        )
-    }
-
-    private func isPresent(_ value: String) -> Bool {
-        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private static func expireLeases(_ leases: inout [AgentWakeLeaseRecord], at instant: Date) {
-        for index in leases.indices where leases[index].state == .active {
-            if instant >= leases[index].expiresAt || instant >= leases[index].maxExpiresAt {
-                leases[index].state = .expired
-                leases[index].result = .timeout
-            }
-        }
-    }
-
-    private static func summary(_ leases: [AgentWakeLeaseRecord]) -> LeaseStatusSummary {
+    private static func summary(_ leases: [AgentWakeLease]) -> LeaseStatusSummary {
         let active = leases.count { $0.state == .active }
-        let released = leases.count { $0.state == .released }
-        let expired = leases.count { $0.state == .expired }
+        let expired = leases.count { $0.state == .timeout }
         return LeaseStatusSummary(
             wakeRequired: active > 0,
             activeCount: active,
-            releasedCount: released,
+            releasedCount: leases.count - active - expired,
             expiredCount: expired,
             totalCount: leases.count
         )
     }
+}
+
+private enum LeaseAdapterError: Error {
+    case invalidLeaseID
+    case callerCannotDeclareTimeout
+    case unexpectedResponse
 }
 
 /// Strict parser for the `keepresso lease` command group.
@@ -693,8 +660,8 @@ public enum LeaseCLIParser {
         var options = try parseOptions(
             Array(arguments.dropFirst()), valued: ["--result", "--message"])
         let rawResult = take("--result", from: &options) ?? LeaseCompletionResult.success.rawValue
-        guard let result = LeaseCompletionResult(rawValue: rawResult) else {
-            throw CLIUsageError("--result must be success, failure, cancelled, or timeout")
+        guard let result = LeaseCompletionResult(rawValue: rawResult), result != .timeout else {
+            throw CLIUsageError("--result must be success, failure, or cancelled")
         }
         let message = take("--message", from: &options)
         try rejectLeftovers(options)

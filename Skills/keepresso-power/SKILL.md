@@ -34,7 +34,7 @@ Use the `keepresso lease` CLI to declare the task lifecycle explicitly. Acquire 
      --message "Task is still running"
    ```
 
-6. Release in a `finally`, `defer`, or exit-trap path. Report the actual result as `success`, `failure`, `cancelled`, or `timeout`:
+6. Release in a `finally`, `defer`, or exit-trap path. Report the actual result as `success`, `failure`, or `cancelled`:
 
    ```sh
    lease_result=failure
@@ -51,7 +51,7 @@ Use the `keepresso lease` CLI to declare the task lifecycle explicitly. Acquire 
    lease_result=success
    ```
 
-Set `lease_result=timeout` when a task deadline is reached. Leave the default as `failure` until the task has verifiably succeeded.
+Leave the default as `failure` until the task has verifiably succeeded. Do not report `timeout` yourself. Keepresso records timeout automatically when the TTL or maximum lifetime expires.
 
 ## Inspect without disturbing other agents
 

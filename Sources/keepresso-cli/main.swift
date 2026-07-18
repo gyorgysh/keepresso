@@ -29,7 +29,7 @@ Agent wake leases (stable JSON output):
       [--ttl <seconds>] [--max-lifetime <seconds>] [--message <text>]
   keepresso lease renew <id> [--ttl <seconds>] [--message <text>]
   keepresso lease heartbeat <id> [--ttl <seconds>] [--message <text>]
-  keepresso lease release <id> [--result <result>] [--message <text>]
+  keepresso lease release <id> [--result success|failure|cancelled] [--message <text>]
   keepresso lease list [--owner <owner>] [--agent <agent>] [--task <task>] [--all]
   keepresso lease status [id]
 
@@ -206,7 +206,17 @@ func writeLeaseResponse(_ response: LeaseCommandResponse, exitCode: Int32? = nil
 }
 
 func runLease(_ command: LeaseCommand) -> Never {
-    writeLeaseResponse(FileLeaseCommander().execute(command))
+    MainActor.assumeIsolated {
+        do {
+            writeLeaseResponse(try AgentLeaseCommandAdapter().execute(command))
+        } catch {
+            writeLeaseResponse(.failure(
+                command: command.operation,
+                code: "store_error",
+                message: error.localizedDescription
+            ))
+        }
+    }
 }
 
 // MARK: - Entry
