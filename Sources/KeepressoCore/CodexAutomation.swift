@@ -545,6 +545,7 @@ public struct CodexRecurrenceRule: Equatable, Sendable {
         case hourly = "HOURLY"
         case daily = "DAILY"
         case weekly = "WEEKLY"
+        case monthly = "MONTHLY"
     }
 
     public enum Weekday: String, CaseIterable, Equatable, Hashable, Sendable {
@@ -574,6 +575,7 @@ public struct CodexRecurrenceRule: Equatable, Sendable {
         case unsupportedFrequency
         case invalidInterval
         case invalidWeekday
+        case invalidMonthDay
         case invalidHour
         case invalidMinute
         case unsupportedPart(String)
@@ -583,6 +585,7 @@ public struct CodexRecurrenceRule: Equatable, Sendable {
     public var frequency: Frequency
     public var interval: Int
     public var byWeekdays: Set<Weekday>
+    public var byMonthDays: [Int]
     public var byHours: [Int]
     public var byMinutes: [Int]
     public var startDate: Date?
@@ -591,6 +594,7 @@ public struct CodexRecurrenceRule: Equatable, Sendable {
         frequency: Frequency,
         interval: Int = 1,
         byWeekdays: Set<Weekday> = [],
+        byMonthDays: [Int] = [],
         byHours: [Int] = [],
         byMinutes: [Int] = [],
         startDate: Date? = nil
@@ -598,6 +602,9 @@ public struct CodexRecurrenceRule: Equatable, Sendable {
         self.frequency = frequency
         self.interval = max(1, interval)
         self.byWeekdays = byWeekdays
+        self.byMonthDays = Array(Set(byMonthDays.filter {
+            $0 != 0 && (-31...31).contains($0)
+        })).sorted()
         self.byHours = Array(Set(byHours.filter { (0...23).contains($0) })).sorted()
         self.byMinutes = Array(Set(byMinutes.filter { (0...59).contains($0) })).sorted()
         self.startDate = startDate
@@ -637,7 +644,7 @@ public struct CodexRecurrenceRule: Equatable, Sendable {
             let key = part[..<equals].uppercased()
             let value = String(part[part.index(after: equals)...])
             switch key {
-            case "FREQ", "INTERVAL", "BYDAY", "BYHOUR", "BYMINUTE":
+            case "FREQ", "INTERVAL", "BYDAY", "BYMONTHDAY", "BYHOUR", "BYMINUTE":
                 values[key] = value
             case "BYSECOND":
                 guard value.split(separator: ",").allSatisfy({ Int($0) == 0 }) else {
@@ -679,12 +686,17 @@ public struct CodexRecurrenceRule: Equatable, Sendable {
         } else {
             weekdays = []
         }
+        let monthDays = try Self.monthDayList(values["BYMONTHDAY"])
+        if frequency != .monthly, !monthDays.isEmpty {
+            throw ParseError.unsupportedPart("BYMONTHDAY")
+        }
         let hours = try Self.integerList(values["BYHOUR"], range: 0...23, error: .invalidHour)
         let minutes = try Self.integerList(values["BYMINUTE"], range: 0...59, error: .invalidMinute)
         self.init(
             frequency: frequency,
             interval: interval,
             byWeekdays: weekdays,
+            byMonthDays: monthDays,
             byHours: hours,
             byMinutes: minutes,
             startDate: parsedStart
@@ -711,6 +723,8 @@ public struct CodexRecurrenceRule: Equatable, Sendable {
             return nextDaily(after: date, anchor: anchor, calendar: calendar)
         case .weekly:
             return nextWeekly(after: date, anchor: anchor, calendar: calendar)
+        case .monthly:
+            return nextMonthly(after: date, anchor: anchor, calendar: calendar)
         }
     }
 
@@ -810,6 +824,77 @@ public struct CodexRecurrenceRule: Equatable, Sendable {
         return nil
     }
 
+    private func nextMonthly(after date: Date, anchor: Date, calendar: Calendar) -> Date? {
+        guard let anchorMonth = calendar.dateInterval(of: .month, for: anchor)?.start,
+              var month = calendar.dateInterval(of: .month, for: max(date, anchor))?.start
+        else { return nil }
+        let offset = max(
+            0,
+            calendar.dateComponents([.month], from: anchorMonth, to: month).month ?? 0
+        )
+        let remainder = offset % interval
+        if remainder != 0,
+           let aligned = calendar.date(byAdding: .month, value: interval - remainder, to: month) {
+            month = aligned
+        }
+
+        for _ in 0..<Self.searchLimit {
+            for day in monthlyDayCandidates(in: month, anchor: anchor, calendar: calendar) {
+                guard let candidateDay = calendar.date(
+                    byAdding: .day,
+                    value: day - 1,
+                    to: month
+                ) else { continue }
+                if let candidate = firstCandidate(
+                    on: candidateDay,
+                    after: date,
+                    anchor: anchor,
+                    calendar: calendar
+                ) {
+                    return candidate
+                }
+            }
+            guard let next = calendar.date(byAdding: .month, value: interval, to: month)
+            else { return nil }
+            month = next
+        }
+        return nil
+    }
+
+    /// Resolve positive and negative RFC 5545 month days for one concrete
+    /// month. Missing dates are skipped instead of being normalized into the
+    /// next month. An unqualified monthly rule uses the anchor's day, while
+    /// BYDAY without BYMONTHDAY selects every matching weekday in the month.
+    private func monthlyDayCandidates(
+        in month: Date,
+        anchor: Date,
+        calendar: Calendar
+    ) -> [Int] {
+        guard let dayRange = calendar.range(of: .day, in: .month, for: month) else {
+            return []
+        }
+        let dayCount = dayRange.count
+        let candidates: [Int]
+        if !byMonthDays.isEmpty {
+            candidates = byMonthDays.compactMap { raw in
+                let resolved = raw > 0 ? raw : dayCount + raw + 1
+                return dayRange.contains(resolved) ? resolved : nil
+            }
+        } else if !byWeekdays.isEmpty {
+            candidates = Array(dayRange)
+        } else {
+            let anchorDay = calendar.component(.day, from: anchor)
+            candidates = dayRange.contains(anchorDay) ? [anchorDay] : []
+        }
+
+        return Array(Set(candidates)).filter { day in
+            guard !byWeekdays.isEmpty else { return true }
+            guard let candidate = calendar.date(byAdding: .day, value: day - 1, to: month)
+            else { return false }
+            return matchesWeekday(candidate, calendar: calendar)
+        }.sorted()
+    }
+
     private func firstCandidate(
         on day: Date,
         after date: Date,
@@ -874,6 +959,17 @@ public struct CodexRecurrenceRule: Equatable, Sendable {
         var values: [Int] = []
         for token in raw.split(separator: ",") {
             guard let value = Int(token), range.contains(value) else { throw error }
+            values.append(value)
+        }
+        return Array(Set(values)).sorted()
+    }
+
+    private static func monthDayList(_ raw: String?) throws -> [Int] {
+        guard let raw else { return [] }
+        var values: [Int] = []
+        for token in raw.split(separator: ",") {
+            guard let value = Int(token), value != 0, (-31...31).contains(value)
+            else { throw ParseError.invalidMonthDay }
             values.append(value)
         }
         return Array(Set(values)).sorted()

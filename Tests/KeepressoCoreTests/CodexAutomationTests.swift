@@ -199,15 +199,134 @@ private func utc(
     #expect(next == utc(22, 7, 15))
 }
 
+@Test func monthlyRuleSupportsTheDocumentedCodexExampleAndStrictAfter() throws {
+    let rule = try CodexRecurrenceRule(
+        "RRULE:FREQ=MONTHLY;BYMONTHDAY=1;BYHOUR=9;BYMINUTE=0"
+    )
+    let next = rule.next(
+        after: utc(1, 9, 0),
+        anchor: utc(15, 12, 0, year: 2026, month: 1),
+        calendar: utcCalendar
+    )
+
+    #expect(next == utc(1, 9, 0, year: 2026, month: 8))
+}
+
+@Test func monthlyRuleSupportsMultipleDaysHoursAndMinutes() throws {
+    let rule = try CodexRecurrenceRule(
+        "FREQ=MONTHLY;BYMONTHDAY=5,20;BYHOUR=8,17;BYMINUTE=15,45"
+    )
+
+    #expect(rule.next(
+        after: utc(5, 8, 15),
+        anchor: utc(1, 0, 0),
+        calendar: utcCalendar
+    ) == utc(5, 8, 45))
+    #expect(rule.next(
+        after: utc(5, 17, 45),
+        anchor: utc(1, 0, 0),
+        calendar: utcCalendar
+    ) == utc(20, 8, 15))
+}
+
+@Test func monthlyIntervalUsesTheCreatedAtAnchorAcrossYears() throws {
+    let rule = try CodexRecurrenceRule(
+        "FREQ=MONTHLY;INTERVAL=2;BYMONTHDAY=10;BYHOUR=7;BYMINUTE=30"
+    )
+    let next = rule.next(
+        after: utc(1, 0, 0, year: 2025, month: 12),
+        anchor: utc(15, 6, 0, year: 2025, month: 11),
+        calendar: utcCalendar
+    )
+
+    #expect(next == utc(10, 7, 30, year: 2026, month: 1))
+}
+
+@Test func monthlyRuleSkipsMissingMonthDaysInsteadOfNormalizingThem() throws {
+    let rule = try CodexRecurrenceRule(
+        "FREQ=MONTHLY;BYMONTHDAY=31;BYHOUR=9;BYMINUTE=0"
+    )
+    let next = rule.next(
+        after: utc(1, 0, 0, year: 2026, month: 4),
+        anchor: utc(31, 9, 0, year: 2026, month: 1),
+        calendar: utcCalendar
+    )
+
+    #expect(next == utc(31, 9, 0, year: 2026, month: 5))
+}
+
+@Test func monthlyNegativeDayFindsLeapYearMonthEnd() throws {
+    let rule = try CodexRecurrenceRule(
+        "FREQ=MONTHLY;BYMONTHDAY=-1;BYHOUR=9;BYMINUTE=0"
+    )
+    let next = rule.next(
+        after: utc(1, 0, 0, year: 2028, month: 2),
+        anchor: utc(1, 0, 0, year: 2028, month: 1),
+        calendar: utcCalendar
+    )
+
+    #expect(next == utc(29, 9, 0, year: 2028, month: 2))
+}
+
+@Test func monthlyByDayFiltersResolvedMonthDays() throws {
+    let rule = try CodexRecurrenceRule(
+        "FREQ=MONTHLY;BYMONTHDAY=1,2,3;BYDAY=FR;BYHOUR=9;BYMINUTE=0"
+    )
+    let next = rule.next(
+        after: utc(1, 0, 0),
+        anchor: utc(1, 0, 0, year: 2026, month: 1),
+        calendar: utcCalendar
+    )
+
+    #expect(next == utc(3, 9, 0))
+}
+
+@Test func monthlyByDayWithoutMonthDaysFindsEveryMatchingWeekday() throws {
+    let rule = try CodexRecurrenceRule(
+        "FREQ=MONTHLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0"
+    )
+    let next = rule.next(
+        after: utc(1, 0, 0),
+        anchor: utc(1, 0, 0, year: 2026, month: 1),
+        calendar: utcCalendar
+    )
+
+    #expect(next == utc(6, 9, 0))
+}
+
+@Test func monthlyDTStartSuppliesTheDefaultDayAndSkipsShortMonths() throws {
+    let rule = try CodexRecurrenceRule(
+        "DTSTART:20260131T090000Z\nRRULE:FREQ=MONTHLY"
+    )
+    let next = rule.next(
+        after: utc(1, 0, 0, year: 2026, month: 2),
+        calendar: utcCalendar
+    )
+
+    #expect(next == utc(31, 9, 0, year: 2026, month: 3))
+}
+
 @Test func invalidOrUnsupportedRulesAreRejected() {
     #expect(throws: CodexRecurrenceRule.ParseError.unsupportedFrequency) {
-        try CodexRecurrenceRule("FREQ=MONTHLY")
+        try CodexRecurrenceRule("FREQ=YEARLY")
     }
     #expect(throws: CodexRecurrenceRule.ParseError.invalidHour) {
         try CodexRecurrenceRule("FREQ=DAILY;BYHOUR=25")
     }
     #expect(throws: CodexRecurrenceRule.ParseError.unsupportedPart("COUNT")) {
         try CodexRecurrenceRule("FREQ=DAILY;COUNT=2")
+    }
+    #expect(throws: CodexRecurrenceRule.ParseError.invalidMonthDay) {
+        try CodexRecurrenceRule("FREQ=MONTHLY;BYMONTHDAY=0")
+    }
+    #expect(throws: CodexRecurrenceRule.ParseError.invalidMonthDay) {
+        try CodexRecurrenceRule("FREQ=MONTHLY;BYMONTHDAY=32")
+    }
+    #expect(throws: CodexRecurrenceRule.ParseError.invalidMonthDay) {
+        try CodexRecurrenceRule("FREQ=MONTHLY;BYMONTHDAY=-32")
+    }
+    #expect(throws: CodexRecurrenceRule.ParseError.unsupportedPart("BYMONTHDAY")) {
+        try CodexRecurrenceRule("FREQ=DAILY;BYMONTHDAY=1")
     }
 }
 
