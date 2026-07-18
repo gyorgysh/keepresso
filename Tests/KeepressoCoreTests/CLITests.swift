@@ -3,13 +3,15 @@ import Foundation
 @testable import KeepressoCore
 
 @Test func olderStatusSnapshotDecodesWithoutUnattendedFields() throws {
-    let data = Data(#"{
+    let data = Data(#"""
+    {
         "isActive":true,
         "triggersEnabled":false,
         "triggersPaused":false,
         "pid":42,
         "writtenAt":"2026-07-18T00:00:00Z"
-    }"#.utf8)
+    }
+    """#.utf8)
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
     let snapshot = try decoder.decode(StatusSnapshot.self, from: data)
