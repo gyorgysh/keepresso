@@ -225,8 +225,10 @@ public final class HelperEngine: @unchecked Sendable {
         runner.run("/usr/bin/pmset", ["repeat", "wakeorpoweron", days, time])
     }
 
-    /// Cancel one-shot schedules and the repeating pair. On total failure,
-    /// leave a debt so the next daemon launch retries.
+    /// Cancel one-shot schedules and the repeating pair. Debt-by-success:
+    /// the pending marker only clears when both cancels landed, so a partial
+    /// failure (say, the repeating pair surviving a failed `repeat cancel`)
+    /// is retried at the next daemon launch instead of reported as done.
     public func clearWakeSchedules() -> Bool {
         // cancelall drops every one-shot (including non-Keepresso owners on
         // some OS versions); repeat cancel drops the single system pair.
@@ -235,31 +237,49 @@ public final class HelperEngine: @unchecked Sendable {
         state.set(.wakeClearPending, present: true)
         let a = runner.run("/usr/bin/pmset", ["schedule", "cancelall"])
         let b = runner.run("/usr/bin/pmset", ["repeat", "cancel"])
-        let ok = a || b
+        let ok = a && b
         if ok { state.set(.wakeClearPending, present: false) }
         return ok
     }
 
-    /// Apply a full desired config: clear first, then install what remains.
-    /// Returns whether every step the config required succeeded.
-    public func applyWakeSchedule(_ config: WakeScheduleConfig) -> Bool {
-        guard config.isActive else {
+    /// Apply a full desired schedule in one step: clear previous installs,
+    /// then install what remains. `nil` parts are not wanted; all `nil`
+    /// clears everything. Returns whether every required step succeeded.
+    /// This is the one place that owns the clear-then-install ordering; the
+    /// app calls it through a single XPC verb rather than sequencing the
+    /// primitives itself.
+    public func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool {
+        let wantsRepeat = repeatDays != nil && repeatTime != nil
+        guard oneShot != nil || wantsRepeat else {
             return clearWakeSchedules()
         }
-        // Clear previous Keepresso installs so we don't stack one-shots.
+        // Clear previous Keepresso installs so we don't stack one-shots. The
+        // install proceeds even when the clear failed; the marker handling
+        // below settles the debt either way.
         _ = clearWakeSchedules()
         var ok = true
-        if let date = config.oneShot {
-            let stamp = WakeScheduleConfig.oneShotString(for: date)
-            ok = scheduleOneShotWake(at: stamp) && ok
+        if let oneShot {
+            ok = scheduleOneShotWake(at: oneShot) && ok
         }
-        if config.repeatingEnabled {
-            ok = scheduleRepeatingWake(
-                days: config.repeatWeekdays,
-                time: config.repeatTimeString
-            ) && ok
+        if let repeatDays, let repeatTime {
+            ok = scheduleRepeatingWake(days: repeatDays, time: repeatTime) && ok
         }
+        // Once the install landed, the desired state is "schedules present":
+        // a leftover clear debt from the step above would make the next
+        // daemon launch wipe what was just installed. On failure any existing
+        // debt stays, and the app re-applies the config at its next launch.
+        if ok { state.set(.wakeClearPending, present: false) }
         return ok
+    }
+
+    /// Convenience over the primitive form for a full config.
+    public func applyWakeSchedule(_ config: WakeScheduleConfig) -> Bool {
+        let parts = config.pmsetArguments
+        return applyWakeSchedule(
+            oneShot: parts.oneShot,
+            repeatDays: parts.repeatDays,
+            repeatTime: parts.repeatTime
+        )
     }
 
     /// Take or release `client`'s hold on `disablesleep`. Writes the system

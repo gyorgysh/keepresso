@@ -69,6 +69,18 @@ public struct WakeScheduleConfig: Codable, Equatable, Sendable {
         return String(format: "%02d:%02d:%02d", h, m, s)
     }
 
+    /// The `pmset`-facing pieces of this config: the one-shot stamp and the
+    /// repeating days/time, `nil` for parts not wanted. The single source for
+    /// the XPC call and the helper engine's convenience overload, so the two
+    /// can't drift.
+    public var pmsetArguments: (oneShot: String?, repeatDays: String?, repeatTime: String?) {
+        (
+            oneShot: oneShot.map { Self.oneShotString(for: $0) },
+            repeatDays: repeatingEnabled ? repeatWeekdays : nil,
+            repeatTime: repeatingEnabled ? repeatTimeString : nil
+        )
+    }
+
     /// `MM/dd/yy HH:mm:ss` for `pmset schedule wake`, local time.
     public static func oneShotString(for date: Date, calendar: Calendar = .current) -> String {
         let parts = calendar.dateComponents(
@@ -112,12 +124,20 @@ public protocol WakeScheduleReading: AnyObject {
 
 /// Parse `pmset -g sched` text into ``SystemWakeState``. Pure for tests.
 public enum WakeScheduleParser {
-    /// Example lines:
-    /// ` [0]  wake at 07/18/2026 14:32:09 by '…'`
-    /// `  wakeorpoweron at 3:00:00AM every day`
+    /// Real `pmset -g sched` output is sectioned, with the repeating event on
+    /// the indented line after its header:
+    /// ```
+    /// Repeating power events:
+    ///   wakeorpoweron at 3:00:00AM every day
+    /// Scheduled power events:
+    ///  [0]  wake at 07/18/2026 14:32:09 by '…'
+    /// ```
     public static func parse(_ text: String, now: Date = Date(), calendar: Calendar = .current) -> SystemWakeState {
         var wakes: [Date] = []
         var repeating: String?
+        /// True between the "Repeating power events:" header and the next
+        /// section header, where the event line lives.
+        var inRepeatingSection = false
         let oneShot = try? NSRegularExpression(
             pattern: #"\b(?:wake|wakeorpoweron|poweron)\s+at\s+(\d{1,2}/\d{1,2}/\d{2,4}\s+\d{1,2}:\d{2}:\d{2})"#,
             options: .caseInsensitive
@@ -130,8 +150,22 @@ public enum WakeScheduleParser {
                     .trimmingCharacters(in: .whitespaces)
                 if !rest.isEmpty, rest.lowercased() != "none" {
                     repeating = rest
+                    inRepeatingSection = false
+                } else {
+                    // Bare header: the event (if any) is on the next line.
+                    inRepeatingSection = rest.isEmpty
                 }
                 continue
+            }
+            if inRepeatingSection {
+                if trimmed.isEmpty || trimmed.hasSuffix(":") {
+                    // Blank line or the next section header ends the section.
+                    inRepeatingSection = false
+                } else if trimmed.lowercased() != "none" {
+                    repeating = trimmed
+                    inRepeatingSection = false
+                    continue
+                }
             }
             if let match = oneShot?.firstMatch(
                 in: line, range: NSRange(line.startIndex..., in: line)
@@ -207,22 +241,19 @@ public enum WakeAndBrewPolicy {
         date: Date,
         calendar: Calendar
     ) -> Bool {
-        let letter = Self.weekdayLetter(for: date, calendar: calendar)
-        guard config.repeatWeekdays.contains(letter) else {
-            // Near midnight a wake can land on the next day; also check the
-            // previous day's slot for late oversights.
-            return false
-        }
+        // Each candidate slot counts on its own day's letter: the wake day's
+        // slot when that day is configured, and the previous day's slot when
+        // that day is (a 23:xx slot can wake the Mac just past midnight, on a
+        // day that may not be in the set at all).
         let start = calendar.startOfDay(for: date)
-        let slot = start.addingTimeInterval(TimeInterval(config.repeatSecondsFromMidnight))
-        if abs(date.timeIntervalSince(slot)) <= matchWindow { return true }
-        // Previous day same time (wake slightly after midnight for a 23:xx slot).
-        if let prev = calendar.date(byAdding: .day, value: -1, to: start) {
-            let prevLetter = Self.weekdayLetter(for: prev, calendar: calendar)
-            if config.repeatWeekdays.contains(prevLetter) {
-                let prevSlot = prev.addingTimeInterval(TimeInterval(config.repeatSecondsFromMidnight))
-                if abs(date.timeIntervalSince(prevSlot)) <= matchWindow { return true }
-            }
+        if config.repeatWeekdays.contains(Self.weekdayLetter(for: date, calendar: calendar)) {
+            let slot = start.addingTimeInterval(TimeInterval(config.repeatSecondsFromMidnight))
+            if abs(date.timeIntervalSince(slot)) <= matchWindow { return true }
+        }
+        if let prev = calendar.date(byAdding: .day, value: -1, to: start),
+           config.repeatWeekdays.contains(Self.weekdayLetter(for: prev, calendar: calendar)) {
+            let prevSlot = prev.addingTimeInterval(TimeInterval(config.repeatSecondsFromMidnight))
+            if abs(date.timeIntervalSince(prevSlot)) <= matchWindow { return true }
         }
         return false
     }

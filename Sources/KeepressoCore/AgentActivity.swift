@@ -602,10 +602,19 @@ public final class AgentActivityTrigger: Trigger {
     /// read for the menu's per-session rows.
     public private(set) var sessionStates: [SessionState] = []
 
-    /// True when this tick flipped from any-working to none-working. The host
-    /// (AppModel) reads it after reconcile to fire the agent-idle hook. Cleared
-    /// on the next tick that does not make the same edge.
+    /// True when this tick flipped from any-working to none-working. Cleared
+    /// on the next tick that does not make the same edge, and consumed by
+    /// ``consumeJustWentIdle()``.
     public private(set) var justWentIdle = false
+
+    /// One-shot read of the working-to-idle edge: returns the latched flag
+    /// and clears it. The host reads through this (not the raw property) so
+    /// an edge observed while ticking stops (triggers paused right after the
+    /// flip) can't re-fire the agent-idle hook every read until resume.
+    public func consumeJustWentIdle() -> Bool {
+        defer { justWentIdle = false }
+        return justWentIdle
+    }
 
     public init(
         monitor: AgentActivityMonitoring = PSAgentActivityMonitor(),

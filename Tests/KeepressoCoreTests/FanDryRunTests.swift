@@ -26,9 +26,7 @@ private final class FakeFanHelper: PrivilegedHelperCalling, @unchecked Sendable 
 
     func fanHoldDropped() -> Bool? { false }
     func sleepNow() -> Bool { true }
-    func scheduleOneShotWake(at dateString: String) -> Bool { true }
-    func scheduleRepeatingWake(days: String, time: String) -> Bool { true }
-    func clearWakeSchedules() -> Bool { true }
+    func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool { true }
 
     var recorded: [String] {
         lock.lock()
@@ -83,9 +81,7 @@ private final class RigHelper: PrivilegedHelperCalling, @unchecked Sendable {
 
     func fanHoldDropped() -> Bool? { inner.fanHoldDropped() }
     func sleepNow() -> Bool { true }
-    func scheduleOneShotWake(at dateString: String) -> Bool { true }
-    func scheduleRepeatingWake(days: String, time: String) -> Bool { true }
-    func clearWakeSchedules() -> Bool { true }
+    func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool { true }
 }
 
 @MainActor

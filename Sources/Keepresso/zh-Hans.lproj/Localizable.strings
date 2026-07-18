@@ -522,7 +522,7 @@
 "Repeating: every day at %@" = "重复：每天 %@";
 "Run a Shortcut, post a webhook, or a shell command on session and trigger events. No helper required." = "在会话和触发事件上运行快捷指令、Webhook 或 shell 命令。不需要助理。";
 "Scheduled wake" = "计划唤醒";
-"Scheduled wake needs the administrator helper, the same one closed-display mode and fan boost use. Install once; macOS asks for approval in System Settings." = "计划唤醒需要管理员助理，与合盖模式和风扇加速相同。安装一次即可；macOS 会在系统设置中请求批准。";
+"Scheduled wake needs the administrator helper, the same one closed-display mode and fan boost use. Install once, and macOS asks for approval in System Settings." = "计划唤醒需要管理员助理，与合盖模式和风扇加速相同。安装一次即可，macOS 会在系统设置中请求批准。";
 "Session length" = "会话时长";
 "Shell" = "Shell";
 "Shortcut" = "快捷指令";
@@ -545,7 +545,7 @@
 "Wake at" = "唤醒时间";
 "Wake schedule" = "唤醒计划";
 "Wake schedule not installed" = "未安装唤醒计划";
-"Wake the Mac at a set time through the administrator helper (pmset schedule / repeat), then optionally start a keep-awake session so it does not fall back asleep before the job runs. Pair with an end-of-session action above for wake, work, sleep. Scheduled wake is reliable on AC power; on battery the firmware may skip it. macOS only allows one system-wide repeating power schedule, so enabling ours replaces whatever was there. The controls stay locked until the helper is installed and ready, the same rule as the thermal fan boost." = "通过管理员助理在设定时间唤醒 Mac（pmset schedule / repeat），并可选择启动保持唤醒，以免任务开始前再次入睡。可与上方会话结束动作搭配：唤醒、工作、睡眠。接通电源时可靠；用电池时固件可能跳过。macOS 全系统只允许一套重复电源计划，启用我们的会替换已有计划。控件在助理就绪前保持锁定，与热风扇加速相同。";
+"Wake the Mac at a set time through the administrator helper (pmset schedule / repeat), then optionally start a keep-awake session so it does not fall back asleep before the job runs. Pair with an end-of-session action above for wake, work, sleep. Scheduled wake is reliable on AC power. On battery the firmware may skip it. macOS only allows one system-wide repeating power schedule, so enabling ours replaces whatever was there. The controls stay locked until the helper is installed and ready, the same rule as the thermal fan boost." = "通过管理员助理在设定时间唤醒 Mac（pmset schedule / repeat），并可选择启动保持唤醒，以免任务开始前再次入睡。可与上方会话结束动作搭配：唤醒、工作、睡眠。接通电源时可靠。用电池时固件可能跳过。macOS 全系统只允许一套重复电源计划，启用我们的会替换已有计划。控件在助理就绪前保持锁定，与热风扇加速相同。";
 "Webhook" = "Webhook";
 "When a keep-awake session ends on its own (a timer expiring, or trigger conditions dropping), Keepresso can put the display to sleep, lock the screen, start the screen saver, or sleep the Mac. Off by default so a timed session never surprises you. Manual stops, and the battery and thermal safety pauses, never run this action. A brief debounce cancels it if the session restarts right away." = "当保持唤醒会话自行结束（计时到期或触发条件消失）时，Keepresso 可使显示器睡眠、锁定屏幕、启动屏保或让 Mac 睡眠。默认关闭，以免定时会话吓人。手动停止以及电池/热安全暂停从不执行此操作。若会话立刻重启，短暂防抖会取消它。";
 "When something happens in Keepresso, run a Shortcut, POST a webhook, or run a shell command. Useful for a push to your phone when an overnight agent finishes (ntfy, or a Shortcut that sends a notification). Hooks are suspended while you edit them, so a half-written command never runs. No administrator helper needed. User-authored shell commands are intentional in this unsandboxed app: only add commands you trust." = "Keepresso 中发生事件时，运行快捷指令、POST Webhook 或 shell 命令。适合通宵代理结束后推送到手机（ntfy 或发通知的快捷指令）。编辑时钩子暂停。不需要管理员助理。在此未沙盒应用中允许用户 shell 命令：只添加你信任的命令。";

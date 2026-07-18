@@ -158,29 +158,42 @@ public final class DecisionLogPersister {
     /// How many events to rehydrate into the in-memory log on launch.
     public static let loadLimit = DecisionLog.capacity
 
+    /// Running size of the on-disk file, so the per-append rotation check
+    /// doesn't re-read the whole file. Seeded by the first load (or append)
+    /// and kept in step with every write from then on.
+    private var knownFileBytes: Int?
+
     public init(store: LogPersisting = FileLogStore()) {
         self.store = store
     }
 
     /// Load the newest events from disk for the in-memory log.
     public func loadRecent() -> [PersistedSessionEvent] {
-        let all = DecisionLogCodec.decode(store.load())
+        let all = loadAll()
         if all.count <= Self.loadLimit { return all }
         return Array(all.suffix(Self.loadLimit))
     }
 
     /// Full history for stats (already rotation-capped on disk).
     public func loadAll() -> [PersistedSessionEvent] {
-        DecisionLogCodec.decode(store.load())
+        let data = store.load()
+        knownFileBytes = data.count
+        return DecisionLogCodec.decode(data)
     }
 
     /// Persist one event and rotate when the file grows past the soft cap.
+    /// The size check runs on the tracked byte count; only an actual rotation
+    /// reads the file back (it has to rewrite it anyway).
     public func append(_ event: PersistedSessionEvent) {
         guard let line = DecisionLogCodec.encodeLine(event) else { return }
         store.append(line)
-        let data = store.load()
-        if data.count > DecisionLogCodec.maxFileBytes {
-            store.replace(DecisionLogCodec.rotate(data))
+        let size = knownFileBytes.map { $0 + line.count } ?? store.load().count
+        if size > DecisionLogCodec.maxFileBytes {
+            let rotated = DecisionLogCodec.rotate(store.load())
+            store.replace(rotated)
+            knownFileBytes = rotated.count
+        } else {
+            knownFileBytes = size
         }
     }
 }

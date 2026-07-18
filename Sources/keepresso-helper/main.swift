@@ -60,16 +60,12 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
         reply(engine.sleepNow())
     }
 
-    func scheduleOneShotWake(at dateString: String, reply: @escaping @Sendable (Bool) -> Void) {
-        reply(engine.scheduleOneShotWake(at: dateString))
-    }
-
-    func scheduleRepeatingWake(days: String, time: String, reply: @escaping @Sendable (Bool) -> Void) {
-        reply(engine.scheduleRepeatingWake(days: days, time: time))
-    }
-
-    func clearWakeSchedules(reply: @escaping @Sendable (Bool) -> Void) {
-        reply(engine.clearWakeSchedules())
+    func applyWakeSchedule(oneShot: String, repeatDays: String, repeatTime: String, reply: @escaping @Sendable (Bool) -> Void) {
+        reply(engine.applyWakeSchedule(
+            oneShot: oneShot.isEmpty ? nil : oneShot,
+            repeatDays: repeatDays.isEmpty ? nil : repeatDays,
+            repeatTime: repeatTime.isEmpty ? nil : repeatTime
+        ))
     }
 
     func terminateWhenIdle() {

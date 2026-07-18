@@ -371,14 +371,19 @@ public final class SessionController {
         pendingEndActionAt = nil
     }
 
-    /// Fire a due end action. Called from ``reconcile`` so the host's 1 Hz
-    /// tick drives the debounce without a separate timer.
+    /// Fire a due end action, unless it has gone stale. Called from
+    /// ``reconcile`` so the host's 1 Hz tick drives the debounce without a
+    /// separate timer. The staleness bound covers what the scheduling-time
+    /// check can't see: a Mac that slept across the debounce window, or a
+    /// safety pause that starved the flush for hours, must not have the
+    /// action sleep or lock the just-woken Mac long after the session ended.
     private func flushPendingEndAction(at instant: Date) {
         guard let action = pendingEndAction,
               let due = pendingEndActionAt,
               instant >= due
         else { return }
         cancelPendingEndAction()
+        guard instant.timeIntervalSince(due) <= Self.endActionStaleGrace else { return }
         endActor.perform(action)
     }
 
@@ -482,6 +487,10 @@ public final class SessionController {
                 pausedByBattery = false
             } else if percent < threshold {
                 pausedByBattery = true
+                // The safety pause owns sleep from here: a pending end action
+                // from a just-ended session must not fire when the pause
+                // lifts, arbitrarily later.
+                cancelPendingEndAction()
                 if isActive {
                     stop(
                         reason: L("Paused, battery below %d%%", threshold),
@@ -515,6 +524,8 @@ public final class SessionController {
             case .hot:
                 if !pausedByThermal {
                     pausedByThermal = true
+                    // Same rule as the battery latch above.
+                    cancelPendingEndAction()
                     if isActive {
                         stop(
                             reason: L("Paused, the Mac is running hot"),

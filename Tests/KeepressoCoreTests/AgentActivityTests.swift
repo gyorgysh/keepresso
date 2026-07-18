@@ -532,3 +532,27 @@ private final class PSOutputStub: @unchecked Sendable {
     #expect(sessions.map(\.origin) == [.claudeApp, .terminal])
     #expect(sessions.map(\.label) == ["claude (Claude app)", "claude (s003)"])
 }
+
+// MARK: - Idle-edge latch
+
+@Test func idleEdgeIsConsumedOnce() {
+    // A hookState of .working / .idle decides outright, so the edge is exact.
+    let monitor = FakeAgentActivity([
+        AgentSession(pid: 1, agent: "claude", tty: "s001", cpuPercent: 0, hookState: .working),
+    ])
+    let trigger = AgentActivityTrigger(monitor: monitor)
+    trigger.tick()
+    #expect(trigger.isSatisfied())
+    #expect(!trigger.consumeJustWentIdle()) // no edge yet
+
+    monitor.current = AgentSnapshot(sessions: [
+        AgentSession(pid: 1, agent: "claude", tty: "s001", cpuPercent: 0, hookState: .idle),
+    ])
+    trigger.tick()
+    #expect(!trigger.isSatisfied())
+    // The edge reports exactly once, even when ticking stops afterwards
+    // (triggers paused): repeated reads must not re-fire the hook.
+    #expect(trigger.consumeJustWentIdle())
+    #expect(!trigger.consumeJustWentIdle())
+    #expect(!trigger.justWentIdle)
+}

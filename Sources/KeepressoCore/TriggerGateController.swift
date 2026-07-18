@@ -113,16 +113,19 @@ public final class TriggerGateController {
     /// Whether any live agent-activity trigger flipped from working to idle
     /// on its most recent ``Trigger/tick()``. The host reads this after
     /// reconcile to fire the agent-idle outbound hook. False when gating is
-    /// off or no agent rule is present.
+    /// off or no agent rule is present. Consuming: each edge is reported
+    /// once, so a gate that stops ticking (paused) can't re-report the same
+    /// edge every second.
     public func agentJustWentIdle() -> Bool {
         guard let engine else { return false }
+        var fired = false
         for trigger in engine.triggers {
             let inner = (trigger as? GracePeriodTrigger)?.wrappedTrigger ?? trigger
-            if let agent = inner as? AgentActivityTrigger, agent.justWentIdle {
-                return true
+            if let agent = inner as? AgentActivityTrigger, agent.consumeJustWentIdle() {
+                fired = true
             }
         }
-        return false
+        return fired
     }
 }
 

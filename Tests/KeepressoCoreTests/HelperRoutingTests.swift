@@ -50,18 +50,8 @@ private final class FakeHelperClient: PrivilegedHelperCalling, @unchecked Sendab
         return holdSucceeds
     }
 
-    func scheduleOneShotWake(at dateString: String) -> Bool {
-        record("scheduleOneShotWake(\(dateString))")
-        return holdSucceeds
-    }
-
-    func scheduleRepeatingWake(days: String, time: String) -> Bool {
-        record("scheduleRepeatingWake(\(days), \(time))")
-        return holdSucceeds
-    }
-
-    func clearWakeSchedules() -> Bool {
-        record("clearWakeSchedules")
+    func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool {
+        record("applyWakeSchedule(\(oneShot ?? "-"), \(repeatDays ?? "-"), \(repeatTime ?? "-"))")
         return holdSucceeds
     }
 

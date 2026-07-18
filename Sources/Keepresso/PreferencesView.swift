@@ -1015,7 +1015,7 @@ private struct AutomationTab: View {
                 AutomationHelperLockedRow(model: model, context: .wakeSchedule)
             }
         } header: {
-            sectionHeader("Scheduled wake", info: L("Wake the Mac at a set time through the administrator helper (pmset schedule / repeat), then optionally start a keep-awake session so it does not fall back asleep before the job runs. Pair with an end-of-session action above for wake, work, sleep. Scheduled wake is reliable on AC power; on battery the firmware may skip it. macOS only allows one system-wide repeating power schedule, so enabling ours replaces whatever was there. The controls stay locked until the helper is installed and ready, the same rule as the thermal fan boost."))
+            sectionHeader("Scheduled wake", info: L("Wake the Mac at a set time through the administrator helper (pmset schedule / repeat), then optionally start a keep-awake session so it does not fall back asleep before the job runs. Pair with an end-of-session action above for wake, work, sleep. Scheduled wake is reliable on AC power. On battery the firmware may skip it. macOS only allows one system-wide repeating power schedule, so enabling ours replaces whatever was there. The controls stay locked until the helper is installed and ready, the same rule as the thermal fan boost."))
         } footer: {
             wakeScheduleFooter
         }
@@ -1061,14 +1061,25 @@ private struct AutomationTab: View {
                     "Time",
                     selection: Binding(
                         get: {
+                            // Wall-clock components on both sides, never
+                            // elapsed time since midnight: on a DST
+                            // transition day the two differ by an hour, and
+                            // pmset takes wall-clock time.
                             let secs = model.wakeSchedule?.repeatSecondsFromMidnight ?? 0
-                            return Calendar.current.startOfDay(for: Date())
-                                .addingTimeInterval(TimeInterval(secs))
+                            let calendar = Calendar.current
+                            return calendar.date(
+                                bySettingHour: secs / 3600,
+                                minute: (secs % 3600) / 60,
+                                second: secs % 60,
+                                of: calendar.startOfDay(for: Date())
+                            ) ?? Date()
                         },
                         set: { date in
-                            let start = Calendar.current.startOfDay(for: date)
+                            let parts = Calendar.current.dateComponents(
+                                [.hour, .minute], from: date)
                             updateWake {
-                                $0.repeatSecondsFromMidnight = Int(date.timeIntervalSince(start))
+                                $0.repeatSecondsFromMidnight =
+                                    (parts.hour ?? 0) * 3600 + (parts.minute ?? 0) * 60
                             }
                         }
                     ),
@@ -1303,7 +1314,7 @@ private struct AutomationHelperLockedRow: View {
         }
         switch context {
         case .wakeSchedule:
-            return L("Scheduled wake needs the administrator helper, the same one closed-display mode and fan boost use. Install once; macOS asks for approval in System Settings.")
+            return L("Scheduled wake needs the administrator helper, the same one closed-display mode and fan boost use. Install once, and macOS asks for approval in System Settings.")
         }
     }
 }

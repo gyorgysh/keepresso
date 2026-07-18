@@ -64,6 +64,29 @@ import Foundation
     #expect(!WakeAndBrewPolicy.shouldStartSession(config: config, wakeDate: slot))
 }
 
+@Test func wakeAndBrewMatchesPreviousDaySlotAcrossMidnight() {
+    let cal = Calendar(identifier: .gregorian)
+    // Friday-only 23:58 slot; the firmware wake lands Saturday 00:01.
+    let config = WakeScheduleConfig(
+        repeatingEnabled: true,
+        repeatSecondsFromMidnight: 23 * 3600 + 58 * 60,
+        repeatWeekdays: "F",
+        startSessionOnWake: true
+    )
+    let saturdayJustPastMidnight = cal.date(from: DateComponents(
+        year: 2026, month: 7, day: 25, hour: 0, minute: 1 // 2026-07-25 is Saturday
+    ))!
+    #expect(WakeAndBrewPolicy.weekdayLetter(for: saturdayJustPastMidnight, calendar: cal) == "S")
+    #expect(WakeAndBrewPolicy.shouldStartSession(
+        config: config, wakeDate: saturdayJustPastMidnight, calendar: cal))
+    // Sunday just past midnight is a day too late for Friday's slot.
+    let sundayJustPastMidnight = cal.date(from: DateComponents(
+        year: 2026, month: 7, day: 26, hour: 0, minute: 1
+    ))!
+    #expect(!WakeAndBrewPolicy.shouldStartSession(
+        config: config, wakeDate: sundayJustPastMidnight, calendar: cal))
+}
+
 @Test func schedParserExtractsOneShotWakes() {
     let text = """
     Scheduled power events:
@@ -72,6 +95,31 @@ import Foundation
     """
     let state = WakeScheduleParser.parse(text)
     #expect(state.scheduledWakes.count == 2)
+}
+
+@Test func schedParserReadsRepeatingEventFromItsOwnLine() {
+    // Real pmset prints the repeating event on the indented line after the
+    // bare section header, not after the colon.
+    let text = """
+    Repeating power events:
+      wakeorpoweron at 3:00:00AM every day
+    Scheduled power events:
+     [0]  wake at 07/18/26 14:32:09 by 'Keepresso'
+    """
+    let state = WakeScheduleParser.parse(text)
+    #expect(state.repeatingSummary == "wakeorpoweron at 3:00:00AM every day")
+    #expect(state.scheduledWakes.count == 1)
+}
+
+@Test func schedParserTreatsEmptyRepeatingSectionAsNone() {
+    let text = """
+    Repeating power events:
+    Scheduled power events:
+     [0]  wake at 07/18/26 14:32:09 by 'Keepresso'
+    """
+    let state = WakeScheduleParser.parse(text)
+    #expect(state.repeatingSummary == nil)
+    #expect(state.scheduledWakes.count == 1)
 }
 
 @Test func helperApplyWakeScheduleClearsWhenInactive() {
@@ -110,6 +158,42 @@ import Foundation
     #expect(state.markers().contains(.wakeClearPending))
 }
 
+@Test func partiallyFailedClearKeepsThePendingMarker() {
+    // One of the two cancels failing must not read as success: the surviving
+    // schedule would keep waking the Mac with no retry debt.
+    let runner = RecordingRunner()
+    runner.failMatching = "repeat cancel"
+    let state = FakeMarkerState()
+    let engine = HelperEngine(runner: runner, state: state)
+    #expect(!engine.clearWakeSchedules())
+    #expect(state.markers().contains(.wakeClearPending))
+}
+
+@Test func successfulInstallSettlesAFailedClearDebt() {
+    // A failed clear inside an apply must not leave the marker set: the next
+    // daemon launch would wipe the schedules that were just installed.
+    let runner = RecordingRunner()
+    runner.failMatching = "cancelall"
+    let state = FakeMarkerState()
+    let engine = HelperEngine(runner: runner, state: state)
+    let ok = engine.applyWakeSchedule(
+        oneShot: "08/01/26 06:30:00", repeatDays: "MWF", repeatTime: "07:00:00")
+    #expect(ok)
+    #expect(!state.markers().contains(.wakeClearPending))
+}
+
+@Test func totallyFailedApplyKeepsTheClearDebt() {
+    // When neither the clear nor the install lands, the debt must survive so
+    // the next daemon launch still settles whatever pmset is left holding.
+    let runner = RecordingRunner()
+    runner.failAll = true
+    let state = FakeMarkerState()
+    let engine = HelperEngine(runner: runner, state: state)
+    #expect(!engine.applyWakeSchedule(
+        oneShot: "08/01/26 06:30:00", repeatDays: nil, repeatTime: nil))
+    #expect(state.markers().contains(.wakeClearPending))
+}
+
 @Test func restoreAtLaunchRetriesPendingWakeClear() {
     let runner = RecordingRunner()
     let state = FakeMarkerState([.wakeClearPending])
@@ -124,9 +208,14 @@ import Foundation
 private final class RecordingRunner: HelperCommandRunning, @unchecked Sendable {
     private(set) var commands: [String] = []
     var failAll = false
+    /// When set, only commands containing this substring fail.
+    var failMatching: String?
     func run(_ path: String, _ arguments: [String]) -> Bool {
-        commands.append(([path] + arguments).joined(separator: " "))
-        return !failAll
+        let command = ([path] + arguments).joined(separator: " ")
+        commands.append(command)
+        if failAll { return false }
+        if let failMatching, command.contains(failMatching) { return false }
+        return true
     }
 }
 

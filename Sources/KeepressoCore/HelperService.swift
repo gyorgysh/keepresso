@@ -34,7 +34,8 @@ public enum HelperService {
     /// 4: added `setFanHold` (the thermal safety net's fan boost) and
     /// `fanHoldDropped` (the app's view of a surrendered boost).
     /// 5: added `sleepNow` (`pmset sleepnow` for the session-end action).
-    /// 6: added wake-schedule verbs (`pmset schedule` / `pmset repeat`).
+    /// 6: added the wake-schedule verb (`applyWakeSchedule`, one composite
+    ///    `pmset schedule` / `pmset repeat` step).
     public static let protocolVersion = 6
 
     /// The code-signing requirement one side demands of the other: an
@@ -106,14 +107,13 @@ public enum HelperService {
     /// from the caller's perspective: the machine may sleep before the reply
     /// lands, so a missing reply is not a failure.
     func sleepNow(reply: @escaping @Sendable (Bool) -> Void)
-    /// Install a one-shot wake (`pmset schedule wake "MM/dd/yy HH:mm:ss"`).
-    func scheduleOneShotWake(at dateString: String, reply: @escaping @Sendable (Bool) -> Void)
-    /// Install a repeating wakeorpoweron (`pmset repeat wakeorpoweron DAYS HH:mm:ss`).
-    /// Replaces any existing system-wide repeating power pair.
-    func scheduleRepeatingWake(days: String, time: String, reply: @escaping @Sendable (Bool) -> Void)
-    /// Cancel Keepresso-owned wake schedules (`pmset schedule cancelall` for
-    /// one-shots we set, and `pmset repeat cancel` for the repeating pair).
-    func clearWakeSchedules(reply: @escaping @Sendable (Bool) -> Void)
+    /// Apply the full desired wake schedule in one step: cancel previous
+    /// schedules, then install the one-shot (`pmset schedule wake`) and the
+    /// repeating pair (`pmset repeat wakeorpoweron`) as requested. Empty
+    /// strings mean "not wanted"; all empty clears everything. One composite
+    /// verb so the clear-then-install ordering runs inside the daemon and a
+    /// mid-sequence restart can't leave a cleared-but-not-reinstalled state.
+    func applyWakeSchedule(oneShot: String, repeatDays: String, repeatTime: String, reply: @escaping @Sendable (Bool) -> Void)
     /// Ask the daemon to exit at its first fully idle moment, without the
     /// ordinary exit's extra grace period (see ``HelperShutdownPolicy``), so
     /// launchd relaunches the binary currently in the bundle on the next call.
@@ -142,9 +142,10 @@ public protocol PrivilegedHelperCalling: AnyObject, Sendable {
     func fanHoldDropped() -> Bool?
     /// Ask the daemon to put the Mac to sleep (`pmset sleepnow`).
     func sleepNow() -> Bool
-    func scheduleOneShotWake(at dateString: String) -> Bool
-    func scheduleRepeatingWake(days: String, time: String) -> Bool
-    func clearWakeSchedules() -> Bool
+    /// Apply the full desired wake schedule (see
+    /// ``HelperXPCProtocol/applyWakeSchedule(oneShot:repeatDays:repeatTime:reply:)``).
+    /// `nil` parts are not wanted; all `nil` clears everything.
+    func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool
 }
 
 /// Real client over `NSXPCConnection`. The connection *is* the app's claim on
@@ -231,16 +232,15 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         call { proxy, done in proxy.sleepNow(reply: done) }
     }
 
-    public func scheduleOneShotWake(at dateString: String) -> Bool {
-        call { proxy, done in proxy.scheduleOneShotWake(at: dateString, reply: done) }
-    }
-
-    public func scheduleRepeatingWake(days: String, time: String) -> Bool {
-        call { proxy, done in proxy.scheduleRepeatingWake(days: days, time: time, reply: done) }
-    }
-
-    public func clearWakeSchedules() -> Bool {
-        call { proxy, done in proxy.clearWakeSchedules(reply: done) }
+    public func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool {
+        call { proxy, done in
+            proxy.applyWakeSchedule(
+                oneShot: oneShot ?? "",
+                repeatDays: repeatDays ?? "",
+                repeatTime: repeatTime ?? "",
+                reply: done
+            )
+        }
     }
 
     /// Fire the version-handshake-and-retire nudge: if the daemon on the other

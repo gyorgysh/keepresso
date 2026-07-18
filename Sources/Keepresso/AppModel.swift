@@ -148,9 +148,12 @@ final class AppModel {
         let logPersister = DecisionLogPersister()
         self.logPersister = logPersister
         self.wakeReader = PMSetWakeScheduleReader()
-        // Rehydrate Activity from disk before any new events land.
-        self.session.log.load(logPersister.loadRecent())
-        self.awakeStats = AwakeStatsAggregator.summarize(events: logPersister.loadAll())
+        // Rehydrate Activity from disk before any new events land: one read
+        // feeds both the in-memory log and the stats mirror.
+        let history = logPersister.loadAll()
+        self.statsHistory = history
+        self.session.log.load(Array(history.suffix(DecisionLogPersister.loadLimit)))
+        self.awakeStats = AwakeStatsAggregator.summarize(events: history)
         // Raw config here (self isn't fully initialized yet for the
         // availability derivation); the first thermalAvailabilityTick one
         // second later nils an unavailable boost stage out.
@@ -166,8 +169,9 @@ final class AppModel {
         // is initialized so weak self is legal.
         self.session.log.onRecord = { [weak hooks, weak logPersister, weak self] event in
             hooks?.handle(sessionEvent: event)
-            logPersister?.append(PersistedSessionEvent(event, batteryPercent: event.batteryPercent))
-            self?.refreshAwakeStats()
+            let persisted = PersistedSessionEvent(event, batteryPercent: event.batteryPercent)
+            logPersister?.append(persisted)
+            self?.recordForStats(persisted)
         }
         // With one of the auto features on and no helper installed, this run
         // can hit a password prompt in the background (e.g. a trigger-started
@@ -545,50 +549,74 @@ final class AppModel {
         }
     }
 
+    /// Set once Keepresso has attempted to install system wake schedules on
+    /// this Mac, so the no-schedule case never touches `pmset`: clearing
+    /// there would delete wake schedules the user or another tool set.
+    /// Debt-by-attempt like the helper's own markers (an install can
+    /// partially land even on failure), reset only by a clean clear.
+    /// Machine-local bookkeeping, deliberately not part of the exported
+    /// settings.
+    private var wakeSchedulesInstalledByKeepresso: Bool {
+        get { UserDefaults.standard.bool(forKey: Self.wakeInstalledDefaultsKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.wakeInstalledDefaultsKey) }
+    }
+    private static let wakeInstalledDefaultsKey = "wakeSchedulesInstalledByKeepresso"
+
     /// Push settings to the helper (or clear). Installing needs the helper;
     /// clearing is attempted when it answers so a disable after reinstall
     /// still drops system schedules.
     func applyWakeScheduleToSystem() {
+        // A one-shot whose moment has passed can never install again (pmset
+        // refuses past dates); drop it so later applies don't fail on it
+        // forever.
+        if let date = settings.wakeSchedule?.oneShot, date <= Date() {
+            settings.wakeSchedule?.oneShot = nil
+            persist()
+        }
         let config = settings.wakeSchedule ?? WakeScheduleConfig()
+        // Leave pmset alone when there is nothing to install and Keepresso
+        // never installed anything: the system schedules belong to the user
+        // or another tool, not to us.
+        guard config.isActive || wakeSchedulesInstalledByKeepresso else { return }
+        // A pre-update daemon still answering the handshake means "updating",
+        // not "missing": no failure notification, re-apply once the new
+        // daemon serves.
+        let helperUpdating = wakeHelperGate == .helperUpdating
         let client = helperClient
         Task.detached { [weak self] in
-            let helperUp = client.ping()
-            let ok: Bool
-            if config.isActive {
-                guard helperUp else {
-                    await MainActor.run { [weak self] in
-                        self?.refreshSystemWakeState()
-                        self?.notifier.notify(
+            guard client.ping() else {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    self.refreshSystemWakeState()
+                    guard config.isActive else { return }
+                    if helperUpdating {
+                        self.reapplyWakeScheduleWhenHelperReady()
+                    } else {
+                        self.notifier.notify(
                             title: L("Wake schedule not installed"),
                             body: L("Installing a wake schedule needs the administrator helper (Preferences ▸ General)."),
                             sound: false
                         )
                     }
-                    return
                 }
-                _ = client.clearWakeSchedules()
-                var step = true
-                if let date = config.oneShot {
-                    step = client.scheduleOneShotWake(
-                        at: WakeScheduleConfig.oneShotString(for: date)
-                    ) && step
-                }
-                if config.repeatingEnabled {
-                    step = client.scheduleRepeatingWake(
-                        days: config.repeatWeekdays,
-                        time: config.repeatTimeString
-                    ) && step
-                }
-                ok = step
-            } else if helperUp {
-                ok = client.clearWakeSchedules()
-            } else {
-                ok = true
+                return
             }
+            let parts = config.pmsetArguments
+            let ok = client.applyWakeSchedule(
+                oneShot: parts.oneShot,
+                repeatDays: parts.repeatDays,
+                repeatTime: parts.repeatTime
+            )
             await MainActor.run { [weak self] in
-                self?.refreshSystemWakeState()
+                guard let self else { return }
+                if config.isActive {
+                    self.wakeSchedulesInstalledByKeepresso = true
+                } else if ok {
+                    self.wakeSchedulesInstalledByKeepresso = false
+                }
+                self.refreshSystemWakeState()
                 if !ok {
-                    self?.notifier.notify(
+                    self.notifier.notify(
                         title: L("Wake schedule not installed"),
                         body: L("The administrator helper could not update the system wake schedule."),
                         sound: false
@@ -598,13 +626,60 @@ final class AppModel {
         }
     }
 
+    /// One re-apply once the daemon finishes updating after an app update, so
+    /// a saved schedule doesn't sit uninstalled until the next Preferences
+    /// visit. Single-flight; gives up when the helper goes missing or after
+    /// two minutes.
+    @ObservationIgnored private var wakeReapplyWatch: Task<Void, Never>?
+
+    private func reapplyWakeScheduleWhenHelperReady() {
+        guard wakeReapplyWatch == nil else { return }
+        helper.watchDaemonUpdate()
+        wakeReapplyWatch = Task { [weak self] in
+            for _ in 0..<60 {
+                try? await Task.sleep(for: .seconds(2))
+                guard let self, !Task.isCancelled else { return }
+                switch self.wakeHelperGate {
+                case .ready:
+                    self.wakeReapplyWatch = nil
+                    self.applyWakeScheduleToSystem()
+                    return
+                case .needsHelper:
+                    // Uninstalled while waiting; nothing to re-apply onto.
+                    self.wakeReapplyWatch = nil
+                    return
+                case .awaitingApproval, .helperUpdating:
+                    continue
+                }
+            }
+            self?.wakeReapplyWatch = nil
+        }
+    }
+
     /// Re-read `pmset -g sched` for the Automation footer.
     func refreshSystemWakeState() {
         systemWakeState = wakeReader.current()
     }
 
+    /// The persisted history mirrored in memory, so per-event stats updates
+    /// don't re-read and re-decode the log file. Seeded once at init and
+    /// appended on every recorded event.
+    @ObservationIgnored private var statsHistory: [PersistedSessionEvent] = []
+
+    /// Fold one just-recorded event into the mirror and re-summarize. Pure
+    /// compute, no disk: the persister already wrote the event.
+    private func recordForStats(_ event: PersistedSessionEvent) {
+        statsHistory.append(event)
+        // The stats window is seven days; a flap-heavy machine left running
+        // for months must not grow the mirror without bound.
+        if statsHistory.count > 8192 {
+            statsHistory.removeFirst(statsHistory.count - 4096)
+        }
+        refreshAwakeStats()
+    }
+
     func refreshAwakeStats() {
-        awakeStats = AwakeStatsAggregator.summarize(events: logPersister.loadAll())
+        awakeStats = AwakeStatsAggregator.summarize(events: statsHistory)
     }
 
     /// React to ``NSWorkspace.didWakeNotification``: if the wake matches a

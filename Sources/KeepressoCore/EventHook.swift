@@ -76,7 +76,9 @@ public protocol HookRunning: AnyObject {
 public enum EventHookPolicy {
     /// How long after a hook fires before the same hook may fire again.
     public static let debounce: TimeInterval = 2
-    /// How long a shell or shortcut may run before being abandoned.
+    /// How long a webhook request may wait before being abandoned. Shell and
+    /// Shortcut hooks are fire-and-forget (reaped in the background), so no
+    /// run bound applies to them.
     public static let runTimeout: TimeInterval = 30
 
     /// Which hook events a decision-log kind should raise. A trigger release
@@ -182,24 +184,24 @@ public final class SystemHookRunner: HookRunning, @unchecked Sendable {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = arguments
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
+        // Discard output: nobody reads it, and an undrained Pipe would block
+        // the child for good once it fills the pipe buffer.
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
         } catch {
             return
         }
-        // Bound wait so a hung shortcut or shell can't pin a caller. The
-        // process is left running if it overruns: killing user work mid-flight
-        // is worse than a brief orphan, and launchd/session cleanup reaps it.
-        let deadline = DispatchTime.now() + timeout
+        // Never wait on the caller's thread: hooks fire on the main actor
+        // mid-reconcile, and a slow command would freeze the menu bar and the
+        // 1 Hz tick for its whole runtime. Reap the child from a background
+        // queue instead; a long-running command is the user's own business
+        // (killing their work mid-flight is worse than a lingering child).
         let box = ProcessWaitBox(process)
-        let sem = DispatchSemaphore(value: 0)
         DispatchQueue.global(qos: .utility).async {
             box.wait()
-            sem.signal()
         }
-        _ = sem.wait(timeout: deadline)
     }
 }
 

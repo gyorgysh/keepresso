@@ -281,6 +281,46 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
 }
 
 @MainActor
+@Test func aPendingEndActionGoneStaleIsDroppedAtFlush() {
+    let (controller, _, endActor, clock) = makeEndController()
+    controller.endAction = .sleepMac
+    let gate = StubReminderGate(true)
+    controller.triggerGate = gate
+
+    controller.reconcile()
+    gate.satisfied = false
+    controller.reconcile() // ends naturally, action pending in the debounce
+    #expect(endActor.performed.isEmpty)
+
+    // The Mac sleeps across the debounce window; the first reconcile after
+    // wake, hours later, must not put the just-woken Mac back to sleep.
+    clock.advance(3 * 3600)
+    controller.reconcile()
+    #expect(endActor.performed.isEmpty)
+}
+
+@MainActor
+@Test func aSafetyPauseCancelsThePendingEndAction() {
+    let (controller, _, endActor, clock) = makeEndController()
+    controller.endAction = .sleepMac
+    controller.pauseBelowBatteryPercent = 20
+    let gate = StubReminderGate(true)
+    controller.triggerGate = gate
+
+    controller.reconcile(battery: .discharging(50))
+    gate.satisfied = false
+    controller.reconcile(battery: .discharging(50)) // action pending
+    // The battery pause latches inside the debounce window and starves the
+    // flush; lifting it later must not fire the stale action.
+    clock.advance(1)
+    controller.reconcile(battery: .discharging(10))
+    clock.advance(2 * 3600)
+    controller.reconcile(battery: .onAC)
+    controller.reconcile(battery: .onAC)
+    #expect(endActor.performed.isEmpty)
+}
+
+@MainActor
 @Test func endEffectsStayQuietWhenTheOptionsAreOff() {
     let (controller, reminder, endActor, clock) = makeEndController()
     // notifyOnEnd false, endAction .none (defaults)
