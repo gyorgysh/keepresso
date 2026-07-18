@@ -9,56 +9,59 @@ import Foundation
         flagPath: "/Users/g/Library/Application Support/Keepresso/sleep-watchdog.flag",
         appPID: 4242
     )
-    // The helper must live with the app's pid (so a crash restores normal
-    // sleep), follow the flag file, and background itself so the admin prompt
-    // returns. Unlike the AWDL loop it must be edge-triggered: it writes
-    // `disablesleep` only on a flag transition, so it never fights the user's
-    // own manual toggle, and on exit restores sleep only if it disabled it.
+    // The helper must live with the app's pid, validate fixed mode literals,
+    // acknowledge a generation only after readback, and keep retrying restore
+    // after the app exits until the original value is confirmed.
     #expect(command.contains("kill -0 4242"))
-    #expect(command.contains("if [ -f \"/Users/g/Library/Application Support/Keepresso/sleep-watchdog.flag\" ]"))
-    #expect(command.contains("ORIG=$(/usr/bin/pmset -g"))
+    #expect(command.contains("if [ -f '/Users/g/Library/Application Support/Keepresso/sleep-watchdog.flag' ]"))
+    #expect(command.contains("IFS=' ' read -r GEN WANT"))
+    #expect(command.contains("active|thermallySuspended|released"))
+    #expect(command.contains("OUT=$(/usr/bin/pmset -g"))
     #expect(command.contains("tolower($1) == \"sleepdisabled\""))
     #expect(command.contains("tolower($1) == \"disablesleep\""))
-    #expect(command.contains("case \"$ORIG\" in 0|1"))
-    #expect(command.contains("0|1) SET=1; /usr/bin/pmset -a disablesleep 1"))
-    #expect(command.contains("*) ORIG= ;; esac"))
-    #expect(!command.contains("ORIG=0"))
-    #expect(command.contains("elif [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep \"$ORIG\""))
+    #expect(command.contains("if (!found) exit 1"))
+    #expect(command.contains("WANT\" = thermallySuspended"))
+    #expect(command.contains("TARGET=0"))
+    #expect(command.contains("printf '%s %s\\n' \"$GEN\" \"$WANT\""))
+    #expect(command.contains("if [ -z \"$ALIVE\" ] && [ -z \"$SET\" ]; then break"))
     #expect(command.hasSuffix("&"))
-    #expect(command.contains("rm -f"))
-    #expect(command.contains("if [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep \"$ORIG\"; fi )"))
+    #expect(command.contains("/var/run/sh.gyorgy.keepresso.sleep-4242.ack"))
+    #expect(command.contains("chmod 644"))
+}
+
+@Test func sleepWatchdogShellQuotesPathsThatContainSyntax() {
+    let command = OsascriptSleepWatchdog.watchdogCommand(
+        flagPath: "/tmp/keepresso '$(touch injected)' flag",
+        ackPath: "/var/run/keepresso 'ack'",
+        appPID: 4242
+    )
+    #expect(command.contains("'/tmp/keepresso '\"'\"'$(touch injected)'\"'\"' flag'"))
+    #expect(command.contains("'/var/run/keepresso '\"'\"'ack'\"'\"''"))
+    #expect(!command.contains("\"/tmp/keepresso '$(touch injected)' flag\""))
+}
+
+@Test func sleepWatchdogRejectsStaleOrWrongModeAcknowledgements() {
+    let expected = "generation-b thermallySuspended"
+    #expect(OsascriptSleepWatchdog.acknowledgementMatches(
+        "generation-b thermallySuspended\n",
+        expected: expected
+    ))
+    #expect(!OsascriptSleepWatchdog.acknowledgementMatches(
+        "generation-a thermallySuspended\n",
+        expected: expected
+    ))
+    #expect(!OsascriptSleepWatchdog.acknowledgementMatches(
+        "generation-b active\n",
+        expected: expected
+    ))
 }
 
 // MARK: - Controller
 
-@Test func thermalLiftPreservesClosedDisplayOwnership() {
-    var automatic = ClosedDisplayThermalLiftCoordinator()
-    #expect(automatic.pause(
-        closedDisplayEnabled: true,
-        automaticHoldActive: true
-    ) == .releaseAutomaticHold)
-    #expect(automatic.hasPendingRecovery)
-    #expect(automatic.pause(
-        closedDisplayEnabled: true,
-        automaticHoldActive: true
-    ) == .none)
-    #expect(automatic.resume() == .resumeAutomaticControl)
-    #expect(!automatic.hasPendingRecovery)
-    #expect(automatic.resume() == .none)
-
-    var manual = ClosedDisplayThermalLiftCoordinator()
-    #expect(manual.pause(
-        closedDisplayEnabled: true,
-        automaticHoldActive: false
-    ) == .setManualMode(false))
-    #expect(manual.resume() == .setManualMode(true))
-
-    var disabled = ClosedDisplayThermalLiftCoordinator()
-    #expect(disabled.pause(
-        closedDisplayEnabled: false,
-        automaticHoldActive: false
-    ) == .none)
-    #expect(disabled.resume() == .none)
+@Test func scopedSleepModesHaveStableProtocolValues() {
+    #expect(SleepHoldMode(rawValue: 0) == .released)
+    #expect(SleepHoldMode(rawValue: 1) == .active)
+    #expect(SleepHoldMode(rawValue: 2) == .thermallySuspended)
 }
 
 @Test func activeAgentReadinessRequiresAConfirmedScopedHold() {
@@ -77,6 +80,12 @@ import Foundation
         helperReady: true,
         automaticHoldActive: true
     ))
+    #expect(ClosedLidProtectionReadiness.resolve(
+        hasUnattendedDemand: true,
+        helperReady: false,
+        automaticHoldActive: false,
+        manualProtectionActive: true
+    ))
 }
 
 private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecked Sendable {
@@ -84,6 +93,8 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     var result: SleepSettingResult = .applied
     var createFlagSucceeds = true
     var engageFailureMessage = "backend says no"
+    private(set) var modes: [SleepHoldMode] = []
+    private var started = false
     /// Helper spawns, i.e. how often the user was asked for a password.
     var startCalls = 0
     var removeCalls = 0
@@ -98,8 +109,17 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
         flagPresent = false
         removeCalls += 1
     }
+    func setMode(_ mode: SleepHoldMode) -> Bool {
+        modes.append(mode)
+        guard createFlagSucceeds else { return false }
+        flagPresent = mode != .released
+        if mode == .released { removeCalls += 1 }
+        return true
+    }
     func startHelper(appPID: Int32) -> SleepSettingResult {
+        if started { return .applied }
         startCalls += 1
+        if result == .applied { started = true }
         return result
     }
 }
@@ -122,6 +142,128 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     await controller.autoTick(brewing: false)
     #expect(!controller.isHolding)
     #expect(!launcher.flagPresent)
+}
+
+@MainActor
+@Test func closedDisplayAutoUsesVerifiedManualProtectionWithoutWrappingIt() async {
+    let launcher = FakeSleepWatchdogLauncher()
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+    controller.onlyWhileBrewing = true
+
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: true)
+    #expect(!controller.isHolding)
+    #expect(controller.isUsingManualProtection)
+    #expect(launcher.startCalls == 0)
+
+    // An unreadable global state is not permission to change it. A later
+    // verified false value lets the normal scoped hold engage.
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: nil)
+    #expect(!controller.isHolding)
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+    #expect(controller.isHolding)
+    #expect(!controller.isUsingManualProtection)
+}
+
+@MainActor
+@Test func thermalSuspensionHardGatesAutomaticReengage() async {
+    let launcher = FakeSleepWatchdogLauncher()
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+    controller.onlyWhileBrewing = true
+
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+    #expect(controller.confirmedMode == .active)
+
+    controller.requestThermalSuspend()
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+    #expect(!controller.isHolding)
+    #expect(controller.confirmedMode == .thermallySuspended)
+
+    let activeRequestsBefore = launcher.modes.count { $0 == .active }
+    for _ in 0..<100 {
+        await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+    }
+    #expect(launcher.modes.count { $0 == .active } == activeRequestsBefore)
+
+    controller.requestThermalResume()
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+    #expect(controller.isHolding)
+}
+
+@MainActor
+@Test func thermalSuspensionCanCaptureManualOnlyStateAndRestoreIt() async {
+    let launcher = FakeSleepWatchdogLauncher()
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+
+    controller.requestThermalSuspend()
+    await controller.autoTick(brewing: false, sleepAlreadyDisabled: true)
+    #expect(controller.confirmedMode == .thermallySuspended)
+
+    controller.requestThermalResume()
+    await controller.autoTick(brewing: false, sleepAlreadyDisabled: false)
+    #expect(controller.confirmedMode == .released)
+    #expect(Array(launcher.modes.suffix(2)) == [.thermallySuspended, .released])
+}
+
+@MainActor
+@Test func renewedHeatSupersedesAPendingThermalResume() async {
+    let launcher = FakeSleepWatchdogLauncher()
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+    controller.onlyWhileBrewing = true
+
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+    controller.requestThermalSuspend()
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: true)
+    controller.requestThermalResume()
+    controller.requestThermalSuspend()
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+
+    #expect(controller.isThermallySuspended)
+    #expect(controller.confirmedMode == .thermallySuspended)
+}
+
+private final class BlockingSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecked Sendable {
+    let activeEntered = DispatchSemaphore(value: 0)
+    let allowActiveToFinish = DispatchSemaphore(value: 0)
+    private let lock = NSLock()
+    private var modes: [SleepHoldMode] = []
+
+    func isFlagPresent() -> Bool { true }
+    func createFlag() -> Bool { setMode(.active) }
+    func removeFlag() { _ = setMode(.released) }
+    func startHelper(appPID: Int32) -> SleepSettingResult { .applied }
+    func setMode(_ mode: SleepHoldMode) -> Bool {
+        lock.lock()
+        modes.append(mode)
+        lock.unlock()
+        if mode == .active {
+            activeEntered.signal()
+            _ = allowActiveToFinish.wait(timeout: .now() + 2)
+        }
+        return true
+    }
+
+    var recordedModes: [SleepHoldMode] {
+        lock.lock()
+        defer { lock.unlock() }
+        return modes
+    }
+}
+
+@MainActor
+@Test func inFlightEngageConvergesToAConcurrentThermalSuspend() async {
+    let launcher = BlockingSleepWatchdogLauncher()
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+    controller.onlyWhileBrewing = true
+
+    controller.updateAutomaticDemand(brewing: true, sleepAlreadyDisabled: false)
+    try? await Task.sleep(for: .milliseconds(20))
+    #expect(launcher.activeEntered.wait(timeout: .now() + 1) == .success)
+    controller.requestThermalSuspend()
+    launcher.allowActiveToFinish.signal()
+    await controller.autoTick(brewing: true, sleepAlreadyDisabled: false)
+
+    #expect(controller.confirmedMode == .thermallySuspended)
+    #expect(Array(launcher.recordedModes.suffix(2)) == [.active, .thermallySuspended])
 }
 
 @MainActor
@@ -215,14 +357,13 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     await controller.autoTick(brewing: true)
     #expect(controller.lastError == "backend says no")
     #expect(!controller.isHolding)
-    #expect(launcher.removeCalls == 1)
+    // A timed-out backend may still have recorded the desired state. Do not
+    // issue an unsafe reverse compensation; retry the same desired mode.
+    #expect(launcher.removeCalls == 0)
 }
 
 @MainActor
-@Test func retryEngageLetsAFailedEngageTryAgainMidSession() async {
-    // A failed engage normally holds off until the session ends; after an
-    // external fix (the helper daemon was repaired) retryEngage lets the next
-    // tick try again within the same session.
+@Test func aFailedModeApplicationRetriesTheSameIntentMidSession() async {
     let launcher = FakeSleepWatchdogLauncher()
     launcher.createFlagSucceeds = false
     let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
@@ -233,10 +374,6 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     #expect(!controller.isHolding)
 
     launcher.createFlagSucceeds = true
-    await controller.autoTick(brewing: true) // still held off, no engage
-    #expect(!controller.isHolding)
-
-    controller.retryEngage()
     await controller.autoTick(brewing: true)
     #expect(controller.isHolding)
     #expect(controller.lastError == nil)

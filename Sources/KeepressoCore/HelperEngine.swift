@@ -260,7 +260,10 @@ public final class HelperEngine: @unchecked Sendable {
     private let fans: FanControlling
     private let sleepSettingReader: SleepSettingReading
 
-    private var sleepHolders: Set<Int> = []
+    private var sleepHolders: [Int: SleepHoldMode] = [:]
+    /// Last target this daemon confirmed. Nil means a persisted recovery debt
+    /// predates this process or the latest write had an ambiguous failure.
+    private var appliedSleepTarget: Bool?
     private var awdlHolders: Set<Int> = []
     /// Client → wanted fan boost percent; the effective target is the max.
     private var fanHolders: [Int: Int] = [:]
@@ -295,6 +298,7 @@ public final class HelperEngine: @unchecked Sendable {
             let original = persistedSleepRestoreValue() ?? false
             let ok = runner.run("/usr/bin/pmset", ["-a", "disablesleep", original ? "1" : "0"])
             if ok { _ = clearPersistedSleepRestore() }
+            appliedSleepTarget = nil
         }
         if leftovers.contains(.awdlDown) {
             let ok = runner.run("/sbin/ifconfig", ["awdl0", "up"])
@@ -312,7 +316,17 @@ public final class HelperEngine: @unchecked Sendable {
     /// not connection-scoped and not marked for restore (the global toggle is
     /// meant to outlive the app; that matches the old osascript semantics).
     public func setSleepDisabled(_ disabled: Bool) -> Bool {
-        runner.run("/usr/bin/pmset", ["-a", "disablesleep", disabled ? "1" : "0"])
+        lock.lock()
+        if !sleepHolders.isEmpty {
+            // A manual choice made during a scoped transaction becomes the
+            // new restore baseline. The current active or suspended target
+            // remains in force until the transaction closes.
+            let saved = persistSleepRestoreValue(disabled)
+            lock.unlock()
+            return saved
+        }
+        lock.unlock()
+        return runner.run("/usr/bin/pmset", ["-a", "disablesleep", disabled ? "1" : "0"])
     }
 
     /// Put the Mac to sleep right now. Not a hold: there is nothing to restore
@@ -392,11 +406,26 @@ public final class HelperEngine: @unchecked Sendable {
     /// Take or release `client`'s hold on `disablesleep`. Writes the system
     /// only when the union of holders becomes non-empty or empty.
     public func setSleepHold(client: Int, holding: Bool) -> Bool {
+        setSleepHoldMode(client: client, mode: holding ? .active : .released)
+    }
+
+    /// Apply one client's exact mode. Active wins over suspended when several
+    /// clients coexist. The first non-released mode opens one journaled
+    /// transaction; only the last release restores and clears its snapshot.
+    public func setSleepHoldMode(client: Int, mode: SleepHoldMode) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        return applySleepUnion {
-            if holding { sleepHolders.insert(client) } else { sleepHolders.remove(client) }
+        if mode != .released,
+           sleepHolders.isEmpty,
+           !beginSleepTransactionLocked() {
+            return false
         }
+        if mode == .released {
+            sleepHolders.removeValue(forKey: client)
+        } else {
+            sleepHolders[client] = mode
+        }
+        return reconcileSleepTargetLocked()
     }
 
     /// Take or release `client`'s hold on `awdl0 down`.
@@ -429,7 +458,8 @@ public final class HelperEngine: @unchecked Sendable {
     public func clientDisconnected(_ client: Int) {
         lock.lock()
         defer { lock.unlock() }
-        _ = applySleepUnion { sleepHolders.remove(client) }
+        sleepHolders.removeValue(forKey: client)
+        _ = reconcileSleepTargetLocked()
         _ = applyAWDLUnion { awdlHolders.remove(client) }
         _ = applyFanUnion { fanHolders.removeValue(forKey: client) }
     }
@@ -445,6 +475,15 @@ public final class HelperEngine: @unchecked Sendable {
         if holding {
             runner.run("/sbin/ifconfig", ["awdl0", "down"])
         }
+    }
+
+    /// Retry an ambiguous sleep write or restore debt. This is intentionally
+    /// periodic: a failed last release has no client left to issue another
+    /// request, but the daemon must keep settling the journal until it lands.
+    public func sleepTick() {
+        lock.lock()
+        _ = reconcileSleepTargetLocked()
+        lock.unlock()
     }
 
     /// Re-force the fans while any hold is live: thermalmonitord re-takes fan
@@ -489,8 +528,9 @@ public final class HelperEngine: @unchecked Sendable {
     /// it on demand).
     public var isIdle: Bool {
         lock.lock()
-        defer { lock.unlock() }
-        return sleepHolders.isEmpty && awdlHolders.isEmpty && fanHolders.isEmpty
+        let holdsEmpty = sleepHolders.isEmpty && awdlHolders.isEmpty && fanHolders.isEmpty
+        lock.unlock()
+        return holdsEmpty && !state.markers().contains(.sleepDisabled)
     }
 
     // MARK: - CLI symlink
@@ -524,53 +564,72 @@ public final class HelperEngine: @unchecked Sendable {
 
     // MARK: - Union edges (call with the lock held)
 
-    private func applySleepUnion(_ mutate: () -> Void) -> Bool {
-        let previousHolders = sleepHolders
-        let before = !sleepHolders.isEmpty
-        mutate()
-        let after = !sleepHolders.isEmpty
-        guard before != after else { return true }
-        if after {
-            // A previous release or launch restore may have failed. Its marker
-            // and snapshot are the authoritative debt until a restore succeeds;
-            // sampling the currently-stuck value here would overwrite the real
-            // original and make `disablesleep 1` permanent.
-            if state.markers().contains(.sleepDisabled) {
-                if sleepSettingReader.sleepIsDisabled() == true { return true }
-                return runner.run("/usr/bin/pmset", ["-a", "disablesleep", "1"])
+    private func beginSleepTransactionLocked() -> Bool {
+        if state.markers().contains(.sleepDisabled) {
+            // Reuse an unsettled debt. Sampling the currently stuck value here
+            // would overwrite the real original and make it permanent.
+            return true
+        }
+        guard let original = sleepSettingReader.sleepIsDisabled() else {
+            return false
+        }
+        guard persistSleepRestoreValue(original) else { return false }
+        guard state.set(.sleepDisabled, present: true) else {
+            if state.set(.sleepDisabled, present: false) {
+                _ = (state as? HelperSleepRestoreValuePersisting)?.setSleepRestoreValue(nil)
             }
+            return false
+        }
+        appliedSleepTarget = original
+        return true
+    }
 
-            guard let original = sleepSettingReader.sleepIsDisabled() else {
-                // Without an exact snapshot, changing a global setting could
-                // destroy user-owned state on release. Refuse this hold and
-                // retry later instead of guessing that sleep was enabled.
-                sleepHolders = previousHolders
-                return false
+    private func effectiveSleepModeLocked() -> SleepHoldMode {
+        if sleepHolders.values.contains(.active) { return .active }
+        if sleepHolders.values.contains(.thermallySuspended) {
+            return .thermallySuspended
+        }
+        return .released
+    }
+
+    private func reconcileSleepTargetLocked() -> Bool {
+        let mode = effectiveSleepModeLocked()
+        if mode == .released {
+            guard state.markers().contains(.sleepDisabled) else {
+                appliedSleepTarget = nil
+                return true
             }
-            // Record the exact snapshot and debt before the system write. If
-            // either journal operation fails, roll back the in-memory claim and
-            // refuse to touch pmset because a later crash could not recover it.
-            guard persistSleepRestoreValue(original) else {
-                sleepHolders = previousHolders
-                return false
-            }
-            guard state.set(.sleepDisabled, present: true) else {
-                sleepHolders = previousHolders
-                // A failed write can be ambiguous. Clear the snapshot only if
-                // we can prove no marker remains; otherwise retain the exact
-                // value so a later launch still has safe recovery data.
-                if state.set(.sleepDisabled, present: false) {
-                    _ = (state as? HelperSleepRestoreValuePersisting)?.setSleepRestoreValue(nil)
+            let original = persistedSleepRestoreValue() ?? false
+            if appliedSleepTarget != original {
+                guard runner.run(
+                    "/usr/bin/pmset",
+                    ["-a", "disablesleep", original ? "1" : "0"]
+                ) else {
+                    appliedSleepTarget = nil
+                    return false
                 }
-                return false
+                appliedSleepTarget = original
             }
-            if original { return true }
-            return runner.run("/usr/bin/pmset", ["-a", "disablesleep", "1"])
+            guard clearPersistedSleepRestore() else { return false }
+            appliedSleepTarget = nil
+            return true
         }
 
-        let original = persistedSleepRestoreValue() ?? false
-        let ok = runner.run("/usr/bin/pmset", ["-a", "disablesleep", original ? "1" : "0"])
-        return ok && clearPersistedSleepRestore()
+        if !state.markers().contains(.sleepDisabled),
+           !beginSleepTransactionLocked() {
+            return false
+        }
+        let target = mode == .active
+        guard appliedSleepTarget != target else { return true }
+        guard runner.run(
+            "/usr/bin/pmset",
+            ["-a", "disablesleep", target ? "1" : "0"]
+        ) else {
+            appliedSleepTarget = nil
+            return false
+        }
+        appliedSleepTarget = target
+        return true
     }
 
     private func applyAWDLUnion(_ mutate: () -> Void) -> Bool {

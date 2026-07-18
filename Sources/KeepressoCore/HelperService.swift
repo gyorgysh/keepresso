@@ -36,7 +36,8 @@ public enum HelperService {
     /// 5: added `sleepNow` (`pmset sleepnow` for the session-end action).
     /// 6: added the wake-schedule verb (`applyWakeSchedule`, one composite
     ///    `pmset schedule` / `pmset repeat` step).
-    public static let protocolVersion = 6
+    /// 7: added three-state scoped sleep holds for thermal suspension.
+    public static let protocolVersion = 7
 
     /// The code-signing requirement one side demands of the other: an
     /// Apple-issued certificate, the expected identifier, and the same team as
@@ -90,6 +91,9 @@ public enum HelperService {
     /// Take or release this connection's hold on `disablesleep` (the
     /// "only while brewing" automation).
     func setSleepHold(_ holding: Bool, reply: @escaping @Sendable (Bool) -> Void)
+    /// Set this connection's exact scoped sleep mode. Raw values are defined
+    /// by ``SleepHoldMode``.
+    func setSleepHoldMode(_ rawMode: Int, reply: @escaping @Sendable (Bool) -> Void)
     /// Take or release this connection's hold on `awdl0 down` (the AWDL
     /// watchdog). While any hold is live the daemon re-downs the interface
     /// every few seconds, since macOS re-raises it on its own.
@@ -135,6 +139,7 @@ public protocol PrivilegedHelperCalling: AnyObject, Sendable {
     func pingVersion() -> Int?
     func setSleepDisabled(_ disabled: Bool) -> Bool
     func setSleepHold(_ holding: Bool) -> Bool
+    func setSleepHoldMode(_ mode: SleepHoldMode) -> Bool
     func setAWDLHold(_ holding: Bool) -> Bool
     func setFanHold(_ holding: Bool, percent: Int) -> Bool
     /// Whether the daemon surrendered the forced-fan hold on its own, `nil`
@@ -146,6 +151,16 @@ public protocol PrivilegedHelperCalling: AnyObject, Sendable {
     /// ``HelperXPCProtocol/applyWakeSchedule(oneShot:repeatDays:repeatTime:reply:)``).
     /// `nil` parts are not wanted; all `nil` clears everything.
     func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool
+}
+
+extension PrivilegedHelperCalling {
+    public func setSleepHoldMode(_ mode: SleepHoldMode) -> Bool {
+        switch mode {
+        case .released: return setSleepHold(false)
+        case .active: return setSleepHold(true)
+        case .thermallySuspended: return false
+        }
+    }
 }
 
 /// Real client over `NSXPCConnection`. The connection *is* the app's claim on
@@ -161,7 +176,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     private let lock = NSLock()
     private var connection: NSXPCConnection?
     /// What we currently want held, for re-assertion after an interruption.
-    private var wantsSleepHold = false
+    private var wantsSleepMode: SleepHoldMode = .released
     private var wantsAWDLHold = false
     /// The wanted fan boost percent, or nil for no fan hold.
     private var wantsFanHold: Int?
@@ -194,10 +209,14 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func setSleepHold(_ holding: Bool) -> Bool {
+        setSleepHoldMode(holding ? .active : .released)
+    }
+
+    public func setSleepHoldMode(_ mode: SleepHoldMode) -> Bool {
         lock.lock()
-        wantsSleepHold = holding
+        wantsSleepMode = mode
         lock.unlock()
-        return call { proxy, done in proxy.setSleepHold(holding, reply: done) }
+        return call { proxy, done in proxy.setSleepHoldMode(mode.rawValue, reply: done) }
     }
 
     public func setAWDLHold(_ holding: Bool) -> Bool {
@@ -290,7 +309,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     /// launchd only picks up a newly installed binary on a fresh connection.
     private func releaseConnectionUnlessHeld() {
         lock.lock()
-        let held = wantsSleepHold || wantsAWDLHold || wantsFanHold != nil
+        let held = wantsSleepMode != .released || wantsAWDLHold || wantsFanHold != nil
         let stale = held ? nil : connection
         if !held { connection = nil }
         lock.unlock()
@@ -337,12 +356,16 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     /// relaunched daemon, without blocking whoever's runloop we're on.
     private func reassertHolds() {
         lock.lock()
-        let sleep = wantsSleepHold
+        let sleep = wantsSleepMode
         let awdl = wantsAWDLHold
         let fan = wantsFanHold
         lock.unlock()
-        guard sleep || awdl || fan != nil, let proxy = proxyForAsyncUse() else { return }
-        if sleep { proxy.setSleepHold(true) { _ in } }
+        guard sleep != .released || awdl || fan != nil,
+              let proxy = proxyForAsyncUse()
+        else { return }
+        if sleep != .released {
+            proxy.setSleepHoldMode(sleep.rawValue) { _ in }
+        }
         if awdl { proxy.setAWDLHold(true) { _ in } }
         if let fan { proxy.setFanHold(true, percent: fan) { _ in } }
     }

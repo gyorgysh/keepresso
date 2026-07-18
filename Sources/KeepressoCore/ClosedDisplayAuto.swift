@@ -1,6 +1,13 @@
 import Foundation
 import Observation
 
+/// Exact state of one connection-scoped sleep transaction.
+public enum SleepHoldMode: Int, Codable, Sendable, Equatable {
+    case released = 0
+    case active = 1
+    case thermallySuspended = 2
+}
+
 /// System-touching seam for the closed-display auto helper: a root loop that
 /// lives as long as the app does and holds the global `pmset disablesleep`
 /// setting on whenever a user-owned flag file exists.
@@ -21,6 +28,11 @@ public protocol SleepWatchdogLaunching: AnyObject, Sendable {
     /// Delete the flag; the helper notices within a cycle and re-enables
     /// normal sleep (only if it was the one that disabled it).
     func removeFlag()
+    /// Apply and confirm an exact transaction state. Thermal suspension keeps
+    /// the original sleep-setting snapshot but temporarily forces sleep back
+    /// on, so recovery never has to guess whether the original value was
+    /// manual, automatic, or both.
+    func setMode(_ mode: SleepHoldMode) -> Bool
     /// Spawn the root helper loop. Blocking: it waits for the user to answer
     /// the administrator prompt. Called once per app run, on first activation.
     func startHelper(appPID: Int32) -> SleepSettingResult
@@ -33,14 +45,29 @@ extension SleepWatchdogLaunching {
     public var engageFailureMessage: String {
         L("Couldn't create the sleep watchdog flag file.")
     }
+
+    public func setMode(_ mode: SleepHoldMode) -> Bool {
+        switch mode {
+        case .released:
+            removeFlag()
+            return true
+        case .active:
+            return createFlag()
+        case .thermallySuspended:
+            return false
+        }
+    }
 }
 
 /// Real backend: the flag lives in Application Support, and the loop is
 /// spawned as root via `osascript`'s "with administrator privileges" (the same
 /// admin seam ``PMSetSleepControl`` and ``OsascriptAWDLWatchdog`` use),
 /// backgrounded so the prompt returns as soon as the loop is running.
-public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
+public final class OsascriptSleepWatchdog: SleepWatchdogLaunching, @unchecked Sendable {
     private let flagURL: URL
+    private let stateLock = NSLock()
+    private var helperStarted = false
+    private var helperPID: Int32?
 
     public init(flagURL: URL = OsascriptSleepWatchdog.defaultFlagURL) {
         self.flagURL = flagURL
@@ -54,33 +81,89 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
     }
 
     public func isFlagPresent() -> Bool {
-        FileManager.default.fileExists(atPath: flagURL.path)
+        guard let text = try? String(contentsOf: flagURL, encoding: .utf8) else { return false }
+        return text.contains(" active") || text.contains(" thermallySuspended")
     }
 
     public func createFlag() -> Bool {
-        do {
-            try FileManager.default.createDirectory(
-                at: flagURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            try Data().write(to: flagURL)
-            return true
-        } catch {
-            return false
-        }
+        setMode(.active)
     }
 
     public func removeFlag() {
-        try? FileManager.default.removeItem(at: flagURL)
+        _ = setMode(.released)
+    }
+
+    public func setMode(_ mode: SleepHoldMode) -> Bool {
+        stateLock.lock()
+        let started = helperStarted
+        let pid = helperPID
+        stateLock.unlock()
+
+        let fm = FileManager.default
+        if mode == .released, !started {
+            try? fm.removeItem(at: flagURL)
+            return true
+        }
+        guard started, let pid else { return false }
+        let ackURL = URL(fileURLWithPath: Self.ackPath(appPID: pid))
+
+        let generation = UUID().uuidString.lowercased()
+        let modeName: String
+        switch mode {
+        case .released: modeName = "released"
+        case .active: modeName = "active"
+        case .thermallySuspended: modeName = "thermallySuspended"
+        }
+        do {
+            try fm.createDirectory(
+                at: flagURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try Data("\(generation) \(modeName)\n".utf8).write(to: flagURL, options: .atomic)
+            try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: flagURL.path)
+        } catch {
+            return false
+        }
+
+        let expected = "\(generation) \(modeName)"
+        for _ in 0..<80 {
+            if let ack = try? String(contentsOf: ackURL, encoding: .utf8),
+               Self.acknowledgementMatches(ack, expected: expected) {
+                if mode == .released {
+                    try? fm.removeItem(at: flagURL)
+                }
+                return true
+            }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        return false
+    }
+
+    static func acknowledgementMatches(_ text: String, expected: String) -> Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines) == expected
     }
 
     public func startHelper(appPID: Int32) -> SleepSettingResult {
-        let command = Self.watchdogCommand(flagPath: flagURL.path, appPID: appPID)
+        stateLock.lock()
+        let alreadyStarted = helperStarted
+        stateLock.unlock()
+        if alreadyStarted { return .applied }
+        let command = Self.watchdogCommand(
+            flagPath: flagURL.path,
+            ackPath: Self.ackPath(appPID: appPID),
+            appPID: appPID
+        )
         let script = "do shell script \"\(OsascriptAWDLWatchdog.appleScriptEscaped(command))\" with administrator privileges"
         guard let result = runForResult("/usr/bin/osascript", ["-e", script]) else {
             return .failed(L("Couldn't run the sleep watchdog command."))
         }
-        if result.status == 0 { return .applied }
+        if result.status == 0 {
+            stateLock.lock()
+            helperStarted = true
+            helperPID = appPID
+            stateLock.unlock()
+            return .applied
+        }
         // osascript reports a user-cancelled auth prompt as error -128.
         if result.stderr.contains("-128") || result.stderr.localizedCaseInsensitiveContains("cancel") {
             return .cancelled
@@ -89,27 +172,43 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
         return .failed(message.isEmpty ? L("The sleep watchdog couldn't be started.") : message)
     }
 
-    /// The root helper, backgrounded so `do shell script` returns immediately.
-    /// It lives as long as the app's pid does and follows the flag,
-    /// **edge-triggered** unlike the AWDL loop: nothing else re-flips
-    /// `disablesleep` behind our back, and re-asserting every cycle would fight
-    /// the user's own manual toggle (``PMSetSleepControl`` writes the same
-    /// setting directly). So it writes only on a flag transition, and on app
-    /// death restores the value captured at the active hold's start. Capturing
-    /// on every transition also respects a manual change made between two
-    /// automated sessions.
-    static func watchdogCommand(flagPath: String, appPID: Int32) -> String {
-        "( SET=; while kill -0 \(appPID) 2>/dev/null; do "
-            + "if [ -f \"\(flagPath)\" ]; then "
-            + "if [ -z \"$SET\" ]; then "
-            + "ORIG=$(/usr/bin/pmset -g | /usr/bin/awk 'tolower($1) == \"sleepdisabled\" || tolower($1) == \"disablesleep\" { print $2; exit }'); "
-            + "case \"$ORIG\" in "
-            + "0|1) SET=1; /usr/bin/pmset -a disablesleep 1 ;; "
-            + "*) ORIG= ;; esac; fi; "
-            + "elif [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep \"$ORIG\"; SET=; ORIG=; fi; "
-            + "sleep 2; done; "
-            + "rm -f \"\(flagPath)\"; "
-            + "if [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep \"$ORIG\"; fi ) </dev/null >/dev/null 2>&1 &"
+    /// The root helper follows a generation-tagged control file and writes an
+    /// acknowledgement only after `pmset` and its readback agree. It retains
+    /// the original value throughout active and thermally suspended modes. If
+    /// restore fails after the app exits, the loop keeps retrying instead of
+    /// abandoning the recovery debt.
+    static func ackPath(appPID: Int32) -> String {
+        "/var/run/sh.gyorgy.keepresso.sleep-\(appPID).ack"
+    }
+
+    /// Quote an arbitrary path as one POSIX shell word. The fallback command
+    /// runs as root, so even a path supplied by a test or future caller must
+    /// never be able to introduce shell syntax.
+    static func shellQuoted(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
+    }
+
+    static func watchdogCommand(
+        flagPath: String,
+        ackPath: String? = nil,
+        appPID: Int32
+    ) -> String {
+        let quotedFlagPath = Self.shellQuoted(flagPath)
+        let quotedAckPath = Self.shellQuoted(ackPath ?? Self.ackPath(appPID: appPID))
+        let readSetting = "OUT=$(/usr/bin/pmset -g 2>/dev/null) && OBS=$(printf '%s\\n' \"$OUT\" | /usr/bin/awk 'tolower($1) == \"sleepdisabled\" || tolower($1) == \"disablesleep\" { print $2; found=1; exit } END { if (!found) exit 1 }')"
+        return "( SET=; ORIG=; APPLIED=released; while :; do "
+            + "if kill -0 \(appPID) 2>/dev/null; then ALIVE=1; else ALIVE=; fi; "
+            + "GEN=; WANT=released; "
+            + "if [ -n \"$ALIVE\" ] && [ -f \(quotedFlagPath) ]; then IFS=' ' read -r GEN WANT < \(quotedFlagPath); fi; "
+            + "case \"$WANT\" in active|thermallySuspended|released) ;; *) GEN=; WANT=released ;; esac; "
+            + "if [ \"$WANT\" != released ] && [ -z \"$SET\" ]; then \(readSetting); case \"$OBS\" in 0|1) ORIG=$OBS; SET=1 ;; *) ORIG= ;; esac; fi; "
+            + "if [ \"$WANT\" = active ]; then TARGET=1; elif [ \"$WANT\" = thermallySuspended ]; then TARGET=0; else TARGET=$ORIG; fi; "
+            + "if [ \"$WANT\" = released ]; then "
+            + "if [ -n \"$SET\" ]; then if /usr/bin/pmset -a disablesleep \"$TARGET\" && \(readSetting) && [ \"$OBS\" = \"$TARGET\" ]; then SET=; ORIG=; APPLIED=released; fi; else APPLIED=released; fi; "
+            + "elif [ -n \"$SET\" ] && [ \"$APPLIED\" != \"$WANT\" ]; then if /usr/bin/pmset -a disablesleep \"$TARGET\" && \(readSetting) && [ \"$OBS\" = \"$TARGET\" ]; then APPLIED=$WANT; fi; fi; "
+            + "if [ -n \"$GEN\" ] && [ \"$APPLIED\" = \"$WANT\" ]; then printf '%s %s\\n' \"$GEN\" \"$WANT\" > \(quotedAckPath) && chmod 644 \(quotedAckPath); fi; "
+            + "if [ -z \"$ALIVE\" ] && [ -z \"$SET\" ]; then break; fi; sleep 2; done; "
+            + "rm -f \(quotedFlagPath) \(quotedAckPath) ) </dev/null >/dev/null 2>&1 &"
     }
 
     /// Run a command and return its exit status plus stderr, or `nil` if it
@@ -132,16 +231,6 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
     }
 }
 
-/// Side effects needed when thermal protection temporarily lifts a
-/// closed-display override. Automatic holds must remain scoped, while a
-/// manual user setting may be restored through the persistent controller.
-public enum ClosedDisplayThermalAction: Equatable, Sendable {
-    case none
-    case releaseAutomaticHold
-    case resumeAutomaticControl
-    case setManualMode(Bool)
-}
-
 /// Resolves the status exposed to Agent clients. A helper registration is a
 /// sufficient capability signal while idle, but active unattended work must
 /// confirm that its scoped sleep hold was accepted.
@@ -149,51 +238,12 @@ public enum ClosedLidProtectionReadiness {
     public static func resolve(
         hasUnattendedDemand: Bool,
         helperReady: Bool,
-        automaticHoldActive: Bool
+        automaticHoldActive: Bool,
+        manualProtectionActive: Bool = false
     ) -> Bool {
-        hasUnattendedDemand ? automaticHoldActive : helperReady
-    }
-}
-
-/// Remembers who owned `disablesleep` before a thermal pause. This prevents an
-/// automatic Agent hold from being restored as a persistent manual setting.
-public struct ClosedDisplayThermalLiftCoordinator: Equatable, Sendable {
-    private enum Owner: Equatable, Sendable {
-        case automatic
-        case manual
-    }
-
-    private var liftedOwner: Owner?
-
-    public init() {}
-
-    public var hasPendingRecovery: Bool { liftedOwner != nil }
-
-    public mutating func pause(
-        closedDisplayEnabled: Bool,
-        automaticHoldActive: Bool
-    ) -> ClosedDisplayThermalAction {
-        guard liftedOwner == nil,
-              closedDisplayEnabled || automaticHoldActive
-        else { return .none }
-
-        if automaticHoldActive {
-            liftedOwner = .automatic
-            return .releaseAutomaticHold
-        }
-        liftedOwner = .manual
-        return .setManualMode(false)
-    }
-
-    public mutating func resume() -> ClosedDisplayThermalAction {
-        guard let liftedOwner else { return .none }
-        self.liftedOwner = nil
-        switch liftedOwner {
-        case .automatic:
-            return .resumeAutomaticControl
-        case .manual:
-            return .setManualMode(true)
-        }
+        hasUnattendedDemand
+            ? (automaticHoldActive || manualProtectionActive)
+            : (helperReady || manualProtectionActive)
     }
 }
 
@@ -201,8 +251,9 @@ public struct ClosedDisplayThermalLiftCoordinator: Equatable, Sendable {
 /// `disablesleep` setting follows the keep-awake session, on when it starts
 /// and off when it ends, instead of staying on until manually turned off.
 ///
-/// Owns no timer: the host's ticker calls ``autoTick(brewing:)`` once a
-/// second with the session's live state. All flips go through the root helper
+/// Owns no timer: the host's ticker calls
+/// ``autoTick(brewing:sleepAlreadyDisabled:)`` once a second with the
+/// session's live state. All flips go through the root helper
 /// (see ``SleepWatchdogLaunching``), never through the per-flip admin prompt
 /// of ``SleepSettingControlling``, so after the one authorization the
 /// automation is prompt-free. `@MainActor` like the other controllers; the
@@ -210,9 +261,17 @@ public struct ClosedDisplayThermalLiftCoordinator: Equatable, Sendable {
 @MainActor
 @Observable
 public final class ClosedDisplayAutoController {
-    /// Whether the helper is currently holding sleep disabled (the flag file
-    /// is present).
-    public private(set) var isHolding = false
+    /// Last state confirmed by the selected backend. Suspended remains a
+    /// scoped transaction, but it is intentionally not reported as holding
+    /// the Mac awake.
+    public private(set) var confirmedMode: SleepHoldMode = .released
+    public var isHolding: Bool { confirmedMode == .active }
+    /// True only when current automatic demand deliberately relies on a live
+    /// manual global setting instead of a scoped transaction.
+    public private(set) var isUsingManualProtection = false
+    public var hasScopedTransaction: Bool {
+        confirmedMode != .released || desiredMode != .released
+    }
 
     /// Message from the last failed attempt; `nil` after a success or a user
     /// cancellation (cancelling is not an error to nag about).
@@ -226,13 +285,23 @@ public final class ClosedDisplayAutoController {
     /// and mirrors it in.
     public var onlyWhileBrewing = false
 
-    /// Set when an engage was cancelled or failed, so the prompt doesn't
-    /// re-appear every tick; cleared when the current session ends.
+    /// Set when initial authorization was cancelled, so the prompt does not
+    /// reappear every tick. A new demand edge clears it.
     private var heldOff = false
 
-    /// Whether the root helper was already spawned this app run. Once it's up,
-    /// engaging and releasing is flag-file-only: no more prompts.
-    private var helperStarted = false
+    /// Hard gate used while thermal protection has paused work. It is
+    /// separate from the session state because asynchronous release and
+    /// restore operations can overlap a session transition.
+    public private(set) var isThermallySuspended = false
+
+    private var isAuthorizedForThisRun = false
+    private var automaticDemand = false
+    private var sleepAlreadyDisabled: Bool?
+    private var desiredMode: SleepHoldMode = .released
+    private var revision = 0
+    private var resumePending = false
+    private var thermalGateClosed = false
+    @ObservationIgnored private var reconcileTask: Task<Void, Never>?
 
     private let launcher: SleepWatchdogLaunching
     private let appPID: Int32
@@ -247,7 +316,7 @@ public final class ClosedDisplayAutoController {
 
     /// Whether the root helper is already authorized and running this app run,
     /// so engaging needs no further password prompt.
-    public var isAuthorized: Bool { helperStarted }
+    public var isAuthorized: Bool { isAuthorizedForThisRun }
 
     /// Remove any stale flag left by a previous run (a hard kill or a reboot
     /// mid-watchdog). Called once at app launch: any loop from a previous
@@ -255,7 +324,9 @@ public final class ClosedDisplayAutoController {
     /// stale by definition.
     public func cleanupAtLaunch() async {
         let launcher = self.launcher
-        await Task.detached { launcher.removeFlag() }.value
+        _ = await Task.detached { launcher.setMode(.released) }.value
+        confirmedMode = .released
+        desiredMode = .released
     }
 
     /// Pre-authorize the helper without touching the sleep setting: spawn it
@@ -265,16 +336,31 @@ public final class ClosedDisplayAutoController {
     /// (and no prompt) once already authorized.
     @discardableResult
     public func prime() async -> SleepSettingResult {
-        guard !helperStarted, !isBusy else { return .applied }
-        let result = await engage()
-        if case .applied = result { await release() }
+        guard !isAuthorizedForThisRun, !isBusy else { return .applied }
+        isBusy = true
+        defer { isBusy = false }
+        let launcher = self.launcher
+        let pid = appPID
+        let result = await Task.detached { launcher.startHelper(appPID: pid) }.value
+        if case .applied = result {
+            isAuthorizedForThisRun = true
+            _ = await Task.detached { launcher.setMode(.released) }.value
+        }
         return result
     }
 
     /// Stop holding if we are, restoring normal sleep. For when the feature is
     /// switched off mid-session.
     public func stopIfHolding() async {
-        if isHolding { await release() }
+        automaticDemand = false
+        isUsingManualProtection = false
+        thermalGateClosed = false
+        resumePending = false
+        heldOff = false
+        setDesiredMode(.released)
+        finishThermalRecoveryIfConfirmed()
+        scheduleReconcile()
+        await waitForReconcile()
     }
 
     /// Let the next tick try engaging again. For after an external fix (the
@@ -282,76 +368,168 @@ public final class ClosedDisplayAutoController {
     /// engage stays held off until the session ends.
     public func retryEngage() {
         heldOff = false
+        scheduleReconcile()
     }
 
-    /// The once-a-second pulse. Engages while a session is active (one prompt
-    /// on the first engage of an app run; a cancel holds off until the session
-    /// ends) and releases when it stops.
-    public func autoTick(brewing: Bool) async {
-        guard onlyWhileBrewing else { return }
-        if brewing {
-            guard !isHolding, !isBusy, !heldOff else { return }
-            switch await engage() {
-            case .applied:
-                break
-            case .cancelled, .failed:
-                heldOff = true
-            }
-        } else {
+    /// Synchronously close the thermal gate before any asynchronous backend
+    /// work starts. An in-flight active transition may still return, but its
+    /// stale revision is never published and the reconcile loop immediately
+    /// converges to suspended.
+    public func requestThermalSuspend() {
+        resumePending = false
+        guard !thermalGateClosed else { return }
+        isThermallySuspended = true
+        thermalGateClosed = true
+        setDesiredMode(.thermallySuspended)
+        scheduleReconcile()
+    }
+
+    /// Cooling asks for recovery but keeps the gate closed until the next
+    /// post-session-reconcile demand update. That update can move directly
+    /// from suspended to active or released without a release-and-reacquire
+    /// window.
+    public func requestThermalResume() {
+        guard isThermallySuspended else { return }
+        resumePending = true
+    }
+
+    /// Feed the latest post-reconcile demand without creating one task per
+    /// ticker pulse. At most one backend reconcile task exists at a time.
+    public func updateAutomaticDemand(
+        brewing: Bool,
+        sleepAlreadyDisabled: Bool? = false
+    ) {
+        let demandEdge = automaticDemand != brewing
+        automaticDemand = brewing
+        self.sleepAlreadyDisabled = sleepAlreadyDisabled
+        if !brewing || demandEdge { heldOff = false }
+        if resumePending {
+            resumePending = false
+            thermalGateClosed = false
             heldOff = false
-            if isHolding {
-                await release()
+        }
+        recomputeDesiredMode()
+        finishThermalRecoveryIfConfirmed()
+        scheduleReconcile()
+    }
+
+    /// Async compatibility surface for tests and explicit callers.
+    public func autoTick(
+        brewing: Bool,
+        sleepAlreadyDisabled: Bool? = false
+    ) async {
+        updateAutomaticDemand(
+            brewing: brewing,
+            sleepAlreadyDisabled: sleepAlreadyDisabled
+        )
+        await waitForReconcile()
+    }
+
+    private func recomputeDesiredMode() {
+        if thermalGateClosed {
+            isUsingManualProtection = false
+            setDesiredMode(.thermallySuspended)
+            return
+        }
+        guard onlyWhileBrewing, automaticDemand else {
+            isUsingManualProtection = false
+            setDesiredMode(.released)
+            return
+        }
+        // Once a thermal transaction exists, resume it directly. Otherwise a
+        // verified manual global setting already protects closed-lid work and
+        // should not be wrapped in another owner.
+        if confirmedMode != .released || desiredMode != .released {
+            isUsingManualProtection = false
+            setDesiredMode(.active)
+        } else if sleepAlreadyDisabled == false {
+            isUsingManualProtection = false
+            setDesiredMode(.active)
+        } else {
+            isUsingManualProtection = sleepAlreadyDisabled == true
+            setDesiredMode(.released)
+        }
+    }
+
+    private func setDesiredMode(_ mode: SleepHoldMode) {
+        guard desiredMode != mode else { return }
+        desiredMode = mode
+        revision &+= 1
+    }
+
+    private func scheduleReconcile() {
+        guard reconcileTask == nil,
+              confirmedMode != desiredMode,
+              !(heldOff && desiredMode == .active)
+        else { return }
+        reconcileTask = Task { [weak self] in
+            await self?.runReconcileLoop()
+        }
+    }
+
+    private func runReconcileLoop() async {
+        defer {
+            reconcileTask = nil
+            finishThermalRecoveryIfConfirmed()
+        }
+        while confirmedMode != desiredMode {
+            let target = desiredMode
+            let targetRevision = revision
+            let launcher = self.launcher
+            let pid = appPID
+            isBusy = true
+
+            if target != .released {
+                let start = await Task.detached {
+                    launcher.startHelper(appPID: pid)
+                }.value
+                guard targetRevision == revision else {
+                    isBusy = false
+                    continue
+                }
+                switch start {
+                case .applied:
+                    isAuthorizedForThisRun = true
+                case .cancelled:
+                    lastError = nil
+                    if target == .active { heldOff = true }
+                    isBusy = false
+                    return
+                case .failed(let message):
+                    lastError = message
+                    if target == .active { heldOff = true }
+                    isBusy = false
+                    return
+                }
             }
+
+            let applied = await Task.detached {
+                launcher.setMode(target)
+            }.value
+            isBusy = false
+            guard targetRevision == revision else { continue }
+            guard applied else {
+                lastError = launcher.engageFailureMessage
+                return
+            }
+            confirmedMode = target
+            finishThermalRecoveryIfConfirmed()
+            lastError = nil
         }
     }
 
-    /// Disable sleep via the helper. The first call of this app run spawns the
-    /// root helper (one administrator prompt); later ones just recreate the
-    /// flag, instantly and prompt-free.
-    @discardableResult
-    private func engage() async -> SleepSettingResult {
-        guard !isBusy else { return .cancelled }
-        isBusy = true
-        defer { isBusy = false }
-        let launcher = self.launcher
-        let flagCreated = await Task.detached { launcher.createFlag() }.value
-        guard flagCreated else {
-            // A daemon RPC can time out after recording the client's desired
-            // hold or even applying it. Explicitly release on every failed
-            // engage so the XPC client clears that intent and invalidates its
-            // connection instead of reasserting a hidden hold later.
-            await Task.detached { launcher.removeFlag() }.value
-            let message = launcher.engageFailureMessage
-            lastError = message
-            return .failed(message)
-        }
-        if helperStarted {
-            lastError = nil
-            isHolding = true
-            return .applied
-        }
-        let pid = self.appPID
-        let result = await Task.detached { launcher.startHelper(appPID: pid) }.value
-        switch result {
-        case .applied:
-            lastError = nil
-            isHolding = true
-            helperStarted = true
-        case .cancelled:
-            lastError = nil
-            await Task.detached { launcher.removeFlag() }.value
-        case .failed(let message):
-            lastError = message
-            await Task.detached { launcher.removeFlag() }.value
-        }
-        return result
+    private func finishThermalRecoveryIfConfirmed() {
+        guard isThermallySuspended,
+              !thermalGateClosed,
+              confirmedMode == desiredMode,
+              reconcileTask == nil
+        else { return }
+        isThermallySuspended = false
     }
 
-    /// Re-enable normal sleep: just delete the flag (no prompt); the helper
-    /// notices within a cycle and flips `disablesleep` back off.
-    private func release() async {
-        let launcher = self.launcher
-        await Task.detached { launcher.removeFlag() }.value
-        isHolding = false
+    private func waitForReconcile() async {
+        while let task = reconcileTask {
+            await task.value
+        }
     }
 }

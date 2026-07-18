@@ -1101,10 +1101,14 @@ final class AppModel {
     /// scheduled work is active. This keeps a registered helper from being
     /// reported as ready after an actual hold request failed.
     private var agentClosedLidProtectionReady: Bool {
-        ClosedLidProtectionReadiness.resolve(
+        let manualProtectionActive = hasExternalWakeDemand
+            ? closedDisplayAuto.isUsingManualProtection
+            : (!closedDisplayAuto.isThermallySuspended && closedDisplay.isEnabled == true)
+        return ClosedLidProtectionReadiness.resolve(
             hasUnattendedDemand: hasExternalWakeDemand,
             helperReady: wakeHelperGate == .ready,
-            automaticHoldActive: closedDisplayAuto.isHolding
+            automaticHoldActive: closedDisplayAuto.isHolding,
+            manualProtectionActive: manualProtectionActive
         )
     }
 
@@ -1490,12 +1494,6 @@ final class AppModel {
         }
     }
 
-    /// Remembers whether a thermal emergency lifted a manual setting or an
-    /// automatic session hold. In-memory only: a relaunch starts clean rather
-    /// than restoring stale intent.
-    @ObservationIgnored private var thermalClosedDisplayLift =
-        ClosedDisplayThermalLiftCoordinator()
-
     /// The fan boost percent currently held through the helper, or nil when
     /// the fans are under system control. Drives the menu's status line.
     private(set) var fanBoostActivePercent: Int?
@@ -1557,18 +1555,18 @@ final class AppModel {
             case .pauseBrewing:
                 // The session pause itself latches through reconcile (the
                 // guard's reading), which posts the pause notification. Here:
-                // the closed-display lift, always, because the guard only
+                // the closed-display suspension, always, because the guard only
                 // fires with the lid shut and the override on, and pausing
-                // alone can't let that Mac sleep. Use only a prompt-free
-                // release: the scoped watchdog when it owns the setting, or
-                // the installed daemon for a manual global setting.
-                let automaticHoldActive = closedDisplayAuto.isHolding
-                guard closedDisplayEnabled || automaticHoldActive else { break }
-                // Releasing an automatic hold is already prompt-free, even on
-                // the fallback watchdog. A manual global setting still needs
-                // the installed helper because a safety action must never ask
-                // for an administrator password.
-                if !automaticHoldActive, !helperInstalled {
+                // alone cannot let that Mac sleep. The scoped backend keeps
+                // the exact restore snapshot while temporarily forcing sleep
+                // back on.
+                let scopedTransaction = closedDisplayAuto.hasScopedTransaction
+                guard closedDisplayEnabled || scopedTransaction else { break }
+                // An existing scoped transaction is already prompt-free, even
+                // on the fallback watchdog. Opening a transaction around a
+                // manual global setting needs the installed helper because a
+                // safety action must never ask for an administrator password.
+                if !scopedTransaction, !helperInstalled {
                     notifier.notify(
                         title: L("Closed-display mode left on"),
                         body: L("Keepresso paused for heat but can't switch off closed-display mode without the administrator helper (Preferences ▸ General)."),
@@ -1576,34 +1574,15 @@ final class AppModel {
                     )
                     break
                 }
-                applyThermalClosedDisplayAction(thermalClosedDisplayLift.pause(
-                    closedDisplayEnabled: closedDisplayEnabled,
-                    automaticHoldActive: automaticHoldActive
-                ))
+                closedDisplayAuto.requestThermalSuspend()
             case .resumeBrewing:
                 notifier.notify(
                     title: L("Temperatures recovered"),
                     body: L("The Mac has cooled down. Keepresso is back to normal control."),
                     sound: false
                 )
-                applyThermalClosedDisplayAction(thermalClosedDisplayLift.resume())
+                closedDisplayAuto.requestThermalResume()
             }
-        }
-    }
-
-    private func applyThermalClosedDisplayAction(_ action: ClosedDisplayThermalAction) {
-        switch action {
-        case .none:
-            break
-        case .releaseAutomaticHold:
-            Task { await closedDisplayAuto.stopIfHolding() }
-        case .resumeAutomaticControl:
-            // The normal session follower recreates a scoped hold only if the
-            // task demand is still active after the thermal latch clears.
-            closedDisplayAuto.retryEngage()
-        case .setManualMode(let enabled):
-            guard helperInstalled else { return }
-            setClosedDisplay(enabled)
         }
     }
 
@@ -2329,7 +2308,7 @@ final class AppModel {
     var closedDisplayAutoBusy: Bool { closedDisplayAuto.isBusy }
 
     @ObservationIgnored private var wasBrewingForClosedDisplay = false
-    @ObservationIgnored private var wasClosedDisplayHolding = false
+    @ObservationIgnored private var lastConfirmedClosedDisplayMode: SleepHoldMode = .released
     @ObservationIgnored private var sawClosedDisplayAutoError = false
 
     /// Once-a-second pulse for closed-display mode's "only while brewing"
@@ -2338,8 +2317,13 @@ final class AppModel {
     func closedDisplayAutoTick() {
         let shouldFollowSession = settings.closedDisplayOnlyWhileBrewing || hasExternalWakeDemand
         closedDisplayAuto.onlyWhileBrewing = shouldFollowSession
-        guard shouldFollowSession else { return }
-        let brewing = session.isActive
+        let needsRecoveryTick = closedDisplayAuto.hasScopedTransaction
+            || closedDisplayAuto.isThermallySuspended
+        guard shouldFollowSession || needsRecoveryTick else { return }
+        // External Agent demand stays true while the thermal pause makes the
+        // ordinary session inactive. This lets recovery move directly from
+        // suspended back to active when leases still require the machine.
+        let brewing = session.isActive || hasExternalWakeDemand
         // Without the helper, the first engage of an app run prompts for the
         // password (e.g. auto mode was enabled in a previous run): become the
         // active app on the session-start edge so the dialog is focused (same
@@ -2347,7 +2331,11 @@ final class AppModel {
         // notification, since the dialog itself is easy to miss and names
         // "osascript", not Keepresso. Edge-only, so a cancelled prompt isn't
         // followed by a focus steal every second for the rest of the session.
-        if brewing, !wasBrewingForClosedDisplay, !closedDisplayAuto.isAuthorized, !helperInstalled {
+        if brewing,
+           closedDisplay.isEnabled == false,
+           !wasBrewingForClosedDisplay,
+           !closedDisplayAuto.isAuthorized,
+           !helperInstalled {
             NSApp.activate(ignoringOtherApps: true)
             notifier.notify(
                 title: L("Keepresso needs your password"),
@@ -2364,15 +2352,16 @@ final class AppModel {
             verifyHelper()
         }
         sawClosedDisplayAutoError = autoFailed
-        Task { await closedDisplayAuto.autoTick(brewing: brewing) }
-        // Mirror an engage or release into the closed-display toggle's live
-        // state (and the ticker's lid handling, which keys off it) once the
-        // helper has had a cycle to apply the change.
-        let holding = closedDisplayAuto.isHolding
-        if holding != wasClosedDisplayHolding {
-            wasClosedDisplayHolding = holding
+        closedDisplayAuto.updateAutomaticDemand(
+            brewing: brewing,
+            sleepAlreadyDisabled: closedDisplay.isEnabled
+        )
+        // Mirror every confirmed active, suspended, or released transition
+        // into the closed-display toggle and the ticker's lid handling.
+        let confirmedMode = closedDisplayAuto.confirmedMode
+        if confirmedMode != lastConfirmedClosedDisplayMode {
+            lastConfirmedClosedDisplayMode = confirmedMode
             Task {
-                try? await Task.sleep(for: .seconds(3))
                 await closedDisplay.refresh()
             }
         }

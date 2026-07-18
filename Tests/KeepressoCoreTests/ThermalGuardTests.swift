@@ -246,6 +246,27 @@ private let pressureConfig = ThermalSafetyConfig(
     #expect(!stillOpen)
 }
 
+@Test func thermalSuppressionKeepsArmingLatchedUntilTheLidOpens() {
+    var arming = ThermalArming()
+    #expect(arming.update(
+        lidClosed: true,
+        sleepOverrideActive: true,
+        thermalSuppressionLatched: false
+    ))
+    // Suspension intentionally turns the observed override off. Its own
+    // safety latch must keep the hot closed-lid case armed.
+    #expect(arming.update(
+        lidClosed: true,
+        sleepOverrideActive: false,
+        thermalSuppressionLatched: true
+    ))
+    #expect(!arming.update(
+        lidClosed: false,
+        sleepOverrideActive: false,
+        thermalSuppressionLatched: true
+    ))
+}
+
 @Test func configDecodingClampsOutOfRangeValues() throws {
     // liftSleepDisable is retired (the lift is unconditional now); the stale
     // key in old exports must decode without complaint.

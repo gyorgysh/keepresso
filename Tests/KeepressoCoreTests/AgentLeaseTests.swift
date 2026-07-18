@@ -560,10 +560,11 @@ private func temporaryLeaseFile() throws -> (directory: URL, file: URL) {
 @Test func fileStoreQuarantinesSemanticallyUnsafeLeases() throws {
     let fixture = try temporaryLeaseFile()
     defer { try? FileManager.default.removeItem(at: fixture.directory) }
-    let unsafe = lease(
-        ttl: AgentLeaseRegistry.maximumAllowedLifetime + 1,
+    var unsafe = lease(
+        ttl: 300,
         maxLifetime: AgentLeaseRegistry.maximumAllowedLifetime
     )
+    unsafe.expiresAt = unsafe.maxLifetimeAt
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .secondsSince1970
     try encoder.encode(AgentLeasePersistenceState(leases: [unsafe])).write(to: fixture.file)

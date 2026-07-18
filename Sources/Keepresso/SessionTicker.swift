@@ -20,6 +20,7 @@ final class SessionTicker {
     /// Feeds the guard's arming: the net only escalates with the lid closed
     /// while the sleep override holds the Mac awake (the left-in-a-bag case).
     private let lid: LidStateReading
+    private let thermalSuppressionLatched: () -> Bool
     private var thermalArming = ThermalArming()
     /// Runs after each reconcile, e.g. to mirror session state to the widget.
     private let onTick: (() -> Void)?
@@ -32,6 +33,7 @@ final class SessionTicker {
         powerSource: PowerSourceMonitoring = IOKitPowerSourceMonitor(),
         thermalGuard: ThermalGuardController? = nil,
         lid: LidStateReading = IORegistryLidState(),
+        thermalSuppressionLatched: @escaping () -> Bool = { false },
         onThermalEffects: (([ThermalEffect]) -> Void)? = nil,
         onTick: (() -> Void)? = nil
     ) {
@@ -41,6 +43,7 @@ final class SessionTicker {
         self.powerSource = powerSource
         self.thermalGuard = thermalGuard
         self.lid = lid
+        self.thermalSuppressionLatched = thermalSuppressionLatched
         self.onThermalEffects = onThermalEffects
         self.onTick = onTick
     }
@@ -75,14 +78,20 @@ final class SessionTicker {
                     // time a lid can close on a configured override.
                     var thermal = ThermalReading.unknown
                     if let guard_ = self?.thermalGuard, let self {
+                        let suppressionLatched = self.thermalSuppressionLatched()
                         let armed = self.thermalArming.update(
                             lidClosed: self.lid.isClosed(),
-                            sleepOverrideActive: closedDisplay?.isEnabled
+                            sleepOverrideActive: closedDisplay?.isEnabled,
+                            thermalSuppressionLatched: suppressionLatched
                         )
                         let effects = guard_.tick(armed: armed)
                         if !effects.isEmpty { self.onThermalEffects?(effects) }
                         if session.consumesThermalReading {
-                            thermal = guard_.readingForSession
+                            // Do not resume work until the backend confirms
+                            // active or released recovery from suspended mode.
+                            thermal = suppressionLatched
+                                ? .hot
+                                : guard_.readingForSession
                         }
                     }
                     session.reconcile(

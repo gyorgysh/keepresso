@@ -30,6 +30,16 @@ private final class FakeHelperClient: PrivilegedHelperCalling, @unchecked Sendab
         return holdSucceeds
     }
 
+    func setSleepHoldMode(_ mode: SleepHoldMode) -> Bool {
+        switch mode {
+        case .released: return setSleepHold(false)
+        case .active: return setSleepHold(true)
+        case .thermallySuspended:
+            record("setSleepHoldMode(thermallySuspended)")
+            return holdSucceeds
+        }
+    }
+
     func setAWDLHold(_ holding: Bool) -> Bool {
         record("setAWDLHold(\(holding))")
         return holdSucceeds
@@ -64,6 +74,7 @@ private final class FakeHelperClient: PrivilegedHelperCalling, @unchecked Sendab
 
 private final class FakeFallbackSleepWatchdog: SleepWatchdogLaunching, @unchecked Sendable {
     var flagPresent = false
+    private(set) var modes: [SleepHoldMode] = []
     private(set) var startCalls = 0
     private(set) var removeCalls = 0
 
@@ -76,10 +87,35 @@ private final class FakeFallbackSleepWatchdog: SleepWatchdogLaunching, @unchecke
         flagPresent = false
         removeCalls += 1
     }
+    func setMode(_ mode: SleepHoldMode) -> Bool {
+        modes.append(mode)
+        flagPresent = mode != .released
+        if mode == .released { removeCalls += 1 }
+        return true
+    }
     func startHelper(appPID: Int32) -> SleepSettingResult {
         startCalls += 1
         return .applied
     }
+}
+
+@Test func routedSleepTransactionPinsItsBackendAcrossAvailabilityChanges() {
+    let client = FakeHelperClient()
+    let fallback = FakeFallbackSleepWatchdog()
+    let installed = LockedFlag(false)
+    let routed = RoutedSleepWatchdog(
+        daemon: HelperDaemonSleepWatchdog(helper: client),
+        fallback: fallback,
+        helperInstalled: { installed.value }
+    )
+
+    #expect(routed.startHelper(appPID: 1) == .applied)
+    #expect(routed.setMode(.active))
+    installed.value = true
+    #expect(routed.setMode(.thermallySuspended))
+    #expect(routed.setMode(.released))
+    #expect(fallback.modes == [.active, .thermallySuspended, .released])
+    #expect(client.calls == ["setSleepHold(false)"])
 }
 
 private final class FakeFallbackSleepControl: SleepSettingControlling, @unchecked Sendable {

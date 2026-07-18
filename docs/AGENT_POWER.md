@@ -23,6 +23,12 @@ records the exact prior value, and restores that value when the last protected
 session ends. The helper and fallback watchdog also restore it after a client
 crash. Keepresso never assumes the original value was zero.
 
+During a thermal stop, the same scoped transaction enters a suspended mode. It
+forces `disablesleep` to zero while retaining the exact original snapshot and
+recovery marker. After cooling, it moves directly back to active if Agent demand
+remains, or restores the snapshot if work ended. This covers manual, automatic,
+and combined ownership without a release-and-reacquire gap.
+
 ## Lease lifecycle
 
 Acquire a lease immediately before protected work starts. Use a short TTL and
@@ -80,10 +86,11 @@ tokens. A task must release only the ID it acquired. Concurrent tasks remain
 independent, and the Mac stays awake until every active lease is terminal. The
 response status also includes `closedLidProtectionReady` and stable `warnings`.
 Before a task starts, readiness reports whether the required capability is
-available. While unattended demand is active, true means the scoped hold was
-actually accepted, not merely that the helper is installed. A false or unknown
-warning means the lease still protects open-lid idle sleep, but the Agent must
-not tell the user that closed-lid work is safe.
+available. While unattended demand is active, true means either the scoped hold
+was actually accepted or a live manual closed-display override was verified. It
+never means merely that the helper is installed. A false or unknown warning
+means the lease still protects open-lid idle sleep, but the Agent must not tell
+the user that closed-lid work is safe.
 
 ## Codex Skill
 

@@ -18,7 +18,7 @@ import Foundation
 public final class HelperDaemonSleepWatchdog: SleepWatchdogLaunching, @unchecked Sendable {
     private let helper: PrivilegedHelperCalling
     private let lock = NSLock()
-    private var holding = false
+    private var mode: SleepHoldMode = .released
 
     public init(helper: PrivilegedHelperCalling) {
         self.helper = helper
@@ -27,22 +27,23 @@ public final class HelperDaemonSleepWatchdog: SleepWatchdogLaunching, @unchecked
     public func isFlagPresent() -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        return holding
+        return mode != .released
     }
 
     public func createFlag() -> Bool {
-        let ok = helper.setSleepHold(true)
-        lock.lock()
-        holding = ok
-        lock.unlock()
-        return ok
+        setMode(.active)
     }
 
     public func removeFlag() {
-        _ = helper.setSleepHold(false)
+        _ = setMode(.released)
+    }
+
+    public func setMode(_ mode: SleepHoldMode) -> Bool {
+        let ok = helper.setSleepHoldMode(mode)
         lock.lock()
-        holding = false
+        if ok { self.mode = mode }
         lock.unlock()
+        return ok
     }
 
     public func startHelper(appPID: Int32) -> SleepSettingResult {
@@ -98,14 +99,22 @@ public final class HelperDaemonAWDLWatchdog: AWDLWatchdogLaunching, @unchecked S
 // MARK: - Routing
 
 /// Routes ``SleepWatchdogLaunching`` calls to the daemon backend while the
-/// helper is installed and to the osascript fallback otherwise. The choice is
-/// re-made at each activation (`createFlag`), so installing the helper from
-/// Preferences takes effect on the next engage without a relaunch; releases go
-/// to whichever side could be holding (both are idempotent no-ops when idle).
+/// helper is installed and to the osascript fallback otherwise. A live
+/// transaction pins its backend because only that backend owns the original
+/// sleep-setting snapshot.
 public final class RoutedSleepWatchdog: SleepWatchdogLaunching, @unchecked Sendable {
+    private enum Backend {
+        case daemon
+        case fallback
+    }
+
     private let daemon: HelperDaemonSleepWatchdog
     private let fallback: SleepWatchdogLaunching
     private let helperInstalled: @Sendable () -> Bool
+    private let lock = NSLock()
+    /// The backend that owns the current snapshot. It cannot change until a
+    /// released acknowledgement closes that transaction.
+    private var pinnedBackend: Backend?
 
     public init(
         daemon: HelperDaemonSleepWatchdog,
@@ -122,26 +131,81 @@ public final class RoutedSleepWatchdog: SleepWatchdogLaunching, @unchecked Senda
     }
 
     public func createFlag() -> Bool {
-        helperInstalled() ? daemon.createFlag() : fallback.createFlag()
+        setMode(.active)
     }
 
     public func removeFlag() {
-        // Release both sides: the daemon hold only if the daemon could have
-        // taken one (skipping the XPC round-trip otherwise), the flag file
-        // always (deleting a missing file is free and covers a mode switch
-        // mid-hold).
-        if helperInstalled() || daemon.isFlagPresent() {
-            daemon.removeFlag()
+        _ = setMode(.released)
+    }
+
+    public func setMode(_ mode: SleepHoldMode) -> Bool {
+        lock.lock()
+        let pinned = pinnedBackend
+        let selected: Backend
+        if let pinned {
+            selected = pinned
+        } else {
+            selected = helperInstalled() ? .daemon : .fallback
+            if mode != .released { pinnedBackend = selected }
         }
-        fallback.removeFlag()
+        lock.unlock()
+
+        let ok: Bool
+        switch selected {
+        case .daemon: ok = daemon.setMode(mode)
+        case .fallback: ok = fallback.setMode(mode)
+        }
+        guard mode == .released, ok else { return ok }
+
+        // The owning backend confirmed restoration. Clear the pin, then
+        // remove any stale control artifact on the inactive side.
+        lock.lock()
+        pinnedBackend = nil
+        lock.unlock()
+        switch selected {
+        case .daemon: fallback.removeFlag()
+        case .fallback:
+            if helperInstalled() || daemon.isFlagPresent() {
+                daemon.removeFlag()
+            }
+        }
+        return true
     }
 
     public func startHelper(appPID: Int32) -> SleepSettingResult {
-        helperInstalled() ? daemon.startHelper(appPID: appPID) : fallback.startHelper(appPID: appPID)
+        lock.lock()
+        let selected = pinnedBackend ?? (helperInstalled() ? Backend.daemon : Backend.fallback)
+        if pinnedBackend == nil { pinnedBackend = selected }
+        lock.unlock()
+        let result: SleepSettingResult
+        switch selected {
+        case .daemon: result = daemon.startHelper(appPID: appPID)
+        case .fallback: result = fallback.startHelper(appPID: appPID)
+        }
+        if result != .applied {
+            let hasTransaction: Bool
+            switch selected {
+            case .daemon: hasTransaction = daemon.isFlagPresent()
+            case .fallback: hasTransaction = fallback.isFlagPresent()
+            }
+            if !hasTransaction {
+                lock.lock()
+                pinnedBackend = nil
+                lock.unlock()
+            }
+        }
+        return result
     }
 
     public var engageFailureMessage: String {
-        helperInstalled() ? daemon.engageFailureMessage : fallback.engageFailureMessage
+        lock.lock()
+        let pinned = pinnedBackend
+        lock.unlock()
+        switch pinned {
+        case .daemon: return daemon.engageFailureMessage
+        case .fallback: return fallback.engageFailureMessage
+        case nil: return helperInstalled() ? daemon.engageFailureMessage : fallback.engageFailureMessage
+        }
     }
 }
 

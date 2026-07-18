@@ -30,6 +30,7 @@ public struct VirtualDisplayConfig: Codable, Equatable, Sendable {
 /// Seam over creating/removing a virtual display. The real backend uses a
 /// **private** CoreGraphics API (`CGVirtualDisplay`), so it lives in the app
 /// behind this protocol; ``KeepressoCore`` stays clean and tests use a fake.
+@MainActor
 public protocol VirtualDisplaying: AnyObject {
     /// Whether the underlying API exists on this macOS (it's private and may
     /// vanish across releases).
@@ -68,8 +69,12 @@ public final class VirtualDisplayController {
 
     private let backend: VirtualDisplaying
 
-    public init(backend: VirtualDisplaying = NullVirtualDisplay()) {
+    public init(backend: VirtualDisplaying) {
         self.backend = backend
+    }
+
+    public convenience init() {
+        self.init(backend: NullVirtualDisplay())
     }
 
     /// Whether the private API is available on this system.

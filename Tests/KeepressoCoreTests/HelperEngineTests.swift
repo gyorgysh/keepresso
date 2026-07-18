@@ -223,7 +223,7 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     #expect(state.sleepRestoreValue() == true)
 
     #expect(engine.setSleepHold(client: 1, holding: false))
-    #expect(runner.commands == [sleepOn])
+    #expect(runner.commands.isEmpty)
     #expect(state.markers().isEmpty)
     #expect(state.sleepRestoreValue() == nil)
 }
@@ -265,6 +265,101 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     #expect(state.sleepRestoreValue() == nil)
 }
 
+@Test func thermalSleepModesPreserveFalseOriginalAcrossTheWholeTransaction() {
+    let runner = FakeRunner()
+    let state = FakeRestoreState()
+    let engine = HelperEngine(
+        runner: runner,
+        state: state,
+        sleepSettingReader: FakeSleepSettingReader(false)
+    )
+
+    #expect(engine.setSleepHoldMode(client: 1, mode: .active))
+    #expect(engine.setSleepHoldMode(client: 1, mode: .thermallySuspended))
+    #expect(state.markers() == [.sleepDisabled])
+    #expect(state.sleepRestoreValue() == false)
+    #expect(engine.setSleepHoldMode(client: 1, mode: .active))
+    #expect(engine.setSleepHoldMode(client: 1, mode: .released))
+    #expect(runner.commands == [sleepOn, sleepOff, sleepOn, sleepOff])
+    #expect(state.markers().isEmpty)
+}
+
+@Test func thermalSleepModesPreserveTrueManualOriginal() {
+    let runner = FakeRunner()
+    let state = FakeRestoreState()
+    let engine = HelperEngine(
+        runner: runner,
+        state: state,
+        sleepSettingReader: FakeSleepSettingReader(true)
+    )
+
+    // This covers both manual-only released-to-suspended and a mixed
+    // automatic hold whose original snapshot was already true.
+    #expect(engine.setSleepHoldMode(client: 1, mode: .thermallySuspended))
+    #expect(runner.commands == [sleepOff])
+    #expect(engine.setSleepHoldMode(client: 1, mode: .active))
+    #expect(engine.setSleepHoldMode(client: 1, mode: .released))
+    #expect(runner.commands == [sleepOff, sleepOn])
+    #expect(state.sleepRestoreValue() == nil)
+}
+
+@Test func activeClientWinsOverSuspendedClients() {
+    let runner = FakeRunner()
+    let engine = HelperEngine(
+        runner: runner,
+        state: FakeRestoreState(),
+        sleepSettingReader: FakeSleepSettingReader(false)
+    )
+
+    #expect(engine.setSleepHoldMode(client: 1, mode: .thermallySuspended))
+    #expect(engine.setSleepHoldMode(client: 2, mode: .active))
+    #expect(engine.setSleepHoldMode(client: 2, mode: .released))
+    #expect(engine.setSleepHoldMode(client: 1, mode: .released))
+    #expect(runner.commands == [sleepOn, sleepOff])
+}
+
+@Test func failedThermalTransitionAndRestoreRetryOnSleepTick() {
+    let runner = FakeRunner()
+    let state = FakeRestoreState()
+    let engine = HelperEngine(
+        runner: runner,
+        state: state,
+        sleepSettingReader: FakeSleepSettingReader(false)
+    )
+
+    #expect(engine.setSleepHoldMode(client: 1, mode: .active))
+    runner.failNext = true
+    #expect(!engine.setSleepHoldMode(client: 1, mode: .thermallySuspended))
+    #expect(state.markers() == [.sleepDisabled])
+    engine.sleepTick()
+    #expect(runner.commands.suffix(2) == [sleepOff, sleepOff])
+
+    #expect(engine.setSleepHoldMode(client: 1, mode: .active))
+    runner.failNext = true
+    #expect(!engine.setSleepHoldMode(client: 1, mode: .released))
+    #expect(!engine.isIdle)
+    engine.sleepTick()
+    #expect(state.markers().isEmpty)
+    #expect(engine.isIdle)
+}
+
+@Test func manualChoiceDuringScopedHoldUpdatesTheRestoreBaseline() {
+    let runner = FakeRunner()
+    let state = FakeRestoreState()
+    let engine = HelperEngine(
+        runner: runner,
+        state: state,
+        sleepSettingReader: FakeSleepSettingReader(false)
+    )
+
+    #expect(engine.setSleepHoldMode(client: 1, mode: .active))
+    #expect(engine.setSleepDisabled(true))
+    #expect(state.sleepRestoreValue() == true)
+    #expect(engine.setSleepHoldMode(client: 1, mode: .released))
+    #expect(runner.commands == [sleepOn])
+    #expect(state.markers().isEmpty)
+}
+
 @Test func newSleepHoldPreservesAnUnsettledRestoreSnapshot() {
     let runner = FakeRunner()
     let state = FakeRestoreState()
@@ -286,7 +381,7 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     #expect(engine.setSleepHold(client: 2, holding: true))
     #expect(state.sleepRestoreValue() == false)
     #expect(engine.setSleepHold(client: 2, holding: false))
-    #expect(runner.commands == [sleepOn, sleepOff, sleepOff])
+    #expect(runner.commands == [sleepOn, sleepOff, sleepOn, sleepOff])
     #expect(state.markers().isEmpty)
     #expect(state.sleepRestoreValue() == nil)
 }

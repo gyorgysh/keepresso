@@ -44,6 +44,14 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
         reply(engine.setSleepHold(client: clientID, holding: holding))
     }
 
+    func setSleepHoldMode(_ rawMode: Int, reply: @escaping @Sendable (Bool) -> Void) {
+        guard let mode = SleepHoldMode(rawValue: rawMode) else {
+            reply(false)
+            return
+        }
+        reply(engine.setSleepHoldMode(client: clientID, mode: mode))
+    }
+
     func setAWDLHold(_ holding: Bool, reply: @escaping @Sendable (Bool) -> Void) {
         reply(engine.setAWDLHold(client: clientID, holding: holding))
     }
@@ -176,6 +184,7 @@ listener.resume()
 let holdTimer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "hold-tick"))
 holdTimer.schedule(deadline: .now() + 3, repeating: 3)
 holdTimer.setEventHandler {
+    engine.sleepTick()
     engine.awdlTick()
     engine.fanTick()
 }

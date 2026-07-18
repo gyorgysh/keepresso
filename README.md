@@ -162,6 +162,8 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   session instead of leaving it on globally: on when a keep-awake session
   starts, off when it ends (or the app quits, even after a crash), with the
   password asked once per app run, or never with the administrator helper.
+  A thermal stop temporarily permits sleep inside the same scoped transaction,
+  then restores the exact manual and automatic ownership after cooling.
 - 🔑 **One password, ever.** An optional **administrator helper**, a small
   system service installed from Preferences > General (or the welcome screen),
   handles the privileged switches for Keepresso: closed-display mode, the

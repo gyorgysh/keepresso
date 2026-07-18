@@ -268,9 +268,10 @@ public enum AgentLeaseFileCodec {
             let durationsAreSafe = validDuration(lease.ttl)
                 && validDuration(lease.maxLifetime)
             let maximumDeadline = lease.maxLifetimeAt
+            let ttlDeadline = lease.heartbeatAt.addingTimeInterval(lease.ttl)
             let timelineIsOrdered = lease.heartbeatAt >= lease.acquiredAt
                 && lease.expiresAt >= lease.heartbeatAt
-                && lease.expiresAt <= maximumDeadline
+                && lease.expiresAt <= min(ttlDeadline, maximumDeadline)
             let completionIsConsistent: Bool
             if lease.isActive {
                 completionIsConsistent = lease.completedAt == nil
@@ -282,6 +283,7 @@ public enum AgentLeaseFileCodec {
             guard !owner.isEmpty,
                   timestampsAreFinite,
                   maximumDeadline.timeIntervalSinceReferenceDate.isFinite,
+                  ttlDeadline.timeIntervalSinceReferenceDate.isFinite,
                   durationsAreSafe,
                   timelineIsOrdered,
                   completionIsConsistent

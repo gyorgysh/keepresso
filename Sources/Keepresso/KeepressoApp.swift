@@ -137,6 +137,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         disk: model.disk,
         closedDisplay: model.closedDisplay,
         thermalGuard: model.thermalGuard,
+        thermalSuppressionLatched: { [weak self] in
+            self?.model.closedDisplayAuto.isThermallySuspended ?? false
+        },
         onThermalEffects: { [weak self] in self?.model.handleThermalEffects($0) },
         onTick: { [weak self] in
             self?.model.agentLeaseTick()

@@ -209,7 +209,9 @@ public enum ThermalGuard {
 /// read `nil` transiently (`AppleClamshellState` flutters, `pmset -g` can
 /// fail), so each latches its last known value: a failed read must never
 /// release a latched safety measure, mirroring how a `nil` thermal sample
-/// freezes the guard.
+/// freezes the guard. A backend thermal-suppression latch also keeps arming
+/// true after that safety action intentionally changes the observed override
+/// from on to off.
 public struct ThermalArming: Sendable, Equatable {
     private var lidClosed = false
     private var overrideActive = false
@@ -217,10 +219,14 @@ public struct ThermalArming: Sendable, Equatable {
     public init() {}
 
     /// Fold in this tick's readings and return the current verdict.
-    public mutating func update(lidClosed: Bool?, sleepOverrideActive: Bool?) -> Bool {
+    public mutating func update(
+        lidClosed: Bool?,
+        sleepOverrideActive: Bool?,
+        thermalSuppressionLatched: Bool = false
+    ) -> Bool {
         if let lidClosed { self.lidClosed = lidClosed }
         if let sleepOverrideActive { overrideActive = sleepOverrideActive }
-        return self.lidClosed && overrideActive
+        return self.lidClosed && (overrideActive || thermalSuppressionLatched)
     }
 }
 
