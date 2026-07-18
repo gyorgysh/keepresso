@@ -481,7 +481,13 @@ public final class AgentLeaseCommandAdapter: LeaseCommanding {
         lease: AgentWakeLease? = nil,
         leases: [AgentWakeLease]? = nil
     ) throws -> LeaseCommandResponse {
-        let snapshot = try requireSnapshot(service.execute(.snapshot))
+        // The command immediately before this call already committed or read
+        // the authoritative persistence state and adopted it into the service.
+        // Re-reading the store here creates a second failure point after a
+        // successful mutation. In particular, an acquire with a generated ID
+        // could be durably committed but reported as failed, leaving the caller
+        // without the ID needed to release it.
+        let snapshot = service.currentSnapshot
         return LeaseCommandResponse(
             ok: true,
             command: command,
@@ -498,7 +504,7 @@ public final class AgentLeaseCommandAdapter: LeaseCommanding {
         code: String,
         message: String
     ) throws -> LeaseCommandResponse {
-        let snapshot = try requireSnapshot(service.execute(.snapshot))
+        let snapshot = service.currentSnapshot
         var response = LeaseCommandResponse.failure(command: command, code: code, message: message)
         response.status = summary(snapshot.leases)
         return response
@@ -529,11 +535,6 @@ public final class AgentLeaseCommandAdapter: LeaseCommanding {
     private func requireStatus(_ response: AgentLeaseCommandResponse) throws -> AgentWakeLease? {
         guard case .status(let lease) = response else { throw LeaseAdapterError.unexpectedResponse }
         return lease
-    }
-
-    private func requireSnapshot(_ response: AgentLeaseCommandResponse) throws -> AgentLeaseSnapshot {
-        guard case .snapshot(let snapshot) = response else { throw LeaseAdapterError.unexpectedResponse }
-        return snapshot
     }
 
     private func failure(command: String, error: Error) -> LeaseCommandResponse {

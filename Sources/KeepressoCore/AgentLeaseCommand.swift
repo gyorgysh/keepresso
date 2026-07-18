@@ -188,6 +188,11 @@ extension AgentLeaseCommandResponse: Codable {
 
 @MainActor
 public protocol AgentLeaseCommandServing: AnyObject {
+    /// Last state synchronized by this service without starting another
+    /// persistence transaction. A command that just returned has already
+    /// adopted the state committed or read by that command.
+    var currentSnapshot: AgentLeaseSnapshot { get }
+
     func execute(_ command: AgentLeaseCommand) throws -> AgentLeaseCommandResponse
 }
 
@@ -198,6 +203,10 @@ public final class AgentLeaseCommandService: AgentLeaseCommandServing {
 
     public init(registry: AgentLeaseRegistry) {
         self.registry = registry
+    }
+
+    public var currentSnapshot: AgentLeaseSnapshot {
+        registry.currentSnapshot
     }
 
     public convenience init(

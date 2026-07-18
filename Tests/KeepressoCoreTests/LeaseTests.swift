@@ -15,6 +15,29 @@ private final class AdapterLeaseStore: AgentLeasePersisting {
     }
 }
 
+private enum PostCommitReadError: Error {
+    case injected
+}
+
+/// Allows registry initialization and one mutation, then rejects any extra
+/// persistence transaction. This reproduces a store becoming unavailable just
+/// after the mutation was durably accepted.
+private final class RejectingPostCommitReadStore: AgentLeasePersisting {
+    var state = AgentLeasePersistenceState.empty
+    var updateCount = 0
+
+    func load() throws -> AgentLeasePersistenceState { state }
+
+    func update(
+        _ mutation: (inout AgentLeasePersistenceState) throws -> Void
+    ) throws -> AgentLeasePersistenceState {
+        updateCount += 1
+        guard updateCount <= 2 else { throw PostCommitReadError.injected }
+        try mutation(&state)
+        return state
+    }
+}
+
 @MainActor
 private final class RecordingAppSignaler: AgentLeaseAppSignaling {
     var launchRequests: [Bool] = []
@@ -174,6 +197,31 @@ private func testAdapter(
     ])
     #expect(object["schemaVersion"] as? Int == 1)
     #expect(object["leases"] is NSNull)
+}
+
+@Test @MainActor func successfulMutationDoesNotRequireASecondStoreTransaction() throws {
+    let instant = Date(timeIntervalSince1970: 1_800_000_000)
+    let store = RejectingPostCommitReadStore()
+    let adapter = try testAdapter(
+        store: store,
+        clock: LeaseTestClock(instant),
+        signaler: RecordingAppSignaler()
+    )
+
+    let response = adapter.execute(.acquire(
+        owner: "owner",
+        agent: "codex",
+        task: "post-commit-read",
+        ttlSeconds: 300,
+        maxLifetimeSeconds: 3_600,
+        message: nil
+    ))
+
+    #expect(response.ok)
+    #expect(response.lease?.state == .active)
+    #expect(response.status?.activeCount == 1)
+    #expect(store.state.leases.count == 1)
+    #expect(store.updateCount == 2)
 }
 
 @Test @MainActor func leaseWarnsWhenClosedLidProtectionIsNotReady() throws {
