@@ -59,6 +59,33 @@ project_values_equal() {
   done <<< "$values"
 }
 
+SPARKLE_CONFIG="scripts/sparkle-release-config.sh"
+[ -f "$SPARKLE_CONFIG" ] || die "$SPARKLE_CONFIG is missing"
+# shellcheck source=sparkle-release-config.sh
+source "$SPARKLE_CONFIG"
+[[ "$SPARKLE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+  || die "$SPARKLE_CONFIG has invalid SPARKLE_VERSION '$SPARKLE_VERSION'"
+[[ "$SPARKLE_ARCHIVE_SHA256" =~ ^[0-9a-f]{64}$ ]] \
+  || die "$SPARKLE_CONFIG has invalid SPARKLE_ARCHIVE_SHA256"
+
+SPARKLE_PROJECT_VERSION="$(awk '
+  $1 == "Sparkle:" { in_sparkle = 1; next }
+  in_sparkle && $1 == "exactVersion:" {
+    value = $2
+    sub(/^"/, "", value)
+    sub(/"$/, "", value)
+    print value
+    exit
+  }
+' project.yml)"
+[ -n "$SPARKLE_PROJECT_VERSION" ] \
+  || die "project.yml Sparkle dependency must use exactVersion"
+equal "project.yml Sparkle exactVersion" "$SPARKLE_PROJECT_VERSION" "$SPARKLE_VERSION"
+grep -Fq 'source scripts/sparkle-release-config.sh' .github/workflows/release.yml \
+  || die "release workflow must source $SPARKLE_CONFIG"
+grep -Fq './scripts/verify-sparkle-archive.sh "$ARCHIVE"' .github/workflows/release.yml \
+  || die "release workflow must verify the Sparkle archive"
+
 TAG="${1:-${GITHUB_REF_NAME:-}}"
 APP_PATH="${2:-}"
 

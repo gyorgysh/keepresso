@@ -33,15 +33,22 @@ jobs:
       # Sparkle's CLI tools (generate_appcast) used to come from `brew install
       # sparkle`, but that cask is deprecated (fails the Gatekeeper check) and is
       # disabled after 2026-09-01. Fetch the tools straight from Sparkle's release
-      # tarball instead; a curl download isn't quarantined, so the binary runs.
+      # tarball instead. Its pinned digest is verified before extraction or use.
       - name: Install Sparkle tools
         run: |
-          SPARKLE_VERSION=2.6.4
-          curl -fsSL -o "$RUNNER_TEMP/sparkle.tar.xz" \
+          set -euo pipefail
+          source scripts/sparkle-release-config.sh
+          ARCHIVE="$RUNNER_TEMP/Sparkle-$SPARKLE_VERSION.tar.xz"
+          curl --proto '=https' --proto-redir '=https' --tlsv1.2 \
+            --fail --show-error --silent --location \
+            --retry 3 --retry-all-errors --connect-timeout 30 --max-time 300 \
+            --output "$ARCHIVE" \
             "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+          ./scripts/verify-sparkle-archive.sh "$ARCHIVE"
           mkdir -p "$RUNNER_TEMP/sparkle"
-          tar -xJf "$RUNNER_TEMP/sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle"
-          GA="$(find "$RUNNER_TEMP/sparkle" -path '*/bin/generate_appcast' -type f | head -1)"
+          tar -xJf "$ARCHIVE" -C "$RUNNER_TEMP/sparkle"
+          GA="$RUNNER_TEMP/sparkle/bin/generate_appcast"
+          [ -x "$GA" ] || { echo "Error: generate_appcast is missing" >&2; exit 1; }
           echo "GENERATE_APPCAST=$GA" >> "$GITHUB_ENV"
 
       # Import the Developer ID Application cert into a throwaway keychain that is
