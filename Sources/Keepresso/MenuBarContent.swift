@@ -29,6 +29,9 @@ struct MenuBarContent: View {
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     @State private var displayedElapsed: TimeInterval = 0
     @State private var liveRefresh = 0
+    /// Whether the panel is actually on screen. The closed panel keeps this
+    /// view alive on current macOS, so periodic work gates on this.
+    @State private var panelVisible = true
     @State private var showCustomDuration = false
     @State private var showUntilTime = false
 
@@ -189,7 +192,18 @@ struct MenuBarContent: View {
         // buttons, menu rows), so the whole panel scales together.
         .font(type.body)
         .onAppear { model.refreshClosedDisplay() }
+        // The closed panel keeps this content alive (see WindowVisibilityReader),
+        // so the tick would keep re-rendering the whole panel every second with
+        // nobody looking. Skip it while hidden and refresh on reopen instead.
+        .background(WindowVisibilityReader(isVisible: $panelVisible))
+        .onChange(of: panelVisible) { _, visible in
+            guard visible else { return }
+            displayedElapsed = session.elapsed
+            liveRefresh &+= 1
+            model.refreshClosedDisplay()
+        }
         .onReceive(tick) { _ in
+            guard panelVisible else { return }
             displayedElapsed = session.elapsed
             liveRefresh &+= 1
         }
@@ -659,7 +673,9 @@ struct MenuBarContent: View {
             ForEach(Array(details.prefix(Self.maxDetailRows).enumerated()), id: \.offset) { _, detail in
                 let accent = Self.detailAccent(detail)
                 HStack(spacing: 6) {
-                    SparkView(animated: detail.animated)
+                    // Gated on visibility: SparkView's periodic timeline would
+                    // otherwise keep ticking inside the closed panel.
+                    SparkView(animated: detail.animated && panelVisible)
                         .foregroundStyle(detail.active ? accent : Color.secondary)
                     Text(detail.label)
                         .font(type.caption)

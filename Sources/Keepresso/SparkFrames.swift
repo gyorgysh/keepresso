@@ -8,8 +8,10 @@ import SwiftUI
 /// glyphs tinted by the row's foreground style, so it reads correctly in both
 /// menu appearances.
 ///
-/// Lives only inside the open menu, and a `TimelineView` ticks only while its
-/// view is visible, so the animation costs nothing while the menu is closed.
+/// Lives in the menu panel, which keeps its content alive while closed on
+/// current macOS, so the timeline would keep ticking unseen. The call site
+/// passes `animated: false` while the panel is off screen (see
+/// `WindowVisibilityReader`), which drops the timeline entirely.
 struct SparkView: View {
     /// One pulse out and back, at the console's cadence; the first frame is
     /// also the idle rest state.

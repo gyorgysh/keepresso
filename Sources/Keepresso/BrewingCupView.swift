@@ -30,6 +30,12 @@ struct BrewingCupView: View {
     /// Steam waits for the pour to finish, so the sequence reads pour first,
     /// then steam, rather than everything at once.
     @State private var steaming = false
+    /// Whether the host window is actually on screen. `MenuBarExtra(.window)`
+    /// keeps this view alive after its panel closes on current macOS, so the
+    /// steam `TimelineView(.animation)` would otherwise drive the display link
+    /// (and a full window relayout) at 30 fps forever while the menu is shut.
+    /// Reported by ``WindowVisibilityReader``; the steam only ticks while true.
+    @State private var windowVisible = true
 
     /// One full rise-and-dissolve cycle per wisp, staggered thirds apart.
     private static let loopDuration: TimeInterval = 3.4
@@ -43,6 +49,7 @@ struct BrewingCupView: View {
             BrandCupGlyph(fill: fill, lowSip: pausedLowBattery && !isActive)
                 .frame(width: 22 * scale, height: 16.6 * scale)
         }
+        .background(WindowVisibilityReader(isVisible: $windowVisible))
         .accessibilityHidden(true) // the header text next to it carries the status
         .onAppear {
             fill = isActive ? 1 : 0
@@ -70,13 +77,15 @@ struct BrewingCupView: View {
 
     @ViewBuilder
     private var steam: some View {
-        if steaming && !reduceMotion {
+        if steaming && windowVisible && !reduceMotion {
             TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
                 let now = context.date.timeIntervalSinceReferenceDate
                 wisps { delay in Self.wispState(at: now, delay: delay) }
             }
         } else if steaming {
-            // Reduce Motion: steady mid-rise steam instead of movement.
+            // Reduce Motion, or the host window is off screen (a closed
+            // `MenuBarExtra` panel keeps its content alive on current macOS):
+            // steady mid-rise steam, with no display-link ticking behind it.
             wisps { _ in (opacity: 0.55, rise: -1) }
         } else {
             Color.clear

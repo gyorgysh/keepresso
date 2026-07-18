@@ -150,9 +150,10 @@ final class StatusItemBridge: NSObject, NSMenuDelegate {
 }
 
 /// Hands the panel's `NSWindow` to the bridge, following the `PanelKeyAssert`
-/// precedent in Theme.swift. `MenuBarExtra` builds the panel content lazily on
-/// each open, so this re-registers every time and the bridge's weak reference
-/// stays current.
+/// precedent in Theme.swift. On current macOS `MenuBarExtra(.window)` keeps the
+/// panel content (and its window) alive after the first open, so this registers
+/// once and the bridge's weak reference stays current; if the system ever
+/// rebuilds the content, `makeNSView` simply runs again and re-registers.
 struct PanelWindowRegistrar: NSViewRepresentable {
     let register: (NSWindow?) -> Void
 

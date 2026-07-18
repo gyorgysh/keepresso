@@ -124,6 +124,7 @@ struct ThermalSensorPicker: View {
 
     @State private var sensors: [ThermalSensor] = []
     @State private var readings: [String: Double] = [:]
+    @State private var windowVisible = true
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -171,7 +172,17 @@ struct ThermalSensorPicker: View {
             sensors = model.thermalGuard.discoverSensors()
             refresh()
         }
-        .onReceive(tick) { _ in refresh() }
+        // The closed window keeps this content alive (see WindowVisibilityReader),
+        // so the sensor poll would keep reading the SMC unseen. Pause it while
+        // hidden and refresh on reopen.
+        .background(WindowVisibilityReader(isVisible: $windowVisible))
+        .onChange(of: windowVisible) { _, visible in
+            if visible { refresh() }
+        }
+        .onReceive(tick) { _ in
+            guard windowVisible else { return }
+            refresh()
+        }
     }
 
     private func refresh() {

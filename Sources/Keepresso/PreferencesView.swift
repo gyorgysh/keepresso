@@ -91,6 +91,7 @@ private struct ActivityTab: View {
 
     /// Live assertions, refreshed while the pane is visible.
     @State private var assertions: [PowerAssertionInfo] = []
+    @State private var windowVisible = true
     private let tick = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -174,7 +175,19 @@ private struct ActivityTab: View {
             assertions = model.currentAssertions()
             model.refreshAwakeStats()
         }
-        .onReceive(tick) { _ in assertions = model.currentAssertions() }
+        // The closed window keeps this content alive (see WindowVisibilityReader),
+        // so the poll would keep enumerating assertions unseen. Pause it while
+        // hidden and refresh on reopen.
+        .background(WindowVisibilityReader(isVisible: $windowVisible))
+        .onChange(of: windowVisible) { _, visible in
+            guard visible else { return }
+            assertions = model.currentAssertions()
+            model.refreshAwakeStats()
+        }
+        .onReceive(tick) { _ in
+            guard windowVisible else { return }
+            assertions = model.currentAssertions()
+        }
     }
 
     private func formatHeld(_ seconds: TimeInterval) -> String {

@@ -17,6 +17,9 @@ struct StreamingSetupView: View {
     /// ticks down smoothly.
     private let statusTick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     @State private var statusPulse = 0
+    /// Whether the window is actually on screen. The closed window keeps this
+    /// view alive on current macOS, so both ticks gate on this.
+    @State private var windowVisible = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -41,8 +44,21 @@ struct StreamingSetupView: View {
         .glassWindowBackground()
         .centersAndFrontsWindow()
         .onAppear { model.refreshStreaming() }
-        .onReceive(awdlTick) { _ in model.refreshAWDLState() }
-        .onReceive(statusTick) { _ in statusPulse &+= 1 }
+        // The closed window keeps this content alive (see WindowVisibilityReader),
+        // so the AWDL poll would keep spawning ifconfig unseen. Pause both ticks
+        // while hidden and refresh on reopen.
+        .background(WindowVisibilityReader(isVisible: $windowVisible))
+        .onChange(of: windowVisible) { _, visible in
+            if visible { model.refreshStreaming() }
+        }
+        .onReceive(awdlTick) { _ in
+            guard windowVisible else { return }
+            model.refreshAWDLState()
+        }
+        .onReceive(statusTick) { _ in
+            guard windowVisible else { return }
+            statusPulse &+= 1
+        }
     }
 
     private var header: some View {
