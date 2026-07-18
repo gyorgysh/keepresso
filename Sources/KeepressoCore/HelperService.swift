@@ -41,7 +41,9 @@ public enum HelperService {
     ///    generations so reconnect replay cannot overwrite newer safety state.
     /// 8: extended stream generations and logical-owner migration to AWDL
     ///    and fan holds, including release fencing across reconnects.
-    public static let protocolVersion = 8
+    /// 9: added stream generations to wake-schedule applies, so a request
+    ///    that outlives the caller's timeout cannot overwrite newer intent.
+    public static let protocolVersion = 9
 
     /// The code-signing requirement one side demands of the other: an
     /// Apple-issued certificate, the expected identifier, and the same team as
@@ -137,7 +139,16 @@ public enum HelperService {
     /// strings mean "not wanted"; all empty clears everything. One composite
     /// verb so the clear-then-install ordering runs inside the daemon and a
     /// mid-sequence restart can't leave a cleared-but-not-reinstalled state.
-    func applyWakeSchedule(oneShot: String, repeatDays: String, repeatTime: String, reply: @escaping @Sendable (Bool) -> Void)
+    /// The stable stream and monotonic generation fence delayed calls from an
+    /// earlier connection after the caller's timeout.
+    func applyWakeSchedule(
+        oneShot: String,
+        repeatDays: String,
+        repeatTime: String,
+        streamID: String,
+        generation: UInt64,
+        reply: @escaping @Sendable (Bool) -> Void
+    )
     /// Ask the daemon to exit at its first fully idle moment, without the
     /// ordinary exit's extra grace period (see ``HelperShutdownPolicy``), so
     /// launchd relaunches the binary currently in the bundle on the next call.
@@ -168,7 +179,7 @@ public protocol PrivilegedHelperCalling: AnyObject, Sendable {
     /// Ask the daemon to put the Mac to sleep (`pmset sleepnow`).
     func sleepNow() -> Bool
     /// Apply the full desired wake schedule (see
-    /// ``HelperXPCProtocol/applyWakeSchedule(oneShot:repeatDays:repeatTime:reply:)``).
+    /// ``HelperXPCProtocol/applyWakeSchedule(oneShot:repeatDays:repeatTime:streamID:generation:reply:)``).
     /// `nil` parts are not wanted; all `nil` clears everything.
     func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool
 }
@@ -206,6 +217,11 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     private var wantsFanHold: Int?
     private var wantsFanGeneration: UInt64 = 0
     private let fanStreamID = UUID().uuidString.lowercased()
+    /// Wake applies are not connection-scoped holds, but they still share a
+    /// stable process stream so a timed-out request on an old connection is
+    /// fenced by every newer apply, including a clear.
+    private var wakeGeneration: UInt64 = 0
+    private let wakeStreamID = UUID().uuidString.lowercased()
 
     /// How long a call may wait on the daemon before counting as failed.
     /// Generous enough for launchd to spawn it on first contact.
@@ -306,11 +322,17 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool {
-        call { proxy, done in
+        lock.lock()
+        wakeGeneration &+= 1
+        let generation = wakeGeneration
+        lock.unlock()
+        return call { proxy, done in
             proxy.applyWakeSchedule(
                 oneShot: oneShot ?? "",
                 repeatDays: repeatDays ?? "",
                 repeatTime: repeatTime ?? "",
+                streamID: wakeStreamID,
+                generation: generation,
                 reply: done
             )
         }

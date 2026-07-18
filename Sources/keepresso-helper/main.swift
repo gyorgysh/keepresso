@@ -22,6 +22,7 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
     private let sleepGenerations: SleepModeGenerationRegistry
     private let awdlGenerations: SleepModeGenerationRegistry
     private let fanGenerations: SleepModeGenerationRegistry
+    private let wakeGenerations: SleepModeGenerationRegistry
     private let onTerminateRequest: @Sendable () -> Void
     private let legacySleepStreamID = UUID().uuidString.lowercased()
     private let legacySleepLock = NSLock()
@@ -33,6 +34,7 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
         sleepGenerations: SleepModeGenerationRegistry,
         awdlGenerations: SleepModeGenerationRegistry,
         fanGenerations: SleepModeGenerationRegistry,
+        wakeGenerations: SleepModeGenerationRegistry,
         onTerminateRequest: @escaping @Sendable () -> Void
     ) {
         self.engine = engine
@@ -40,6 +42,7 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
         self.sleepGenerations = sleepGenerations
         self.awdlGenerations = awdlGenerations
         self.fanGenerations = fanGenerations
+        self.wakeGenerations = wakeGenerations
         self.onTerminateRequest = onTerminateRequest
     }
 
@@ -140,12 +143,28 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
         reply(engine.sleepNow())
     }
 
-    func applyWakeSchedule(oneShot: String, repeatDays: String, repeatTime: String, reply: @escaping @Sendable (Bool) -> Void) {
-        reply(engine.applyWakeSchedule(
-            oneShot: oneShot.isEmpty ? nil : oneShot,
-            repeatDays: repeatDays.isEmpty ? nil : repeatDays,
-            repeatTime: repeatTime.isEmpty ? nil : repeatTime
-        ))
+    func applyWakeSchedule(
+        oneShot: String,
+        repeatDays: String,
+        repeatTime: String,
+        streamID: String,
+        generation: UInt64,
+        reply: @escaping @Sendable (Bool) -> Void
+    ) {
+        reply(wakeGenerations.apply(
+            streamID: streamID,
+            generation: generation,
+            clientID: clientID
+        ) { _ in
+            // Keep the registry lock through the full clear-and-install
+            // transaction. Whichever generation enters second therefore
+            // determines the final system schedule.
+            engine.applyWakeSchedule(
+                oneShot: oneShot.isEmpty ? nil : oneShot,
+                repeatDays: repeatDays.isEmpty ? nil : repeatDays,
+                repeatTime: repeatTime.isEmpty ? nil : repeatTime
+            )
+        })
     }
 
     func terminateWhenIdle() {
@@ -158,6 +177,7 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
     private let sleepGenerations = SleepModeGenerationRegistry()
     private let awdlGenerations = SleepModeGenerationRegistry()
     private let fanGenerations = SleepModeGenerationRegistry()
+    private let wakeGenerations = SleepModeGenerationRegistry()
     private let shutdownGate = HelperShutdownGate()
 
     init(engine: HelperEngine) {
@@ -183,6 +203,7 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
             sleepGenerations: sleepGenerations,
             awdlGenerations: awdlGenerations,
             fanGenerations: fanGenerations,
+            wakeGenerations: wakeGenerations,
             onTerminateRequest: { [weak self] in self?.requestTerminate() }
         )
         // Invalidation is the connection's definitive end (interruption never
@@ -197,6 +218,10 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
             self?.fanGenerations.clientDisconnected(clientID) {
                 engine.fanClientDisconnected(clientID)
             }
+            // Wake schedules outlive a connection, so there is no engine
+            // cleanup. Clearing only the live registry owner preserves the
+            // generation tombstone and fences requests from this connection.
+            self?.wakeGenerations.clientDisconnected(clientID) {}
             self?.connectionEnded()
         }
         newConnection.resume()
