@@ -3,7 +3,27 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
-## [Unreleased]
+## [1.16.0] - Unreleased
+
+### Added
+
+- **Outbound event hooks.** Preferences ▸ Automation can run a Shortcut, POST a
+  webhook, or run a shell command when something happens: session started or
+  ended, a trigger fired or released, the battery or thermal pause hit, the
+  thermal stage changed, or an AI agent went idle. Useful for a push to your
+  phone (ntfy, or a Shortcut) when an overnight agent finishes.
+- **Count waiting as working.** The AI agent rule can optionally treat a hook
+  `waiting` state as still working, for unattended overnight runs that sit on
+  a prompt. Off by default; a pending approval still always counts as working.
+- **Scheduled wake.** Preferences ▸ Automation can install a one-shot or
+  repeating system wake through the administrator helper, then optionally
+  start a keep-awake session (or leave triggers in charge) when the Mac
+  actually wakes, so overnight jobs do not lose the race to idle sleep.
+  Reliable on AC; on battery the firmware may skip the wake.
+- **Activity that survives a relaunch.** Preferences ▸ Activity keeps the
+  decision log on disk and shows a simple seven-day summary of how long
+  Keepresso held the Mac awake (and battery drop when both ends of a session
+  had a reading).
 
 ### Changed
 
@@ -18,6 +38,12 @@ Versions follow [Semantic Versioning](https://semver.org).
   return to the system and the session resumes. With the lid open, macOS's
   own thermal management is in charge, as it should be, and desktops (no lid
   to trap heat behind) no longer show the Thermal section.
+- **Richer end-of-session actions.** When a session ends on its own, Keepresso
+  can now also lock the screen or sleep the Mac (alongside sleep the display
+  and start the screen saver). Battery and thermal pauses no longer fire the
+  action, a brief restart cancels it, and waking after the Mac slept past a
+  timer no longer re-locks or re-sleeps the display. The picker lives under
+  Preferences ▸ Automation with the new event hooks.
 
 ## [1.15.0] - 2026-07-17
 

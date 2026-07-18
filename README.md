@@ -109,10 +109,10 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   buttons, and on macOS 26 a Keep Awake control for Control Center.
 - 🔍 **Awake explainer.** The Activity pane shows every app's live power
   assertions, a readable `pmset -g assertions`, so you can see exactly what's
-  preventing sleep (whoever's doing it), plus a decision log of why each
-  Keepresso session started or stopped: which trigger, a timer, the battery
-  pause, or a command. The menu bar even names another app that's holding the
-  Mac awake ("Held by Google Chrome") when Keepresso itself is idle.
+  preventing sleep (whoever's doing it), a seven-day held-awake summary, and a
+  decision log of why each Keepresso session started or stopped that survives
+  relaunch. The menu bar even names another app that's holding the Mac awake
+  ("Held by Google Chrome") when Keepresso itself is idle.
 - 🪪 **Auto app detection.** Caffeinate while listed apps run or are frontmost,
   with an optional grace period before it lets go.
 - 🔋 **Battery-aware auto-pause.** Let the Mac sleep once charge drops below a
@@ -163,11 +163,16 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   still works the old way, with a once-per-run prompt (now always announced
   by a notification), except the fan boost, which stays off rather than ever
   prompting from a background safety action.
-- 🔔 **Reminders and end actions.** A "still brewing" notification (with an
-  optional sound) after _N_ minutes, one-time or recurring, so a forgotten
-  session can't quietly drain the battery. Plus an optional notification and
-  action when a session ends on its own (a timer expiring, triggers dropping):
-  do nothing, sleep the display, or start the screen saver.
+- 🔔 **Reminders, end actions, and event hooks.** A "still brewing" notification
+  (with an optional sound) after _N_ minutes, one-time or recurring, so a
+  forgotten session can't quietly drain the battery. When a session ends on its
+  own (a timer expiring, triggers dropping), optionally notify, then sleep the
+  display, lock the screen, start the screen saver, or sleep the Mac. And when
+  something happens (session start/end, trigger fire/release, agent went idle,
+  thermal stage, battery pause), run a Shortcut, POST a webhook, or a shell
+  command, handy for a push to your phone when an overnight agent finishes.
+  Schedule a system wake through the administrator helper and optionally start
+  keep-awake when the Mac comes back (wake, work, sleep).
 - 💽 **Disk keep-alive.** Periodic no-op disk I/O to stop an external drive or NAS
   from spinning down.
 - 🖥️ **Headless Setup checklist.** Probes the system settings an always-on,
@@ -284,11 +289,14 @@ Setup, Gaming & Streaming, About, Check for Updates, and Quit.
     settings backup (export/import), and the welcome screen.
   - **Triggers**: turn on rule-based activation, apply a preset, and build your
     rule set.
-  - **Reminder**: a one-time or recurring "still brewing" alert, with a sound.
+  - **Reminder**: a one-time or recurring "still brewing" alert, with a sound,
+    plus end notifications and the ending-soon warning.
+  - **Automation**: end-of-session actions, outbound event hooks, and scheduled
+    wake (with optional wake-and-brew).
   - **Disk**: choose a volume to keep spun up and how often to touch it.
   - **Display**: create an experimental high-resolution headless virtual display.
-  - **Activity**: what's keeping the Mac awake right now (every app's power
-    assertions) and why each session started or stopped.
+  - **Activity**: what's keeping the Mac awake right now, a weekly held-awake
+    summary, and why each session started or stopped (persisted across relaunch).
 - **Headless Setup** checks that an always-on Mac (say a Mac mini with no display)
   is configured to stay reachable, and links you straight to the right settings.
 - **Gaming & Streaming** diagnoses the once-a-second Wi-Fi lag spikes AWDL

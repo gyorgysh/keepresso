@@ -203,4 +203,22 @@ CORE.update({
     "Paused on high temperature": "因溫度過高而暫停",
     "Paused, the Mac is running hot": "已暫停，Mac 過熱",
     "Serious": "嚴重",
+    # 1.16.0 fill (16)
+    'Lock the screen': '鎖定螢幕',
+    'Sleep the Mac': '讓 Mac 進入睡眠',
+    'Session started': '工作階段已開始',
+    'Session ended': '工作階段已結束',
+    'Trigger fired': '觸發條件滿足',
+    'Trigger released': '觸發條件解除',
+    'Battery pause': '電池暫停',
+    'Thermal pause': '溫度暫停',
+    'Thermal stage changed': '熱階段已變更',
+    'Agent went idle': '代理已閒置',
+    'Shortcut: %@': '捷徑：%@',
+    'Webhook: %@': 'Webhook：%@',
+    'Command: %@': '指令：%@',
+    '+%ds': '+%d 秒',
+    'waiting counts': '等待也算工作',
+    '%@ (%@)': '%@（%@）',
+
 })

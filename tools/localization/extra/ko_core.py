@@ -203,4 +203,22 @@ CORE.update({
     "Paused on high temperature": "고온으로 일시 정지됨",
     "Paused, the Mac is running hot": "일시 정지됨, Mac 온도가 높음",
     "Serious": "심각",
+    # 1.16.0 fill (16)
+    'Lock the screen': '화면 잠금',
+    'Sleep the Mac': 'Mac 잠자기',
+    'Session started': '세션 시작됨',
+    'Session ended': '세션 종료됨',
+    'Trigger fired': '트리거 충족',
+    'Trigger released': '트리거 해제',
+    'Battery pause': '배터리 일시 정지',
+    'Thermal pause': '열 일시 정지',
+    'Thermal stage changed': '열 단계 변경',
+    'Agent went idle': '에이전트 유휴',
+    'Shortcut: %@': '단축어: %@',
+    'Webhook: %@': '웹훅: %@',
+    'Command: %@': '명령: %@',
+    '+%ds': '+%d초',
+    'waiting counts': '대기도 작업으로 계산',
+    '%@ (%@)': '%@ (%@)',
+
 })

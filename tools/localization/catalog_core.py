@@ -35,7 +35,23 @@ CORE = {
     # --- Session end action ---
     "Do nothing": {"hu": "Ne tegyen semmit", "es": "No hacer nada", "fr": "Ne rien faire", "de": "Nichts tun", "zh-Hans": "不执行任何操作"},
     "Sleep the display": {"hu": "Kijelző altatása", "es": "Suspender la pantalla", "fr": "Éteindre l’écran", "de": "Display in Ruhezustand", "zh-Hans": "使显示器进入睡眠"},
+    "Lock the screen": {"hu": "Képernyő zárolása", "es": "Bloquear la pantalla", "fr": "Verrouiller l’écran", "de": "Bildschirm sperren", "zh-Hans": "锁定屏幕"},
     "Start the screen saver": {"hu": "Képernyővédő indítása", "es": "Iniciar el salvapantallas", "fr": "Lancer l’économiseur d’écran", "de": "Bildschirmschoner starten", "zh-Hans": "启动屏幕保护程序"},
+    "Sleep the Mac": {"hu": "Mac altatása", "es": "Suspender el Mac", "fr": "Mettre le Mac en veille", "de": "Mac in den Ruhezustand", "zh-Hans": "让 Mac 进入睡眠"},
+    "Session started": {"hu": "Munkamenet elindult", "es": "Sesión iniciada", "fr": "Session démarrée", "de": "Sitzung gestartet", "zh-Hans": "会话已开始"},
+    "Session ended": {"hu": "Munkamenet véget ért", "es": "Sesión finalizada", "fr": "Session terminée", "de": "Sitzung beendet", "zh-Hans": "会话已结束"},
+    "Trigger fired": {"hu": "Feltétel teljesült", "es": "Condición activada", "fr": "Déclencheur activé", "de": "Auslöser ausgelöst", "zh-Hans": "触发条件满足"},
+    "Trigger released": {"hu": "Feltétel megszűnt", "es": "Condición liberada", "fr": "Déclencheur relâché", "de": "Auslöser freigegeben", "zh-Hans": "触发条件解除"},
+    "Battery pause": {"hu": "Akkumulátor-szünet", "es": "Pausa por batería", "fr": "Pause batterie", "de": "Akku-Pause", "zh-Hans": "电池暂停"},
+    "Thermal pause": {"hu": "Hőmérséklet-szünet", "es": "Pausa térmica", "fr": "Pause thermique", "de": "Thermische Pause", "zh-Hans": "温度暂停"},
+    "Thermal stage changed": {"hu": "Hőfokozat változott", "es": "Etapa térmica cambiada", "fr": "Étape thermique changée", "de": "Thermische Stufe gewechselt", "zh-Hans": "热阶段已变化"},
+    "Agent went idle": {"hu": "Az ügynök tétlen lett", "es": "El agente quedó inactivo", "fr": "L’agent est devenu inactif", "de": "Agent wurde inaktiv", "zh-Hans": "代理已空闲"},
+    "Shortcut: %@": {"hu": "Parancs: %@", "es": "Atajo: %@", "fr": "Raccourci : %@", "de": "Kurzbefehl: %@", "zh-Hans": "快捷指令：%@"},
+    "Webhook: %@": {"hu": "Webhook: %@", "es": "Webhook: %@", "fr": "Webhook : %@", "de": "Webhook: %@", "zh-Hans": "Webhook：%@"},
+    "Command: %@": {"hu": "Parancs: %@", "es": "Comando: %@", "fr": "Commande : %@", "de": "Befehl: %@", "zh-Hans": "命令：%@"},
+    "+%ds": {"hu": "+%d mp", "es": "+%d s", "fr": "+%d s", "de": "+%d s", "zh-Hans": "+%d 秒"},
+    "waiting counts": {"hu": "várakozás számít", "es": "esperar cuenta", "fr": "attente compte", "de": "Warten zählt", "zh-Hans": "等待也算工作"},
+    "%@ (%@)": {"hu": "%@ (%@)", "es": "%@ (%@)", "fr": "%@ (%@)", "de": "%@ (%@)", "zh-Hans": "%@（%@）"},
 
     # --- Built-in preset names ---
     "AI Agent": {"hu": "AI-ügynök", "es": "Agente de IA", "fr": "Agent IA", "de": "KI-Agent", "zh-Hans": "AI 代理"},

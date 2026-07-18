@@ -203,4 +203,22 @@ CORE.update({
     "Paused on high temperature": "Призупинено через високу температуру",
     "Paused, the Mac is running hot": "Призупинено, Mac перегрівається",
     "Serious": "Серйозний",
+    # 1.16.0 fill (16)
+    'Lock the screen': 'Заблокувати екран',
+    'Sleep the Mac': 'Приспати Mac',
+    'Session started': 'Сеанс розпочато',
+    'Session ended': 'Сеанс завершено',
+    'Trigger fired': 'Умова спрацювала',
+    'Trigger released': 'Умову знято',
+    'Battery pause': 'Пауза батареї',
+    'Thermal pause': 'Термічна пауза',
+    'Thermal stage changed': 'Змінено тепловий етап',
+    'Agent went idle': 'Агент у простої',
+    'Shortcut: %@': 'Команда: %@',
+    'Webhook: %@': 'Вебхук: %@',
+    'Command: %@': 'Команда: %@',
+    '+%ds': '+%d с',
+    'waiting counts': 'очікування рахується',
+    '%@ (%@)': '%@ (%@)',
+
 })

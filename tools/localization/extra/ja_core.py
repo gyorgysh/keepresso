@@ -203,4 +203,22 @@ CORE.update({
     "terminal": "ターミナル",
     "Claude app": "Claude アプリ",
     "IDE": "IDE",
+    # 1.16.0 fill (16)
+    'Lock the screen': '画面をロック',
+    'Sleep the Mac': 'Mac をスリープ',
+    'Session started': 'セッション開始',
+    'Session ended': 'セッション終了',
+    'Trigger fired': 'トリガー発火',
+    'Trigger released': 'トリガー解除',
+    'Battery pause': 'バッテリー一時停止',
+    'Thermal pause': '温度一時停止',
+    'Thermal stage changed': '温度ステージ変更',
+    'Agent went idle': 'エージェントがアイドル',
+    'Shortcut: %@': 'ショートカット: %@',
+    'Webhook: %@': 'Webhook: %@',
+    'Command: %@': 'コマンド: %@',
+    '+%ds': '+%d 秒',
+    'waiting counts': '待機も作業扱い',
+    '%@ (%@)': '%@（%@）',
+
 })

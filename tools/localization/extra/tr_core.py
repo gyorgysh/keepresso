@@ -202,4 +202,22 @@ CORE.update({
     "Paused on high temperature": "Yüksek sıcaklıkta duraklatıldı",
     "Paused, the Mac is running hot": "Duraklatıldı, Mac aşırı ısınıyor",
     "Serious": "Ciddi",
+    # 1.16.0 fill (16)
+    'Lock the screen': 'Ekranı kilitle',
+    'Sleep the Mac': 'Mac’i uyut',
+    'Session started': 'Oturum başladı',
+    'Session ended': 'Oturum bitti',
+    'Trigger fired': 'Tetikleyici ateşlendi',
+    'Trigger released': 'Tetikleyici bırakıldı',
+    'Battery pause': 'Pil duraklatması',
+    'Thermal pause': 'Isı duraklatması',
+    'Thermal stage changed': 'Isı aşaması değişti',
+    'Agent went idle': 'Ajan boşta',
+    'Shortcut: %@': 'Kestirme: %@',
+    'Webhook: %@': 'Webhook: %@',
+    'Command: %@': 'Komut: %@',
+    '+%ds': '+%d sn',
+    'waiting counts': 'bekleme sayılır',
+    '%@ (%@)': '%@ (%@)',
+
 })
