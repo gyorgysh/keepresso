@@ -551,7 +551,7 @@ public final class KeepressoMCPServer {
     }
 
     private static func isValidRequestID(_ value: Any?) -> Bool {
-        if value is String { return true }
+        if value is String || value is NSNull { return true }
         guard let number = value as? NSNumber else { return false }
         return !isBoolean(number)
     }
