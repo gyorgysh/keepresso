@@ -378,7 +378,8 @@ private func utc(
                 attributes: ["automation_id": "automation-two"]
             ),
         ],
-        excluding: [baselineID]
+        excluding: [baselineID],
+        acquiredOnOrAfter: date
     )
 
     #expect(claims == [
@@ -415,8 +416,45 @@ private func utc(
     let claims = CodexLeaseHandoffPolicy.matchedClaims(
         runs: runs,
         leases: [lease],
-        excluding: []
+        excluding: [],
+        acquiredOnOrAfter: date
     )
     #expect(claims.count == 1)
     #expect(Set(claims.values) == [leaseID])
+}
+
+@Test func staleSnapshotAndTerminalHandoffSemanticsAreExplicit() throws {
+    let handoff = utc(20, 9, 0)
+    let run = CodexAutomationQueuedRun(
+        automationID: "scheduled",
+        automationName: "Scheduled",
+        scheduledRun: handoff,
+        workingDirectories: []
+    )
+    let staleID = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000007"))
+    let terminalID = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000008"))
+    func lease(_ id: UUID, acquiredAt: Date, state: AgentLeaseState) -> AgentWakeLease {
+        AgentWakeLease(
+            id: id,
+            metadata: AgentLeaseMetadata(owner: "scheduled", agent: "codex"),
+            acquiredAt: acquiredAt,
+            heartbeatAt: acquiredAt,
+            expiresAt: acquiredAt.addingTimeInterval(300),
+            ttl: 300,
+            maxLifetime: 3_600,
+            state: state,
+            completedAt: state.isTerminal ? acquiredAt.addingTimeInterval(1) : nil
+        )
+    }
+
+    let claims = CodexLeaseHandoffPolicy.matchedClaims(
+        runs: [run],
+        leases: [
+            lease(staleID, acquiredAt: handoff.addingTimeInterval(-1), state: .active),
+            lease(terminalID, acquiredAt: handoff, state: .success),
+        ],
+        excluding: [],
+        acquiredOnOrAfter: handoff
+    )
+    #expect(claims == ["scheduled": terminalID])
 }

@@ -972,10 +972,15 @@ public enum CodexLeaseHandoffPolicy {
     public static func matchedClaims(
         runs: [CodexAutomationQueuedRun],
         leases: [AgentWakeLease],
-        excluding baseline: Set<UUID>
+        excluding baseline: Set<UUID>,
+        acquiredOnOrAfter handoffBeganAt: Date
     ) -> [String: UUID] {
         var unused = leases
-            .filter { !baseline.contains($0.id) && isCodex($0.metadata.agent) }
+            .filter {
+                !baseline.contains($0.id)
+                    && $0.acquiredAt >= handoffBeganAt
+                    && isCodex($0.metadata.agent)
+            }
             .sorted {
                 if $0.acquiredAt != $1.acquiredAt { return $0.acquiredAt < $1.acquiredAt }
                 return $0.id.uuidString < $1.id.uuidString
@@ -993,6 +998,11 @@ public enum CodexLeaseHandoffPolicy {
         }
         return claims
     }
+
+    // Do not filter terminal state here. A newly correlated lease that was
+    // subsequently released, failed, cancelled, or timed out proves that this
+    // scheduled task claimed the handoff and has already reached its explicit
+    // terminal result. It should not keep scheduled demand alive until timeout.
 
     private static func isCodex(_ raw: String?) -> Bool {
         guard let raw else { return false }

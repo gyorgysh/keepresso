@@ -127,6 +127,10 @@ final class AppModel {
     @ObservationIgnored private var scheduledWakeDemands: Set<ScheduledWakeDemand> = []
     /// Lease IDs already active before the current scheduled preparation.
     @ObservationIgnored private var scheduledLeaseBaseline: Set<UUID> = []
+    /// Durable acquisition timestamps must also fall inside this handoff. This
+    /// closes the gap when a file update arrives before the Darwin observer has
+    /// refreshed AppModel's in-memory baseline.
+    @ObservationIgnored private var scheduledHandoffBeganAt: Date?
     @ObservationIgnored private var currentScheduledRuns: [CodexAutomationQueuedRun] = []
     @ObservationIgnored private var scheduledHandoffLeaseIDs: Set<UUID> = []
     @ObservationIgnored private var lastHandledCodexRun: Date?
@@ -923,6 +927,7 @@ final class AppModel {
         // Capture every retained ID, not only active ones. A completed lease
         // from before this handoff must not become a new claim later.
         scheduledLeaseBaseline = Set(agentLeaseSnapshot.leases.map(\.id))
+        scheduledHandoffBeganAt = date
         scheduledHandoffLeaseIDs = []
         scheduledWakeDemands = Set(currentScheduledRuns.map {
             ScheduledWakeDemand(id: $0.automationID, phase: .preparation)
@@ -975,7 +980,8 @@ final class AppModel {
             let claims = CodexLeaseHandoffPolicy.matchedClaims(
                 runs: currentScheduledRuns,
                 leases: agentLeaseSnapshot.leases,
-                excluding: scheduledLeaseBaseline
+                excluding: scheduledLeaseBaseline,
+                acquiredOnOrAfter: scheduledHandoffBeganAt ?? date
             )
             scheduledHandoffLeaseIDs = Set(claims.values)
             let expectedLeaseCount = max(1, currentScheduledRuns.count)
@@ -998,6 +1004,7 @@ final class AppModel {
             let active = Set(agentLeaseSnapshot.activeLeases.map(\.id))
             if active.isDisjoint(with: scheduledHandoffLeaseIDs) {
                 scheduledHandoffLeaseIDs = []
+                scheduledHandoffBeganAt = nil
                 currentScheduledRuns = []
                 codexAgentPhase = .idle
                 refreshCodexAutomationPlan(force: true)
@@ -1048,6 +1055,7 @@ final class AppModel {
         codexOrchestration = nil
         scheduledWakeDemands.removeAll()
         scheduledHandoffLeaseIDs = []
+        scheduledHandoffBeganAt = nil
         codexLeaseHandoffDeadline = nil
         currentScheduledRuns = []
         codexAgentPhase = .idle
