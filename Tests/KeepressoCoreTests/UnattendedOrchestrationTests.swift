@@ -266,6 +266,50 @@ private func task(_ id: String, timeout: TimeInterval = 60) -> UnattendedTaskDef
     )
 }
 
+private func terminalSummary(
+    _ phases: UnattendedTaskPhase...
+) -> UnattendedTaskSummary {
+    UnattendedTaskSummary(executions: phases.enumerated().map { index, phase in
+        UnattendedTaskExecution(task: task("summary-\(index)"), phase: phase)
+    })
+}
+
+@Test func successfulLaunchBatchMayAwaitAnAgentLease() {
+    let summary = terminalSummary(.succeeded, .succeeded)
+
+    #expect(UnattendedLeaseHandoffPolicy.disposition(for: summary) == .awaitLease)
+}
+
+@Test func emptyLaunchBatchMustFailPreparation() {
+    let summary = terminalSummary()
+
+    #expect(UnattendedLeaseHandoffPolicy.disposition(for: summary) == .failPreparation)
+}
+
+@Test func failedLaunchBatchMustFailPreparation() {
+    let summary = terminalSummary(.failed)
+
+    #expect(UnattendedLeaseHandoffPolicy.disposition(for: summary) == .failPreparation)
+}
+
+@Test func timedOutLaunchBatchMustFailPreparation() {
+    let summary = terminalSummary(.timedOut)
+
+    #expect(UnattendedLeaseHandoffPolicy.disposition(for: summary) == .failPreparation)
+}
+
+@Test func cancelledLaunchBatchMustFailPreparation() {
+    let summary = terminalSummary(.cancelled)
+
+    #expect(UnattendedLeaseHandoffPolicy.disposition(for: summary) == .failPreparation)
+}
+
+@Test func mixedLaunchBatchMustFailPreparation() {
+    let summary = terminalSummary(.succeeded, .failed, .timedOut, .cancelled)
+
+    #expect(UnattendedLeaseHandoffPolicy.disposition(for: summary) == .failPreparation)
+}
+
 @MainActor
 @Test func concurrentTasksMustAllBecomeTerminalBeforeSleep() {
     let launcher = FakeTaskLauncher()

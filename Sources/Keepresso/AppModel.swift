@@ -921,8 +921,17 @@ final class AppModel {
             codexAgentPhase = .preparing
         case .running:
             codexAgentPhase = .launching
-        case .completed:
-            enterCodexLeaseHandoff(at: now)
+        case .completed(let summary):
+            switch UnattendedLeaseHandoffPolicy.disposition(for: summary) {
+            case .awaitLease:
+                enterCodexLeaseHandoff(at: now)
+            case .failPreparation:
+                failCodexPreparation(
+                    title: L("Codex automation was not started"),
+                    body: L("Power, network, or the Codex application did not become ready in time."),
+                    at: now
+                )
+            }
         case .readinessFailed:
             failCodexPreparation(
                 title: L("Codex automation was not started"),

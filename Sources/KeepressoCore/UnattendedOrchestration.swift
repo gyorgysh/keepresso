@@ -738,6 +738,27 @@ public struct UnattendedTaskSummary: Equatable, Sendable {
     }
 }
 
+public enum UnattendedLeaseHandoffDisposition: Equatable, Sendable {
+    case awaitLease
+    case failPreparation
+}
+
+public enum UnattendedLeaseHandoffPolicy {
+    /// A launch batch may hand off to an explicit agent lease only when every
+    /// terminal task succeeded. Empty, failed, timed-out, cancelled, or mixed
+    /// batches must release scheduled demand instead of extending wakefulness.
+    public static func disposition(
+        for summary: UnattendedTaskSummary
+    ) -> UnattendedLeaseHandoffDisposition {
+        guard summary.succeeded > 0,
+              summary.failed == 0,
+              summary.timedOut == 0,
+              summary.cancelled == 0
+        else { return .failPreparation }
+        return .awaitLease
+    }
+}
+
 public enum UnattendedOrchestrationState: Equatable, Sendable {
     case idle
     case preparing
