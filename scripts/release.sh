@@ -10,7 +10,10 @@
 #   1. Runs Sparkle's generate_appcast over dist/, which EdDSA-signs the DMG
 #      (using the private key in your Keychain) and writes dist/appcast.xml with
 #      enclosure URLs pointing at this release's GitHub download.
-#   2. Creates (or updates) the GitHub Release vX.Y.Z and uploads the DMG plus
+#   2. Runs appcast-notes.sh, which links the appcast's release notes to the
+#      GitHub release page and extracts this version's CHANGELOG.md section
+#      for the release body.
+#   3. Creates (or updates) the GitHub Release vX.Y.Z and uploads the DMG plus
 #      appcast.xml as assets.
 #
 # Because SUFeedURL is .../releases/latest/download/appcast.xml, the newest
@@ -60,6 +63,9 @@ info "Signing appcast with Sparkle ($VERSION)"
 APPCAST="$DIST_DIR/appcast.xml"
 [ -f "$APPCAST" ] || die "generate_appcast did not produce appcast.xml"
 
+info "Adding release notes (appcast link + changelog section)"
+"$SCRIPT_DIR/appcast-notes.sh" "$VERSION" "$REPO" "$TAG"
+
 info "Publishing GitHub Release $TAG"
 if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
   gh release upload "$TAG" "$DMG_PATH" "$APPCAST" --repo "$REPO" --clobber
@@ -67,7 +73,7 @@ else
   gh release create "$TAG" "$DMG_PATH" "$APPCAST" \
     --repo "$REPO" \
     --title "Keepresso $VERSION" \
-    --notes "See the changelog. Install: download the DMG, or \`brew install --cask keepresso\`."
+    --notes-file "$ROOT_DIR/build/RELEASE_NOTES.md" --generate-notes
 fi
 
 info "Done. Released $TAG with the DMG and signed appcast.xml."

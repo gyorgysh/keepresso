@@ -115,6 +115,12 @@ jobs:
             --download-url-prefix "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/"
           rm -f "$KEYFILE"
 
+      # Point the appcast's release notes at the GitHub release page, and pull
+      # this version's CHANGELOG.md section out for the release body, so the
+      # Sparkle update dialog shows the real changelog.
+      - name: Add release notes to the appcast
+        run: ./scripts/appcast-notes.sh "${GITHUB_REF_NAME#v}" "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME"
+
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -122,7 +128,8 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           gh release create "$GITHUB_REF_NAME" \
             "dist/Keepresso-$VERSION.dmg" "dist/appcast.xml" \
-            --title "Keepresso $VERSION" --generate-notes
+            --title "Keepresso $VERSION" \
+            --notes-file build/RELEASE_NOTES.md --generate-notes
 
       - name: Clean up keychain
         if: always()
