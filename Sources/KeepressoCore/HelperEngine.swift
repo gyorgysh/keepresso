@@ -29,6 +29,44 @@ public final class ProcessCommandRunner: HelperCommandRunning {
     }
 }
 
+/// Read-only seam for the global `disablesleep` value. The helper snapshots
+/// this before its first scoped hold so the last release restores the user's
+/// actual setting instead of assuming that it was disabled.
+public protocol SleepSettingReading: AnyObject, Sendable {
+    func sleepIsDisabled() -> Bool?
+}
+
+/// Reads `pmset -g` without changing power settings.
+public final class PMSetSleepSettingReader: SleepSettingReading {
+    public init() {}
+
+    public func sleepIsDisabled() -> Bool? {
+        let process = Process()
+        let output = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
+        process.arguments = ["-g"]
+        process.standardOutput = output
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else { return nil }
+            let data = output.fileHandleForReading.readDataToEndOfFile()
+            guard let text = String(data: data, encoding: .utf8) else { return nil }
+            for line in text.split(whereSeparator: \.isNewline) {
+                let fields = line.split(whereSeparator: \.isWhitespace)
+                guard let key = fields.firstIndex(of: "disablesleep"),
+                      fields.indices.contains(fields.index(after: key))
+                else { continue }
+                return fields[fields.index(after: key)] == "1"
+            }
+            return nil
+        } catch {
+            return nil
+        }
+    }
+}
+
 /// How one forced-fan write went. `needsUnlock` is the M3-and-newer firmware
 /// refusing manual mode (SMC result 0x82) until the `Ftst` test flag is set;
 /// the engine answers it with exactly one unlock-and-retry.
@@ -88,8 +126,16 @@ public protocol HelperRestoreStatePersisting: AnyObject, Sendable {
     func set(_ marker: HelperRestoreMarker, present: Bool)
 }
 
+/// Optional extension used by current helpers to remember the value that a
+/// scoped sleep hold must restore. Older marker stores remain compatible and
+/// fall back to `false`, matching the behavior of previous releases.
+public protocol HelperSleepRestoreValuePersisting: HelperRestoreStatePersisting {
+    func sleepRestoreValue() -> Bool?
+    func setSleepRestoreValue(_ value: Bool?)
+}
+
 /// Real marker store: one empty file per marker in a root-owned directory.
-public final class FileRestoreState: HelperRestoreStatePersisting {
+public final class FileRestoreState: HelperSleepRestoreValuePersisting {
     private let directory: URL
 
     public init(directory: URL = URL(fileURLWithPath: "/var/db/sh.gyorgy.keepresso.helper")) {
@@ -111,8 +157,32 @@ public final class FileRestoreState: HelperRestoreStatePersisting {
         }
     }
 
+    public func sleepRestoreValue() -> Bool? {
+        guard let data = try? Data(contentsOf: sleepRestoreURL),
+              let value = String(data: data, encoding: .utf8)
+        else { return nil }
+        switch value.trimmingCharacters(in: .whitespacesAndNewlines) {
+        case "1": return true
+        case "0": return false
+        default: return nil
+        }
+    }
+
+    public func setSleepRestoreValue(_ value: Bool?) {
+        guard let value else {
+            try? FileManager.default.removeItem(at: sleepRestoreURL)
+            return
+        }
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? Data((value ? "1" : "0").utf8).write(to: sleepRestoreURL, options: .atomic)
+    }
+
     private func url(for marker: HelperRestoreMarker) -> URL {
         directory.appendingPathComponent(marker.rawValue, isDirectory: false)
+    }
+
+    private var sleepRestoreURL: URL {
+        directory.appendingPathComponent("sleep-restore-value", isDirectory: false)
     }
 }
 
@@ -154,6 +224,7 @@ public final class HelperEngine: @unchecked Sendable {
     private let runner: HelperCommandRunning
     private let state: HelperRestoreStatePersisting
     private let fans: FanControlling
+    private let sleepSettingReader: SleepSettingReading
 
     private var sleepHolders: Set<Int> = []
     private var awdlHolders: Set<Int> = []
@@ -171,11 +242,13 @@ public final class HelperEngine: @unchecked Sendable {
     public init(
         runner: HelperCommandRunning,
         state: HelperRestoreStatePersisting,
-        fans: FanControlling = NullFanControl()
+        fans: FanControlling = NullFanControl(),
+        sleepSettingReader: SleepSettingReading = PMSetSleepSettingReader()
     ) {
         self.runner = runner
         self.state = state
         self.fans = fans
+        self.sleepSettingReader = sleepSettingReader
     }
 
     /// Settle debts from a previous daemon life (crash, kill, reboot
@@ -185,16 +258,16 @@ public final class HelperEngine: @unchecked Sendable {
     public func restoreAtLaunch() {
         let leftovers = state.markers()
         if leftovers.contains(.sleepDisabled) {
-            runner.run("/usr/bin/pmset", ["-a", "disablesleep", "0"])
-            state.set(.sleepDisabled, present: false)
+            let original = persistedSleepRestoreValue() ?? false
+            let ok = runner.run("/usr/bin/pmset", ["-a", "disablesleep", original ? "1" : "0"])
+            if ok { clearPersistedSleepRestore() }
         }
         if leftovers.contains(.awdlDown) {
-            runner.run("/sbin/ifconfig", ["awdl0", "up"])
-            state.set(.awdlDown, present: false)
+            let ok = runner.run("/sbin/ifconfig", ["awdl0", "up"])
+            if ok { state.set(.awdlDown, present: false) }
         }
         if leftovers.contains(.fanForced) {
-            _ = fans.restoreAuto()
-            state.set(.fanForced, present: false)
+            if fans.restoreAuto() { state.set(.fanForced, present: false) }
         }
         if leftovers.contains(.wakeClearPending) {
             _ = clearWakeSchedules()
@@ -422,8 +495,19 @@ public final class HelperEngine: @unchecked Sendable {
         mutate()
         let after = !sleepHolders.isEmpty
         guard before != after else { return true }
-        let ok = runner.run("/usr/bin/pmset", ["-a", "disablesleep", after ? "1" : "0"])
-        state.set(.sleepDisabled, present: after && ok)
+        if after {
+            let original = sleepSettingReader.sleepIsDisabled() ?? false
+            persistSleepRestoreValue(original)
+            // Record the debt before the write. A failed command may still
+            // have changed state, and restoring the snapshot is harmless.
+            state.set(.sleepDisabled, present: true)
+            if original { return true }
+            return runner.run("/usr/bin/pmset", ["-a", "disablesleep", "1"])
+        }
+
+        let original = persistedSleepRestoreValue() ?? false
+        let ok = runner.run("/usr/bin/pmset", ["-a", "disablesleep", original ? "1" : "0"])
+        if ok { clearPersistedSleepRestore() }
         return ok
     }
 
@@ -432,9 +516,23 @@ public final class HelperEngine: @unchecked Sendable {
         mutate()
         let after = !awdlHolders.isEmpty
         guard before != after else { return true }
+        if after { state.set(.awdlDown, present: true) }
         let ok = runner.run("/sbin/ifconfig", ["awdl0", after ? "down" : "up"])
-        state.set(.awdlDown, present: after && ok)
+        if !after, ok { state.set(.awdlDown, present: false) }
         return ok
+    }
+
+    private func persistedSleepRestoreValue() -> Bool? {
+        (state as? HelperSleepRestoreValuePersisting)?.sleepRestoreValue()
+    }
+
+    private func persistSleepRestoreValue(_ value: Bool) {
+        (state as? HelperSleepRestoreValuePersisting)?.setSleepRestoreValue(value)
+    }
+
+    private func clearPersistedSleepRestore() {
+        state.set(.sleepDisabled, present: false)
+        (state as? HelperSleepRestoreValuePersisting)?.setSleepRestoreValue(nil)
     }
 
     /// Fan version of the union edge: the effective target is the max percent

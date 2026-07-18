@@ -58,6 +58,26 @@ import Foundation
     #expect(try JSONDecoder().decode(KeepressoSettings.self, from: data).thermalSafety == settings.thermalSafety)
 }
 
+@Test func unattendedPowerPolicyIsSecureByDefaultAndRoundTrips() throws {
+    let oldJSON = """
+    { "triggersEnabled": true }
+    """
+    let old = try JSONDecoder().decode(KeepressoSettings.self, from: Data(oldJSON.utf8))
+    #expect(old.unattendedPowerPolicy.lockScreenOnStart)
+    #expect(old.unattendedPowerPolicy.sleepDisplayOnStart)
+    #expect(old.unattendedPowerPolicy.endAction == .sleepMac)
+
+    var settings = KeepressoSettings.default
+    settings.unattendedPowerPolicy = UnattendedPowerPolicy(
+        lockScreenOnStart: false,
+        sleepDisplayOnStart: true,
+        endAction: .lockScreen
+    )
+    let data = try JSONEncoder().encode(settings)
+    let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: data)
+    #expect(decoded.unattendedPowerPolicy == settings.unattendedPowerPolicy)
+}
+
 @Test func menuPanelExpandedDefaultsOnAndRoundTripsCollapsed() throws {
     // A blob saved before the field existed keeps today's full panel.
     let json = """

@@ -917,6 +917,7 @@ private struct AutomationTab: View {
 
     var body: some View {
         Form {
+            unattendedPolicySection
             endActionSection
             scheduledWakeSection
             eventHooksSection
@@ -924,6 +925,7 @@ private struct AutomationTab: View {
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .animation(.snappy(duration: 0.25), value: model.endAction)
+        .animation(.snappy(duration: 0.25), value: model.unattendedPowerPolicy)
         .animation(.snappy(duration: 0.25), value: model.wakeSchedule != nil)
         .animation(.snappy(duration: 0.25), value: model.helperInstalled)
         .animation(.snappy(duration: 0.25), value: model.helper.awaitingApproval)
@@ -955,6 +957,43 @@ private struct AutomationTab: View {
     }
 
     // MARK: End action
+
+    private var unattendedPolicySection: some View {
+        Section {
+            Toggle("Lock screen before unattended work", isOn: Binding(
+                get: { model.unattendedPowerPolicy.lockScreenOnStart },
+                set: { enabled in
+                    var policy = model.unattendedPowerPolicy
+                    policy.lockScreenOnStart = enabled
+                    model.unattendedPowerPolicy = policy
+                }
+            ))
+            Toggle("Turn display off before unattended work", isOn: Binding(
+                get: { model.unattendedPowerPolicy.sleepDisplayOnStart },
+                set: { enabled in
+                    var policy = model.unattendedPowerPolicy
+                    policy.sleepDisplayOnStart = enabled
+                    model.unattendedPowerPolicy = policy
+                }
+            ))
+            Picker("After all unattended work", selection: Binding(
+                get: { model.unattendedPowerPolicy.endAction },
+                set: { action in
+                    var policy = model.unattendedPowerPolicy
+                    policy.endAction = action
+                    model.unattendedPowerPolicy = policy
+                }
+            )) {
+                ForEach(SessionEndAction.allCases, id: \.self) { action in
+                    Text(action.label).tag(action)
+                }
+            }
+        } header: {
+            sectionHeader("Unattended Agent work", info: L("Scheduled and Agent-driven jobs use a separate secure policy. By default Keepresso locks the login session, turns off the display while preserving the system assertion, and sleeps the Mac after the final job finishes."))
+        } footer: {
+            sectionFooter("These defaults do not change interactive keep-awake sessions.")
+        }
+    }
 
     private var endActionSection: some View {
         Section {

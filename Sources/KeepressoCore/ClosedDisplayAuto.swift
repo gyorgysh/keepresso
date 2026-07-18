@@ -95,17 +95,20 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
     /// `disablesleep` behind our back, and re-asserting every cycle would fight
     /// the user's own manual toggle (``PMSetSleepControl`` writes the same
     /// setting directly). So it writes only on a flag transition, and on app
-    /// death restores normal sleep only if it was the one that disabled it, so
-    /// a crash or quit mid-session fails safe while a manually enabled global
-    /// setting survives untouched.
+    /// death restores the value captured at the active hold's start. Capturing
+    /// on every transition also respects a manual change made between two
+    /// automated sessions.
     static func watchdogCommand(flagPath: String, appPID: Int32) -> String {
         "( SET=; while kill -0 \(appPID) 2>/dev/null; do "
             + "if [ -f \"\(flagPath)\" ]; then "
-            + "if [ -z \"$SET\" ]; then /usr/bin/pmset -a disablesleep 1; SET=1; fi; "
-            + "elif [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0; SET=; fi; "
+            + "if [ -z \"$SET\" ]; then "
+            + "ORIG=$(/usr/bin/pmset -g | /usr/bin/awk '$1 == \"disablesleep\" { print $2; exit }'); "
+            + "case \"$ORIG\" in 0|1) ;; *) ORIG=0 ;; esac; "
+            + "SET=1; /usr/bin/pmset -a disablesleep 1; fi; "
+            + "elif [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep \"$ORIG\"; SET=; ORIG=; fi; "
             + "sleep 2; done; "
             + "rm -f \"\(flagPath)\"; "
-            + "if [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0; fi ) </dev/null >/dev/null 2>&1 &"
+            + "if [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep \"$ORIG\"; fi ) </dev/null >/dev/null 2>&1 &"
     }
 
     /// Run a command and return its exit status plus stderr, or `nil` if it

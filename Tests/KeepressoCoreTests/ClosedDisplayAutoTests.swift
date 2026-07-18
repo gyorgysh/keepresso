@@ -16,11 +16,13 @@ import Foundation
     // own manual toggle, and on exit restores sleep only if it disabled it.
     #expect(command.contains("kill -0 4242"))
     #expect(command.contains("if [ -f \"/Users/g/Library/Application Support/Keepresso/sleep-watchdog.flag\" ]"))
-    #expect(command.contains("if [ -z \"$SET\" ]; then /usr/bin/pmset -a disablesleep 1"))
-    #expect(command.contains("elif [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0"))
+    #expect(command.contains("ORIG=$(/usr/bin/pmset -g"))
+    #expect(command.contains("case \"$ORIG\" in 0|1"))
+    #expect(command.contains("SET=1; /usr/bin/pmset -a disablesleep 1"))
+    #expect(command.contains("elif [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep \"$ORIG\""))
     #expect(command.hasSuffix("&"))
     #expect(command.contains("rm -f"))
-    #expect(command.contains("if [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0; fi )"))
+    #expect(command.contains("if [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep \"$ORIG\"; fi )"))
 }
 
 // MARK: - Controller

@@ -63,12 +63,18 @@ final class AppModel {
 
     private let store: SettingsStore
     private let notifier: UserNotificationReminder
+    /// Runs the privacy actions used only for unattended work. The same
+    /// concrete performer is also passed to the session controller.
+    @ObservationIgnored private let unattendedActionPerformer: SessionEndActing
     /// Direct line to the helper daemon for the thermal fan boost (the other
     /// privileged features go through their Routed* controllers).
     @ObservationIgnored private let helperClient: PrivilegedHelperCalling
     private(set) var settings: KeepressoSettings
     /// Avoid double-starting on a single system wake.
     @ObservationIgnored private var lastWakeBrewAt: Date?
+    /// While armed, the session uses the unattended end action instead of the
+    /// user's interactive-session preference.
+    @ObservationIgnored private var unattendedSessionArmed = false
 
     /// The default reminder interval used when the feature is first enabled.
     static let defaultReminderAfter: TimeInterval = 30 * 60
@@ -132,6 +138,7 @@ final class AppModel {
             return helperClient.sleepNow()
         })
         let endActor = SystemEndActionPerformer(systemSleeper: systemSleeper)
+        self.unattendedActionPerformer = endActor
         self.session = SessionController(reminder: notifier, endActor: endActor)
         self.session.options = loaded.options
         self.session.reminderAfter = loaded.reminderAfter
@@ -172,6 +179,9 @@ final class AppModel {
             let persisted = PersistedSessionEvent(event, batteryPercent: event.batteryPercent)
             logPersister?.append(persisted)
             self?.recordForStats(persisted)
+            if event.kind == .sessionEnded || event.kind == .startRefused {
+                self?.disarmUnattendedPowerPolicy()
+            }
         }
         // With one of the auto features on and no helper installed, this run
         // can hit a password prompt in the background (e.g. a trigger-started
@@ -483,7 +493,17 @@ final class AppModel {
         get { settings.endAction }
         set {
             settings.endAction = newValue
-            session.endAction = newValue
+            if !unattendedSessionArmed { session.endAction = newValue }
+            persist()
+        }
+    }
+
+    /// Privacy and shutdown behavior used by scheduled and Agent-driven work.
+    var unattendedPowerPolicy: UnattendedPowerPolicy {
+        get { settings.unattendedPowerPolicy }
+        set {
+            settings.unattendedPowerPolicy = newValue
+            if unattendedSessionArmed { session.endAction = newValue.endAction }
             persist()
         }
     }
@@ -692,13 +712,16 @@ final class AppModel {
         let now = Date()
         if let last = lastWakeBrewAt, now.timeIntervalSince(last) < 60 { return }
         lastWakeBrewAt = now
+        prepareUnattendedPowerPolicy()
         if let presetID = config.presetID,
            let preset = settings.presets.first(where: { $0.id == presetID }) {
             applyPreset(preset)
+            performUnattendedPrivacyActions()
             return
         }
         if triggersEnabled {
             // Gate owns activation; just ensure triggers are live.
+            performUnattendedPrivacyActions()
             return
         }
         let mode: SessionMode = {
@@ -708,6 +731,39 @@ final class AppModel {
             return .indefinite
         }()
         session.start(mode: mode, cause: .command)
+        performUnattendedPrivacyActions()
+    }
+
+    /// Apply the secure defaults before an unattended task can show content.
+    /// The display action does not release the system-sleep assertion.
+    func armUnattendedPowerPolicy() {
+        prepareUnattendedPowerPolicy()
+        performUnattendedPrivacyActions()
+    }
+
+    private func prepareUnattendedPowerPolicy() {
+        guard !unattendedSessionArmed else { return }
+        unattendedSessionArmed = true
+        session.endAction = settings.unattendedPowerPolicy.endAction
+    }
+
+    private func performUnattendedPrivacyActions() {
+        guard unattendedSessionArmed else { return }
+        let policy = settings.unattendedPowerPolicy
+        if policy.lockScreenOnStart {
+            unattendedActionPerformer.perform(.lockScreen)
+        }
+        if policy.sleepDisplayOnStart {
+            unattendedActionPerformer.perform(.sleepDisplay)
+        }
+    }
+
+    /// Restore the interactive preference after the unattended session has
+    /// captured its own pending end action.
+    func disarmUnattendedPowerPolicy() {
+        guard unattendedSessionArmed else { return }
+        unattendedSessionArmed = false
+        session.endAction = settings.endAction
     }
 
     // MARK: - Quick stop
