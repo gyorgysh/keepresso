@@ -25,6 +25,8 @@ private final class FakeRestoreState: HelperSleepRestoreValuePersisting, @unchec
     private let lock = NSLock()
     private var stored: Set<HelperRestoreMarker> = []
     private var storedSleepValue: Bool?
+    var failMarkerWrites = false
+    var failSleepValueWrites = false
 
     init(_ initial: Set<HelperRestoreMarker> = [], sleepRestoreValue: Bool? = nil) {
         stored = initial
@@ -37,10 +39,13 @@ private final class FakeRestoreState: HelperSleepRestoreValuePersisting, @unchec
         return stored
     }
 
-    func set(_ marker: HelperRestoreMarker, present: Bool) {
+    @discardableResult
+    func set(_ marker: HelperRestoreMarker, present: Bool) -> Bool {
         lock.lock()
         defer { lock.unlock() }
+        guard !failMarkerWrites else { return false }
         if present { stored.insert(marker) } else { stored.remove(marker) }
+        return true
     }
 
     func sleepRestoreValue() -> Bool? {
@@ -49,10 +54,13 @@ private final class FakeRestoreState: HelperSleepRestoreValuePersisting, @unchec
         return storedSleepValue
     }
 
-    func setSleepRestoreValue(_ value: Bool?) {
+    @discardableResult
+    func setSleepRestoreValue(_ value: Bool?) -> Bool {
         lock.lock()
         defer { lock.unlock() }
+        guard !failSleepValueWrites else { return false }
         storedSleepValue = value
+        return true
     }
 }
 
@@ -255,6 +263,51 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     #expect(runner.commands == [sleepOn, sleepOff, sleepOff])
     #expect(state.markers().isEmpty)
     #expect(state.sleepRestoreValue() == nil)
+}
+
+@Test func newSleepHoldPreservesAnUnsettledRestoreSnapshot() {
+    let runner = FakeRunner()
+    let state = FakeRestoreState()
+    let reader = FakeSleepSettingReader(false)
+    let engine = HelperEngine(
+        runner: runner,
+        state: state,
+        sleepSettingReader: reader
+    )
+    #expect(engine.setSleepHold(client: 1, holding: true))
+
+    runner.failNext = true
+    #expect(!engine.setSleepHold(client: 1, holding: false))
+    #expect(state.sleepRestoreValue() == false)
+
+    // The failed restore left the live setting at 1. A new hold must reuse the
+    // saved original 0 instead of sampling that debt and replacing it with 1.
+    reader.value = true
+    #expect(engine.setSleepHold(client: 2, holding: true))
+    #expect(state.sleepRestoreValue() == false)
+    #expect(engine.setSleepHold(client: 2, holding: false))
+    #expect(runner.commands == [sleepOn, sleepOff, sleepOff])
+    #expect(state.markers().isEmpty)
+    #expect(state.sleepRestoreValue() == nil)
+}
+
+@Test func sleepHoldRefusesPMSetWhenRestoreJournalCannotBePersisted() {
+    for failSnapshot in [true, false] {
+        let runner = FakeRunner()
+        let state = FakeRestoreState()
+        state.failSleepValueWrites = failSnapshot
+        state.failMarkerWrites = !failSnapshot
+        let engine = HelperEngine(
+            runner: runner,
+            state: state,
+            sleepSettingReader: FakeSleepSettingReader(false)
+        )
+
+        #expect(!engine.setSleepHold(client: 1, holding: true))
+        #expect(runner.commands.isEmpty)
+        #expect(engine.isIdle)
+        #expect(state.markers().isEmpty)
+    }
 }
 
 // MARK: - Manual set and restore

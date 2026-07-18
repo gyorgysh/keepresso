@@ -137,7 +137,11 @@ public enum HelperRestoreMarker: String, CaseIterable, Sendable {
 /// Persistence seam for the restore markers.
 public protocol HelperRestoreStatePersisting: AnyObject, Sendable {
     func markers() -> Set<HelperRestoreMarker>
-    func set(_ marker: HelperRestoreMarker, present: Bool)
+    /// Persist or clear one recovery debt. A failed journal write must be
+    /// observable so callers never change privileged system state without a
+    /// durable recovery path.
+    @discardableResult
+    func set(_ marker: HelperRestoreMarker, present: Bool) -> Bool
 }
 
 /// Optional extension used by current helpers to remember the value that a
@@ -145,7 +149,8 @@ public protocol HelperRestoreStatePersisting: AnyObject, Sendable {
 /// fall back to `false`, matching the behavior of previous releases.
 public protocol HelperSleepRestoreValuePersisting: HelperRestoreStatePersisting {
     func sleepRestoreValue() -> Bool?
-    func setSleepRestoreValue(_ value: Bool?)
+    @discardableResult
+    func setSleepRestoreValue(_ value: Bool?) -> Bool
 }
 
 /// Real marker store: one empty file per marker in a root-owned directory.
@@ -162,12 +167,19 @@ public final class FileRestoreState: HelperSleepRestoreValuePersisting {
         })
     }
 
-    public func set(_ marker: HelperRestoreMarker, present: Bool) {
-        if present {
-            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try? Data().write(to: url(for: marker))
-        } else {
-            try? FileManager.default.removeItem(at: url(for: marker))
+    @discardableResult
+    public func set(_ marker: HelperRestoreMarker, present: Bool) -> Bool {
+        let markerURL = url(for: marker)
+        do {
+            if present {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                try Data().write(to: markerURL, options: .atomic)
+            } else if FileManager.default.fileExists(atPath: markerURL.path) {
+                try FileManager.default.removeItem(at: markerURL)
+            }
+            return true
+        } catch {
+            return false
         }
     }
 
@@ -182,13 +194,21 @@ public final class FileRestoreState: HelperSleepRestoreValuePersisting {
         }
     }
 
-    public func setSleepRestoreValue(_ value: Bool?) {
-        guard let value else {
-            try? FileManager.default.removeItem(at: sleepRestoreURL)
-            return
+    @discardableResult
+    public func setSleepRestoreValue(_ value: Bool?) -> Bool {
+        do {
+            guard let value else {
+                if FileManager.default.fileExists(atPath: sleepRestoreURL.path) {
+                    try FileManager.default.removeItem(at: sleepRestoreURL)
+                }
+                return true
+            }
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data((value ? "1" : "0").utf8).write(to: sleepRestoreURL, options: .atomic)
+            return true
+        } catch {
+            return false
         }
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try? Data((value ? "1" : "0").utf8).write(to: sleepRestoreURL, options: .atomic)
     }
 
     private func url(for marker: HelperRestoreMarker) -> URL {
@@ -274,7 +294,7 @@ public final class HelperEngine: @unchecked Sendable {
         if leftovers.contains(.sleepDisabled) {
             let original = persistedSleepRestoreValue() ?? false
             let ok = runner.run("/usr/bin/pmset", ["-a", "disablesleep", original ? "1" : "0"])
-            if ok { clearPersistedSleepRestore() }
+            if ok { _ = clearPersistedSleepRestore() }
         }
         if leftovers.contains(.awdlDown) {
             let ok = runner.run("/sbin/ifconfig", ["awdl0", "up"])
@@ -511,6 +531,15 @@ public final class HelperEngine: @unchecked Sendable {
         let after = !sleepHolders.isEmpty
         guard before != after else { return true }
         if after {
+            // A previous release or launch restore may have failed. Its marker
+            // and snapshot are the authoritative debt until a restore succeeds;
+            // sampling the currently-stuck value here would overwrite the real
+            // original and make `disablesleep 1` permanent.
+            if state.markers().contains(.sleepDisabled) {
+                if sleepSettingReader.sleepIsDisabled() == true { return true }
+                return runner.run("/usr/bin/pmset", ["-a", "disablesleep", "1"])
+            }
+
             guard let original = sleepSettingReader.sleepIsDisabled() else {
                 // Without an exact snapshot, changing a global setting could
                 // destroy user-owned state on release. Refuse this hold and
@@ -518,18 +547,30 @@ public final class HelperEngine: @unchecked Sendable {
                 sleepHolders = previousHolders
                 return false
             }
-            persistSleepRestoreValue(original)
-            // Record the debt before the write. A failed command may still
-            // have changed state, and restoring the snapshot is harmless.
-            state.set(.sleepDisabled, present: true)
+            // Record the exact snapshot and debt before the system write. If
+            // either journal operation fails, roll back the in-memory claim and
+            // refuse to touch pmset because a later crash could not recover it.
+            guard persistSleepRestoreValue(original) else {
+                sleepHolders = previousHolders
+                return false
+            }
+            guard state.set(.sleepDisabled, present: true) else {
+                sleepHolders = previousHolders
+                // A failed write can be ambiguous. Clear the snapshot only if
+                // we can prove no marker remains; otherwise retain the exact
+                // value so a later launch still has safe recovery data.
+                if state.set(.sleepDisabled, present: false) {
+                    _ = (state as? HelperSleepRestoreValuePersisting)?.setSleepRestoreValue(nil)
+                }
+                return false
+            }
             if original { return true }
             return runner.run("/usr/bin/pmset", ["-a", "disablesleep", "1"])
         }
 
         let original = persistedSleepRestoreValue() ?? false
         let ok = runner.run("/usr/bin/pmset", ["-a", "disablesleep", original ? "1" : "0"])
-        if ok { clearPersistedSleepRestore() }
-        return ok
+        return ok && clearPersistedSleepRestore()
     }
 
     private func applyAWDLUnion(_ mutate: () -> Void) -> Bool {
@@ -547,13 +588,19 @@ public final class HelperEngine: @unchecked Sendable {
         (state as? HelperSleepRestoreValuePersisting)?.sleepRestoreValue()
     }
 
-    private func persistSleepRestoreValue(_ value: Bool) {
-        (state as? HelperSleepRestoreValuePersisting)?.setSleepRestoreValue(value)
+    private func persistSleepRestoreValue(_ value: Bool) -> Bool {
+        guard let persistence = state as? HelperSleepRestoreValuePersisting else {
+            // Legacy stores can safely restore the historical default only.
+            return value == false
+        }
+        return persistence.setSleepRestoreValue(value)
     }
 
-    private func clearPersistedSleepRestore() {
-        state.set(.sleepDisabled, present: false)
-        (state as? HelperSleepRestoreValuePersisting)?.setSleepRestoreValue(nil)
+    private func clearPersistedSleepRestore() -> Bool {
+        // Keep the exact snapshot until the marker itself is gone. A crash
+        // between these operations then still has enough information to retry.
+        guard state.set(.sleepDisabled, present: false) else { return false }
+        return (state as? HelperSleepRestoreValuePersisting)?.setSleepRestoreValue(nil) ?? true
     }
 
     /// Fan version of the union edge: the effective target is the max percent

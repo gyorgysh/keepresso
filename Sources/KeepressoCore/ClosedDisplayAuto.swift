@@ -251,6 +251,11 @@ public final class ClosedDisplayAutoController {
         let launcher = self.launcher
         let flagCreated = await Task.detached { launcher.createFlag() }.value
         guard flagCreated else {
+            // A daemon RPC can time out after recording the client's desired
+            // hold or even applying it. Explicitly release on every failed
+            // engage so the XPC client clears that intent and invalidates its
+            // connection instead of reasserting a hidden hold later.
+            await Task.detached { launcher.removeFlag() }.value
             let message = launcher.engageFailureMessage
             lastError = message
             return .failed(message)

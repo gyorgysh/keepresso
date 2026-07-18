@@ -223,7 +223,9 @@ private final class FakeMarkerState: HelperRestoreStatePersisting, @unchecked Se
     private var stored: Set<HelperRestoreMarker>
     init(_ initial: Set<HelperRestoreMarker> = []) { stored = initial }
     func markers() -> Set<HelperRestoreMarker> { stored }
-    func set(_ marker: HelperRestoreMarker, present: Bool) {
+    @discardableResult
+    func set(_ marker: HelperRestoreMarker, present: Bool) -> Bool {
         if present { stored.insert(marker) } else { stored.remove(marker) }
+        return true
     }
 }

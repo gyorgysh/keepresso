@@ -38,6 +38,7 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     var engageFailureMessage = "backend says no"
     /// Helper spawns, i.e. how often the user was asked for a password.
     var startCalls = 0
+    var removeCalls = 0
 
     func isFlagPresent() -> Bool { flagPresent }
     func createFlag() -> Bool {
@@ -45,7 +46,10 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
         flagPresent = true
         return true
     }
-    func removeFlag() { flagPresent = false }
+    func removeFlag() {
+        flagPresent = false
+        removeCalls += 1
+    }
     func startHelper(appPID: Int32) -> SleepSettingResult {
         startCalls += 1
         return result
@@ -163,6 +167,7 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     await controller.autoTick(brewing: true)
     #expect(controller.lastError == "backend says no")
     #expect(!controller.isHolding)
+    #expect(launcher.removeCalls == 1)
 }
 
 @MainActor
