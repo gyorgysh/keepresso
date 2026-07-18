@@ -427,6 +427,12 @@ private func hookRecord(
     var nudged = AgentActivityTrigger.State()
     nudged = AgentActivityTrigger.step(nudged, sample: 0.1, hookState: .waiting)
     #expect(!nudged.isWorking)
+
+    // Per-rule override: overnight unattended runs can treat waiting as work.
+    var overnight = AgentActivityTrigger.State()
+    overnight = AgentActivityTrigger.step(
+        overnight, sample: 0.1, hookState: .waiting, countWaitingAsWorking: true)
+    #expect(overnight.isWorking)
 }
 
 @Test func missingHookStateFallsBackToHeuristics() {

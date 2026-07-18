@@ -325,6 +325,10 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
 @Test func agentRuleLabelIncludesGraceSuffix() {
     #expect(TriggerRule.agentActivity(AgentRule(grace: 0)).label == "AI agent working")
     #expect(TriggerRule.agentActivity(AgentRule(grace: 300)).label == "AI agent working (+300s)")
+    #expect(
+        TriggerRule.agentActivity(AgentRule(grace: 300, countWaitingAsWorking: true)).label
+            == "AI agent working (+300s, waiting counts)"
+    )
     #expect(TriggerRule.agentActivity(AgentRule()).requiredPermission == nil)
 }
 

@@ -45,6 +45,26 @@ private final class FakeHelperClient: PrivilegedHelperCalling, @unchecked Sendab
         return false
     }
 
+    func sleepNow() -> Bool {
+        record("sleepNow")
+        return holdSucceeds
+    }
+
+    func scheduleOneShotWake(at dateString: String) -> Bool {
+        record("scheduleOneShotWake(\(dateString))")
+        return holdSucceeds
+    }
+
+    func scheduleRepeatingWake(days: String, time: String) -> Bool {
+        record("scheduleRepeatingWake(\(days), \(time))")
+        return holdSucceeds
+    }
+
+    func clearWakeSchedules() -> Bool {
+        record("clearWakeSchedules")
+        return holdSucceeds
+    }
+
     private func record(_ call: String) {
         lock.lock()
         calls.append(call)

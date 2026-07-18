@@ -56,6 +56,22 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
         reply(engine.fanHoldDropped)
     }
 
+    func sleepNow(reply: @escaping @Sendable (Bool) -> Void) {
+        reply(engine.sleepNow())
+    }
+
+    func scheduleOneShotWake(at dateString: String, reply: @escaping @Sendable (Bool) -> Void) {
+        reply(engine.scheduleOneShotWake(at: dateString))
+    }
+
+    func scheduleRepeatingWake(days: String, time: String, reply: @escaping @Sendable (Bool) -> Void) {
+        reply(engine.scheduleRepeatingWake(days: days, time: time))
+    }
+
+    func clearWakeSchedules(reply: @escaping @Sendable (Bool) -> Void) {
+        reply(engine.clearWakeSchedules())
+    }
+
     func terminateWhenIdle() {
         onTerminateRequest()
     }

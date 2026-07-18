@@ -109,6 +109,21 @@ public final class TriggerGateController {
         cachedAt = now()
         return states
     }
+
+    /// Whether any live agent-activity trigger flipped from working to idle
+    /// on its most recent ``Trigger/tick()``. The host reads this after
+    /// reconcile to fire the agent-idle outbound hook. False when gating is
+    /// off or no agent rule is present.
+    public func agentJustWentIdle() -> Bool {
+        guard let engine else { return false }
+        for trigger in engine.triggers {
+            let inner = (trigger as? GracePeriodTrigger)?.wrappedTrigger ?? trigger
+            if let agent = inner as? AgentActivityTrigger, agent.justWentIdle {
+                return true
+            }
+        }
+        return false
+    }
 }
 
 /// The live state of one saved rule, for the menu's condition list.

@@ -12,6 +12,18 @@ public enum SessionCause: Equatable, Sendable {
     case command
 }
 
+/// Machine-readable kind of a session decision, for outbound event hooks and
+/// anything else that must not parse the localized ``SessionEvent/reason``.
+public enum SessionEventKind: String, Codable, Equatable, Sendable {
+    case sessionStarted
+    case sessionEnded
+    case triggerFired
+    case triggerReleased
+    case batteryPaused
+    case thermalPaused
+    case startRefused
+}
+
 /// One entry in the decision log: the session began or ended, when, and why.
 public struct SessionEvent: Equatable, Identifiable, Sendable {
     public var id: Int
@@ -21,37 +33,87 @@ public struct SessionEvent: Equatable, Identifiable, Sendable {
     /// Human-readable cause, snapshotted at event time ("Started manually",
     /// "Triggers: Camera in use", "Timed session ended").
     public var reason: String
+    /// Stable kind for hooks and automation. Optional so older synthetic
+    /// events in tests still decode; production always sets it.
+    public var kind: SessionEventKind?
+    /// Battery percent at event time when discharging, for awake stats.
+    public var batteryPercent: Int?
 
-    public init(id: Int, date: Date, began: Bool, reason: String) {
+    public init(
+        id: Int,
+        date: Date,
+        began: Bool,
+        reason: String,
+        kind: SessionEventKind? = nil,
+        batteryPercent: Int? = nil
+    ) {
         self.id = id
         self.date = date
         self.began = began
         self.reason = reason
+        self.kind = kind
+        self.batteryPercent = batteryPercent
     }
 }
 
 /// A bounded, observable log of the controller's session decisions, answering
 /// "why did Keepresso turn on or off?" without digging through Console. Held
-/// by ``SessionController``, which records every transition; in-memory only
-/// (it resets on relaunch, like the trigger pause).
+/// by ``SessionController``. The newest ``capacity`` events live in memory;
+/// the host also persists them via ``DecisionLogPersister`` so Activity
+/// survives a relaunch.
 @MainActor
 @Observable
 public final class DecisionLog {
-    /// Oldest entries fall off past this count.
+    /// Oldest entries fall off past this count in memory.
     public static let capacity = 100
 
     /// Events oldest-first. The UI shows them reversed.
     public private(set) var events: [SessionEvent] = []
     private var nextID = 0
 
+    /// Called after every recorded event so the host can drive outbound hooks
+    /// and persistence without polling. Tests leave it nil.
+    public var onRecord: ((SessionEvent) -> Void)?
+
     public init() {}
 
-    public func record(began: Bool, reason: String, at date: Date) {
-        events.append(SessionEvent(id: nextID, date: date, began: began, reason: reason))
+    /// Seed the in-memory log from disk (oldest first). Does not re-fire
+    /// ``onRecord`` (would re-append to the file and re-run hooks).
+    public func load(_ persisted: [PersistedSessionEvent]) {
+        events = persisted.enumerated().map { index, item in
+            SessionEvent(
+                id: index,
+                date: item.date,
+                began: item.began,
+                reason: item.reason,
+                kind: item.kind,
+                batteryPercent: item.batteryPercent
+            )
+        }
+        nextID = events.count
+    }
+
+    public func record(
+        began: Bool,
+        reason: String,
+        kind: SessionEventKind? = nil,
+        batteryPercent: Int? = nil,
+        at date: Date
+    ) {
+        let event = SessionEvent(
+            id: nextID,
+            date: date,
+            began: began,
+            reason: reason,
+            kind: kind,
+            batteryPercent: batteryPercent
+        )
+        events.append(event)
         nextID += 1
         if events.count > Self.capacity {
             events.removeFirst(events.count - Self.capacity)
         }
+        onRecord?(event)
     }
 }
 

@@ -75,6 +75,11 @@ public enum HelperRestoreMarker: String, CaseIterable, Sendable {
     case awdlDown = "awdl-down"
     /// We forced the fans for a hold and haven't restored auto control.
     case fanForced = "fan-forced"
+    /// A clear of wake schedules was requested but did not finish. Next
+    /// daemon launch retries the cancel so a disable cannot leave system
+    /// schedules behind after a crash. Successful schedules do not set this
+    /// (they are meant to survive reboots).
+    case wakeClearPending = "wake-clear-pending"
 }
 
 /// Persistence seam for the restore markers.
@@ -191,6 +196,9 @@ public final class HelperEngine: @unchecked Sendable {
             _ = fans.restoreAuto()
             state.set(.fanForced, present: false)
         }
+        if leftovers.contains(.wakeClearPending) {
+            _ = clearWakeSchedules()
+        }
     }
 
     /// The manual closed-display toggle: a plain persistent set, deliberately
@@ -198,6 +206,60 @@ public final class HelperEngine: @unchecked Sendable {
     /// meant to outlive the app; that matches the old osascript semantics).
     public func setSleepDisabled(_ disabled: Bool) -> Bool {
         runner.run("/usr/bin/pmset", ["-a", "disablesleep", disabled ? "1" : "0"])
+    }
+
+    /// Put the Mac to sleep right now. Not a hold: there is nothing to restore
+    /// on disconnect, and the machine may be asleep before the caller hears
+    /// the reply.
+    public func sleepNow() -> Bool {
+        runner.run("/usr/bin/pmset", ["sleepnow"])
+    }
+
+    /// One-shot wake. Schedules persist across reboots by design.
+    public func scheduleOneShotWake(at dateString: String) -> Bool {
+        runner.run("/usr/bin/pmset", ["schedule", "wake", dateString])
+    }
+
+    /// Repeating wakeorpoweron. Replaces the system-wide repeating pair.
+    public func scheduleRepeatingWake(days: String, time: String) -> Bool {
+        runner.run("/usr/bin/pmset", ["repeat", "wakeorpoweron", days, time])
+    }
+
+    /// Cancel one-shot schedules and the repeating pair. On total failure,
+    /// leave a debt so the next daemon launch retries.
+    public func clearWakeSchedules() -> Bool {
+        // cancelall drops every one-shot (including non-Keepresso owners on
+        // some OS versions); repeat cancel drops the single system pair.
+        // Acceptable: wake schedules are a power-user feature and the UI
+        // re-applies the desired config on every save.
+        state.set(.wakeClearPending, present: true)
+        let a = runner.run("/usr/bin/pmset", ["schedule", "cancelall"])
+        let b = runner.run("/usr/bin/pmset", ["repeat", "cancel"])
+        let ok = a || b
+        if ok { state.set(.wakeClearPending, present: false) }
+        return ok
+    }
+
+    /// Apply a full desired config: clear first, then install what remains.
+    /// Returns whether every step the config required succeeded.
+    public func applyWakeSchedule(_ config: WakeScheduleConfig) -> Bool {
+        guard config.isActive else {
+            return clearWakeSchedules()
+        }
+        // Clear previous Keepresso installs so we don't stack one-shots.
+        _ = clearWakeSchedules()
+        var ok = true
+        if let date = config.oneShot {
+            let stamp = WakeScheduleConfig.oneShotString(for: date)
+            ok = scheduleOneShotWake(at: stamp) && ok
+        }
+        if config.repeatingEnabled {
+            ok = scheduleRepeatingWake(
+                days: config.repeatWeekdays,
+                time: config.repeatTimeString
+            ) && ok
+        }
+        return ok
     }
 
     /// Take or release `client`'s hold on `disablesleep`. Writes the system

@@ -591,14 +591,28 @@ public final class AgentActivityTrigger: Trigger {
     }
 
     private let monitor: AgentActivityMonitoring
+    /// See ``AgentRule/countWaitingAsWorking``.
+    public let countWaitingAsWorking: Bool
     private var smoothing: [Int32: State] = [:]
+    /// Last tick's overall working verdict, so the host can detect the
+    /// working → idle edge for outbound hooks.
+    private var wasWorking = false
 
     /// The sessions seen by the last ``tick()`` with their verdicts, a pure
     /// read for the menu's per-session rows.
     public private(set) var sessionStates: [SessionState] = []
 
-    public init(monitor: AgentActivityMonitoring = PSAgentActivityMonitor()) {
+    /// True when this tick flipped from any-working to none-working. The host
+    /// (AppModel) reads it after reconcile to fire the agent-idle hook. Cleared
+    /// on the next tick that does not make the same edge.
+    public private(set) var justWentIdle = false
+
+    public init(
+        monitor: AgentActivityMonitoring = PSAgentActivityMonitor(),
+        countWaitingAsWorking: Bool = false
+    ) {
         self.monitor = monitor
+        self.countWaitingAsWorking = countWaitingAsWorking
     }
 
     public var label: String { L("AI agent working") }
@@ -617,12 +631,16 @@ public final class AgentActivityTrigger: Trigger {
                 sample: session.cpuPercent,
                 freshEvidence: session.hasFreshEvidence,
                 hookState: session.hookState,
-                hookDetail: session.hookDetail
+                hookDetail: session.hookDetail,
+                countWaitingAsWorking: countWaitingAsWorking
             )
             next[session.pid] = stepped
             return SessionState(session: session, isWorking: stepped.isWorking)
         }
         smoothing = next
+        let working = sessionStates.contains { $0.isWorking }
+        justWentIdle = wasWorking && !working
+        wasWorking = working
     }
 
     public func isSatisfied() -> Bool {
@@ -631,9 +649,8 @@ public final class AgentActivityTrigger: Trigger {
 
     /// Pure decision step, exposed for direct unit testing. A live hook state
     /// is an exact edge and decides outright: `working` is on; `waiting` is
-    /// on only for a pending approval (mid-task, and flipping through every
-    /// prompt would flap the trigger), not for the idle nudge a prompt left
-    /// unanswered fires; `idle` is off.
+    /// on for a pending approval always, and for the plain idle-nudge waiting
+    /// only when ``countWaitingAsWorking`` is set; `idle` is off.
     /// Otherwise `freshEvidence` (a transcript written moments ago)
     /// is proof of work and wins; the CPU heuristic decides for agents that
     /// leave no transcript. The EMA and baseline advance on every tick
@@ -643,7 +660,8 @@ public final class AgentActivityTrigger: Trigger {
         sample: Double,
         freshEvidence: Bool = false,
         hookState: AgentHooks.HookSessionState? = nil,
-        hookDetail: String? = nil
+        hookDetail: String? = nil,
+        countWaitingAsWorking: Bool = false
     ) -> State {
         var next = state
         let clamped = max(sample, 0)
@@ -672,8 +690,9 @@ public final class AgentActivityTrigger: Trigger {
         next.baseline = baseline
 
         if let hookState {
+            let waitingCounts = hookDetail == "waiting-approval" || countWaitingAsWorking
             next.isWorking = hookState == .working
-                || (hookState == .waiting && hookDetail == "waiting-approval")
+                || (hookState == .waiting && waitingCounts)
         } else {
             let delta = state.isWorking ? Self.offDeltaPercent : Self.onDeltaPercent
             next.isWorking = freshEvidence

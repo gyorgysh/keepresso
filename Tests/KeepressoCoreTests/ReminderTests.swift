@@ -189,6 +189,11 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
     controller.reconcile()
     #expect(controller.isActive == false)
     #expect(reminder.notices.contains { $0.title == "Keepresso stopped" })
+    // Debounced: notification is immediate, action waits out the window.
+    #expect(endActor.performed.isEmpty)
+
+    clock.advance(SessionController.endActionDebounce)
+    controller.reconcile()
     #expect(endActor.performed == [.sleepDisplay])
 }
 
@@ -205,7 +210,7 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
 
 @MainActor
 @Test func endEffectsFireWhenTriggerConditionsDrop() {
-    let (controller, reminder, endActor, _) = makeEndController()
+    let (controller, reminder, endActor, clock) = makeEndController()
     controller.notifyOnEnd = true
     controller.endAction = .startScreensaver
     let gate = StubReminderGate(true)
@@ -217,7 +222,62 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
     controller.reconcile() // conditions drop: ends on its own
     #expect(controller.isActive == false)
     #expect(reminder.notices.contains { $0.title == "Keepresso stopped" })
+    #expect(endActor.performed.isEmpty)
+
+    clock.advance(SessionController.endActionDebounce)
+    controller.reconcile()
     #expect(endActor.performed == [.startScreensaver])
+}
+
+@MainActor
+@Test func aTriggerFlapCancelsThePendingEndAction() {
+    let (controller, _, endActor, clock) = makeEndController()
+    controller.endAction = .sleepDisplay
+    let gate = StubReminderGate(true)
+    controller.triggerGate = gate
+
+    controller.reconcile()
+    gate.satisfied = false
+    controller.reconcile()
+    #expect(controller.isActive == false)
+
+    // Re-satisfy inside the debounce window: the sleep must not fire.
+    gate.satisfied = true
+    clock.advance(1)
+    controller.reconcile()
+    #expect(controller.isActive)
+    clock.advance(SessionController.endActionDebounce)
+    controller.reconcile()
+    #expect(endActor.performed.isEmpty)
+}
+
+@MainActor
+@Test func batteryPauseDoesNotRunTheEndAction() {
+    let (controller, reminder, endActor, _) = makeEndController()
+    controller.endAction = .sleepDisplay
+    controller.pauseBelowBatteryPercent = 20
+    controller.start()
+    controller.reconcile(battery: .discharging(10))
+    #expect(controller.isActive == false)
+    #expect(reminder.notices.contains { $0.title == "Paused on low battery" })
+    #expect(endActor.performed.isEmpty)
+}
+
+@MainActor
+@Test func aStaleTimedExpirySuppressesTheEndAction() {
+    let (controller, reminder, endActor, clock) = makeEndController()
+    controller.notifyOnEnd = true
+    controller.endAction = .lockScreen
+    controller.start(mode: .timed(duration: 60))
+
+    // Notice the deadline long after it passed (Mac slept across it).
+    clock.advance(60 + SessionController.endActionStaleGrace + 1)
+    controller.reconcile()
+    #expect(controller.isActive == false)
+    #expect(reminder.notices.contains { $0.title == "Keepresso stopped" })
+    clock.advance(SessionController.endActionDebounce)
+    controller.reconcile()
+    #expect(endActor.performed.isEmpty)
 }
 
 @MainActor

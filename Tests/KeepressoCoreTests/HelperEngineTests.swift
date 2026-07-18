@@ -171,6 +171,15 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     #expect(runner.commands == [sleepOn, sleepOff])
 }
 
+@Test func sleepNowIsFireAndForgetPmset() {
+    let runner = FakeRunner()
+    let engine = HelperEngine(runner: runner, state: FakeRestoreState())
+    #expect(engine.sleepNow())
+    #expect(runner.commands == ["/usr/bin/pmset sleepnow"])
+    // Not a hold: nothing to restore if the daemon dies after.
+    #expect(FakeRestoreState().markers().isEmpty)
+}
+
 // MARK: - CLI symlink
 
 /// A scratch directory standing in for /usr/local/bin plus a fake app bundle,

@@ -27,6 +27,10 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     public var quickStopDurations: [TimeInterval]
     /// What to do to the Mac when a session ends on its own. None by default.
     public var endAction: SessionEndAction
+    /// Outbound "on event, do action" hooks. Empty by default.
+    public var eventHooks: [EventHook]
+    /// Scheduled wake + optional wake-and-brew, or `nil` (the default) for off.
+    public var wakeSchedule: WakeScheduleConfig?
     /// Keep a chosen disk/volume spun up, or `nil` (the default) for off.
     public var diskKeepAlive: DiskKeepAliveConfig?
     /// Experimental headless virtual display, or `nil` (the default) for off.
@@ -93,6 +97,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         endingSoonNoticeSeconds: TimeInterval? = nil,
         quickStopDurations: [TimeInterval] = KeepressoSettings.defaultQuickStopDurations,
         endAction: SessionEndAction = .none,
+        eventHooks: [EventHook] = [],
+        wakeSchedule: WakeScheduleConfig? = nil,
         diskKeepAlive: DiskKeepAliveConfig? = nil,
         virtualDisplay: VirtualDisplayConfig? = nil,
         thermalSafety: ThermalSafetyConfig? = nil,
@@ -121,6 +127,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.endingSoonNoticeSeconds = Self.normalizedEndingSoonNotice(endingSoonNoticeSeconds)
         self.quickStopDurations = Self.normalizedQuickStopDurations(quickStopDurations)
         self.endAction = endAction
+        self.eventHooks = eventHooks
+        self.wakeSchedule = wakeSchedule
         self.diskKeepAlive = diskKeepAlive
         self.virtualDisplay = virtualDisplay
         self.thermalSafety = thermalSafety
@@ -209,6 +217,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
                 ?? Self.defaultQuickStopDurations
         )
         endAction = try c.decodeIfPresent(SessionEndAction.self, forKey: .endAction) ?? .none
+        eventHooks = try c.decodeIfPresent([EventHook].self, forKey: .eventHooks) ?? []
+        wakeSchedule = try c.decodeIfPresent(WakeScheduleConfig.self, forKey: .wakeSchedule)
         diskKeepAlive = try c.decodeIfPresent(DiskKeepAliveConfig.self, forKey: .diskKeepAlive)
         virtualDisplay = try c.decodeIfPresent(VirtualDisplayConfig.self, forKey: .virtualDisplay)
         // ThermalSafetyConfig's own decoder applies the clamps.

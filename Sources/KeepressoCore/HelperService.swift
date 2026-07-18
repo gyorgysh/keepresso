@@ -33,7 +33,9 @@ public enum HelperService {
     /// the daemon to try.
     /// 4: added `setFanHold` (the thermal safety net's fan boost) and
     /// `fanHoldDropped` (the app's view of a surrendered boost).
-    public static let protocolVersion = 4
+    /// 5: added `sleepNow` (`pmset sleepnow` for the session-end action).
+    /// 6: added wake-schedule verbs (`pmset schedule` / `pmset repeat`).
+    public static let protocolVersion = 6
 
     /// The code-signing requirement one side demands of the other: an
     /// Apple-issued certificate, the expected identifier, and the same team as
@@ -100,6 +102,18 @@ public enum HelperService {
     /// firmware refusals), so the app can stop claiming a boost the hardware
     /// no longer has and release its side of the hold.
     func fanHoldDropped(reply: @escaping @Sendable (Bool) -> Void)
+    /// Put the Mac to sleep immediately (`pmset sleepnow`). Fire-and-forget
+    /// from the caller's perspective: the machine may sleep before the reply
+    /// lands, so a missing reply is not a failure.
+    func sleepNow(reply: @escaping @Sendable (Bool) -> Void)
+    /// Install a one-shot wake (`pmset schedule wake "MM/dd/yy HH:mm:ss"`).
+    func scheduleOneShotWake(at dateString: String, reply: @escaping @Sendable (Bool) -> Void)
+    /// Install a repeating wakeorpoweron (`pmset repeat wakeorpoweron DAYS HH:mm:ss`).
+    /// Replaces any existing system-wide repeating power pair.
+    func scheduleRepeatingWake(days: String, time: String, reply: @escaping @Sendable (Bool) -> Void)
+    /// Cancel Keepresso-owned wake schedules (`pmset schedule cancelall` for
+    /// one-shots we set, and `pmset repeat cancel` for the repeating pair).
+    func clearWakeSchedules(reply: @escaping @Sendable (Bool) -> Void)
     /// Ask the daemon to exit at its first fully idle moment, without the
     /// ordinary exit's extra grace period (see ``HelperShutdownPolicy``), so
     /// launchd relaunches the binary currently in the bundle on the next call.
@@ -126,6 +140,11 @@ public protocol PrivilegedHelperCalling: AnyObject, Sendable {
     /// Whether the daemon surrendered the forced-fan hold on its own, `nil`
     /// when no daemon answered.
     func fanHoldDropped() -> Bool?
+    /// Ask the daemon to put the Mac to sleep (`pmset sleepnow`).
+    func sleepNow() -> Bool
+    func scheduleOneShotWake(at dateString: String) -> Bool
+    func scheduleRepeatingWake(days: String, time: String) -> Bool
+    func clearWakeSchedules() -> Bool
 }
 
 /// Real client over `NSXPCConnection`. The connection *is* the app's claim on
@@ -203,6 +222,25 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
             }
         }
         return replied ? dropped.value : nil
+    }
+
+    public func sleepNow() -> Bool {
+        // Once sleep starts the reply may never arrive. The regular call
+        // timeout bounds the wait; a missing reply is treated as failure and
+        // the composite sleeper falls through to IOKit / System Events.
+        call { proxy, done in proxy.sleepNow(reply: done) }
+    }
+
+    public func scheduleOneShotWake(at dateString: String) -> Bool {
+        call { proxy, done in proxy.scheduleOneShotWake(at: dateString, reply: done) }
+    }
+
+    public func scheduleRepeatingWake(days: String, time: String) -> Bool {
+        call { proxy, done in proxy.scheduleRepeatingWake(days: days, time: time, reply: done) }
+    }
+
+    public func clearWakeSchedules() -> Bool {
+        call { proxy, done in proxy.clearWakeSchedules(reply: done) }
     }
 
     /// Fire the version-handshake-and-retire nudge: if the daemon on the other

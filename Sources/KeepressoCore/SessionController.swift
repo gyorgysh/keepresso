@@ -56,7 +56,23 @@ public final class SessionController {
     public var endingSoonNotice: TimeInterval?
 
     /// What to do to the Mac when a session ends on its own. Default none.
+    /// Debounced by ``endActionDebounce`` so a trigger flap or an immediate
+    /// restart cancels the pending action. Never runs on battery or thermal
+    /// pauses (those manage sleep themselves).
     public var endAction: SessionEndAction = .none
+
+    /// Seconds to wait after a natural session end before performing
+    /// ``endAction``. A restart (manual, trigger, or command) within this
+    /// window cancels the pending action. Three seconds absorbs a brief
+    /// trigger flap without feeling slow when the Mac should actually sleep.
+    public static let endActionDebounce: TimeInterval = 3
+
+    /// When a timed session's deadline is noticed this many seconds late
+    /// (typically because the Mac slept across it), the end action is
+    /// suppressed: opening the lid after overnight sleep must not
+    /// immediately sleep the display or lock the screen. Notifications still
+    /// fire.
+    public static let endActionStaleGrace: TimeInterval = 30
 
     /// When set, ``reconcile(now:systemIdleSeconds:battery:thermal:)`` force-stops
     /// an active session (releasing assertions and letting the Mac sleep) once
@@ -161,6 +177,16 @@ public final class SessionController {
     /// "that didn't work, and here's why" shake.
     public var refusedStarts: Int { batteryRefusedStarts + thermalRefusedStarts }
 
+    /// End action waiting out ``endActionDebounce``, or `nil` when none.
+    private var pendingEndAction: SessionEndAction?
+    /// When ``pendingEndAction`` should fire, wall-clock of the injected
+    /// ``now`` source.
+    private var pendingEndActionAt: Date?
+
+    /// Last discharging battery percent fed to reconcile, for decision-log
+    /// snapshots. Cleared on AC / unknown.
+    private var lastBatteryPercent: Int?
+
     /// - Parameters:
     ///   - assertions: power-assertion backend; inject a fake in tests.
     ///   - reminder: reminder delivery backend; inject a fake in tests. `nil`
@@ -197,6 +223,8 @@ public final class SessionController {
             log.record(
                 began: false,
                 reason: L("Not started, battery below %d%%", pauseBelowBatteryPercent ?? 0),
+                kind: .startRefused,
+                batteryPercent: lastBatteryPercent,
                 at: now()
             )
             return
@@ -205,9 +233,18 @@ public final class SessionController {
         // has cooled; a start now would just be re-stopped on the next tick.
         if pausedByThermal {
             thermalRefusedStarts += 1
-            log.record(began: false, reason: L("Not started, the Mac is running hot"), at: now())
+            log.record(
+                began: false,
+                reason: L("Not started, the Mac is running hot"),
+                kind: .startRefused,
+                batteryPercent: lastBatteryPercent,
+                at: now()
+            )
             return
         }
+        // A restart within the debounce window cancels a pending end action
+        // (the session is back on, so sleep/lock would fight the user).
+        cancelPendingEndAction()
         let restarted = isActive
         if let options { self.options = options }
         self.mode = mode
@@ -216,7 +253,13 @@ public final class SessionController {
         remindersFired = 0
         lastActivityPokeAt = nil
         armEndingSoon(remaining: mode.duration)
-        log.record(began: true, reason: Self.startReason(cause: cause, restarted: restarted), at: now())
+        log.record(
+            began: true,
+            reason: Self.startReason(cause: cause, restarted: restarted),
+            kind: .sessionStarted,
+            batteryPercent: lastBatteryPercent,
+            at: now()
+        )
         reconcile(now: now())
     }
 
@@ -239,17 +282,45 @@ public final class SessionController {
         stop(reason: cause == .manual ? L("Stopped manually") : L("Stopped by a command"))
     }
 
+    /// What effects a stop may fire beyond releasing assertions.
+    private enum StopEffects {
+        /// Manual or command stop: silent.
+        case none
+        /// Natural end: notification (if configured) and a debounced end action.
+        case natural(kind: SessionEventKind)
+        /// Safety pause (battery / thermal): notification only, never the end
+        /// action. Those pauses already manage sleep on their own.
+        case safetyPause(kind: SessionEventKind)
+    }
+
     /// The shared teardown: logs `reason` when a session was actually running
     /// (idempotent stops don't spam the log), then releases everything. When the
-    /// session ended on its own (`endedNaturally`), fire the end notification and
-    /// action; a manual stop passes `false` so it never surprise-sleeps the Mac.
-    /// A `notice` replaces the generic end notification with a specific
-    /// explanation (the battery pause), delivered even when ``notifyOnEnd`` is
-    /// off: that stop is invisible otherwise, which is the notice's whole point.
-    private func stop(reason: String, endedNaturally: Bool = false, notice: (title: String, body: String)? = nil) {
+    /// session ended on its own, fire the end notification and (for natural
+    /// ends) schedule the end action; a manual stop stays silent so it never
+    /// surprise-sleeps the Mac. A `notice` replaces the generic end
+    /// notification with a specific explanation (the battery pause), delivered
+    /// even when ``notifyOnEnd`` is off: that stop is invisible otherwise,
+    /// which is the notice's whole point.
+    private func stop(
+        reason: String,
+        effects: StopEffects = .none,
+        notice: (title: String, body: String)? = nil
+    ) {
         let wasActive = isActive
+        let kind: SessionEventKind? = {
+            switch effects {
+            case .none: return wasActive ? .sessionEnded : nil
+            case .natural(let kind), .safetyPause(let kind): return kind
+            }
+        }()
         if isActive {
-            log.record(began: false, reason: reason, at: now())
+            log.record(
+                began: false,
+                reason: reason,
+                kind: kind,
+                batteryPercent: lastBatteryPercent,
+                at: now()
+            )
         }
         isActive = false
         startedAt = nil
@@ -258,12 +329,24 @@ public final class SessionController {
         lastActivityPokeAt = nil
         assertions.releaseAll()
         reminder?.cancelPending()
-        if wasActive, endedNaturally { performEndEffects(notice: notice) }
+        guard wasActive else { return }
+        switch effects {
+        case .none:
+            break
+        case .natural:
+            performEndEffects(notice: notice, scheduleAction: true)
+        case .safetyPause:
+            performEndEffects(notice: notice, scheduleAction: false)
+        }
     }
 
-    /// Notify (and optionally act) when a session ends on its own. The cancelled
-    /// reminder above is the mid-session nudge; this is a separate one-shot.
-    private func performEndEffects(notice: (title: String, body: String)?) {
+    /// Notify (and optionally schedule the end action) when a session ends on
+    /// its own. The cancelled reminder above is the mid-session nudge; this is
+    /// a separate one-shot. The action is debounced so a flap can cancel it.
+    private func performEndEffects(
+        notice: (title: String, body: String)?,
+        scheduleAction: Bool
+    ) {
         if let notice {
             reminder?.notify(title: notice.title, body: notice.body, sound: reminderSound)
         } else if notifyOnEnd {
@@ -273,7 +356,30 @@ public final class SessionController {
                 sound: reminderSound
             )
         }
-        if endAction != .none { endActor.perform(endAction) }
+        if scheduleAction, endAction != .none {
+            scheduleEndAction(endAction, at: now())
+        }
+    }
+
+    private func scheduleEndAction(_ action: SessionEndAction, at instant: Date) {
+        pendingEndAction = action
+        pendingEndActionAt = instant.addingTimeInterval(Self.endActionDebounce)
+    }
+
+    private func cancelPendingEndAction() {
+        pendingEndAction = nil
+        pendingEndActionAt = nil
+    }
+
+    /// Fire a due end action. Called from ``reconcile`` so the host's 1 Hz
+    /// tick drives the debounce without a separate timer.
+    private func flushPendingEndAction(at instant: Date) {
+        guard let action = pendingEndAction,
+              let due = pendingEndActionAt,
+              instant >= due
+        else { return }
+        cancelPendingEndAction()
+        endActor.perform(action)
     }
 
     static func startReason(cause: SessionCause, restarted: Bool) -> String {
@@ -353,6 +459,13 @@ public final class SessionController {
     ) {
         let instant = now ?? self.now()
 
+        switch battery {
+        case .discharging(let percent):
+            lastBatteryPercent = percent
+        case .onAC, .unknown:
+            lastBatteryPercent = nil
+        }
+
         if pauseBelowBatteryPercent == nil {
             // Feature off: never leave a stale pause latched.
             pausedByBattery = false
@@ -372,7 +485,7 @@ public final class SessionController {
                 if isActive {
                     stop(
                         reason: L("Paused, battery below %d%%", threshold),
-                        endedNaturally: true,
+                        effects: .safetyPause(kind: .batteryPaused),
                         notice: (
                             title: L("Paused on low battery"),
                             body: L("Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge.", percent)
@@ -405,7 +518,7 @@ public final class SessionController {
                     if isActive {
                         stop(
                             reason: L("Paused, the Mac is running hot"),
-                            endedNaturally: true,
+                            effects: .safetyPause(kind: .thermalPaused),
                             notice: (
                                 title: L("Paused on high temperature"),
                                 body: L("Keepresso stopped the keep-awake session so the Mac can cool down. It resumes when temperatures recover.")
@@ -431,7 +544,19 @@ public final class SessionController {
             setActive(triggerGate.isSatisfied(), at: instant)
         } else if isActive, let total = mode.duration, let startedAt,
                   instant.timeIntervalSince(startedAt) >= total {
-            stop(reason: L("Timed session ended"), endedNaturally: true)
+            // A deadline noticed long after it passed (Mac slept across it)
+            // still ends the session and may notify, but must not fire the
+            // end action: waking the lid would immediately re-sleep the
+            // display or lock the screen.
+            let overdue = instant.timeIntervalSince(startedAt) - total
+            let fireAction = overdue <= Self.endActionStaleGrace
+            stop(
+                reason: L("Timed session ended"),
+                effects: fireAction
+                    ? .natural(kind: .sessionEnded)
+                    : .safetyPause(kind: .sessionEnded)
+            )
+            flushPendingEndAction(at: instant)
             return
         }
 
@@ -443,6 +568,7 @@ public final class SessionController {
         maybeRemind(at: instant)
         maybeNotifyEndingSoon(at: instant)
         maybePokeActivity(at: instant, systemIdleSeconds: systemIdleSeconds)
+        flushPendingEndAction(at: instant)
     }
 
     /// Report user activity to the OS on a slow cadence while a keep-active
@@ -537,14 +663,26 @@ public final class SessionController {
     /// so a trigger-held session keeps its original `startedAt`.
     private func setActive(_ want: Bool, at instant: Date) {
         if want, !isActive {
+            // Trigger re-satisfied within the debounce: cancel a pending
+            // end action so a flap doesn't sleep the Mac mid-session.
+            cancelPendingEndAction()
             isActive = true
             startedAt = instant
             remindersFired = 0
             lastActivityPokeAt = nil
             let detail = triggerDescriber?().map { L("Triggers: %@", $0) }
-            log.record(began: true, reason: detail ?? L("Trigger conditions met"), at: instant)
+            log.record(
+                began: true,
+                reason: detail ?? L("Trigger conditions met"),
+                kind: .triggerFired,
+                batteryPercent: lastBatteryPercent,
+                at: instant
+            )
         } else if !want, isActive {
-            stop(reason: L("Trigger conditions ended"), endedNaturally: true)
+            stop(
+                reason: L("Trigger conditions ended"),
+                effects: .natural(kind: .triggerReleased)
+            )
         }
     }
 

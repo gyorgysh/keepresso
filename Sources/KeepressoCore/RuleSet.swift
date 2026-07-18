@@ -135,14 +135,37 @@ public struct AgentRule: Codable, Equatable, Hashable, Sendable {
     /// Three minutes by default: a genuinely zero-CPU stretch (a long network
     /// wait, a slow model turn) reads as idle, and the grace is what bridges it.
     public var grace: TimeInterval
+    /// When true, a hook `waiting` state (idle nudge after a prompt went
+    /// unanswered) still counts as working. Off by default: overnight
+    /// unattended runs that sit on a permission prompt would otherwise hold
+    /// the Mac awake indefinitely. `waiting-approval` always counts as
+    /// working regardless of this flag (mid-task, flipping on every prompt
+    /// would flap the trigger).
+    public var countWaitingAsWorking: Bool
 
-    public init(grace: TimeInterval = AgentActivityTrigger.defaultGrace) {
+    public init(
+        grace: TimeInterval = AgentActivityTrigger.defaultGrace,
+        countWaitingAsWorking: Bool = false
+    ) {
         self.grace = grace
+        self.countWaitingAsWorking = countWaitingAsWorking
+    }
+
+    /// Forgiving decoder: older saves without the waiting flag keep the
+    /// default (false).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        grace = try c.decodeIfPresent(TimeInterval.self, forKey: .grace)
+            ?? AgentActivityTrigger.defaultGrace
+        countWaitingAsWorking = try c.decodeIfPresent(Bool.self, forKey: .countWaitingAsWorking) ?? false
     }
 
     public var label: String {
         let base = L("AI agent working")
-        return grace > 0 ? L("%@ (+%ds)", base, Int(grace)) : base
+        var parts: [String] = []
+        if grace > 0 { parts.append(L("+%ds", Int(grace))) }
+        if countWaitingAsWorking { parts.append(L("waiting counts")) }
+        return parts.isEmpty ? base : L("%@ (%@)", base, parts.joined(separator: ", "))
     }
 }
 
@@ -278,7 +301,10 @@ public struct TriggerFactory {
                 now: now
             )
         case .agentActivity(let rule):
-            let trigger = AgentActivityTrigger(monitor: agents)
+            let trigger = AgentActivityTrigger(
+                monitor: agents,
+                countWaitingAsWorking: rule.countWaitingAsWorking
+            )
             return rule.grace > 0
                 ? GracePeriodTrigger(wrapping: trigger, grace: rule.grace, now: now)
                 : trigger
