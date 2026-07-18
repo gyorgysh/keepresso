@@ -2,6 +2,32 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
+@Test func codexAutomationSettingsClampUnsafeImportedValues() throws {
+    let data = Data(#"{
+        "enabled": true,
+        "wakeLeadTime": -10,
+        "readinessTimeout": 2,
+        "leaseHandoffTimeout": 999999,
+        "requireNetwork": true,
+        "requireExternalPower": false,
+        "minimumBatteryPercentage": 2,
+        "applicationBundleIdentifier": "   "
+    }"#.utf8)
+    let decoded = try JSONDecoder().decode(CodexAutomationSettings.self, from: data)
+
+    #expect(decoded.wakeLeadTime == 0)
+    #expect(decoded.readinessTimeout == 15)
+    #expect(decoded.leaseHandoffTimeout == 2 * 60 * 60)
+    #expect(decoded.minimumBatteryPercentage == 10)
+    #expect(decoded.applicationBundleIdentifier == CodexAutomationSettings.defaultBundleIdentifier)
+
+    let noMinimum = try JSONDecoder().decode(
+        CodexAutomationSettings.self,
+        from: Data(#"{"minimumBatteryPercentage":null}"#.utf8)
+    )
+    #expect(noMinimum.minimumBatteryPercentage == nil)
+}
+
 @Test func settingsRoundTripCarriesTheHotKey() throws {
     var settings = KeepressoSettings.default
     settings.hotKey = HotKeyShortcut(keyCode: 40, modifierFlags: 1_048_576) // ⌘K-ish

@@ -33,6 +33,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     public var wakeSchedule: WakeScheduleConfig?
     /// Privacy and final sleep behavior for scheduled or Agent-driven work.
     public var unattendedPowerPolicy: UnattendedPowerPolicy
+    /// Read-only synchronization of local Codex automation schedules.
+    public var codexAutomation: CodexAutomationSettings
     /// Keep a chosen disk/volume spun up, or `nil` (the default) for off.
     public var diskKeepAlive: DiskKeepAliveConfig?
     /// Experimental headless virtual display, or `nil` (the default) for off.
@@ -102,6 +104,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         eventHooks: [EventHook] = [],
         wakeSchedule: WakeScheduleConfig? = nil,
         unattendedPowerPolicy: UnattendedPowerPolicy = .default,
+        codexAutomation: CodexAutomationSettings = .default,
         diskKeepAlive: DiskKeepAliveConfig? = nil,
         virtualDisplay: VirtualDisplayConfig? = nil,
         thermalSafety: ThermalSafetyConfig? = nil,
@@ -133,6 +136,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.eventHooks = eventHooks
         self.wakeSchedule = wakeSchedule
         self.unattendedPowerPolicy = unattendedPowerPolicy
+        self.codexAutomation = codexAutomation
         self.diskKeepAlive = diskKeepAlive
         self.virtualDisplay = virtualDisplay
         self.thermalSafety = thermalSafety
@@ -226,6 +230,10 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         unattendedPowerPolicy = try c.decodeIfPresent(
             UnattendedPowerPolicy.self,
             forKey: .unattendedPowerPolicy
+        ) ?? .default
+        codexAutomation = try c.decodeIfPresent(
+            CodexAutomationSettings.self,
+            forKey: .codexAutomation
         ) ?? .default
         diskKeepAlive = try c.decodeIfPresent(DiskKeepAliveConfig.self, forKey: .diskKeepAlive)
         virtualDisplay = try c.decodeIfPresent(VirtualDisplayConfig.self, forKey: .virtualDisplay)
