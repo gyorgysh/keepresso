@@ -227,12 +227,18 @@ public enum FileAgentLeaseStoreError: Error, Equatable, Sendable {
     case cannotQuarantine(path: String)
 }
 
+public enum AgentLeasePersistenceValidationError: Error, Equatable, Sendable {
+    case duplicateLeaseID(UUID)
+    case invalidLease(UUID)
+}
+
 /// Stable JSON codec shared by the app, CLI, Skill, and MCP adapters.
 /// The top-level ``AgentLeasePersistenceState/schemaVersion`` is validated on
 /// every decode so older binaries never overwrite a future format.
 public enum AgentLeaseFileCodec {
     public static func encode(_ state: AgentLeasePersistenceState) throws -> Data {
-        try encoder.encode(state)
+        try validate(state)
+        return try encoder.encode(state)
     }
 
     public static func decode(_ data: Data) throws -> AgentLeasePersistenceState {
@@ -240,7 +246,55 @@ public enum AgentLeaseFileCodec {
         guard state.schemaVersion == AgentLeasePersistenceState.currentSchemaVersion else {
             throw FileAgentLeaseStoreError.unsupportedSchemaVersion(state.schemaVersion)
         }
+        try validate(state)
         return state
+    }
+
+    private static func validate(_ state: AgentLeasePersistenceState) throws {
+        var identifiers: Set<UUID> = []
+        for lease in state.leases {
+            guard identifiers.insert(lease.id).inserted else {
+                throw AgentLeasePersistenceValidationError.duplicateLeaseID(lease.id)
+            }
+            let owner = lease.metadata.owner.trimmingCharacters(in: .whitespacesAndNewlines)
+            let timestamps = [
+                lease.acquiredAt,
+                lease.heartbeatAt,
+                lease.expiresAt,
+            ] + (lease.completedAt.map { [$0] } ?? [])
+            let timestampsAreFinite = timestamps.allSatisfy {
+                $0.timeIntervalSinceReferenceDate.isFinite
+            }
+            let durationsAreSafe = validDuration(lease.ttl)
+                && validDuration(lease.maxLifetime)
+            let maximumDeadline = lease.maxLifetimeAt
+            let timelineIsOrdered = lease.heartbeatAt >= lease.acquiredAt
+                && lease.expiresAt >= lease.heartbeatAt
+                && lease.expiresAt <= maximumDeadline
+            let completionIsConsistent: Bool
+            if lease.isActive {
+                completionIsConsistent = lease.completedAt == nil
+            } else if let completedAt = lease.completedAt {
+                completionIsConsistent = completedAt >= lease.heartbeatAt
+            } else {
+                completionIsConsistent = false
+            }
+            guard !owner.isEmpty,
+                  timestampsAreFinite,
+                  maximumDeadline.timeIntervalSinceReferenceDate.isFinite,
+                  durationsAreSafe,
+                  timelineIsOrdered,
+                  completionIsConsistent
+            else {
+                throw AgentLeasePersistenceValidationError.invalidLease(lease.id)
+            }
+        }
+    }
+
+    private static func validDuration(_ value: TimeInterval) -> Bool {
+        value.isFinite
+            && value > 0
+            && value <= AgentLeaseRegistry.maximumAllowedLifetime
     }
 
     private static var encoder: JSONEncoder {
@@ -503,6 +557,10 @@ public final class AgentLeaseRegistry {
     /// Maximum completed records kept in the shared file. Active records are
     /// never removed by retention pruning.
     public nonisolated static let defaultTerminalRetentionLimit = 256
+    /// Small tolerance for wall-clock correction across process boundaries.
+    /// A lease dated further into the future is safer to expire than to let it
+    /// move the seven-day ceiling forward.
+    private nonisolated static let maximumFutureClockSkew: TimeInterval = 5 * 60
 
     public var onEvent: AgentLeaseEventHandler?
     public var onSnapshotChange: AgentLeaseSnapshotHandler?
@@ -875,10 +933,18 @@ public final class AgentLeaseRegistry {
     ) -> [AgentLeaseLifecycleEvent] {
         var events: [AgentLeaseLifecycleEvent] = []
         for index in state.leases.indices where state.leases[index].isActive {
+            let lease = state.leases[index]
+            let latestToleratedTimestamp = instant.addingTimeInterval(maximumFutureClockSkew)
+            let latestSafeDeadline = instant.addingTimeInterval(maximumAllowedLifetime)
+            let effectiveDeadline = min(lease.expiresAt, lease.maxLifetimeAt)
             let cause: AgentLeaseTimeoutCause?
-            if instant >= state.leases[index].maxLifetimeAt {
+            if lease.acquiredAt > latestToleratedTimestamp
+                || lease.heartbeatAt > latestToleratedTimestamp
+                || effectiveDeadline > latestSafeDeadline {
                 cause = .maximumLifetime
-            } else if instant >= state.leases[index].expiresAt {
+            } else if instant >= lease.maxLifetimeAt {
+                cause = .maximumLifetime
+            } else if instant >= lease.expiresAt {
                 cause = .ttl
             } else {
                 cause = nil

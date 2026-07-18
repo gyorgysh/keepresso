@@ -79,8 +79,11 @@ Every lease command emits a stable JSON envelope. Lease IDs are ownership
 tokens. A task must release only the ID it acquired. Concurrent tasks remain
 independent, and the Mac stays awake until every active lease is terminal. The
 response status also includes `closedLidProtectionReady` and stable `warnings`.
-A false or unknown readiness warning means the lease still protects open-lid
-idle sleep, but the Agent must not tell the user that closed-lid work is safe.
+Before a task starts, readiness reports whether the required capability is
+available. While unattended demand is active, true means the scoped hold was
+actually accepted, not merely that the helper is installed. A false or unknown
+warning means the lease still protects open-lid idle sleep, but the Agent must
+not tell the user that closed-lid work is safe.
 
 ## Codex Skill
 

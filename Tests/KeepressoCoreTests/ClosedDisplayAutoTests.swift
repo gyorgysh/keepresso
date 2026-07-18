@@ -31,6 +31,54 @@ import Foundation
 
 // MARK: - Controller
 
+@Test func thermalLiftPreservesClosedDisplayOwnership() {
+    var automatic = ClosedDisplayThermalLiftCoordinator()
+    #expect(automatic.pause(
+        closedDisplayEnabled: true,
+        automaticHoldActive: true
+    ) == .releaseAutomaticHold)
+    #expect(automatic.hasPendingRecovery)
+    #expect(automatic.pause(
+        closedDisplayEnabled: true,
+        automaticHoldActive: true
+    ) == .none)
+    #expect(automatic.resume() == .resumeAutomaticControl)
+    #expect(!automatic.hasPendingRecovery)
+    #expect(automatic.resume() == .none)
+
+    var manual = ClosedDisplayThermalLiftCoordinator()
+    #expect(manual.pause(
+        closedDisplayEnabled: true,
+        automaticHoldActive: false
+    ) == .setManualMode(false))
+    #expect(manual.resume() == .setManualMode(true))
+
+    var disabled = ClosedDisplayThermalLiftCoordinator()
+    #expect(disabled.pause(
+        closedDisplayEnabled: false,
+        automaticHoldActive: false
+    ) == .none)
+    #expect(disabled.resume() == .none)
+}
+
+@Test func activeAgentReadinessRequiresAConfirmedScopedHold() {
+    #expect(ClosedLidProtectionReadiness.resolve(
+        hasUnattendedDemand: false,
+        helperReady: true,
+        automaticHoldActive: false
+    ))
+    #expect(!ClosedLidProtectionReadiness.resolve(
+        hasUnattendedDemand: true,
+        helperReady: true,
+        automaticHoldActive: false
+    ))
+    #expect(ClosedLidProtectionReadiness.resolve(
+        hasUnattendedDemand: true,
+        helperReady: true,
+        automaticHoldActive: true
+    ))
+}
+
 private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecked Sendable {
     var flagPresent = false
     var result: SleepSettingResult = .applied

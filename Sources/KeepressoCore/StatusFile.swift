@@ -20,7 +20,8 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
     public var nextAgentLeaseDeadline: Date?
     /// Stable unattended phase for scripts, such as preparing or awaitingLease.
     public var unattendedPhase: String?
-    /// Whether the privileged path needed for reliable closed-lid work is ready.
+    /// Whether closed-lid protection is available while idle, or confirmed
+    /// active while unattended work owns the session.
     public var closedLidProtectionReady: Bool?
     /// Nearest enabled local Codex automation run known to the app.
     public var nextCodexRun: Date?

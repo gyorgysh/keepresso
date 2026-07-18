@@ -27,7 +27,11 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 - Closed-display overrides now preserve and restore the exact preexisting
   `pmset disablesleep` value through the helper and fallback watchdog, including
-  application crashes and restarts.
+  application crashes and restarts. Thermal recovery also preserves ownership,
+  so a session-scoped Agent hold can never become a persistent manual setting.
+- Active unattended status now reports closed-lid readiness only after the
+  scoped hold is accepted. Persisted leases with unsafe durations or damaged
+  timelines are quarantined instead of bypassing the seven-day safety ceiling.
 
 ## [1.16.1] - 2026-07-18
 

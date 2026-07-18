@@ -173,20 +173,23 @@ private func completeInitialization(
     #expect(response["id"] as? Int == 7)
 }
 
-@Test @MainActor func jsonRPCNullRequestIDIsEchoed() throws {
+@Test @MainActor func mcpRejectsNullFractionalAndBooleanRequestIDs() throws {
     let server = KeepressoMCPServer(commander: RecordingLeaseCommander())
-    let response = try callMCP(
-        server,
-        id: NSNull(),
-        method: "initialize",
-        params: [
-            "protocolVersion": "2025-11-25",
-            "capabilities": [:],
-            "clientInfo": ["name": "Client", "version": "1"],
-        ]
-    )
-    #expect(response["id"] is NSNull)
-    #expect(response["result"] != nil)
+    for invalidID: Any in [NSNull(), 1.5, true] {
+        let response = try callMCP(
+            server,
+            id: invalidID,
+            method: "initialize",
+            params: [
+                "protocolVersion": "2025-11-25",
+                "capabilities": [:],
+                "clientInfo": ["name": "Client", "version": "1"],
+            ]
+        )
+        let error = try #require(response["error"] as? [String: Any])
+        #expect(error["code"] as? Int == -32600)
+        #expect(response["id"] is NSNull)
+    }
 }
 
 @Test @MainActor func mcpListsExactlyTheWakeLeaseTools() throws {

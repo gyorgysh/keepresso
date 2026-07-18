@@ -132,6 +132,71 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
     }
 }
 
+/// Side effects needed when thermal protection temporarily lifts a
+/// closed-display override. Automatic holds must remain scoped, while a
+/// manual user setting may be restored through the persistent controller.
+public enum ClosedDisplayThermalAction: Equatable, Sendable {
+    case none
+    case releaseAutomaticHold
+    case resumeAutomaticControl
+    case setManualMode(Bool)
+}
+
+/// Resolves the status exposed to Agent clients. A helper registration is a
+/// sufficient capability signal while idle, but active unattended work must
+/// confirm that its scoped sleep hold was accepted.
+public enum ClosedLidProtectionReadiness {
+    public static func resolve(
+        hasUnattendedDemand: Bool,
+        helperReady: Bool,
+        automaticHoldActive: Bool
+    ) -> Bool {
+        hasUnattendedDemand ? automaticHoldActive : helperReady
+    }
+}
+
+/// Remembers who owned `disablesleep` before a thermal pause. This prevents an
+/// automatic Agent hold from being restored as a persistent manual setting.
+public struct ClosedDisplayThermalLiftCoordinator: Equatable, Sendable {
+    private enum Owner: Equatable, Sendable {
+        case automatic
+        case manual
+    }
+
+    private var liftedOwner: Owner?
+
+    public init() {}
+
+    public var hasPendingRecovery: Bool { liftedOwner != nil }
+
+    public mutating func pause(
+        closedDisplayEnabled: Bool,
+        automaticHoldActive: Bool
+    ) -> ClosedDisplayThermalAction {
+        guard liftedOwner == nil,
+              closedDisplayEnabled || automaticHoldActive
+        else { return .none }
+
+        if automaticHoldActive {
+            liftedOwner = .automatic
+            return .releaseAutomaticHold
+        }
+        liftedOwner = .manual
+        return .setManualMode(false)
+    }
+
+    public mutating func resume() -> ClosedDisplayThermalAction {
+        guard let liftedOwner else { return .none }
+        self.liftedOwner = nil
+        switch liftedOwner {
+        case .automatic:
+            return .resumeAutomaticControl
+        case .manual:
+            return .setManualMode(true)
+        }
+    }
+}
+
 /// Drives closed-display mode's "only while brewing" automation: the global
 /// `disablesleep` setting follows the keep-awake session, on when it starts
 /// and off when it ends, instead of staying on until manually turned off.

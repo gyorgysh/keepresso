@@ -181,10 +181,16 @@ private func testAdapter(
         persistence: store,
         now: { instant }
     )
+    var reportedActiveCount: Int?
+    var reportedNewestAcquisition: Date?
     let adapter = AgentLeaseCommandAdapter(
         service: service,
         appSignaler: RecordingAppSignaler(),
-        closedLidProtectionReady: { false }
+        closedLidProtectionReady: { activeCount, newestAcquisition in
+            reportedActiveCount = activeCount
+            reportedNewestAcquisition = newestAcquisition
+            return false
+        }
     )
 
     let response = adapter.execute(.acquire(
@@ -196,6 +202,8 @@ private func testAdapter(
         message: nil
     ))
     #expect(response.ok)
+    #expect(reportedActiveCount == 1)
+    #expect(reportedNewestAcquisition == instant)
     #expect(response.status?.closedLidProtectionReady == false)
     #expect(response.status?.warnings == ["closed_lid_protection_not_ready"])
 
@@ -204,6 +212,37 @@ private func testAdapter(
     let status = try #require(object["status"] as? [String: Any])
     #expect(status["closedLidProtectionReady"] as? Bool == false)
     #expect(status["warnings"] as? [String] == ["closed_lid_protection_not_ready"])
+}
+
+@Test @MainActor func staleAppStatusCannotClaimANewScopedHoldIsReady() {
+    let acquiredAt = Date(timeIntervalSince1970: 1_800_000_100)
+    let stale = StatusSnapshot(
+        isActive: true,
+        activeAgentLeaseCount: 1,
+        closedLidProtectionReady: true,
+        pid: 1,
+        writtenAt: acquiredAt.addingTimeInterval(-1)
+    )
+    #expect(AgentLeaseCommandAdapter.reportedClosedLidProtectionReady(
+        snapshot: stale,
+        expectedActiveCount: 1,
+        newestActiveAcquisition: acquiredAt
+    ) == false)
+
+    var current = stale
+    current.writtenAt = acquiredAt
+    #expect(AgentLeaseCommandAdapter.reportedClosedLidProtectionReady(
+        snapshot: current,
+        expectedActiveCount: 1,
+        newestActiveAcquisition: acquiredAt
+    ) == true)
+
+    current.activeAgentLeaseCount = 2
+    #expect(AgentLeaseCommandAdapter.reportedClosedLidProtectionReady(
+        snapshot: current,
+        expectedActiveCount: 1,
+        newestActiveAcquisition: acquiredAt
+    ) == false)
 }
 
 @Test @MainActor func concurrentLeasesSignalAndKeepUnionActive() throws {

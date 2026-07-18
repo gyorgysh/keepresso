@@ -557,6 +557,49 @@ private func temporaryLeaseFile() throws -> (directory: URL, file: URL) {
     #expect(try store.load().leases == [wanted])
 }
 
+@Test func fileStoreQuarantinesSemanticallyUnsafeLeases() throws {
+    let fixture = try temporaryLeaseFile()
+    defer { try? FileManager.default.removeItem(at: fixture.directory) }
+    let unsafe = lease(
+        ttl: AgentLeaseRegistry.maximumAllowedLifetime + 1,
+        maxLifetime: AgentLeaseRegistry.maximumAllowedLifetime
+    )
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .secondsSince1970
+    try encoder.encode(AgentLeasePersistenceState(leases: [unsafe])).write(to: fixture.file)
+
+    let store = FileAgentLeaseStore(fileURL: fixture.file)
+    #expect(try store.load() == .empty)
+    #expect(!FileManager.default.fileExists(atPath: fixture.file.path))
+    let quarantined = try FileManager.default.contentsOfDirectory(
+        at: fixture.directory,
+        includingPropertiesForKeys: nil
+    ).filter { $0.lastPathComponent.hasPrefix("agent-leases.corrupt-") }
+    #expect(quarantined.count == 1)
+}
+
+@MainActor
+@Test func recoveryExpiresLeasesDatedTooFarInTheFuture() throws {
+    let clock = LeaseClock()
+    let future = clock.now.addingTimeInterval(60 * 60)
+    let unsafe = lease(
+        acquiredAt: future,
+        ttl: AgentLeaseRegistry.maximumAllowedLifetime,
+        maxLifetime: AgentLeaseRegistry.maximumAllowedLifetime
+    )
+    var events: [AgentLeaseLifecycleEvent] = []
+    let registry = try AgentLeaseRegistry(
+        persistence: MemoryAgentLeaseStore(AgentLeasePersistenceState(leases: [unsafe])),
+        now: { clock.now },
+        onEvent: { events.append($0) }
+    )
+
+    #expect(!registry.shouldKeepAwake)
+    #expect(events.map(\.kind) == [.timedOut])
+    #expect(events.first?.source == .recovery)
+    #expect(events.first?.timeoutCause == .maximumLifetime)
+}
+
 @Test func fileStoreLeavesFutureSchemaUntouched() throws {
     let fixture = try temporaryLeaseFile()
     defer { try? FileManager.default.removeItem(at: fixture.directory) }

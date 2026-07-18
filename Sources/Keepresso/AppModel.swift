@@ -1097,6 +1097,17 @@ final class AppModel {
 
     var canEditWakeSchedule: Bool { wakeHelperGate == .ready }
 
+    /// Capability while idle, and confirmed scoped ownership while Agent or
+    /// scheduled work is active. This keeps a registered helper from being
+    /// reported as ready after an actual hold request failed.
+    private var agentClosedLidProtectionReady: Bool {
+        ClosedLidProtectionReadiness.resolve(
+            hasUnattendedDemand: hasExternalWakeDemand,
+            helperReady: wakeHelperGate == .ready,
+            automaticHoldActive: closedDisplayAuto.isHolding
+        )
+    }
+
     /// Desired wake schedule (nil = off / clear system schedules). Enabling
     /// without a ready helper is refused so Preferences never looks live
     /// when the system cannot install the schedule.
@@ -1479,10 +1490,11 @@ final class AppModel {
         }
     }
 
-    /// Set when a thermal emergency lifted closed-display mode, so recovery
-    /// puts it back. In-memory only: a relaunch mid-emergency starts clean
-    /// rather than resurrecting a stale intent.
-    @ObservationIgnored private var thermalLiftedClosedDisplay = false
+    /// Remembers whether a thermal emergency lifted a manual setting or an
+    /// automatic session hold. In-memory only: a relaunch starts clean rather
+    /// than restoring stale intent.
+    @ObservationIgnored private var thermalClosedDisplayLift =
+        ClosedDisplayThermalLiftCoordinator()
 
     /// The fan boost percent currently held through the helper, or nil when
     /// the fans are under system control. Drives the menu's status line.
@@ -1547,12 +1559,16 @@ final class AppModel {
                 // guard's reading), which posts the pause notification. Here:
                 // the closed-display lift, always, because the guard only
                 // fires with the lid shut and the override on, and pausing
-                // alone can't let that Mac sleep. Only through the prompt-free
-                // daemon path: never prompt for a password from an unattended
-                // safety action; without the helper the lift is skipped and
-                // the notification says so.
-                guard closedDisplayEnabled else { break }
-                guard helperInstalled else {
+                // alone can't let that Mac sleep. Use only a prompt-free
+                // release: the scoped watchdog when it owns the setting, or
+                // the installed daemon for a manual global setting.
+                let automaticHoldActive = closedDisplayAuto.isHolding
+                guard closedDisplayEnabled || automaticHoldActive else { break }
+                // Releasing an automatic hold is already prompt-free, even on
+                // the fallback watchdog. A manual global setting still needs
+                // the installed helper because a safety action must never ask
+                // for an administrator password.
+                if !automaticHoldActive, !helperInstalled {
                     notifier.notify(
                         title: L("Closed-display mode left on"),
                         body: L("Keepresso paused for heat but can't switch off closed-display mode without the administrator helper (Preferences ▸ General)."),
@@ -1560,19 +1576,34 @@ final class AppModel {
                     )
                     break
                 }
-                thermalLiftedClosedDisplay = true
-                setClosedDisplay(false)
+                applyThermalClosedDisplayAction(thermalClosedDisplayLift.pause(
+                    closedDisplayEnabled: closedDisplayEnabled,
+                    automaticHoldActive: automaticHoldActive
+                ))
             case .resumeBrewing:
                 notifier.notify(
                     title: L("Temperatures recovered"),
                     body: L("The Mac has cooled down. Keepresso is back to normal control."),
                     sound: false
                 )
-                if thermalLiftedClosedDisplay {
-                    thermalLiftedClosedDisplay = false
-                    if helperInstalled { setClosedDisplay(true) }
-                }
+                applyThermalClosedDisplayAction(thermalClosedDisplayLift.resume())
             }
+        }
+    }
+
+    private func applyThermalClosedDisplayAction(_ action: ClosedDisplayThermalAction) {
+        switch action {
+        case .none:
+            break
+        case .releaseAutomaticHold:
+            Task { await closedDisplayAuto.stopIfHolding() }
+        case .resumeAutomaticControl:
+            // The normal session follower recreates a scoped hold only if the
+            // task demand is still active after the thermal latch clears.
+            closedDisplayAuto.retryEngage()
+        case .setManualMode(let enabled):
+            guard helperInstalled else { return }
+            setClosedDisplay(enabled)
         }
     }
 
@@ -1885,7 +1916,7 @@ final class AppModel {
                 activeLeaseCount: agentLeaseSnapshot.activeCount,
                 nextLeaseDeadline: agentLeaseSnapshot.nextDeadline,
                 phase: unattendedStatusPhase,
-                closedLidProtectionReady: wakeHelperGate == .ready,
+                closedLidProtectionReady: agentClosedLidProtectionReady,
                 nextCodexRun: codexWakePlanning.wakePlan?.scheduledRun
             )
         )

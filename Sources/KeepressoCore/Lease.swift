@@ -151,9 +151,10 @@ public struct LeaseStatusSummary: Codable, Equatable, Sendable {
     public var releasedCount: Int
     public var expiredCount: Int
     public var totalCount: Int
-    /// `true` means the live app reports that its administrator helper can
-    /// protect a closed lid. `false` is an actionable warning; nil means the
-    /// app status is not live or has not reported the capability yet.
+    /// `true` means the live app reports closed-lid protection is available,
+    /// and confirms the scoped hold while unattended work is active. `false`
+    /// is actionable; nil means the app status is not live or has not reported
+    /// the capability yet.
     public var closedLidProtectionReady: Bool?
     /// Stable machine-readable warnings. Acquiring a lease remains successful
     /// because open-lid idle-sleep protection is still useful.
@@ -307,7 +308,7 @@ public final class SystemAgentLeaseAppSignaler: AgentLeaseAppSignaling {
 public final class AgentLeaseCommandAdapter: LeaseCommanding {
     private let service: AgentLeaseCommandServing
     private let appSignaler: AgentLeaseAppSignaling
-    private let closedLidProtectionReady: @MainActor () -> Bool?
+    private let closedLidProtectionReady: @MainActor (Int, Date?) -> Bool?
 
     public init(
         service: AgentLeaseCommandServing,
@@ -321,7 +322,7 @@ public final class AgentLeaseCommandAdapter: LeaseCommanding {
     public init(
         service: AgentLeaseCommandServing,
         appSignaler: AgentLeaseAppSignaling,
-        closedLidProtectionReady: @escaping @MainActor () -> Bool?
+        closedLidProtectionReady: @escaping @MainActor (Int, Date?) -> Bool?
     ) {
         self.service = service
         self.appSignaler = appSignaler
@@ -618,7 +619,11 @@ public final class AgentLeaseCommandAdapter: LeaseCommanding {
     private func summary(_ leases: [AgentWakeLease]) -> LeaseStatusSummary {
         let active = leases.count { $0.state == .active }
         let expired = leases.count { $0.state == .timeout }
-        let closedLidReady = closedLidProtectionReady()
+        let newestActiveAcquisition = leases
+            .filter { $0.state == .active }
+            .map(\.acquiredAt)
+            .max()
+        let closedLidReady = closedLidProtectionReady(active, newestActiveAcquisition)
         let warnings: [String]
         switch closedLidReady {
         case true: warnings = []
@@ -636,10 +641,31 @@ public final class AgentLeaseCommandAdapter: LeaseCommanding {
         )
     }
 
-    private static func liveClosedLidProtectionReady() -> Bool? {
+    private static func liveClosedLidProtectionReady(
+        expectedActiveCount: Int,
+        newestActiveAcquisition: Date?
+    ) -> Bool? {
         guard let snapshot = StatusFile.read(),
               kill(snapshot.pid, 0) == 0 || errno == EPERM
         else { return nil }
+        return reportedClosedLidProtectionReady(
+            snapshot: snapshot,
+            expectedActiveCount: expectedActiveCount,
+            newestActiveAcquisition: newestActiveAcquisition
+        )
+    }
+
+    static func reportedClosedLidProtectionReady(
+        snapshot: StatusSnapshot,
+        expectedActiveCount: Int,
+        newestActiveAcquisition: Date?
+    ) -> Bool? {
+        if expectedActiveCount > 0 {
+            guard snapshot.activeAgentLeaseCount == expectedActiveCount,
+                  let newestActiveAcquisition,
+                  snapshot.writtenAt >= newestActiveAcquisition
+            else { return false }
+        }
         return snapshot.closedLidProtectionReady
     }
 }
