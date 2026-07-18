@@ -23,6 +23,11 @@ final class WidgetStateSync {
     /// The last state written, so the per-second tick only writes on change.
     private var lastState: SharedSessionState?
     private var lastUnattendedStatus: UnattendedStatusMetadata?
+    private var lastStatusWriteAt: Date?
+    /// Keep one second of margin inside the five-second reader deadline. State
+    /// changes still write immediately; an idle app no longer replaces the
+    /// same JSON file 86,400 times per day.
+    private let statusHeartbeatInterval: TimeInterval = 4
     private let appVersion =
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
 
@@ -38,24 +43,29 @@ final class WidgetStateSync {
             lastState = state
             lastUnattendedStatus = unattended
         }
-        let pid = ProcessInfo.processInfo.processIdentifier
-        // status.json is also a one-second liveness heartbeat. Keep writing it
-        // even when the UI state is unchanged; widget reloads remain change-only.
-        StatusFile.write(StatusSnapshot(
-            isActive: state.isActive,
-            endsAt: state.endsAt,
-            triggersEnabled: state.triggersEnabled,
-            triggersPaused: state.triggersPaused,
-            activeAgentLeaseCount: unattended.activeLeaseCount,
-            nextAgentLeaseDeadline: unattended.nextLeaseDeadline,
-            unattendedPhase: unattended.phase,
-            closedLidProtectionReady: unattended.closedLidProtectionReady,
-            nextCodexRun: unattended.nextCodexRun,
-            appVersion: appVersion,
-            pid: pid,
-            processStartToken: StatusProcessIdentity.startToken(pid: pid),
-            writtenAt: Date()
-        ))
+        let instant = Date()
+        let heartbeatDue = lastStatusWriteAt.map {
+            instant.timeIntervalSince($0) >= statusHeartbeatInterval
+        } ?? true
+        if statusChanged || heartbeatDue {
+            let pid = ProcessInfo.processInfo.processIdentifier
+            StatusFile.write(StatusSnapshot(
+                isActive: state.isActive,
+                endsAt: state.endsAt,
+                triggersEnabled: state.triggersEnabled,
+                triggersPaused: state.triggersPaused,
+                activeAgentLeaseCount: unattended.activeLeaseCount,
+                nextAgentLeaseDeadline: unattended.nextLeaseDeadline,
+                unattendedPhase: unattended.phase,
+                closedLidProtectionReady: unattended.closedLidProtectionReady,
+                nextCodexRun: unattended.nextCodexRun,
+                appVersion: appVersion,
+                pid: pid,
+                processStartToken: StatusProcessIdentity.startToken(pid: pid),
+                writtenAt: instant
+            ))
+            lastStatusWriteAt = instant
+        }
         guard statusChanged else { return }
         guard sharedChanged else { return }
         guard let defaults else { return }
