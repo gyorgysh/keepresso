@@ -287,12 +287,43 @@ private struct ActivityTab: View {
 
     private func unattendedRecordTitle(_ record: UnattendedAuditRecord) -> String {
         if let event = record.leaseLifecycle {
-            return L("Agent lease: %@", event.kind.rawValue)
+            return L("Agent lease: %@", agentLeaseEventName(event.kind))
         }
         if let event = record.unattendedDiagnostic {
-            return L("Unattended work: %@", event.kind.rawValue)
+            return L("Unattended work: %@", unattendedEventName(event.kind))
         }
         return L("Unattended event")
+    }
+
+    private func agentLeaseEventName(_ kind: AgentLeaseEventKind) -> String {
+        switch kind {
+        case .acquired: return L("Lease acquired")
+        case .heartbeat: return L("Lease heartbeat received")
+        case .renewed: return L("Lease renewed")
+        case .released: return L("Lease released")
+        case .timedOut: return L("Lease timed out")
+        case .restored: return L("Lease restored after restart")
+        case .changed: return L("Lease changed by another process")
+        }
+    }
+
+    private func unattendedEventName(_ kind: UnattendedDiagnosticKind) -> String {
+        switch kind {
+        case .discoveryCompleted: return L("Automation discovery completed")
+        case .discoveryFailed: return L("Automation discovery failed")
+        case .wakePlanned: return L("Wake planned")
+        case .wakePreparationStarted: return L("Wake preparation started")
+        case .readinessRetryScheduled: return L("Readiness retry scheduled")
+        case .readinessReady: return L("Readiness checks passed")
+        case .readinessTimedOut: return L("Readiness timed out")
+        case .taskStarted: return L("Unattended task started")
+        case .taskSucceeded: return L("Unattended task succeeded")
+        case .taskFailed: return L("Unattended task failed")
+        case .taskTimedOut: return L("Unattended task timed out")
+        case .taskCancelled: return L("Unattended task cancelled")
+        case .sleepEligible: return L("System is eligible to sleep")
+        case .orchestrationCancelled: return L("Unattended orchestration cancelled")
+        }
     }
 
     private func unattendedRecordDetail(_ record: UnattendedAuditRecord) -> String? {
