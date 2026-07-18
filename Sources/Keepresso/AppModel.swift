@@ -39,6 +39,21 @@ enum CodexAgentPhase: String, Equatable {
 @MainActor
 @Observable
 final class AppModel {
+    private struct WakeApplyDesired: Equatable, Sendable {
+        var config: WakeScheduleConfig
+        var plannedCodexWake: Date?
+    }
+
+    private typealias WakeApplyRequest =
+        SerializedLatestRequestPump<WakeApplyDesired>.Request
+
+    private enum WakeApplyResult: Sendable, Equatable {
+        case accepted
+        case rejected
+        case helperUpdating
+        case helperMissing
+    }
+
     let session: SessionController
     let disk: DiskKeepAliveController
     /// Controls closed-display mode (the global `pmset disablesleep` setting that
@@ -137,9 +152,12 @@ final class AppModel {
     /// Preparation pipeline for power, network, application launch, and timeout.
     @ObservationIgnored private var codexOrchestration: UnattendedOrchestrationController?
     @ObservationIgnored private let wakeIntentBox = AppWakeIntentBox()
-    @ObservationIgnored private var codexDiscoveryInFlight = false
+    @ObservationIgnored private var codexDiscoveryGate = CoalescedForceRunGate()
     @ObservationIgnored private var lastCodexDiscoveryAt: Date?
     @ObservationIgnored private var lastInstalledCodexWake: Date?
+    @ObservationIgnored private var wakeApplyPump =
+        SerializedLatestRequestPump<WakeApplyDesired>()
+    @ObservationIgnored private var wakeApplyRetry: Task<Void, Never>?
     @ObservationIgnored private var externalPrivacyApplied = false
     private(set) var settings: KeepressoSettings
     /// Avoid double-starting on a single system wake.
@@ -825,8 +843,7 @@ final class AppModel {
         let now = Date()
         if !force, let last = lastCodexDiscoveryAt,
            now.timeIntervalSince(last) < 60 { return }
-        guard !codexDiscoveryInFlight else { return }
-        codexDiscoveryInFlight = true
+        guard codexDiscoveryGate.begin(force: force) else { return }
         let searchAfter = max(
             now,
             lastHandledCodexRun?.addingTimeInterval(1) ?? now
@@ -838,7 +855,7 @@ final class AppModel {
             ).plan(for: result.automations, after: searchAfter)
             await MainActor.run { [weak self] in
                 guard let self else { return }
-                self.codexDiscoveryInFlight = false
+                let rerunForced = self.codexDiscoveryGate.finish()
                 self.lastCodexDiscoveryAt = Date()
                 guard self.settings.codexAutomation.enabled else { return }
                 self.codexAutomations = result.automations
@@ -855,10 +872,12 @@ final class AppModel {
                 }
                 let wake = planning.wakePlan?.scheduledWake
                 if wake != self.lastInstalledCodexWake {
-                    self.lastInstalledCodexWake = wake
                     self.applyWakeScheduleToSystem()
                 }
                 self.beginCodexPreparationIfNeeded(at: Date())
+                if rerunForced {
+                    self.refreshCodexAutomationPlan(force: true)
+                }
             }
         }
     }
@@ -1124,11 +1143,9 @@ final class AppModel {
         }
     }
 
-    /// Set once Keepresso has attempted to install system wake schedules on
+    /// Set once the helper has durably accepted Keepresso's wake schedule on
     /// this Mac, so the no-schedule case never touches `pmset`: clearing
     /// there would delete wake schedules the user or another tool set.
-    /// Debt-by-attempt like the helper's own markers (an install can
-    /// partially land even on failure), reset only by a clean clear.
     /// Machine-local bookkeeping, deliberately not part of the exported
     /// settings.
     private var wakeSchedulesInstalledByKeepresso: Bool {
@@ -1140,7 +1157,11 @@ final class AppModel {
     /// Push settings to the helper (or clear). Installing needs the helper;
     /// clearing is attempted when it answers so a disable after reinstall
     /// still drops system schedules.
-    func applyWakeScheduleToSystem() {
+    func applyWakeScheduleToSystem(retryAttempt: Int = 0) {
+        if retryAttempt == 0 {
+            wakeApplyRetry?.cancel()
+            wakeApplyRetry = nil
+        }
         let now = Date()
         // A one-shot whose moment has passed can never install again (pmset
         // refuses past dates); drop it so later applies don't fail on it
@@ -1150,55 +1171,110 @@ final class AppModel {
             persist()
         }
         let config = effectiveWakeSchedule(at: now)
+        let desired = WakeApplyDesired(
+            config: config,
+            plannedCodexWake: codexWakePlanning.wakePlan?.scheduledWake
+        )
         // Leave pmset alone when there is nothing to install and Keepresso
         // never installed anything: the system schedules belong to the user
-        // or another tool, not to us.
-        guard config.isActive || wakeSchedulesInstalledByKeepresso else { return }
-        // A pre-update daemon still answering the handshake means "updating",
-        // not "missing": no failure notification, re-apply once the new
-        // daemon serves.
+        // or another tool, not to us. An active request already in the pump
+        // is enough ownership risk to require a serialized clear afterward.
+        let pipelineMayInstall = wakeApplyPump.current?.value.config.isActive == true
+            || wakeApplyPump.pending?.value.config.isActive == true
+        guard config.isActive || wakeSchedulesInstalledByKeepresso || pipelineMayInstall else {
+            return
+        }
+        if let request = wakeApplyPump.submit(desired, retryAttempt: retryAttempt) {
+            startWakeApply(request)
+        }
+    }
+
+    /// Exactly one blocking XPC apply may run at a time. New desired state
+    /// replaces the pending slot, then starts only after the current request
+    /// returns, so an old apply can never land after a newer clear or install.
+    private func startWakeApply(_ request: WakeApplyRequest) {
         let helperUpdating = wakeHelperGate == .helperUpdating
         let client = helperClient
         Task.detached { [weak self] in
+            let result: WakeApplyResult
             guard client.ping() else {
-                await MainActor.run { [weak self] in
-                    guard let self else { return }
-                    self.refreshSystemWakeState()
-                    guard config.isActive else { return }
-                    if helperUpdating {
-                        self.reapplyWakeScheduleWhenHelperReady()
-                    } else {
-                        self.notifier.notify(
-                            title: L("Wake schedule not installed"),
-                            body: L("Installing a wake schedule needs the administrator helper (Preferences ▸ General)."),
-                            sound: false
-                        )
-                    }
-                }
+                result = helperUpdating ? .helperUpdating : .helperMissing
+                await self?.finishWakeApply(request, result: result)
                 return
             }
-            let parts = config.pmsetArguments
+            let parts = request.value.config.pmsetArguments
             let ok = client.applyWakeSchedule(
                 oneShot: parts.oneShot,
                 repeatDays: parts.repeatDays,
                 repeatTime: parts.repeatTime
             )
-            await MainActor.run { [weak self] in
-                guard let self else { return }
-                if config.isActive {
-                    self.wakeSchedulesInstalledByKeepresso = true
-                } else if ok {
-                    self.wakeSchedulesInstalledByKeepresso = false
-                }
-                self.refreshSystemWakeState()
-                if !ok {
-                    self.notifier.notify(
-                        title: L("Wake schedule not installed"),
-                        body: L("The administrator helper could not update the system wake schedule."),
-                        sound: false
-                    )
-                }
+            result = ok ? .accepted : .rejected
+            await self?.finishWakeApply(request, result: result)
+        }
+    }
+
+    private func finishWakeApply(_ request: WakeApplyRequest, result: WakeApplyResult) {
+        guard let completion = wakeApplyPump.complete(request) else { return }
+
+        // This flag describes actual Keepresso ownership, not the latest UI
+        // desire. Preserve an accepted superseded active intent so a crash
+        // before its queued clear cannot strand that wake schedule forever.
+        if result == .accepted {
+            wakeSchedulesInstalledByKeepresso = request.value.config.isActive
+        }
+
+        // A newer desired request wins all final bookkeeping and reporting.
+        // Start it immediately after the old XPC call releases the single
+        // flight slot.
+        if let next = completion.next {
+            startWakeApply(next)
+            return
+        }
+        guard completion.wasLatest else { return }
+
+        refreshSystemWakeState()
+        switch result {
+        case .accepted:
+            wakeApplyRetry?.cancel()
+            wakeApplyRetry = nil
+            lastInstalledCodexWake = request.value.plannedCodexWake
+        case .rejected:
+            scheduleWakeApplyRetry(
+                attempt: request.retryAttempt + 1,
+                expectedRevision: request.revision
+            )
+            notifier.notify(
+                title: L("Wake schedule not installed"),
+                body: L("The administrator helper could not update the system wake schedule."),
+                sound: false
+            )
+        case .helperUpdating:
+            reapplyWakeScheduleWhenHelperReady()
+        case .helperMissing:
+            if request.value.config.isActive {
+                notifier.notify(
+                    title: L("Wake schedule not installed"),
+                    body: L("Installing a wake schedule needs the administrator helper (Preferences ▸ General)."),
+                    sound: false
+                )
             }
+        }
+    }
+
+    /// Retry only when the helper rejected the durable intent itself. Once
+    /// accepted, its own journal and periodic tick own all pmset recovery.
+    /// A new user or Codex plan cancels this bounded retry and starts fresh.
+    private func scheduleWakeApplyRetry(attempt: Int, expectedRevision: UInt64) {
+        guard attempt <= 5 else { return }
+        wakeApplyRetry?.cancel()
+        let delay = min(pow(2.0, Double(attempt)), 30)
+        wakeApplyRetry = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard let self, !Task.isCancelled else { return }
+            guard self.wakeApplyPump.latestRevision == expectedRevision else { return }
+            guard self.wakeApplyPump.isIdle else { return }
+            self.wakeApplyRetry = nil
+            self.applyWakeScheduleToSystem(retryAttempt: attempt)
         }
     }
 

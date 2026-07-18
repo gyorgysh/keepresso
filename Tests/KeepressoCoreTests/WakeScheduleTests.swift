@@ -149,29 +149,29 @@ import Foundation
     #expect(runner.commands.contains { $0.contains("repeat wakeorpoweron MWF 07:00:00") })
 }
 
-@Test func failedClearLeavesPendingMarker() {
+@Test func failedClearIsAcceptedAsDurablePendingWork() {
     let runner = RecordingRunner()
     runner.failAll = true
     let state = FakeMarkerState()
     let engine = HelperEngine(runner: runner, state: state)
-    #expect(!engine.clearWakeSchedules())
+    #expect(engine.clearWakeSchedules())
     #expect(state.markers().contains(.wakeClearPending))
 }
 
-@Test func partiallyFailedClearKeepsThePendingMarker() {
+@Test func partiallyFailedClearIsAcceptedAndKeepsThePendingMarker() {
     // One of the two cancels failing must not read as success: the surviving
     // schedule would keep waking the Mac with no retry debt.
     let runner = RecordingRunner()
     runner.failMatching = "repeat cancel"
     let state = FakeMarkerState()
     let engine = HelperEngine(runner: runner, state: state)
-    #expect(!engine.clearWakeSchedules())
+    #expect(engine.clearWakeSchedules())
     #expect(state.markers().contains(.wakeClearPending))
 }
 
-@Test func successfulInstallSettlesAFailedClearDebt() {
-    // A failed clear inside an apply must not leave the marker set: the next
-    // daemon launch would wipe the schedules that were just installed.
+@Test func failedClearPreventsInstallAndKeepsTheRecoveryDebt() {
+    // Installing after a failed clear could stack an old one-shot and then
+    // lose track of it. The apply stops before installation and keeps debt.
     let runner = RecordingRunner()
     runner.failMatching = "cancelall"
     let state = FakeMarkerState()
@@ -179,17 +179,27 @@ import Foundation
     let ok = engine.applyWakeSchedule(
         oneShot: "08/01/26 06:30:00", repeatDays: "MWF", repeatTime: "07:00:00")
     #expect(ok)
+    #expect(state.markers().contains(.wakeClearPending))
+    #expect(!runner.commands.contains { $0.contains("schedule wake") })
+    #expect(!runner.commands.contains { $0.contains("wakeorpoweron") })
+
+    // The desired schedule is durable. Once the transient clear failure is
+    // gone, the helper tick completes the original install without the app.
+    runner.failMatching = nil
+    engine.wakeTick()
     #expect(!state.markers().contains(.wakeClearPending))
+    #expect(runner.commands.contains { $0.contains("schedule wake") })
+    #expect(runner.commands.contains { $0.contains("wakeorpoweron") })
 }
 
-@Test func totallyFailedApplyKeepsTheClearDebt() {
+@Test func totallyFailedApplyIsAcceptedAndKeepsTheDesiredDebt() {
     // When neither the clear nor the install lands, the debt must survive so
     // the next daemon launch still settles whatever pmset is left holding.
     let runner = RecordingRunner()
     runner.failAll = true
     let state = FakeMarkerState()
     let engine = HelperEngine(runner: runner, state: state)
-    #expect(!engine.applyWakeSchedule(
+    #expect(engine.applyWakeSchedule(
         oneShot: "08/01/26 06:30:00", repeatDays: nil, repeatTime: nil))
     #expect(state.markers().contains(.wakeClearPending))
 }
@@ -200,6 +210,172 @@ import Foundation
     let engine = HelperEngine(runner: runner, state: state)
     engine.restoreAtLaunch()
     #expect(runner.commands.contains { $0.contains("cancelall") })
+    #expect(!state.markers().contains(.wakeClearPending))
+}
+
+@Test func wakeIntentPersistenceFailureRunsNoPMSetAndTheSamePlanCanRetry() {
+    let runner = RecordingRunner()
+    let state = FakeMarkerState()
+    state.failWrites = true
+    let engine = HelperEngine(runner: runner, state: state)
+
+    #expect(!engine.clearWakeSchedules())
+    #expect(runner.commands.isEmpty)
+    #expect(engine.isIdle)
+    #expect(!engine.applyWakeSchedule(
+        oneShot: "08/01/26 06:30:00", repeatDays: nil, repeatTime: nil
+    ))
+    #expect(runner.commands.isEmpty)
+    state.failWrites = false
+    #expect(engine.applyWakeSchedule(
+        oneShot: "08/01/26 06:30:00", repeatDays: nil, repeatTime: nil
+    ))
+    #expect(runner.commands.contains { $0.contains("schedule wake") })
+}
+
+@Test func wakeMarkerFailureRunsNoPMSetAndThePersistedPlanCanRetry() {
+    let runner = RecordingRunner()
+    let state = FakeMarkerState()
+    state.failMarkerWrites = true
+    let engine = HelperEngine(runner: runner, state: state)
+
+    #expect(!engine.applyWakeSchedule(
+        oneShot: "08/01/26 06:30:00", repeatDays: nil, repeatTime: nil
+    ))
+    #expect(runner.commands.isEmpty)
+    #expect(state.markers().isEmpty)
+    #expect(state.wakeTransaction()?.oneShot == "08/01/26 06:30:00")
+
+    state.failMarkerWrites = false
+    #expect(engine.applyWakeSchedule(
+        oneShot: "08/01/26 06:30:00", repeatDays: nil, repeatTime: nil
+    ))
+    #expect(runner.commands.contains { $0.contains("schedule wake") })
+}
+
+@Test func wakeAppliedPhaseWriteFailureKeepsPendingIntentForTickRetry() {
+    let runner = RecordingRunner()
+    let state = FakeMarkerState()
+    state.failAppliedWrites = true
+    let engine = HelperEngine(runner: runner, state: state)
+
+    #expect(engine.applyWakeSchedule(
+        oneShot: "08/01/26 06:30:00", repeatDays: nil, repeatTime: nil
+    ))
+    #expect(state.markers().contains(.wakeClearPending))
+    #expect(state.wakeTransaction()?.phase == .pendingApply)
+    state.failAppliedWrites = false
+    engine.wakeTick()
+    #expect(state.markers().isEmpty)
+    #expect(state.wakeTransaction() == nil)
+    #expect(runner.commands.filter { $0.contains("schedule wake") }.count == 2)
+}
+
+@Test func failedLaunchWakeRecoveryBlocksIdleAndRetriesOnTick() {
+    let runner = RecordingRunner()
+    runner.failMatching = "cancelall"
+    let state = FakeMarkerState([.wakeClearPending])
+    let engine = HelperEngine(runner: runner, state: state)
+
+    engine.restoreAtLaunch()
+    #expect(state.markers().contains(.wakeClearPending))
+    #expect(!engine.isIdle)
+    runner.failMatching = nil
+    engine.wakeTick()
+    #expect(!state.markers().contains(.wakeClearPending))
+    #expect(engine.isIdle)
+}
+
+@Test func failedWakeMarkerClearIsRetriedWithoutReportingSuccess() {
+    let runner = RecordingRunner()
+    let state = FakeMarkerState()
+    state.failClears = true
+    let engine = HelperEngine(runner: runner, state: state)
+
+    #expect(engine.applyWakeSchedule(
+        oneShot: "08/01/26 06:30:00", repeatDays: nil, repeatTime: nil
+    ))
+    #expect(state.markers().contains(.wakeClearPending))
+    #expect(!engine.isIdle)
+    state.failClears = false
+    engine.wakeTick()
+    #expect(!state.markers().contains(.wakeClearPending))
+    #expect(engine.isIdle)
+    // The applied phase is durable, so cleanup retry runs no pmset command.
+    #expect(runner.commands.filter { $0.contains("cancelall") }.count == 1)
+    #expect(runner.commands.filter { $0.contains("schedule wake") }.count == 1)
+}
+
+@Test func launchRecoveryCompletesAPersistedDesiredWakeSchedule() {
+    let runner = RecordingRunner()
+    runner.failMatching = "schedule wake"
+    let transaction = HelperWakeTransaction(
+        oneShot: "08/01/26 06:30:00",
+        repeatDays: "MWF",
+        repeatTime: "07:00:00"
+    )
+    let state = FakeMarkerState([.wakeClearPending], wakeTransaction: transaction)
+    let engine = HelperEngine(runner: runner, state: state)
+
+    engine.restoreAtLaunch()
+    #expect(state.markers().contains(.wakeClearPending))
+    #expect(state.wakeTransaction()?.phase == .pendingApply)
+    runner.failMatching = nil
+    engine.wakeTick()
+    #expect(!state.markers().contains(.wakeClearPending))
+    #expect(state.wakeTransaction() == nil)
+    #expect(runner.commands.contains { $0.contains("schedule wake") })
+    #expect(runner.commands.contains { $0.contains("wakeorpoweron") })
+}
+
+@Test func appliedWakePhaseSurvivesLaunchWithoutRepeatingPMSet() {
+    let runner = RecordingRunner()
+    let transaction = HelperWakeTransaction(
+        oneShot: "08/01/26 06:30:00",
+        repeatDays: nil,
+        repeatTime: nil,
+        phase: .applied
+    )
+    let state = FakeMarkerState([.wakeClearPending], wakeTransaction: transaction)
+    state.failClears = true
+    let engine = HelperEngine(runner: runner, state: state)
+
+    engine.restoreAtLaunch()
+    #expect(runner.commands.isEmpty)
+    #expect(state.markers().contains(.wakeClearPending))
+    state.failClears = false
+    engine.wakeTick()
+    #expect(runner.commands.isEmpty)
+    #expect(state.markers().isEmpty)
+}
+
+@Test func wakeRecoveryTickCannotEraseAConcurrentSuccessfulInstall() {
+    let runner = BlockingWakeRunner()
+    let state = FakeMarkerState()
+    let engine = HelperEngine(runner: runner, state: state)
+    let applyFinished = DispatchSemaphore(value: 0)
+    let tickStarted = DispatchSemaphore(value: 0)
+    let tickFinished = DispatchSemaphore(value: 0)
+
+    DispatchQueue.global().async {
+        _ = engine.applyWakeSchedule(
+            oneShot: "08/01/26 06:30:00", repeatDays: nil, repeatTime: nil
+        )
+        applyFinished.signal()
+    }
+    #expect(runner.installStarted.wait(timeout: .now() + 2) == .success)
+    DispatchQueue.global().async {
+        tickStarted.signal()
+        engine.wakeTick()
+        tickFinished.signal()
+    }
+    #expect(tickStarted.wait(timeout: .now() + 2) == .success)
+    runner.allowInstall.signal()
+    #expect(applyFinished.wait(timeout: .now() + 2) == .success)
+    #expect(tickFinished.wait(timeout: .now() + 2) == .success)
+
+    #expect(runner.commands.filter { $0.contains("cancelall") }.count == 1)
+    #expect(runner.commands.last?.contains("schedule wake") == true)
     #expect(!state.markers().contains(.wakeClearPending))
 }
 
@@ -219,13 +395,64 @@ private final class RecordingRunner: HelperCommandRunning, @unchecked Sendable {
     }
 }
 
-private final class FakeMarkerState: HelperRestoreStatePersisting, @unchecked Sendable {
+private final class BlockingWakeRunner: HelperCommandRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedCommands: [String] = []
+    let installStarted = DispatchSemaphore(value: 0)
+    let allowInstall = DispatchSemaphore(value: 0)
+
+    var commands: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedCommands
+    }
+
+    func run(_ path: String, _ arguments: [String]) -> Bool {
+        let command = ([path] + arguments).joined(separator: " ")
+        lock.lock()
+        storedCommands.append(command)
+        lock.unlock()
+        if command.contains("schedule wake") {
+            installStarted.signal()
+            allowInstall.wait()
+        }
+        return true
+    }
+}
+
+private final class FakeMarkerState: HelperWakeTransactionPersisting, @unchecked Sendable {
     private var stored: Set<HelperRestoreMarker>
-    init(_ initial: Set<HelperRestoreMarker> = []) { stored = initial }
+    private var storedWakeTransaction: HelperWakeTransaction?
+    var failWrites = false
+    var failClears = false
+    var failMarkerWrites = false
+    var failAppliedWrites = false
+    init(
+        _ initial: Set<HelperRestoreMarker> = [],
+        wakeTransaction: HelperWakeTransaction? = nil
+    ) {
+        stored = initial
+        storedWakeTransaction = wakeTransaction
+    }
     func markers() -> Set<HelperRestoreMarker> { stored }
     @discardableResult
     func set(_ marker: HelperRestoreMarker, present: Bool) -> Bool {
+        guard !failWrites,
+              !failMarkerWrites,
+              !(!present && failClears)
+        else { return false }
         if present { stored.insert(marker) } else { stored.remove(marker) }
+        return true
+    }
+
+    func wakeTransaction() -> HelperWakeTransaction? { storedWakeTransaction }
+
+    @discardableResult
+    func setWakeTransaction(_ transaction: HelperWakeTransaction?) -> Bool {
+        guard !failWrites,
+              !(transaction?.phase == .applied && failAppliedWrites)
+        else { return false }
+        storedWakeTransaction = transaction
         return true
     }
 }

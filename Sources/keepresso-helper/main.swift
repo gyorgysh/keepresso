@@ -207,13 +207,15 @@ listener.delegate = delegate
 listener.resume()
 
 // While any AWDL or fan hold is live, keep re-asserting it (macOS re-raises
-// the interface and re-takes fan control on its own); a no-op otherwise.
+// the interface and re-takes fan control on its own). The same periodic tick
+// also settles wake-clear debt left after an interrupted or failed apply.
 let holdTimer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "hold-tick"))
 holdTimer.schedule(deadline: .now() + 3, repeating: 3)
 holdTimer.setEventHandler {
     engine.sleepTick()
     engine.awdlTick()
     engine.fanTick()
+    engine.wakeTick()
 }
 holdTimer.resume()
 
