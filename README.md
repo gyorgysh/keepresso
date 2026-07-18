@@ -347,10 +347,10 @@ Triggers), so the command actually takes effect.
 ### The `keepresso` command-line tool
 
 The app bundle ships a caffeinate-style CLI. The Homebrew cask links it onto
-your PATH; on a DMG install, the administrator helper creates the
-`/usr/local/bin/keepresso` link for you. It drives the app for session
-commands and can also hold its own assertion when you need to block in a
-pipeline:
+your PATH. On a DMG install, the administrator helper creates the
+`/usr/local/bin/keepresso` link after it is installed and approved. The CLI
+drives the app for session commands and can also hold its own assertion when
+you need to block in a pipeline:
 
 ```sh
 keepresso start --for 90     # tell the app to brew for 90 minutes
@@ -365,8 +365,9 @@ keepresso -u                 # wake the display now
 ```
 
 The standalone holds work even when the app is not running; `keepresso help`
-lists everything. Installed from a DMG instead of Homebrew? Symlink it
-yourself: `ln -s /Applications/Keepresso.app/Contents/Helpers/keepresso /usr/local/bin/`.
+lists everything. If you install from a DMG without the administrator helper,
+symlink it yourself:
+`ln -s /Applications/Keepresso.app/Contents/Helpers/keepresso /usr/local/bin/`.
 
 ### Agent wake leases, Skill, and MCP
 

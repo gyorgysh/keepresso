@@ -10,10 +10,10 @@ jobs:
     name: Core build & tests
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       # The project format, swift-testing, and newer SDK symbols need Xcode 26+
       # with the macOS 26 SDK, so pin to the latest stable Xcode on the runner.
-      - uses: maxim-lobanov/setup-xcode@v1
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
           xcode-version: latest-stable
       - name: Build & test KeepressoCore
@@ -25,8 +25,8 @@ jobs:
     name: App build
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v5
-      - uses: maxim-lobanov/setup-xcode@v1
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
           xcode-version: latest-stable
       - name: Install XcodeGen

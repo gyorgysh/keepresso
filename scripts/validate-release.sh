@@ -59,6 +59,46 @@ project_values_equal() {
   done <<< "$values"
 }
 
+validate_action_pins() {
+  local action
+  local line
+  local line_number
+  local uses_pattern='^[[:space:]]*(-[[:space:]]*)?uses:[[:space:]]*([^[:space:]#]+)'
+  local sha_pattern='@[0-9a-f]{40}$'
+  local workflow
+  local workflows
+  local count=0
+
+  shopt -s nullglob
+  workflows=(.github/workflows/*.yml .github/workflows/*.yaml)
+  shopt -u nullglob
+  [ "${#workflows[@]}" -gt 0 ] || die "no GitHub Actions workflows found"
+
+  for workflow in "${workflows[@]}"; do
+    line_number=0
+    while IFS= read -r line || [ -n "$line" ]; do
+      line_number=$((line_number + 1))
+      if [[ "$line" =~ $uses_pattern ]]; then
+        action="${BASH_REMATCH[2]}"
+        action="${action#\"}"
+        action="${action%\"}"
+        action="${action#\'}"
+        action="${action%\'}"
+        case "$action" in
+          ./*) continue ;;
+        esac
+        count=$((count + 1))
+        [[ "$action" =~ $sha_pattern ]] \
+          || die "$workflow:$line_number action '$action' must use a full 40-character commit SHA"
+      fi
+    done < "$workflow"
+  done
+
+  [ "$count" -gt 0 ] || die "no external GitHub Actions found"
+}
+
+validate_action_pins
+
 SPARKLE_CONFIG="scripts/sparkle-release-config.sh"
 [ -f "$SPARKLE_CONFIG" ] || die "$SPARKLE_CONFIG is missing"
 # shellcheck source=sparkle-release-config.sh
