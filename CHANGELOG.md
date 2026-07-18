@@ -14,12 +14,12 @@ Versions follow [Semantic Versioning](https://semver.org).
   phone (ntfy, or a Shortcut) when an overnight agent finishes.
 - **Count waiting as working.** The AI agent rule can optionally treat a hook
   `waiting` state as still working, for unattended overnight runs that sit on
-  a prompt. Off by default; a pending approval still always counts as working.
+  a prompt. Off by default, and a pending approval still always counts as working.
 - **Scheduled wake.** Preferences ▸ Automation can install a one-shot or
   repeating system wake through the administrator helper, then optionally
   start a keep-awake session (or leave triggers in charge) when the Mac
   actually wakes, so overnight jobs do not lose the race to idle sleep.
-  Reliable on AC; on battery the firmware may skip the wake.
+  Reliable on AC power. On battery the firmware may skip the wake.
 - **Activity that survives a relaunch.** Preferences ▸ Activity keeps the
   decision log on disk and shows a simple seven-day summary of how long
   Keepresso held the Mac awake (and battery drop when both ends of a session
