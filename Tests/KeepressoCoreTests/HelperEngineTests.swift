@@ -54,43 +54,54 @@ private final class FakeRunner: HelperCommandRunning, SleepSettingReading, @unch
 
 private final class FakeRestoreState: HelperSleepRestoreValuePersisting, @unchecked Sendable {
     private let lock = NSLock()
-    private var stored: Set<HelperRestoreMarker> = []
-    private var storedSleepValue: Bool?
+    private var stored: HelperRestoreSnapshot
     var failMarkerWrites = false
     var failSleepValueWrites = false
+    var available = true
 
     init(_ initial: Set<HelperRestoreMarker> = [], sleepRestoreValue: Bool? = nil) {
-        stored = initial
-        storedSleepValue = sleepRestoreValue
+        stored = HelperRestoreSnapshot(
+            sleepOriginalDisablesleep: initial.contains(.sleepDisabled)
+                ? (sleepRestoreValue ?? false)
+                : nil,
+            sleepRestorePending: initial.contains(.sleepDisabled),
+            awdlRestorePending: initial.contains(.awdlDown),
+            fanRestorePending: initial.contains(.fanForced),
+            wakeTransaction: initial.contains(.wakeClearPending)
+                ? HelperWakeTransaction(
+                    oneShot: nil,
+                    repeatDays: nil,
+                    repeatTime: nil,
+                    phase: .pendingApply
+                )
+                : nil
+        )
     }
 
-    func markers() -> Set<HelperRestoreMarker> {
+    func snapshot() -> HelperRestoreSnapshot? {
         lock.lock()
         defer { lock.unlock() }
-        return stored
+        return available ? stored : nil
     }
 
     @discardableResult
-    func set(_ marker: HelperRestoreMarker, present: Bool) -> Bool {
+    func update(_ mutation: (inout HelperRestoreSnapshot) -> Void) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        guard !failMarkerWrites else { return false }
-        if present { stored.insert(marker) } else { stored.remove(marker) }
-        return true
-    }
-
-    func sleepRestoreValue() -> Bool? {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedSleepValue
-    }
-
-    @discardableResult
-    func setSleepRestoreValue(_ value: Bool?) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !failSleepValueWrites else { return false }
-        storedSleepValue = value
+        guard available else { return false }
+        var next = stored
+        mutation(&next)
+        let markerChanged = next.sleepRestorePending != stored.sleepRestorePending
+            || next.awdlRestorePending != stored.awdlRestorePending
+            || next.fanRestorePending != stored.fanRestorePending
+            || next.wakeTransaction != stored.wakeTransaction
+        let sleepValueChanged = next.sleepOriginalDisablesleep
+            != stored.sleepOriginalDisablesleep
+        guard !(markerChanged && failMarkerWrites),
+              !(sleepValueChanged && failSleepValueWrites),
+              next.isValid
+        else { return false }
+        stored = next
         return true
     }
 }
@@ -704,6 +715,59 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
         #expect(engine.isIdle)
         #expect(state.markers().isEmpty)
     }
+}
+
+@Test func unavailableRestoreJournalFailsEveryDurableDomainClosed() {
+    let runner = FakeRunner(sleepValue: false)
+    let state = FakeRestoreState()
+    state.available = false
+    let fans = FakeFanControl()
+    let engine = HelperEngine(
+        runner: runner,
+        state: state,
+        fans: fans,
+        sleepSettingReader: runner
+    )
+
+    engine.restoreAtLaunch()
+    #expect(!engine.setSleepDisabled(true))
+    #expect(!engine.setSleepHold(client: 1, holding: true))
+    #expect(!engine.setAWDLHold(client: 1, holding: true))
+    #expect(!engine.setFanHold(client: 1, holding: true, percent: 80))
+    #expect(!engine.applyWakeSchedule(
+        oneShot: "08/01/26 06:30:00",
+        repeatDays: nil,
+        repeatTime: nil
+    ))
+    engine.sleepTick()
+    engine.awdlTick()
+    engine.fanTick()
+
+    #expect(runner.commands.isEmpty)
+    #expect(fans.forcedPercents.isEmpty)
+    #expect(fans.restoreCalls == 0)
+    #expect(!engine.isIdle)
+}
+
+@Test func failedAWDLAndFanDebtCommitsDoNotTouchTheSystem() {
+    let runner = FakeRunner()
+    let state = FakeRestoreState()
+    state.failMarkerWrites = true
+    let fans = FakeFanControl()
+    let engine = HelperEngine(runner: runner, state: state, fans: fans)
+
+    #expect(!engine.setAWDLHold(client: 1, holding: true))
+    #expect(!engine.setFanHold(client: 1, holding: true, percent: 80))
+    #expect(runner.commands.isEmpty)
+    #expect(fans.forcedPercents.isEmpty)
+
+    // Failed durable commits roll the proposed holders back, so once storage
+    // recovers each request still produces its required union edge.
+    state.failMarkerWrites = false
+    #expect(engine.setAWDLHold(client: 1, holding: true))
+    #expect(engine.setFanHold(client: 1, holding: true, percent: 80))
+    #expect(runner.commands == [awdlDown])
+    #expect(fans.forcedPercents == [80])
 }
 
 // MARK: - Manual set and restore

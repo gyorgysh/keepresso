@@ -217,109 +217,6 @@ public final class NullFanControl: FanControlling {
     public func restoreAuto() -> Bool { false }
 }
 
-/// What the daemon still owes the system if it dies mid-hold: markers persist
-/// on disk (root-owned, under `/var/db`) and are settled on the next daemon
-/// launch, including the launchd `RunAtLoad` start after a reboot or crash.
-public enum HelperRestoreMarker: String, CaseIterable, Sendable {
-    /// We set `pmset disablesleep 1` for a hold and haven't set it back.
-    case sleepDisabled = "sleep-disabled"
-    /// We took `awdl0` down for a hold and haven't raised it.
-    case awdlDown = "awdl-down"
-    /// We forced the fans for a hold and haven't restored auto control.
-    case fanForced = "fan-forced"
-    /// A clear of wake schedules was requested but did not finish. Next
-    /// daemon launch retries the cancel so a disable cannot leave system
-    /// schedules behind after a crash. Successful schedules do not set this
-    /// (they are meant to survive reboots).
-    case wakeClearPending = "wake-clear-pending"
-}
-
-/// Persistence seam for the restore markers.
-public protocol HelperRestoreStatePersisting: AnyObject, Sendable {
-    func markers() -> Set<HelperRestoreMarker>
-    /// Persist or clear one recovery debt. A failed journal write must be
-    /// observable so callers never change privileged system state without a
-    /// durable recovery path.
-    @discardableResult
-    func set(_ marker: HelperRestoreMarker, present: Bool) -> Bool
-}
-
-/// Optional extension used by current helpers to remember the value that a
-/// scoped sleep hold must restore. Older marker stores remain compatible and
-/// fall back to `false`, matching the behavior of previous releases.
-public protocol HelperSleepRestoreValuePersisting: HelperRestoreStatePersisting {
-    func sleepRestoreValue() -> Bool?
-    @discardableResult
-    func setSleepRestoreValue(_ value: Bool?) -> Bool
-}
-
-/// Real marker store: one empty file per marker in a root-owned directory.
-public final class FileRestoreState: HelperSleepRestoreValuePersisting {
-    private let directory: URL
-
-    public init(directory: URL = URL(fileURLWithPath: "/var/db/sh.gyorgy.keepresso.helper")) {
-        self.directory = directory
-    }
-
-    public func markers() -> Set<HelperRestoreMarker> {
-        Set(HelperRestoreMarker.allCases.filter {
-            FileManager.default.fileExists(atPath: url(for: $0).path)
-        })
-    }
-
-    @discardableResult
-    public func set(_ marker: HelperRestoreMarker, present: Bool) -> Bool {
-        let markerURL = url(for: marker)
-        do {
-            if present {
-                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-                try Data().write(to: markerURL, options: .atomic)
-            } else if FileManager.default.fileExists(atPath: markerURL.path) {
-                try FileManager.default.removeItem(at: markerURL)
-            }
-            return true
-        } catch {
-            return false
-        }
-    }
-
-    public func sleepRestoreValue() -> Bool? {
-        guard let data = try? Data(contentsOf: sleepRestoreURL),
-              let value = String(data: data, encoding: .utf8)
-        else { return nil }
-        switch value.trimmingCharacters(in: .whitespacesAndNewlines) {
-        case "1": return true
-        case "0": return false
-        default: return nil
-        }
-    }
-
-    @discardableResult
-    public func setSleepRestoreValue(_ value: Bool?) -> Bool {
-        do {
-            guard let value else {
-                if FileManager.default.fileExists(atPath: sleepRestoreURL.path) {
-                    try FileManager.default.removeItem(at: sleepRestoreURL)
-                }
-                return true
-            }
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try Data((value ? "1" : "0").utf8).write(to: sleepRestoreURL, options: .atomic)
-            return true
-        } catch {
-            return false
-        }
-    }
-
-    private func url(for marker: HelperRestoreMarker) -> URL {
-        directory.appendingPathComponent(marker.rawValue, isDirectory: false)
-    }
-
-    private var sleepRestoreURL: URL {
-        directory.appendingPathComponent("sleep-restore-value", isDirectory: false)
-    }
-}
-
 /// When the helper daemon process may exit, kept pure so it's testable (the
 /// daemon's timer feeds in its counters).
 ///
@@ -393,22 +290,24 @@ public final class HelperEngine: @unchecked Sendable {
     /// restore it now and clear the marker. Called once at daemon launch,
     /// before the listener accepts anyone.
     public func restoreAtLaunch() {
-        let leftovers = state.markers()
-        if leftovers.contains(.sleepDisabled) {
-            let original = persistedSleepRestoreValue() ?? false
+        guard let snapshot = state.snapshot() else { return }
+        if snapshot.sleepRestorePending,
+           let original = snapshot.sleepOriginalDisablesleep {
             let ok = applyAndConfirmSleepTargetLocked(original)
             if ok { _ = clearPersistedSleepRestore() }
             appliedSleepTarget = nil
         }
-        if leftovers.contains(.awdlDown) {
+        if snapshot.awdlRestorePending {
             let ok = runner.run("/sbin/ifconfig", ["awdl0", "up"])
-            if ok { state.set(.awdlDown, present: false) }
+            if ok { _ = state.update { $0.awdlRestorePending = false } }
         }
-        if leftovers.contains(.fanForced) {
-            if fans.restoreAuto() { state.set(.fanForced, present: false) }
+        if snapshot.fanRestorePending {
+            if fans.restoreAuto() {
+                _ = state.update { $0.fanRestorePending = false }
+            }
         }
-        if leftovers.contains(.wakeClearPending) {
-            _ = clearWakeSchedules()
+        if snapshot.wakeTransaction != nil {
+            _ = recoverWakeTransaction()
         }
     }
 
@@ -417,15 +316,18 @@ public final class HelperEngine: @unchecked Sendable {
     /// meant to outlive the app; that matches the old osascript semantics).
     public func setSleepDisabled(_ disabled: Bool) -> Bool {
         lock.lock()
-        if !sleepHolders.isEmpty {
+        defer { lock.unlock() }
+        guard let snapshot = state.snapshot() else { return false }
+        if !sleepHolders.isEmpty || snapshot.sleepRestorePending {
             // A manual choice made during a scoped transaction becomes the
             // new restore baseline. The current active or suspended target
             // remains in force until the transaction closes.
-            let saved = persistSleepRestoreValue(disabled)
-            lock.unlock()
-            return saved
+            guard state.update({ value in
+                value.sleepRestorePending = true
+                value.sleepOriginalDisablesleep = disabled
+            }) else { return false }
+            return sleepHolders.isEmpty ? reconcileSleepTargetLocked() : true
         }
-        lock.unlock()
         return runner.run("/usr/bin/pmset", ["-a", "disablesleep", disabled ? "1" : "0"])
     }
 
@@ -438,12 +340,14 @@ public final class HelperEngine: @unchecked Sendable {
 
     /// One-shot wake. Schedules persist across reboots by design.
     public func scheduleOneShotWake(at dateString: String) -> Bool {
-        runner.run("/usr/bin/pmset", ["schedule", "wake", dateString])
+        guard state.snapshot() != nil else { return false }
+        return runner.run("/usr/bin/pmset", ["schedule", "wake", dateString])
     }
 
     /// Repeating wakeorpoweron. Replaces the system-wide repeating pair.
     public func scheduleRepeatingWake(days: String, time: String) -> Bool {
-        runner.run("/usr/bin/pmset", ["repeat", "wakeorpoweron", days, time])
+        guard state.snapshot() != nil else { return false }
+        return runner.run("/usr/bin/pmset", ["repeat", "wakeorpoweron", days, time])
     }
 
     /// Cancel one-shot schedules and the repeating pair. Debt-by-success:
@@ -451,16 +355,7 @@ public final class HelperEngine: @unchecked Sendable {
     /// failure (say, the repeating pair surviving a failed `repeat cancel`)
     /// is retried at the next daemon launch instead of reported as done.
     public func clearWakeSchedules() -> Bool {
-        // cancelall drops every one-shot (including non-Keepresso owners on
-        // some OS versions); repeat cancel drops the single system pair.
-        // Acceptable: wake schedules are a power-user feature and the UI
-        // re-applies the desired config on every save.
-        state.set(.wakeClearPending, present: true)
-        let a = runner.run("/usr/bin/pmset", ["schedule", "cancelall"])
-        let b = runner.run("/usr/bin/pmset", ["repeat", "cancel"])
-        let ok = a && b
-        if ok { state.set(.wakeClearPending, present: false) }
-        return ok
+        applyWakeSchedule(oneShot: nil, repeatDays: nil, repeatTime: nil)
     }
 
     /// Apply a full desired schedule in one step: clear previous installs,
@@ -471,26 +366,19 @@ public final class HelperEngine: @unchecked Sendable {
     /// primitives itself.
     public func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool {
         let wantsRepeat = repeatDays != nil && repeatTime != nil
-        guard oneShot != nil || wantsRepeat else {
-            return clearWakeSchedules()
-        }
-        // Clear previous Keepresso installs so we don't stack one-shots. The
-        // install proceeds even when the clear failed; the marker handling
-        // below settles the debt either way.
-        _ = clearWakeSchedules()
-        var ok = true
-        if let oneShot {
-            ok = scheduleOneShotWake(at: oneShot) && ok
-        }
-        if let repeatDays, let repeatTime {
-            ok = scheduleRepeatingWake(days: repeatDays, time: repeatTime) && ok
-        }
-        // Once the install landed, the desired state is "schedules present":
-        // a leftover clear debt from the step above would make the next
-        // daemon launch wipe what was just installed. On failure any existing
-        // debt stays, and the app re-applies the config at its next launch.
-        if ok { state.set(.wakeClearPending, present: false) }
-        return ok
+        guard (repeatDays == nil) == (repeatTime == nil) else { return false }
+        let transaction = HelperWakeTransaction(
+            oneShot: oneShot,
+            repeatDays: wantsRepeat ? repeatDays : nil,
+            repeatTime: wantsRepeat ? repeatTime : nil,
+            phase: .pendingApply
+        )
+        guard state.update({ $0.wakeTransaction = transaction }) else { return false }
+        guard executeWakeTransaction(transaction) else { return false }
+        guard state.update({ value in
+            value.wakeTransaction?.phase = .applied
+        }) else { return false }
+        return state.update { $0.wakeTransaction = nil }
     }
 
     /// Convenience over the primitive form for a full config.
@@ -501,6 +389,44 @@ public final class HelperEngine: @unchecked Sendable {
             repeatDays: parts.repeatDays,
             repeatTime: parts.repeatTime
         )
+    }
+
+    /// Retry a wake transaction left by a failed command, crash, or journal
+    /// cleanup. The daemon timer may call this repeatedly; an applied phase
+    /// performs no further system mutation.
+    @discardableResult
+    public func recoverWakeTransaction() -> Bool {
+        guard let snapshot = state.snapshot() else { return false }
+        guard let transaction = snapshot.wakeTransaction else { return true }
+        if transaction.phase == .applied {
+            return state.update { $0.wakeTransaction = nil }
+        }
+        guard executeWakeTransaction(transaction) else { return false }
+        guard state.update({ value in
+            value.wakeTransaction?.phase = .applied
+        }) else { return false }
+        return state.update { $0.wakeTransaction = nil }
+    }
+
+    private func executeWakeTransaction(_ transaction: HelperWakeTransaction) -> Bool {
+        // cancelall drops every one-shot; repeat cancel drops the one system
+        // pair. Desired entries are installed only after both clears land.
+        guard runner.run("/usr/bin/pmset", ["schedule", "cancelall"]),
+              runner.run("/usr/bin/pmset", ["repeat", "cancel"])
+        else { return false }
+        if let oneShot = transaction.oneShot,
+           !runner.run("/usr/bin/pmset", ["schedule", "wake", oneShot]) {
+            return false
+        }
+        if let repeatDays = transaction.repeatDays,
+           let repeatTime = transaction.repeatTime,
+           !runner.run(
+                "/usr/bin/pmset",
+                ["repeat", "wakeorpoweron", repeatDays, repeatTime]
+           ) {
+            return false
+        }
+        return true
     }
 
     /// Take or release `client`'s hold on `disablesleep`. Writes the system
@@ -637,7 +563,7 @@ public final class HelperEngine: @unchecked Sendable {
     /// from its timer; a no-op with no holders.
     public func awdlTick() {
         lock.lock()
-        let holding = !awdlHolders.isEmpty
+        let holding = !awdlHolders.isEmpty && state.snapshot() != nil
         lock.unlock()
         if holding {
             runner.run("/sbin/ifconfig", ["awdl0", "down"])
@@ -660,7 +586,8 @@ public final class HelperEngine: @unchecked Sendable {
     /// firmware forever; ``fanHoldDropped`` records that it happened.
     public func fanTick() {
         lock.lock()
-        guard let target = fanHolders.values.max() else {
+        guard state.snapshot() != nil,
+              let target = fanHolders.values.max() else {
             lock.unlock()
             return
         }
@@ -687,7 +614,7 @@ public final class HelperEngine: @unchecked Sendable {
             // restore actually landed, so a crash after a failed restore
             // still settles the debt at the next daemon launch.
             let ok = fans.restoreAuto()
-            state.set(.fanForced, present: !ok)
+            _ = state.update { $0.fanRestorePending = !ok }
         }
     }
 
@@ -697,7 +624,8 @@ public final class HelperEngine: @unchecked Sendable {
         lock.lock()
         let holdsEmpty = sleepHolders.isEmpty && awdlHolders.isEmpty && fanHolders.isEmpty
         lock.unlock()
-        return holdsEmpty && !state.markers().contains(.sleepDisabled)
+        guard let snapshot = state.snapshot() else { return false }
+        return holdsEmpty && !snapshot.hasRecoveryDebt
     }
 
     // MARK: - CLI symlink
@@ -732,21 +660,19 @@ public final class HelperEngine: @unchecked Sendable {
     // MARK: - Union edges (call with the lock held)
 
     private func beginSleepTransactionLocked() -> Bool {
-        if state.markers().contains(.sleepDisabled) {
+        guard let snapshot = state.snapshot() else { return false }
+        if snapshot.sleepRestorePending {
             // Reuse an unsettled debt. Sampling the currently stuck value here
             // would overwrite the real original and make it permanent.
-            return true
+            return snapshot.sleepOriginalDisablesleep != nil
         }
         guard let original = sleepSettingReader.sleepIsDisabled() else {
             return false
         }
-        guard persistSleepRestoreValue(original) else { return false }
-        guard state.set(.sleepDisabled, present: true) else {
-            if state.set(.sleepDisabled, present: false) {
-                _ = (state as? HelperSleepRestoreValuePersisting)?.setSleepRestoreValue(nil)
-            }
-            return false
-        }
+        guard state.update({ value in
+            value.sleepOriginalDisablesleep = original
+            value.sleepRestorePending = true
+        }) else { return false }
         appliedSleepTarget = original
         return true
     }
@@ -760,20 +686,21 @@ public final class HelperEngine: @unchecked Sendable {
     }
 
     private func reconcileSleepTargetLocked() -> Bool {
+        guard let snapshot = state.snapshot() else { return false }
         let mode = effectiveSleepModeLocked()
         if mode == .released {
-            guard state.markers().contains(.sleepDisabled) else {
+            guard snapshot.sleepRestorePending else {
                 appliedSleepTarget = nil
                 return true
             }
-            let original = persistedSleepRestoreValue() ?? false
+            guard let original = snapshot.sleepOriginalDisablesleep else { return false }
             guard applyAndConfirmSleepTargetLocked(original) else { return false }
             guard clearPersistedSleepRestore() else { return false }
             appliedSleepTarget = nil
             return true
         }
 
-        if !state.markers().contains(.sleepDisabled),
+        if !snapshot.sleepRestorePending,
            !beginSleepTransactionLocked() {
             return false
         }
@@ -805,33 +732,33 @@ public final class HelperEngine: @unchecked Sendable {
     }
 
     private func applyAWDLUnion(_ mutate: () -> Void) -> Bool {
+        guard let snapshot = state.snapshot() else { return false }
+        let originalHolders = awdlHolders
         let before = !awdlHolders.isEmpty
         mutate()
         let after = !awdlHolders.isEmpty
         guard before != after else { return true }
-        if after { state.set(.awdlDown, present: true) }
+        if after,
+           !state.update({ $0.awdlRestorePending = true }) {
+            awdlHolders = originalHolders
+            return false
+        }
+        if !after, !snapshot.awdlRestorePending {
+            awdlHolders = originalHolders
+            return false
+        }
         let ok = runner.run("/sbin/ifconfig", ["awdl0", after ? "down" : "up"])
-        if !after, ok { state.set(.awdlDown, present: false) }
+        if !after, ok {
+            return state.update { $0.awdlRestorePending = false }
+        }
         return ok
     }
 
-    private func persistedSleepRestoreValue() -> Bool? {
-        (state as? HelperSleepRestoreValuePersisting)?.sleepRestoreValue()
-    }
-
-    private func persistSleepRestoreValue(_ value: Bool) -> Bool {
-        guard let persistence = state as? HelperSleepRestoreValuePersisting else {
-            // Legacy stores can safely restore the historical default only.
-            return value == false
-        }
-        return persistence.setSleepRestoreValue(value)
-    }
-
     private func clearPersistedSleepRestore() -> Bool {
-        // Keep the exact snapshot until the marker itself is gone. A crash
-        // between these operations then still has enough information to retry.
-        guard state.set(.sleepDisabled, present: false) else { return false }
-        return (state as? HelperSleepRestoreValuePersisting)?.setSleepRestoreValue(nil) ?? true
+        state.update { snapshot in
+            snapshot.sleepRestorePending = false
+            snapshot.sleepOriginalDisablesleep = nil
+        }
     }
 
     /// Fan version of the union edge: the effective target is the max percent
@@ -846,6 +773,8 @@ public final class HelperEngine: @unchecked Sendable {
     /// restore that actually succeeded. A spurious restore of already-auto
     /// fans is harmless, forced fans with no marker are not.
     private func applyFanUnion(_ mutate: () -> Void) -> Bool {
+        guard let snapshot = state.snapshot() else { return false }
+        let originalHolders = fanHolders
         let before = fanHolders.values.max()
         mutate()
         let after = fanHolders.values.max()
@@ -853,12 +782,20 @@ public final class HelperEngine: @unchecked Sendable {
         if let target = after {
             fanFailureStreak = 0
             fanHoldDropped = false
-            state.set(.fanForced, present: true)
+            if before == nil,
+               !state.update({ $0.fanRestorePending = true }) {
+                fanHolders = originalHolders
+                return false
+            }
             return writeFanTarget(target)
         }
+        guard snapshot.fanRestorePending else {
+            fanHolders = originalHolders
+            return false
+        }
         let ok = fans.restoreAuto()
-        state.set(.fanForced, present: !ok)
-        return ok
+        guard ok else { return false }
+        return state.update { $0.fanRestorePending = false }
     }
 
     /// One forced write, with the single unlock-and-retry newer firmware

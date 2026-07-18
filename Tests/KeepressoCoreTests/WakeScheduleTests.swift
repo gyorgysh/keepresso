@@ -169,17 +169,18 @@ import Foundation
     #expect(state.markers().contains(.wakeClearPending))
 }
 
-@Test func successfulInstallSettlesAFailedClearDebt() {
-    // A failed clear inside an apply must not leave the marker set: the next
-    // daemon launch would wipe the schedules that were just installed.
+@Test func failedClearStopsInstallAndKeepsTheDesiredWakeDebt() {
+    // Installing after a failed clear would leave an unverified mixture of
+    // old and new schedules. The desired transaction stays durable instead.
     let runner = RecordingRunner()
     runner.failMatching = "cancelall"
     let state = FakeMarkerState()
     let engine = HelperEngine(runner: runner, state: state)
     let ok = engine.applyWakeSchedule(
         oneShot: "08/01/26 06:30:00", repeatDays: "MWF", repeatTime: "07:00:00")
-    #expect(ok)
-    #expect(!state.markers().contains(.wakeClearPending))
+    #expect(!ok)
+    #expect(state.markers().contains(.wakeClearPending))
+    #expect(!runner.commands.contains { $0.contains("schedule wake") })
 }
 
 @Test func totallyFailedApplyKeepsTheClearDebt() {
@@ -220,12 +221,30 @@ private final class RecordingRunner: HelperCommandRunning, @unchecked Sendable {
 }
 
 private final class FakeMarkerState: HelperRestoreStatePersisting, @unchecked Sendable {
-    private var stored: Set<HelperRestoreMarker>
-    init(_ initial: Set<HelperRestoreMarker> = []) { stored = initial }
-    func markers() -> Set<HelperRestoreMarker> { stored }
+    private var stored: HelperRestoreSnapshot
+    init(_ initial: Set<HelperRestoreMarker> = []) {
+        stored = HelperRestoreSnapshot(
+            sleepOriginalDisablesleep: initial.contains(.sleepDisabled) ? false : nil,
+            sleepRestorePending: initial.contains(.sleepDisabled),
+            awdlRestorePending: initial.contains(.awdlDown),
+            fanRestorePending: initial.contains(.fanForced),
+            wakeTransaction: initial.contains(.wakeClearPending)
+                ? HelperWakeTransaction(
+                    oneShot: nil,
+                    repeatDays: nil,
+                    repeatTime: nil,
+                    phase: .pendingApply
+                )
+                : nil
+        )
+    }
+    func snapshot() -> HelperRestoreSnapshot? { stored }
     @discardableResult
-    func set(_ marker: HelperRestoreMarker, present: Bool) -> Bool {
-        if present { stored.insert(marker) } else { stored.remove(marker) }
+    func update(_ mutation: (inout HelperRestoreSnapshot) -> Void) -> Bool {
+        var next = stored
+        mutation(&next)
+        guard next.isValid else { return false }
+        stored = next
         return true
     }
 }
