@@ -164,6 +164,136 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     #expect(!registry.apply(streamID: String(repeating: "x", count: 129), generation: 1) { true })
 }
 
+@Test func streamOwnershipMigrationRejectsTheOldConnectionsSameGeneration() {
+    let registry = SleepModeGenerationRegistry()
+    var previousOwners: [Int?] = []
+    var oldDisconnectCleanups = 0
+
+    #expect(registry.apply(
+        streamID: "process-stream",
+        generation: 4,
+        clientID: 10
+    ) { previousClientID in
+        previousOwners.append(previousClientID)
+        return true
+    })
+    #expect(registry.apply(
+        streamID: "process-stream",
+        generation: 4,
+        clientID: 11
+    ) { previousClientID in
+        previousOwners.append(previousClientID)
+        return true
+    })
+
+    // A delayed request on old connection 10 cannot reclaim generation 4.
+    #expect(!registry.apply(
+        streamID: "process-stream",
+        generation: 4,
+        clientID: 10
+    ) { _ in
+        Issue.record("the old connection operation must not run")
+        return true
+    })
+    registry.clientDisconnected(10) { oldDisconnectCleanups += 1 }
+
+    #expect(previousOwners.count == 2)
+    #expect(previousOwners[0] == nil)
+    #expect(previousOwners[1] == 10)
+    #expect(oldDisconnectCleanups == 0)
+}
+
+@Test func reconnectMigrationPreservesSleepAWDLAndFanLogicalHolders() {
+    let runner = FakeRunner(sleepValue: false)
+    let state = FakeRestoreState()
+    let fans = FakeFanControl()
+    let engine = HelperEngine(
+        runner: runner,
+        state: state,
+        fans: fans,
+        sleepSettingReader: runner
+    )
+    let sleepRegistry = SleepModeGenerationRegistry()
+    let awdlRegistry = SleepModeGenerationRegistry()
+    let fanRegistry = SleepModeGenerationRegistry()
+
+    func setSleep(client: Int, generation: UInt64, mode: SleepHoldMode) -> Bool {
+        sleepRegistry.apply(
+            streamID: "sleep-stream",
+            generation: generation,
+            clientID: client
+        ) { previousClientID in
+            engine.setSleepHoldMode(
+                client: client,
+                replacing: previousClientID,
+                mode: mode
+            )
+        }
+    }
+    func setAWDL(client: Int, generation: UInt64, holding: Bool) -> Bool {
+        awdlRegistry.apply(
+            streamID: "awdl-stream",
+            generation: generation,
+            clientID: client
+        ) { previousClientID in
+            engine.setAWDLHold(
+                client: client,
+                replacing: previousClientID,
+                holding: holding
+            )
+        }
+    }
+    func setFan(client: Int, generation: UInt64, holding: Bool) -> Bool {
+        fanRegistry.apply(
+            streamID: "fan-stream",
+            generation: generation,
+            clientID: client
+        ) { previousClientID in
+            engine.setFanHold(
+                client: client,
+                replacing: previousClientID,
+                holding: holding,
+                percent: 80
+            )
+        }
+    }
+
+    #expect(setSleep(client: 1, generation: 1, mode: .active))
+    #expect(setAWDL(client: 1, generation: 1, holding: true))
+    #expect(setFan(client: 1, generation: 1, holding: true))
+    #expect(runner.commands == [sleepOn, awdlDown])
+    #expect(fans.forcedPercents == [80])
+
+    // Reconnect B retries the same intent. Each logical holder moves from A
+    // to B without a second union edge or a duplicate fan write.
+    #expect(setSleep(client: 2, generation: 1, mode: .active))
+    #expect(setAWDL(client: 2, generation: 1, holding: true))
+    #expect(setFan(client: 2, generation: 1, holding: true))
+    #expect(runner.commands == [sleepOn, awdlDown])
+    #expect(fans.forcedPercents == [80])
+
+    sleepRegistry.clientDisconnected(1) { engine.sleepClientDisconnected(1) }
+    awdlRegistry.clientDisconnected(1) { engine.awdlClientDisconnected(1) }
+    fanRegistry.clientDisconnected(1) { engine.fanClientDisconnected(1) }
+    #expect(runner.commands == [sleepOn, awdlDown])
+    #expect(fans.restoreCalls == 0)
+
+    // The newest releases win. A delayed generation-1 replay cannot revive
+    // any of the three privileged holds afterward.
+    #expect(setSleep(client: 2, generation: 2, mode: .released))
+    #expect(setAWDL(client: 2, generation: 2, holding: false))
+    #expect(setFan(client: 2, generation: 2, holding: false))
+    #expect(runner.commands == [sleepOn, awdlDown, sleepOff, awdlUp])
+    #expect(fans.restoreCalls == 1)
+
+    #expect(!setSleep(client: 1, generation: 1, mode: .active))
+    #expect(!setAWDL(client: 1, generation: 1, holding: true))
+    #expect(!setFan(client: 1, generation: 1, holding: true))
+    #expect(runner.commands == [sleepOn, awdlDown, sleepOff, awdlUp])
+    #expect(fans.forcedPercents == [80])
+    #expect(engine.isIdle)
+}
+
 @Test func sleepSettingReaderParsesRealAndLegacyPMSetKeys() {
     #expect(PMSetSleepSettingReader.parse("System-wide power settings:\n SleepDisabled 1\n") == true)
     #expect(PMSetSleepSettingReader.parse(" disablesleep 0\n") == false)

@@ -42,8 +42,13 @@ public protocol SleepSettingReading: AnyObject, Sendable {
 /// exported connection objects, so a delayed reconnect replay cannot revive
 /// an older active hold after suspension or release already won.
 public final class SleepModeGenerationRegistry: @unchecked Sendable {
+    private struct StreamState {
+        var generation: UInt64
+        var ownerClientID: Int?
+    }
+
     private let lock = NSLock()
-    private var latestByStream: [String: UInt64] = [:]
+    private var statesByStream: [String: StreamState] = [:]
     private let maximumStreams: Int
 
     public init(maximumStreams: Int = 1_024) {
@@ -54,21 +59,70 @@ public final class SleepModeGenerationRegistry: @unchecked Sendable {
     public func apply(
         streamID: String,
         generation: UInt64,
-        operation: () -> Bool
+        clientID: Int,
+        operation: (_ previousClientID: Int?) -> Bool
     ) -> Bool {
         guard !streamID.isEmpty, streamID.utf8.count <= 128 else { return false }
         lock.lock()
         defer { lock.unlock() }
-        if let latest = latestByStream[streamID], generation < latest {
-            return false
+        if let state = statesByStream[streamID] {
+            guard generation >= state.generation else { return false }
+            // Listener client IDs increase with connection acceptance. When
+            // reconnect B retries the same generation, a delayed request from
+            // older connection A must not migrate the logical stream back.
+            if generation == state.generation,
+               let owner = state.ownerClientID,
+               clientID < owner {
+                return false
+            }
+        } else {
+            guard statesByStream.count < maximumStreams else { return false }
         }
-        guard latestByStream[streamID] != nil || latestByStream.count < maximumStreams else {
-            return false
+
+        let previousClientID = statesByStream[streamID]?.ownerClientID
+        // Advance ownership before applying. The registry lock remains held
+        // while the engine moves the holder, making connection migration and
+        // its system reconciliation one indivisible operation to disconnect.
+        statesByStream[streamID] = StreamState(
+            generation: generation,
+            ownerClientID: clientID
+        )
+        return operation(previousClientID)
+    }
+
+    /// Compatibility form for callers that only need monotonic ordering.
+    public func apply(
+        streamID: String,
+        generation: UInt64,
+        operation: () -> Bool
+    ) -> Bool {
+        apply(streamID: streamID, generation: generation, clientID: 0) { _ in
+            operation()
         }
-        // Advance before applying. Even an ambiguous operation failure must
-        // fence older requests while the caller retries a newer generation.
-        latestByStream[streamID] = generation
-        return operation()
+    }
+
+    /// Release this connection's domain holder only if it still owns at
+    /// least one logical stream. Entries remain as generation tombstones, so
+    /// a delayed pre-release replay cannot revive a hold after disconnect.
+    public func clientDisconnected(
+        _ clientID: Int,
+        operation: () -> Void
+    ) {
+        lock.lock()
+        let ownedStreamIDs = statesByStream.compactMap { streamID, state in
+            state.ownerClientID == clientID ? streamID : nil
+        }
+        guard !ownedStreamIDs.isEmpty else {
+            lock.unlock()
+            return
+        }
+        for streamID in ownedStreamIDs {
+            statesByStream[streamID]?.ownerClientID = nil
+        }
+        // Keep the registry lock through the engine release. A reconnect
+        // cannot claim the stream between the ownership check and cleanup.
+        operation()
+        lock.unlock()
     }
 }
 
@@ -449,9 +503,27 @@ public final class HelperEngine: @unchecked Sendable {
     /// clients coexist. The first non-released mode opens one journaled
     /// transaction; only the last release restores and clears its snapshot.
     public func setSleepHoldMode(client: Int, mode: SleepHoldMode) -> Bool {
+        setSleepHoldMode(client: client, replacing: nil, mode: mode)
+    }
+
+    /// Move one logical sleep stream from an older XPC connection to this
+    /// client and apply its latest mode under one engine lock. The registry
+    /// calls this while holding its own ownership lock, so invalidation of the
+    /// previous connection cannot remove the migrated holder.
+    public func setSleepHoldMode(
+        client: Int,
+        replacing previousClient: Int?,
+        mode: SleepHoldMode
+    ) -> Bool {
         lock.lock()
         defer { lock.unlock() }
+
+        let transactionWasOpen = !sleepHolders.isEmpty
+        if let previousClient, previousClient != client {
+            sleepHolders.removeValue(forKey: previousClient)
+        }
         if mode != .released,
+           !transactionWasOpen,
            sleepHolders.isEmpty,
            !beginSleepTransactionLocked() {
             return false
@@ -466,9 +538,22 @@ public final class HelperEngine: @unchecked Sendable {
 
     /// Take or release `client`'s hold on `awdl0 down`.
     public func setAWDLHold(client: Int, holding: Bool) -> Bool {
+        setAWDLHold(client: client, replacing: nil, holding: holding)
+    }
+
+    /// Move one logical AWDL stream between connections without creating a
+    /// second union holder or an up/down edge during reconnect.
+    public func setAWDLHold(
+        client: Int,
+        replacing previousClient: Int?,
+        holding: Bool
+    ) -> Bool {
         lock.lock()
         defer { lock.unlock() }
         return applyAWDLUnion {
+            if let previousClient, previousClient != client {
+                awdlHolders.remove(previousClient)
+            }
             if holding { awdlHolders.insert(client) } else { awdlHolders.remove(client) }
         }
     }
@@ -477,9 +562,23 @@ public final class HelperEngine: @unchecked Sendable {
     /// holders the hottest request wins (the max percent). Writes only when
     /// the effective target changes.
     public func setFanHold(client: Int, holding: Bool, percent: Int) -> Bool {
+        setFanHold(client: client, replacing: nil, holding: holding, percent: percent)
+    }
+
+    /// Move one logical fan stream between connections while preserving the
+    /// union's effective target across a reconnect retry.
+    public func setFanHold(
+        client: Int,
+        replacing previousClient: Int?,
+        holding: Bool,
+        percent: Int
+    ) -> Bool {
         lock.lock()
         defer { lock.unlock() }
         return applyFanUnion {
+            if let previousClient, previousClient != client {
+                fanHolders.removeValue(forKey: previousClient)
+            }
             if holding {
                 fanHolders[client] = max(30, min(percent, 100))
             } else {
@@ -498,6 +597,28 @@ public final class HelperEngine: @unchecked Sendable {
         _ = reconcileSleepTargetLocked()
         _ = applyAWDLUnion { awdlHolders.remove(client) }
         _ = applyFanUnion { fanHolders.removeValue(forKey: client) }
+    }
+
+    /// Domain-specific disconnects let stream registries guard each cleanup
+    /// independently. A connection that no longer owns a migrated stream is
+    /// never allowed to remove that stream's new holder.
+    public func sleepClientDisconnected(_ client: Int) {
+        lock.lock()
+        sleepHolders.removeValue(forKey: client)
+        _ = reconcileSleepTargetLocked()
+        lock.unlock()
+    }
+
+    public func awdlClientDisconnected(_ client: Int) {
+        lock.lock()
+        _ = applyAWDLUnion { awdlHolders.remove(client) }
+        lock.unlock()
+    }
+
+    public func fanClientDisconnected(_ client: Int) {
+        lock.lock()
+        _ = applyFanUnion { fanHolders.removeValue(forKey: client) }
+        lock.unlock()
     }
 
     /// Re-down `awdl0` while any hold is live: macOS re-raises the interface

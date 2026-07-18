@@ -5,22 +5,23 @@ import KeepressoCore
 ///
 /// A tiny root LaunchDaemon registered from the app via `SMAppService`
 /// (approved once by the user, with administrator credentials, in System
-/// Settings). It exposes exactly two reversible switches over XPC, sleep
-/// (`pmset disablesleep`) and AWDL (`ifconfig awdl0 down`), so the app never
-/// needs another password prompt for them. All behavior lives in
-/// ``HelperEngine`` (KeepressoCore, unit-tested); this file is the XPC and
-/// launchd wiring around it.
+/// Settings). It exposes fixed reversible sleep, AWDL, and fan controls over
+/// XPC, so the app never needs another password prompt for them. All behavior
+/// lives in ``HelperEngine`` (KeepressoCore, unit-tested); this file is the
+/// XPC and launchd wiring around it.
 ///
 /// launchd launches it on demand (`MachServices`) and at boot (`RunAtLoad`,
 /// so leftover state from a crash or power loss is restored); it exits again
 /// once idle.
 
-/// One XPC client connection. Holds are attributed to `clientID`, and the
-/// connection's death releases them (see ``HelperEngine/clientDisconnected(_:)``).
+/// One XPC client connection. Logical stream ownership migrates across
+/// reconnects, and only the current owner connection may release each hold.
 final class HelperConnection: NSObject, HelperXPCProtocol {
     private let engine: HelperEngine
     private let clientID: Int
     private let sleepGenerations: SleepModeGenerationRegistry
+    private let awdlGenerations: SleepModeGenerationRegistry
+    private let fanGenerations: SleepModeGenerationRegistry
     private let onTerminateRequest: @Sendable () -> Void
     private let legacySleepStreamID = UUID().uuidString.lowercased()
     private let legacySleepLock = NSLock()
@@ -30,11 +31,15 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
         engine: HelperEngine,
         clientID: Int,
         sleepGenerations: SleepModeGenerationRegistry,
+        awdlGenerations: SleepModeGenerationRegistry,
+        fanGenerations: SleepModeGenerationRegistry,
         onTerminateRequest: @escaping @Sendable () -> Void
     ) {
         self.engine = engine
         self.clientID = clientID
         self.sleepGenerations = sleepGenerations
+        self.awdlGenerations = awdlGenerations
+        self.fanGenerations = fanGenerations
         self.onTerminateRequest = onTerminateRequest
     }
 
@@ -53,9 +58,14 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
         legacySleepLock.unlock()
         reply(sleepGenerations.apply(
             streamID: legacySleepStreamID,
-            generation: generation
-        ) {
-            engine.setSleepHold(client: clientID, holding: holding)
+            generation: generation,
+            clientID: clientID
+        ) { previousClientID in
+            engine.setSleepHoldMode(
+                client: clientID,
+                replacing: previousClientID,
+                mode: holding ? .active : .released
+            )
         })
     }
 
@@ -71,18 +81,55 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
         }
         reply(sleepGenerations.apply(
             streamID: streamID,
-            generation: generation
-        ) {
-            engine.setSleepHoldMode(client: clientID, mode: mode)
+            generation: generation,
+            clientID: clientID
+        ) { previousClientID in
+            engine.setSleepHoldMode(
+                client: clientID,
+                replacing: previousClientID,
+                mode: mode
+            )
         })
     }
 
-    func setAWDLHold(_ holding: Bool, reply: @escaping @Sendable (Bool) -> Void) {
-        reply(engine.setAWDLHold(client: clientID, holding: holding))
+    func setAWDLHold(
+        _ holding: Bool,
+        streamID: String,
+        generation: UInt64,
+        reply: @escaping @Sendable (Bool) -> Void
+    ) {
+        reply(awdlGenerations.apply(
+            streamID: streamID,
+            generation: generation,
+            clientID: clientID
+        ) { previousClientID in
+            engine.setAWDLHold(
+                client: clientID,
+                replacing: previousClientID,
+                holding: holding
+            )
+        })
     }
 
-    func setFanHold(_ holding: Bool, percent: Int, reply: @escaping @Sendable (Bool) -> Void) {
-        reply(engine.setFanHold(client: clientID, holding: holding, percent: percent))
+    func setFanHold(
+        _ holding: Bool,
+        percent: Int,
+        streamID: String,
+        generation: UInt64,
+        reply: @escaping @Sendable (Bool) -> Void
+    ) {
+        reply(fanGenerations.apply(
+            streamID: streamID,
+            generation: generation,
+            clientID: clientID
+        ) { previousClientID in
+            engine.setFanHold(
+                client: clientID,
+                replacing: previousClientID,
+                holding: holding,
+                percent: percent
+            )
+        })
     }
 
     func fanHoldDropped(reply: @escaping @Sendable (Bool) -> Void) {
@@ -109,6 +156,8 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
 final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     private let engine: HelperEngine
     private let sleepGenerations = SleepModeGenerationRegistry()
+    private let awdlGenerations = SleepModeGenerationRegistry()
+    private let fanGenerations = SleepModeGenerationRegistry()
     private let lock = NSLock()
     private var nextClientID = 1
     private var liveConnections = 0
@@ -137,12 +186,22 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
             engine: engine,
             clientID: clientID,
             sleepGenerations: sleepGenerations,
+            awdlGenerations: awdlGenerations,
+            fanGenerations: fanGenerations,
             onTerminateRequest: { [weak self] in self?.requestTerminate() }
         )
         // Invalidation is the connection's definitive end (interruption never
         // fires for a peer process exit on the daemon side of a mach service).
         newConnection.invalidationHandler = { [weak self, engine] in
-            engine.clientDisconnected(clientID)
+            self?.sleepGenerations.clientDisconnected(clientID) {
+                engine.sleepClientDisconnected(clientID)
+            }
+            self?.awdlGenerations.clientDisconnected(clientID) {
+                engine.awdlClientDisconnected(clientID)
+            }
+            self?.fanGenerations.clientDisconnected(clientID) {
+                engine.fanClientDisconnected(clientID)
+            }
             self?.connectionEnded()
         }
         newConnection.resume()

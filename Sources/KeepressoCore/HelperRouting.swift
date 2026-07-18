@@ -149,11 +149,12 @@ public final class RoutedSleepWatchdog: SleepWatchdogLaunching, @unchecked Senda
             // root-owned restore journal. The legacy osascript loop remains
             // release-only so an upgrade can clean its stale control file,
             // but it cannot safely promise reboot recovery for new work.
-            if mode != .released, !helperInstalled() {
+            let installed = helperInstalled()
+            if mode != .released, !installed {
                 lock.unlock()
                 return false
             }
-            selected = helperInstalled() ? .daemon : .fallback
+            selected = installed ? .daemon : .fallback
             if mode != .released { pinnedBackend = selected }
         }
         lock.unlock()
@@ -173,7 +174,7 @@ public final class RoutedSleepWatchdog: SleepWatchdogLaunching, @unchecked Senda
         switch selected {
         case .daemon: fallback.removeFlag()
         case .fallback:
-            if helperInstalled() || daemon.isFlagPresent() {
+            if daemon.isFlagPresent() {
                 daemon.removeFlag()
             }
         }
