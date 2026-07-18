@@ -2,6 +2,86 @@ import Foundation
 import Observation
 import IOKit.pwr_mgt
 
+// MARK: - Unattended orchestration diagnostics
+
+/// Stable event kinds for unattended wake and task orchestration. Events carry
+/// identifiers and state only. Automation prompts and command arguments are
+/// deliberately absent from this API.
+public enum UnattendedDiagnosticKind: String, Codable, Equatable, Sendable {
+    case discoveryCompleted
+    case discoveryFailed
+    case wakePlanned
+    case wakePreparationStarted
+    case readinessRetryScheduled
+    case readinessReady
+    case readinessTimedOut
+    case taskStarted
+    case taskSucceeded
+    case taskFailed
+    case taskTimedOut
+    case taskCancelled
+    case sleepEligible
+    case orchestrationCancelled
+}
+
+/// One structured diagnostic event. This is intentionally not a free-form log
+/// message, which prevents sensitive task input from being copied into logs.
+public struct UnattendedDiagnosticEvent: Codable, Equatable, Identifiable, Sendable {
+    public var id: UUID
+    public var date: Date
+    public var kind: UnattendedDiagnosticKind
+    public var automationID: String?
+    public var taskID: String?
+    public var scheduledRun: Date?
+    public var scheduledWake: Date?
+    public var attempt: Int?
+    public var readinessIssues: [WakeReadinessIssue]
+    public var taskPhase: UnattendedTaskPhase?
+    public var taskCount: Int?
+    public var automationCount: Int?
+    public var issueCount: Int?
+
+    public init(
+        id: UUID = UUID(),
+        date: Date,
+        kind: UnattendedDiagnosticKind,
+        automationID: String? = nil,
+        taskID: String? = nil,
+        scheduledRun: Date? = nil,
+        scheduledWake: Date? = nil,
+        attempt: Int? = nil,
+        readinessIssues: [WakeReadinessIssue] = [],
+        taskPhase: UnattendedTaskPhase? = nil,
+        taskCount: Int? = nil,
+        automationCount: Int? = nil,
+        issueCount: Int? = nil
+    ) {
+        self.id = id
+        self.date = date
+        self.kind = kind
+        self.automationID = automationID
+        self.taskID = taskID
+        self.scheduledRun = scheduledRun
+        self.scheduledWake = scheduledWake
+        self.attempt = attempt
+        self.readinessIssues = readinessIssues
+        self.taskPhase = taskPhase
+        self.taskCount = taskCount
+        self.automationCount = automationCount
+        self.issueCount = issueCount
+    }
+}
+
+public protocol UnattendedDiagnosticRecording: AnyObject, Sendable {
+    func record(_ event: UnattendedDiagnosticEvent)
+}
+
+/// Default recorder for hosts that do not surface unattended diagnostics yet.
+public final class NullUnattendedDiagnosticRecorder: UnattendedDiagnosticRecording, @unchecked Sendable {
+    public init() {}
+    public func record(_ event: UnattendedDiagnosticEvent) {}
+}
+
 // MARK: - Decision log
 
 /// What initiated a session start or stop, for the decision log.
