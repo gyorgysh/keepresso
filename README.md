@@ -11,6 +11,10 @@
 </p>
 
 <p align="center">
+  <a href="https://keepresso.com"><b>keepresso.com</b></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/gyorgysh/keepresso/actions/workflows/ci.yml"><img src="https://github.com/gyorgysh/keepresso/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-blue" alt="macOS 14+">
   <img src="https://img.shields.io/badge/Swift-SwiftUI-orange" alt="Swift + SwiftUI">
@@ -258,6 +262,7 @@ brew install --cask gyorgysh/keepresso/keepresso
 ```
 
 **Manual:** download the latest signed, notarized DMG from
+[keepresso.com](https://keepresso.com) or
 [Releases](https://github.com/gyorgysh/keepresso/releases), drag **Keepresso** to
 Applications, and launch it.
 
