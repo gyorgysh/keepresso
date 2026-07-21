@@ -1,0 +1,4 @@
+# Keep GitHub's language stats about the app itself.
+# The Python files under tools/ are localization catalogs and helper
+# scripts, not part of the shipped code.
+tools/** linguist-vendored
