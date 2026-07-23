@@ -157,11 +157,7 @@ struct MenuBarContent: View {
                 optionToggles
             }
 
-            leaseStatusLine
-
-            fanStatusLine
-
-            awdlStatusLine
+            statusStack
 
             if model.menuPanelExpanded {
                 Divider()
@@ -572,6 +568,35 @@ struct MenuBarContent: View {
         }
     }
 
+    /// Whether any live status caption exists, so the status card only
+    /// appears when there is something to say.
+    private var hasStatusLines: Bool {
+        !session.liveLeases.isEmpty
+            || model.fanBoostActivePercent != nil
+            || (model.awdlStatus.isPausing && AWDLStatusStyle(model.awdlStatus) != nil)
+    }
+
+    /// The live system statuses (automation leases, the fan boost, the AWDL
+    /// pause) gathered into one quiet card instead of loose caption lines, so
+    /// the panel's tail reads as a single "what Keepresso is doing right now"
+    /// block rather than scattered footnotes.
+    @ViewBuilder
+    private var statusStack: some View {
+        let _ = liveRefresh
+        if hasStatusLines {
+            VStack(alignment: .leading, spacing: 6) {
+                leaseStatusLine
+                fanStatusLine
+                awdlStatusLine
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassCard()
+            .transition(.opacity)
+        }
+    }
+
     /// Live automation leases, so a lease-held session explains itself in the
     /// place the user looks first: one caption line, then up to four
     /// tool-and-task rows with their expiry countdowns. Refreshes on the 1s
@@ -586,6 +611,7 @@ struct MenuBarContent: View {
                     Image(systemName: "bolt.badge.clock")
                         .foregroundStyle(.secondary)
                         .font(type.caption)
+                        .frame(width: 16)
                         .accessibilityHidden(true)
                     Text(leases.count == 1
                         ? L("Held awake by an automation lease")
@@ -608,13 +634,13 @@ struct MenuBarContent: View {
                             .foregroundStyle(.secondary)
                             .contentTransition(.numericText(countsDown: true))
                     }
-                    .padding(.leading, 20)
+                    .padding(.leading, 22)
                 }
                 if leases.count > 4 {
                     Text(L("and %d more", leases.count - 4))
                         .font(type.caption2)
                         .foregroundStyle(.secondary)
-                        .padding(.leading, 20)
+                        .padding(.leading, 22)
                 }
             }
         }
@@ -629,6 +655,7 @@ struct MenuBarContent: View {
                 Image(systemName: "fanblades")
                     .foregroundStyle(.orange)
                     .font(type.caption)
+                    .frame(width: 16)
                     .accessibilityHidden(true)
                 Text(L("Fans boosted to %d%% to cool the Mac", percent))
                     .font(type.caption)
@@ -653,6 +680,7 @@ struct MenuBarContent: View {
                 Image(systemName: status.icon)
                     .foregroundStyle(status.color)
                     .font(type.caption)
+                    .frame(width: 16)
                     .accessibilityHidden(true)
                 Text(status.text)
                     .font(type.caption)
