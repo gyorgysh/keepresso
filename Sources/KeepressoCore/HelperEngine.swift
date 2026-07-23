@@ -124,7 +124,10 @@ public final class FileRestoreState: HelperRestoreStatePersisting {
     public func set(_ marker: HelperRestoreMarker, value: String?) {
         if let value {
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try? Data(value.utf8).write(to: url(for: marker))
+            // Atomic like every other store: a daemon crash mid-write must
+            // not leave a torn value (a lost sleep-disabled payload would
+            // restore 0 over the user's own setting).
+            try? Data(value.utf8).write(to: url(for: marker), options: .atomic)
         } else {
             try? FileManager.default.removeItem(at: url(for: marker))
         }
