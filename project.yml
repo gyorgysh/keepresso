@@ -59,6 +59,15 @@ targets:
         copy:
           destination: wrapper
           subpath: Contents/MacOS
+      # The MCP stdio server, next to the CLI in Contents/Helpers. Agents
+      # reference it by absolute path in their MCP configuration; nothing
+      # symlinks it onto PATH.
+      - target: keepresso-mcp
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
     info:
       path: Sources/Keepresso/Info.plist
       properties:
@@ -134,6 +143,25 @@ targets:
         ENABLE_HARDENED_RUNTIME: true
         CODE_SIGN_STYLE: Automatic
         # Embedded in the app; not an install product of its own.
+        SKIP_INSTALL: true
+
+  # The MCP stdio server: automation leases and status for AI agents, over
+  # newline-delimited JSON-RPC. Same dual-build arrangement as the CLI.
+  keepresso-mcp:
+    type: tool
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/keepresso-mcp
+    dependencies:
+      - package: KeepressoCore
+        product: KeepressoCore
+    settings:
+      base:
+        PRODUCT_NAME: keepresso-mcp
+        SWIFT_VERSION: "5.9"
+        ENABLE_HARDENED_RUNTIME: true
+        CODE_SIGN_STYLE: Automatic
         SKIP_INSTALL: true
 
   # The privileged helper daemon: registered by the app as an SMAppService

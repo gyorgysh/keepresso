@@ -15,7 +15,10 @@ let package = Package(
         // The privileged helper daemon (an SMAppService LaunchDaemon). Same
         // arrangement: built here for the dev loop, shipped via the
         // identically sourced `keepresso-helper` Xcode target.
-        .executable(name: "keepresso-helper", targets: ["keepresso-helper"])
+        .executable(name: "keepresso-helper", targets: ["keepresso-helper"]),
+        // The MCP stdio server exposing automation leases to AI agents. Same
+        // arrangement again: dev loop here, embedded Xcode target in releases.
+        .executable(name: "keepresso-mcp", targets: ["keepresso-mcp"])
     ],
     targets: [
         .target(
@@ -31,6 +34,11 @@ let package = Package(
             name: "keepresso-helper",
             dependencies: ["KeepressoCore"],
             path: "Sources/keepresso-helper"
+        ),
+        .executableTarget(
+            name: "keepresso-mcp",
+            dependencies: ["KeepressoCore"],
+            path: "Sources/keepresso-mcp"
         ),
         .testTarget(
             name: "KeepressoCoreTests",
