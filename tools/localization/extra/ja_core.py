@@ -225,4 +225,7 @@ CORE.update({
     'Automation lease acquired': '自動化リース取得',
     'Automation lease ended': '自動化リース終了',
 
+    # 1.17.0 second batch: controller trigger, Steam trigger
+    'Game controller connected': 'ゲームコントローラー接続中',
+    'Steam is downloading': 'Steam がダウンロード中',
 })

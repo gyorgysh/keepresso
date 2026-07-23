@@ -582,3 +582,37 @@ APP.update({
     'https://…': 'https://…',
 
 })
+
+# 1.17 fill: teach-your-agent actions, end-action wording, gaming comfort.
+APP.update({
+    "Copy Agent Instructions": "에이전트 지침 복사",
+    "Copy MCP Setup": "MCP 설정 복사",
+    "For Claude Code (JSON)": "Claude Code용 (JSON)",
+    "For Gemini CLI (JSON)": "Gemini CLI용 (JSON)",
+    "For Grok (JSON)": "Grok용 (JSON)",
+    "For Codex (TOML)": "Codex용 (TOML)",
+    "Server path only": "서버 경로만",
+    "Reveal Skill Folder": "Skill 폴더 표시",
+    "Copied. Paste it to your agent in a new chat to teach it to manage Keepresso.": "복사되었습니다. 새 채팅에서 에이전트에게 붙여넣어 Keepresso 관리 방법을 가르치십시오.",
+    "Copied. Paste it into your agent's MCP configuration file.": "복사되었습니다. 에이전트의 MCP 설정 파일에 붙여넣으십시오.",
+    "Copied. Use it as the MCP server command in your agent's settings.": "복사되었습니다. 에이전트 설정에서 MCP 서버 명령으로 사용하십시오.",
+    "After the last session ends": "마지막 세션이 끝난 후",
+    "When the last thing keeping the Mac awake ends on its own (a timer expiring, trigger conditions dropping, or the final automation lease releasing), Keepresso can put the display to sleep, lock the screen, start the screen saver, or sleep the Mac. Leases count: while any lease is live the session continues and nothing fires. Off by default so a timed session never surprises you. Manual stops, and the battery and thermal safety pauses, never run this action. A brief debounce cancels it if the session restarts right away.": "Mac을 깨어 있게 유지하던 마지막 요인이 스스로 끝나면(타이머 만료, 트리거 조건 해제, 또는 마지막 자동화 임대 해제), Keepresso가 디스플레이 잠자기, 화면 잠금, 화면 보호기 시작, 또는 Mac 잠자기를 실행할 수 있습니다. 임대도 계산에 포함됩니다: 임대가 하나라도 살아 있는 동안에는 세션이 계속되고 아무것도 실행되지 않습니다. 기본은 꺼짐이라 시간 지정 세션이 예상치 못하게 동작하지 않습니다. 수동 중지, 그리고 배터리와 열 안전 일시 정지에서는 이 작업이 절대 실행되지 않습니다. 세션이 곧바로 다시 시작되면 짧은 디바운스가 이를 취소합니다.",
+    "While you play": "플레이 중",
+    "Give the game high CPU priority": "게임에 높은 CPU 우선순위 부여",
+    "Raises the active game or streaming app's CPU priority through the administrator helper, so background work (builds, backups, agent sessions) cannot steal frames. Normal priority comes back after you stop playing, and always when the game quits.": "관리자 도우미를 통해 현재 활성화된 게임이나 스트리밍 앱의 CPU 우선순위를 높여, 백그라운드 작업(빌드, 백업, 에이전트 세션)이 프레임을 빼앗지 못하도록 합니다. 플레이를 멈추면 일반 우선순위로 돌아오며, 게임이 종료될 때는 항상 돌아옵니다.",
+    "Needs the administrator helper (Preferences ▸ General): raising a process's priority is a root-only change.": "관리자 도우미가 필요합니다 (환경설정 ▸ 일반). 프로세스의 우선순위를 높이는 것은 root 권한으로만 가능한 변경입니다.",
+    "Boosting the current game.": "지금 게임을 부스트하는 중입니다.",
+    "Keep the display awake with a controller": "컨트롤러로 디스플레이 깨어 있게 유지",
+    "Controller input does not always count as user activity, so a gamepad-only session can dim or sleep the display mid-game. While a game is in front, a controller is connected, and a keep-awake session is active, Keepresso reports activity for you every half minute.": "컨트롤러 입력이 항상 사용자 활동으로 인식되지는 않아, 게임패드만 사용하는 세션에서는 게임 도중 디스플레이가 어두워지거나 잠들 수 있습니다. 게임이 맨 앞에 있고 컨트롤러가 연결되어 있으며 깨어 있게 유지 세션이 활성 상태인 동안, Keepresso가 30초마다 대신 활동을 보고합니다.",
+    "Game controller connected": "게임 컨트롤러 연결됨",
+    "Counts while any game controller is connected, wired or Bluetooth. Rides out a brief reconnect for half a minute.": "유선이든 Bluetooth든 게임 컨트롤러가 연결되어 있는 동안 계산됩니다. 짧은 재연결은 30초 동안 견뎌냅니다.",
+    "One step left: allow Keepresso under Login Items in System Settings. The priority boost unlocks by itself.": "한 단계 남음: 시스템 설정의 로그인 항목에서 Keepresso를 허용하세요. 우선순위 부스트는 자동으로 잠금 해제됩니다.",
+    "The helper is updating itself (no password). The priority boost unlocks when that finishes, usually under a minute.": "도우미가 스스로 업데이트 중입니다(암호 없음). 끝나면 우선순위 부스트가 잠금 해제되며, 보통 1분 이내입니다.",
+    "Raising a game's priority is a root-only change, so it needs the administrator helper, the same one closed-display mode and fan boost use. Install once, and macOS asks for approval in System Settings.": "게임의 우선순위를 높이는 것은 root 권한으로만 가능한 변경이므로, 디스플레이 닫힘 모드 및 팬 부스트와 동일한 관리자 도우미가 필요합니다. 한 번 설치하면 macOS가 시스템 설정에서 승인을 요청합니다.",
+    "Locked until the helper is ready": "도우미가 준비될 때까지 잠김",
+    "macOS scans for AirDrop, Handoff, and Sidecar peers on the same Wi-Fi radio about once a second, and each hop can spike your ping. That reads as stutter in cloud gaming, remote play, and live streams. The watchdog turns those hops off (pausing the AWDL interface) while you play and brings everything back afterward, automatically with the game detection below or manually with the switch.": "macOS는 같은 Wi-Fi 무선에서 AirDrop, Handoff, Sidecar 피어를 약 1초에 한 번씩 스캔하며, 이 홉마다 ping이 튈 수 있습니다. 이는 클라우드 게임, 원격 플레이, 실시간 스트리밍에서 끊김으로 나타납니다. 워치독은 플레이하는 동안 이 홉을 꺼서(AWDL 인터페이스 일시 정지) 이를 막고, 이후에는 아래의 게임 감지로 자동으로, 또는 스위치로 수동으로 모든 것을 되돌립니다.",
+    "The stutter fix for streaming and online gaming.": "스트리밍과 온라인 게임의 끊김 해결책.",
+    "Steam is downloading": "Steam이 다운로드 중",
+    "Counts while Steam is actively downloading or updating a game in any of its libraries, and lets the Mac sleep once the download finishes or is paused. Reads Steam's own bookkeeping, no permission needed.": "Steam이 라이브러리에서 게임을 다운로드하거나 업데이트하는 동안 계산되며, 다운로드가 끝나거나 일시 정지되면 Mac이 잠들 수 있게 합니다. Steam 자체의 기록을 읽으며 권한이 필요하지 않습니다.",
+})

@@ -225,3 +225,9 @@ CORE.update({
     'Automation lease ended': '자동화 임대 종료됨',
 
 })
+
+# 1.17 fill: shared gaming/Steam condition labels (also in APP).
+CORE.update({
+    "Game controller connected": "게임 컨트롤러 연결됨",
+    "Steam is downloading": "Steam이 다운로드 중",
+})

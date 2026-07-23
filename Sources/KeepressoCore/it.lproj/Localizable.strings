@@ -196,3 +196,5 @@
 "Automation lease: %@" = "Concessione di automazione: %@";
 "Automation lease acquired" = "Concessione di automazione acquisita";
 "Automation lease ended" = "Concessione di automazione terminata";
+"Game controller connected" = "Controller di gioco connesso";
+"Steam is downloading" = "Steam sta scaricando";

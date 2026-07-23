@@ -196,3 +196,5 @@
 "Automation lease: %@" = "Automatizálási bérlet: %@";
 "Automation lease acquired" = "Automatizálási bérlet megszerezve";
 "Automation lease ended" = "Automatizálási bérlet véget ért";
+"Game controller connected" = "Játékvezérlő csatlakoztatva";
+"Steam is downloading" = "Steam letölt";

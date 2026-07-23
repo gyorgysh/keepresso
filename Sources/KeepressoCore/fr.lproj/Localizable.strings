@@ -196,3 +196,5 @@
 "Automation lease: %@" = "Bail d’automatisation : %@";
 "Automation lease acquired" = "Bail d’automatisation obtenu";
 "Automation lease ended" = "Bail d’automatisation terminé";
+"Game controller connected" = "Manette de jeu connectée";
+"Steam is downloading" = "Steam télécharge";

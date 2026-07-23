@@ -228,3 +228,10 @@ CORE.update({
     'Automation lease ended': 'Concessione di automazione terminata',
 
 })
+
+
+# Controller trigger, new in the 1.17 cycle (second batch).
+CORE.update({
+    "Game controller connected": "Controller di gioco connesso",
+    "Steam is downloading": "Steam sta scaricando",
+})

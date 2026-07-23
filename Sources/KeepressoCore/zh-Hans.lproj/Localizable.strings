@@ -196,3 +196,5 @@
 "Automation lease: %@" = "自动化租约：%@";
 "Automation lease acquired" = "已获取自动化租约";
 "Automation lease ended" = "自动化租约已结束";
+"Game controller connected" = "已连接游戏手柄";
+"Steam is downloading" = "Steam 正在下载";

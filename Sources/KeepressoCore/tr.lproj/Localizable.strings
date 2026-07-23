@@ -196,3 +196,5 @@
 "Automation lease: %@" = "Otomasyon kirası: %@";
 "Automation lease acquired" = "Otomasyon kirası alındı";
 "Automation lease ended" = "Otomasyon kirası sona erdi";
+"Game controller connected" = "Oyun denetleyicisi bağlı";
+"Steam is downloading" = "Steam indiriyor";

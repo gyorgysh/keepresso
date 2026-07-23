@@ -592,3 +592,49 @@ APP.update({
     'A lease is a bounded keep-awake grant an outside tool asks for through the keepresso command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning leases off ends any live lease. The wake schedule switch is separate and off by default because a scheduled wake is a system-wide change applied by the administrator helper: leave it off unless a tool you trust should plan wake-ups for you.': 'Dzierżawa to ograniczone czasowo uprawnienie do czuwania, o które prosi zewnętrzne narzędzie przez wiersz poleceń keepresso lub dołączony serwer MCP: agent AI pracujący całą noc, skrypt renderujący, zadanie tworzące kopię zapasową. Każda dzierżawa ma limit czasu, który jej właściciel musi stale odnawiać, oraz twardy limit siedmiu dni, więc uszkodzone narzędzie nigdy nie utrzyma Maca w czuwaniu na stałe. Menu pokazuje każdą aktywną dzierżawę, Stop kończy je wszystkie, a Mac może znów zasnąć po zakończeniu ostatniej. Wyłączenie dzierżaw kończy każdą aktywną dzierżawę. Przełącznik harmonogramu wybudzeń jest osobny i domyślnie wyłączony, ponieważ zaplanowane wybudzenie to zmiana systemowa wprowadzana przez pomocnika administratora: zostaw go wyłączonym, chyba że zaufane narzędzie ma planować wybudzenia za ciebie.',
 
 })
+
+
+# Teach-your-agent actions, end-action wording, and gaming comfort,
+# new in the 1.17 cycle (second batch).
+APP.update({
+    'Copy Agent Instructions': 'Kopiuj instrukcje dla agenta',
+    'Copy MCP Setup': 'Kopiuj konfigurację MCP',
+    'For Claude Code (JSON)': 'Dla Claude Code (JSON)',
+    'For Gemini CLI (JSON)': 'Dla Gemini CLI (JSON)',
+    'For Grok (JSON)': 'Dla Grok (JSON)',
+    'For Codex (TOML)': 'Dla Codex (TOML)',
+    'Server path only': 'Tylko ścieżka serwera',
+    'Reveal Skill Folder': 'Pokaż folder Skill',
+    'Copied. Paste it to your agent in a new chat to teach it to manage Keepresso.': 'Skopiowano. Wklej to swojemu agentowi w nowej rozmowie, aby nauczyć go zarządzać Keepresso.',
+    "Copied. Paste it into your agent's MCP configuration file.": "Skopiowano. Wklej to do pliku konfiguracji MCP swojego agenta.",
+    "Copied. Use it as the MCP server command in your agent's settings.": "Skopiowano. Użyj tego jako polecenia serwera MCP w ustawieniach swojego agenta.",
+    'After the last session ends': 'Po zakończeniu ostatniej sesji',
+    'When the last thing keeping the Mac awake ends on its own (a timer expiring, trigger conditions dropping, or the final automation lease releasing), Keepresso can put the display to sleep, lock the screen, start the screen saver, or sleep the Mac. Leases count: while any lease is live the session continues and nothing fires. Off by default so a timed session never surprises you. Manual stops, and the battery and thermal safety pauses, never run this action. A brief debounce cancels it if the session restarts right away.':
+        'Gdy ostatnia rzecz utrzymująca Maca w stanie czuwania kończy się sama (wygaśnięcie licznika czasu, ustanie warunków wyzwalaczy albo zwolnienie ostatniej dzierżawy automatyzacji), Keepresso może uśpić wyświetlacz, zablokować ekran, uruchomić wygaszacz ekranu lub uśpić Maca. Dzierżawy się liczą: dopóki jakakolwiek dzierżawa jest aktywna, sesja trwa i nic się nie uruchamia. Domyślnie wyłączone, aby sesja z limitem czasu nigdy cię nie zaskoczyła. Ręczne zatrzymanie oraz pauzy bezpieczeństwa baterii i termiczna nigdy nie uruchamiają tej czynności. Krótkie opóźnienie anuluje ją, jeśli sesja od razu się wznowi.',
+    'While you play': 'Podczas gry',
+    'Give the game high CPU priority': 'Nadaj grze wysoki priorytet procesora',
+    "Raises the active game or streaming app's CPU priority through the administrator helper, so background work (builds, backups, agent sessions) cannot steal frames. Normal priority comes back after you stop playing, and always when the game quits.":
+        "Podnosi priorytet procesora aktywnej gry lub aplikacji do streamingu za pomocą pomocnika administratora, dzięki czemu praca w tle (kompilacje, kopie zapasowe, sesje agentów) nie może kraść klatek. Normalny priorytet wraca, gdy przestajesz grać, oraz zawsze, gdy gra zostaje zamknięta.",
+    "Needs the administrator helper (Preferences ▸ General): raising a process's priority is a root-only change.":
+        "Wymaga pomocnika administratora (Ustawienia ▸ Ogólne): podniesienie priorytetu procesu jest zmianą zastrzeżoną dla roota.",
+    'Boosting the current game.': 'Zwiększanie priorytetu bieżącej gry.',
+    'Keep the display awake with a controller': 'Nie pozwalaj wyświetlaczowi zasnąć przy kontrolerze',
+    'Controller input does not always count as user activity, so a gamepad-only session can dim or sleep the display mid-game. While a game is in front, a controller is connected, and a keep-awake session is active, Keepresso reports activity for you every half minute.':
+        'Sygnały z kontrolera nie zawsze liczą się jako aktywność użytkownika, więc sesja obsługiwana wyłącznie padem może przygasić lub uśpić wyświetlacz w trakcie gry. Gdy gra jest na pierwszym planie, kontroler jest podłączony i trwa sesja czuwania, Keepresso zgłasza za ciebie aktywność co pół minuty.',
+    'Game controller connected': 'Podłączono kontroler do gier',
+    'Counts while any game controller is connected, wired or Bluetooth. Rides out a brief reconnect for half a minute.':
+        'Liczy się, dopóki podłączony jest jakikolwiek kontroler do gier, przewodowy lub Bluetooth. Utrzymuje aktywność przez pół minuty w razie krótkiego rozłączenia.',
+    'One step left: allow Keepresso under Login Items in System Settings. The priority boost unlocks by itself.':
+        'Pozostał jeden krok: zezwól Keepresso w Elementach logowania w Ustawieniach systemowych. Zwiększenie priorytetu odblokuje się samo.',
+    'The helper is updating itself (no password). The priority boost unlocks when that finishes, usually under a minute.':
+        'Pomocnik się aktualizuje (bez hasła). Zwiększenie priorytetu odblokuje się po zakończeniu, zwykle poniżej minuty.',
+    "Raising a game's priority is a root-only change, so it needs the administrator helper, the same one closed-display mode and fan boost use. Install once, and macOS asks for approval in System Settings.":
+        "Podniesienie priorytetu gry jest zmianą zastrzeżoną dla roota, dlatego wymaga pomocnika administratora, tego samego co tryb zamkniętej pokrywy i zwiększanie obrotów wentylatorów. Zainstaluj raz, a macOS poprosi o zgodę w Ustawieniach systemowych.",
+    'Locked until the helper is ready': 'Zablokowane, dopóki pomocnik nie będzie gotowy',
+    'macOS scans for AirDrop, Handoff, and Sidecar peers on the same Wi-Fi radio about once a second, and each hop can spike your ping. That reads as stutter in cloud gaming, remote play, and live streams. The watchdog turns those hops off (pausing the AWDL interface) while you play and brings everything back afterward, automatically with the game detection below or manually with the switch.':
+        'macOS skanuje w poszukiwaniu urządzeń AirDrop, Handoff i Sidecar na tym samym radiu Wi-Fi mniej więcej raz na sekundę, a każdy taki skok może podbić twój ping. Objawia się to jako zacinanie w grach w chmurze, grze zdalnej i transmisjach na żywo. Strażnik wyłącza te skoki (wstrzymując interfejs AWDL) na czas gry i przywraca wszystko później, automatycznie dzięki wykrywaniu gry poniżej albo ręcznie za pomocą przełącznika.',
+    'The stutter fix for streaming and online gaming.': 'Rozwiązanie problemu zacinania dla streamingu i gier online.',
+    'Steam is downloading': 'Steam pobiera',
+    "Counts while Steam is actively downloading or updating a game in any of its libraries, and lets the Mac sleep once the download finishes or is paused. Reads Steam's own bookkeeping, no permission needed.":
+        "Liczy się, dopóki Steam aktywnie pobiera lub aktualizuje grę w którejkolwiek ze swoich bibliotek, i pozwala Makowi zasnąć, gdy pobieranie się zakończy lub zostanie wstrzymane. Odczytuje własne dane Steam, bez potrzeby żadnych uprawnień.",
+})

@@ -196,3 +196,5 @@
 "Automation lease: %@" = "Automation lease: %@";
 "Automation lease acquired" = "Automation lease acquired";
 "Automation lease ended" = "Automation lease ended";
+"Game controller connected" = "Game controller connected";
+"Steam is downloading" = "Steam is downloading";

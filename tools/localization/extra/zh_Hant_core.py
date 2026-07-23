@@ -230,3 +230,10 @@ CORE.update({
     'Automation lease acquired': '已取得自動化租約',
     'Automation lease ended': '自動化租約已結束',
 })
+
+
+# v1.18: controller-poke and Steam download triggers
+CORE.update({
+    'Game controller connected': '已連接遊戲控制器',
+    'Steam is downloading': 'Steam 正在下載',
+})

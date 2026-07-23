@@ -196,3 +196,5 @@
 "Automation lease: %@" = "Оренда автоматизації: %@";
 "Automation lease acquired" = "Оренду автоматизації отримано";
 "Automation lease ended" = "Оренду автоматизації завершено";
+"Game controller connected" = "Підключено ігровий контролер";
+"Steam is downloading" = "Steam завантажує";

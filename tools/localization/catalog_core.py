@@ -257,7 +257,7 @@ CORE.update(_LEASES_V117)
 
 # Controller trigger, new in the 1.17 cycle (second batch).
 _V117B = {
-    "Game controller connected": {},
-    "Steam is downloading": {},
+    "Game controller connected": {"hu": "Játékvezérlő csatlakoztatva", "es": "Mando de juego conectado", "fr": "Manette de jeu connectée", "de": "Controller verbunden", "zh-Hans": "已连接游戏手柄"},
+    "Steam is downloading": {"hu": "Steam letölt", "es": "Steam está descargando", "fr": "Steam télécharge", "de": "Steam lädt herunter", "zh-Hans": "Steam 正在下载"},
 }
 CORE.update(_V117B)

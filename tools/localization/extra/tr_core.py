@@ -228,3 +228,9 @@ CORE.update({
     "Automation lease acquired": "Otomasyon kirası alındı",
     "Automation lease ended": "Otomasyon kirası sona erdi",
 })
+
+# Controller trigger, new in the 1.17 cycle (second batch).
+CORE.update({
+    "Game controller connected": "Oyun denetleyicisi bağlı",
+    "Steam is downloading": "Steam indiriyor",
+})

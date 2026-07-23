@@ -226,4 +226,8 @@ CORE.update({
     "Automation lease acquired": "Аренда автоматизации получена",
     "Automation lease ended": "Аренда автоматизации завершена",
 
+    # 1.17.0 controller trigger, second batch
+    "Game controller connected": "Подключён игровой контроллер",
+    "Steam is downloading": "Steam выполняет загрузку",
+
 })
