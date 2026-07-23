@@ -184,26 +184,32 @@ struct StreamingSetupView: View {
             Label("While you play", systemImage: "gamecontroller")
                 .font(.headline)
 
-            switchRow("Give the game high CPU priority", isOn: Binding(
-                get: { model.gamePriorityBoost },
-                set: { model.gamePriorityBoost = $0 }
-            ))
-            .disabled(!model.helperInstalled)
-            if model.helperInstalled {
+            if model.wakeHelperGate == .ready {
+                switchRow("Give the game high CPU priority", isOn: Binding(
+                    get: { model.gamePriorityBoost },
+                    set: { model.gamePriorityBoost = $0 }
+                ))
                 Text("Raises the active game or streaming app's CPU priority through the administrator helper, so background work (builds, backups, agent sessions) cannot steal frames. Normal priority comes back after you stop playing, and always when the game quits.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if model.gamePriority.boostedPID != nil {
+                    Label(L("Boosting the current game."), systemImage: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                }
             } else {
-                Text("Needs the administrator helper (Preferences ▸ General): raising a process's priority is a root-only change.")
+                // No dead toggle: the control is replaced by a lock row that
+                // says why and offers the unlocking action.
+                HStack {
+                    Text("Give the game high CPU priority")
+                    Spacer()
+                    Image(systemName: "lock.fill")
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel(L("Locked until the helper is ready"))
+                }
+                HelperLockedRow(model: model, context: .gamePriority)
                     .font(.caption)
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if model.gamePriority.boostedPID != nil {
-                Label(L("Boosting the current game."), systemImage: "checkmark.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.green)
             }
 
             switchRow("Keep the display awake with a controller", isOn: Binding(

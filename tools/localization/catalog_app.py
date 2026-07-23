@@ -758,5 +758,9 @@ _V117B = {
     'Controller input does not always count as user activity, so a gamepad-only session can dim or sleep the display mid-game. While a game is in front, a controller is connected, and a keep-awake session is active, Keepresso reports activity for you every half minute.': {},
     'Game controller connected': {},
     'Counts while any game controller is connected, wired or Bluetooth. Rides out a brief reconnect for half a minute.': {},
+    'One step left: allow Keepresso under Login Items in System Settings. The priority boost unlocks by itself.': {},
+    'The helper is updating itself (no password). The priority boost unlocks when that finishes, usually under a minute.': {},
+    "Raising a game's priority is a root-only change, so it needs the administrator helper, the same one closed-display mode and fan boost use. Install once, and macOS asks for approval in System Settings.": {},
+    'Locked until the helper is ready': {},
 }
 APP.update(_V117B)

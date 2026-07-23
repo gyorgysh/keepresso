@@ -1059,7 +1059,7 @@ private struct AutomationTab: View {
                         model.wakeSchedule = nil
                     }
                 }
-                AutomationHelperLockedRow(model: model, context: .wakeSchedule)
+                HelperLockedRow(model: model, context: .wakeSchedule)
             }
         } header: {
             sectionHeader("Scheduled wake", info: L("Wake the Mac at a set time through the administrator helper (pmset schedule / repeat), then optionally start a keep-awake session so it does not fall back asleep before the job runs. Pair with an end-of-session action above for wake, work, sleep. Scheduled wake is reliable on AC power. On battery the firmware may skip it. macOS only allows one system-wide repeating power schedule, so enabling ours replaces whatever was there. The controls stay locked until the helper is installed and ready, the same rule as the thermal fan boost."))
@@ -1351,63 +1351,6 @@ private struct AutomationTab: View {
 /// helper (scheduled wake). Same idea as ``ThermalHelperLockedRow``, but
 /// stacked: a side-by-side lock + long sentence + button squeezes the text
 /// into narrow columns and ugly mid-phrase wraps.
-private struct AutomationHelperLockedRow: View {
-    @Bindable var model: AppModel
-    enum Context { case wakeSchedule }
-    let context: Context
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label {
-                Text(statusText)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } icon: {
-                Image(systemName: statusSymbol)
-                    .foregroundStyle(statusSymbolColor)
-            }
-            if showsInstallButton {
-                Button("Install Helper…") { model.installHelper() }
-            } else if model.helper.awaitingApproval {
-                Button("Open Login Items") { model.helper.openApprovalSettings() }
-            }
-            if let error = model.helper.lastError {
-                Label(error, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var showsInstallButton: Bool {
-        !model.helper.awaitingApproval && !model.helper.daemonOutdated
-    }
-
-    private var statusSymbol: String {
-        if model.helper.awaitingApproval { return "hourglass" }
-        if model.helper.daemonOutdated { return "arrow.triangle.2.circlepath" }
-        return "lock"
-    }
-
-    private var statusSymbolColor: Color {
-        model.helper.awaitingApproval ? .orange : .secondary
-    }
-
-    private var statusText: String {
-        if model.helper.awaitingApproval {
-            return L("One step left: allow Keepresso under Login Items in System Settings. Scheduled wake unlocks by itself.")
-        }
-        if model.helper.daemonOutdated {
-            return L("The helper is updating itself (no password). Scheduled wake unlocks when that finishes, usually under a minute.")
-        }
-        switch context {
-        case .wakeSchedule:
-            return L("Scheduled wake needs the administrator helper, the same one closed-display mode and fan boost use. Install once, and macOS asks for approval in System Settings.")
-        }
-    }
-}
-
 /// Editable fields for one hook, independent of the live settings list.
 private struct HookDraft: Identifiable, Equatable {
     enum Kind: String, CaseIterable, Identifiable {
