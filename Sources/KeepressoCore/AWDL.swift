@@ -157,12 +157,24 @@ public final class OsascriptAWDLWatchdog: AWDLWatchdogLaunching {
     /// (only if it was the one holding it down) and removes any leftover flag,
     /// so a crash fails safe.
     static func watchdogCommand(flagPath: String, appPID: Int32) -> String {
-        "( DOWNED=; while kill -0 \(appPID) 2>/dev/null; do "
-            + "if [ -f \"\(flagPath)\" ]; then /sbin/ifconfig awdl0 down; DOWNED=1; "
+        let flag = shellSingleQuoted(flagPath)
+        return "( DOWNED=; while kill -0 \(appPID) 2>/dev/null; do "
+            + "if [ -f \(flag) ]; then /sbin/ifconfig awdl0 down; DOWNED=1; "
             + "elif [ -n \"$DOWNED\" ]; then /sbin/ifconfig awdl0 up; DOWNED=; fi; "
             + "sleep 3; done; "
-            + "rm -f \"\(flagPath)\"; "
+            + "rm -f \(flag); "
             + "if [ -n \"$DOWNED\" ]; then /sbin/ifconfig awdl0 up; fi ) </dev/null >/dev/null 2>&1 &"
+    }
+
+    /// POSIX single-quote a value so `/bin/sh` treats it as one literal word.
+    /// Everything inside single quotes is literal; an embedded single quote is
+    /// closed, escaped, and reopened (`'\''`). The flag path is a fixed app
+    /// path today, but quoting it (rather than wrapping it in double quotes,
+    /// where `$(…)`, backticks, and `"` stay live) keeps this admin-run command
+    /// safe if that path ever changes. For a path with no metacharacters the
+    /// result is byte-equivalent to the old double-quoted form to the shell.
+    static func shellSingleQuoted(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     /// Escape a shell command for embedding in an AppleScript string literal.

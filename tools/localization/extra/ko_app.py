@@ -319,6 +319,7 @@ APP = {
     "Import Keepresso Settings": "Keepresso 설정 가져오기",
     "Exported to %@.": "%@(으)로 내보냈습니다.",
     "Settings imported.": "설정을 가져왔습니다.",
+    "Settings imported. %d command hook(s) were disabled for safety. Review them in Automation before turning them on.": "설정을 가져왔습니다. 안전을 위해 %d개의 명령 훅이 비활성화되었습니다. 켜기 전에 자동화에서 검토하십시오.",
     "Couldn't export settings: %@": "설정을 내보낼 수 없습니다: %@",
     "Couldn't read the file: %@": "파일을 읽을 수 없습니다: %@",
     "That file isn't a Keepresso settings export.": "이 파일은 Keepresso 설정 내보내기 파일이 아닙니다.",

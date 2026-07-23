@@ -319,6 +319,7 @@ APP = {
     "Import Keepresso Settings": "Импорт настроек Keepresso",
     "Exported to %@.": "Экспортировано в %@.",
     "Settings imported.": "Настройки импортированы.",
+    "Settings imported. %d command hook(s) were disabled for safety. Review them in Automation before turning them on.": "Настройки импортированы. Отключено %d хук(ов) команд для безопасности. Проверьте их в Автоматизации, прежде чем включать.",
     "Couldn't export settings: %@": "Не удалось экспортировать настройки: %@",
     "Couldn't read the file: %@": "Не удалось прочитать файл: %@",
     "That file isn't a Keepresso settings export.": "Этот файл не является экспортом настроек Keepresso.",

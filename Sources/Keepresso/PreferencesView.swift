@@ -690,8 +690,17 @@ private struct GeneralTab: View {
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            try model.importSettings(from: Data(contentsOf: url))
-            transferNote = TransferNote(message: L("Settings imported."), isError: false)
+            let disabledShellHooks = try model.importSettings(from: Data(contentsOf: url))
+            let message: String
+            if disabledShellHooks > 0 {
+                message = L(
+                    "Settings imported. %d command hook(s) were disabled for safety. Review them in Automation before turning them on.",
+                    disabledShellHooks
+                )
+            } else {
+                message = L("Settings imported.")
+            }
+            transferNote = TransferNote(message: message, isError: false)
         } catch let error as SettingsTransferError {
             transferNote = TransferNote(message: Self.message(for: error), isError: true)
         } catch {

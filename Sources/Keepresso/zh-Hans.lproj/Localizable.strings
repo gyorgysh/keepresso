@@ -351,6 +351,7 @@
 "Import Keepresso Settings" = "导入 Keepresso 设置";
 "Exported to %@." = "已导出到 %@。";
 "Settings imported." = "设置已导入。";
+"Settings imported. %d command hook(s) were disabled for safety. Review them in Automation before turning them on." = "设置已导入。为安全起见，已禁用 %d 个命令钩子。在启用前，请在“自动化”中查看它们。";
 "Couldn't export settings: %@" = "无法导出设置：%@";
 "Couldn't read the file: %@" = "无法读取文件：%@";
 "That file isn't a Keepresso settings export." = "该文件不是 Keepresso 设置导出文件。";

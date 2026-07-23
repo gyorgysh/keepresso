@@ -351,6 +351,7 @@
 "Import Keepresso Settings" = "匯入 Keepresso 設定";
 "Exported to %@." = "已匯出至 %@。";
 "Settings imported." = "設定已匯入。";
+"Settings imported. %d command hook(s) were disabled for safety. Review them in Automation before turning them on." = "設定已匯入。為安全起見，已停用 %d 個指令鉤子。啟用前，請在「自動化」中查看。";
 "Couldn't export settings: %@" = "無法匯出設定：%@";
 "Couldn't read the file: %@" = "無法讀取檔案：%@";
 "That file isn't a Keepresso settings export." = "該檔案不是 Keepresso 設定匯出檔。";

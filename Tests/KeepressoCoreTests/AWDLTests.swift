@@ -33,17 +33,32 @@ import Foundation
     // idle so re-enabling needs no new prompt), keep re-downing the interface
     // (macOS re-raises it), and background itself so the admin prompt returns.
     #expect(command.contains("kill -0 4242"))
-    #expect(command.contains("if [ -f \"/Users/g/Library/Application Support/Keepresso/awdl-watchdog.flag\" ]"))
+    // The flag path is single-quoted so it stays one literal word to /bin/sh.
+    #expect(command.contains("if [ -f '/Users/g/Library/Application Support/Keepresso/awdl-watchdog.flag' ]"))
     #expect(command.contains("/sbin/ifconfig awdl0 down"))
     #expect(command.contains("elif [ -n \"$DOWNED\" ]; then /sbin/ifconfig awdl0 up"))
     #expect(command.contains("sleep 3"))
     #expect(command.hasSuffix("&"))
-    #expect(command.contains("rm -f"))
+    #expect(command.contains("rm -f '/Users/g/Library/Application Support/Keepresso/awdl-watchdog.flag'"))
 }
 
 @Test func appleScriptEscapingSurvivesQuotedPaths() {
     let escaped = OsascriptAWDLWatchdog.appleScriptEscaped(#"[ -f "/tmp/a flag" ]"#)
     #expect(escaped == #"[ -f \"/tmp/a flag\" ]"#)
+}
+
+@Test func shellSingleQuotingKeepsAHostilePathLiteral() {
+    // Single quotes stop shell substitution: a path can't break out to run
+    // code even though the whole command is executed as root via osascript.
+    #expect(OsascriptAWDLWatchdog.shellSingleQuoted("/plain/flag") == "'/plain/flag'")
+    #expect(OsascriptAWDLWatchdog.shellSingleQuoted("it's") == #"'it'\''s'"#)
+
+    let hostile = #"/tmp/$(touch /tmp/pwned)/`id`/".flag"#
+    let command = OsascriptAWDLWatchdog.watchdogCommand(flagPath: hostile, appPID: 1)
+    // The path appears only inside its single-quoted form, so `$( )`, backticks
+    // and the stray double quote are all inert.
+    #expect(command.contains(OsascriptAWDLWatchdog.shellSingleQuoted(hostile)))
+    #expect(!command.contains("[ -f \"")) // never double-quoted around the path
 }
 
 // MARK: - Controller

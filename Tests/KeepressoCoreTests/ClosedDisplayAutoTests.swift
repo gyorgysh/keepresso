@@ -15,12 +15,20 @@ import Foundation
     // `disablesleep` only on a flag transition, so it never fights the user's
     // own manual toggle, and on exit restores sleep only if it disabled it.
     #expect(command.contains("kill -0 4242"))
-    #expect(command.contains("if [ -f \"/Users/g/Library/Application Support/Keepresso/sleep-watchdog.flag\" ]"))
+    // The flag path is single-quoted so it stays one literal word to /bin/sh.
+    #expect(command.contains("if [ -f '/Users/g/Library/Application Support/Keepresso/sleep-watchdog.flag' ]"))
     #expect(command.contains("if [ -z \"$SET\" ]; then /usr/bin/pmset -a disablesleep 1"))
     #expect(command.contains("elif [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0"))
     #expect(command.hasSuffix("&"))
-    #expect(command.contains("rm -f"))
+    #expect(command.contains("rm -f '/Users/g/Library/Application Support/Keepresso/sleep-watchdog.flag'"))
     #expect(command.contains("if [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0; fi )"))
+}
+
+@Test func sleepWatchdogSingleQuotesAHostileFlagPath() {
+    let hostile = #"/tmp/$(touch /tmp/pwned)/".flag"#
+    let command = OsascriptSleepWatchdog.watchdogCommand(flagPath: hostile, appPID: 1)
+    #expect(command.contains(OsascriptAWDLWatchdog.shellSingleQuoted(hostile)))
+    #expect(!command.contains("[ -f \"")) // never double-quoted around the path
 }
 
 // MARK: - Controller

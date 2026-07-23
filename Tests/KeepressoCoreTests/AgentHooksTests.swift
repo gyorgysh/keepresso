@@ -511,7 +511,8 @@ private func json(_ data: Data) throws -> [String: Any] {
     #expect(command.contains(cliPath))
     #expect(command.contains("agent-hook PreToolUse"))
     #expect(command.contains(AgentHooks.hookMarker))
-    #expect(command.contains("command -v keepresso"))
+    // No bare PATH lookup: a stale hook must not run an unrelated `keepresso`.
+    #expect(!command.contains("command -v"))
 
     // Non-tool events carry no matcher.
     let stop = try #require(hooks["Stop"] as? [[String: Any]])

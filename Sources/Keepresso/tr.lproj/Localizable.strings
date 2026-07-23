@@ -351,6 +351,7 @@
 "Import Keepresso Settings" = "Keepresso Ayarlarını İçe Aktar";
 "Exported to %@." = "%@ konumuna aktarıldı.";
 "Settings imported." = "Ayarlar içe aktarıldı.";
+"Settings imported. %d command hook(s) were disabled for safety. Review them in Automation before turning them on." = "Ayarlar içe aktarıldı. Güvenlik için %d komut kancası devre dışı bırakıldı. Açmadan önce Otomasyon'da gözden geçirin.";
 "Couldn't export settings: %@" = "Ayarlar dışa aktarılamadı: %@";
 "Couldn't read the file: %@" = "Dosya okunamadı: %@";
 "That file isn't a Keepresso settings export." = "Bu dosya bir Keepresso ayarları dışa aktarımı değil.";

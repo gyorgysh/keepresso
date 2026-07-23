@@ -99,12 +99,16 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
     /// a crash or quit mid-session fails safe while a manually enabled global
     /// setting survives untouched.
     static func watchdogCommand(flagPath: String, appPID: Int32) -> String {
-        "( SET=; while kill -0 \(appPID) 2>/dev/null; do "
-            + "if [ -f \"\(flagPath)\" ]; then "
+        // Single-quote the path so it stays one literal word to /bin/sh (the
+        // command runs as root via `do shell script`). See
+        // ``OsascriptAWDLWatchdog/shellSingleQuoted(_:)``.
+        let flag = OsascriptAWDLWatchdog.shellSingleQuoted(flagPath)
+        return "( SET=; while kill -0 \(appPID) 2>/dev/null; do "
+            + "if [ -f \(flag) ]; then "
             + "if [ -z \"$SET\" ]; then /usr/bin/pmset -a disablesleep 1; SET=1; fi; "
             + "elif [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0; SET=; fi; "
             + "sleep 2; done; "
-            + "rm -f \"\(flagPath)\"; "
+            + "rm -f \(flag); "
             + "if [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0; fi ) </dev/null >/dev/null 2>&1 &"
     }
 

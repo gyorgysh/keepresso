@@ -1187,14 +1187,22 @@ final class AppModel {
     /// then re-derive everything that hangs off settings. Throws a
     /// ``SettingsTransferError`` if `data` isn't a valid Keepresso export,
     /// leaving the current configuration untouched.
-    func importSettings(from data: Data) throws {
-        var imported = try SettingsTransfer.importSettings(from: data)
+    ///
+    /// - Returns: how many `.shell` event hooks were disabled for safety on the
+    ///   way in (see ``KeepressoSettings/disarmingImportedShellHooks()``), so
+    ///   the caller can flag them for review.
+    @discardableResult
+    func importSettings(from data: Data) throws -> Int {
+        let (disarmed, disabledShellHooks) =
+            try SettingsTransfer.importSettings(from: data).disarmingImportedShellHooks()
+        var imported = disarmed
         // An export from an older build can predate built-ins added since; seed
         // and refresh them the same way launch does so the import isn't
         // missing new defaults or carrying outdated ones.
         imported.seedNewBuiltInPresets()
         imported.refreshBuiltInPresets()
         apply(imported)
+        return disabledShellHooks
     }
 
     /// Adopt a wholesale-new settings value and push every derived piece of

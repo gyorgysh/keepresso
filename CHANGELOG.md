@@ -3,6 +3,19 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [1.17.0] - Unreleased
+
+### Security
+
+- **Imported settings can't run commands unseen.** Importing a settings file
+  now brings in any shell-command event hooks switched off. Review and
+  re-enable the ones you trust under Preferences ▸ Automation, so a shared or
+  downloaded settings file can't run a command behind your back.
+- **Safer updates and tighter internals.** The auto-updater is pinned to an
+  exact Sparkle version with its signing tools verified by checksum, and the
+  agent-hook and administrator-helper commands are hardened against untrusted
+  input. No change to how the app behaves day to day.
+
 ## [1.16.1] - 2026-07-18
 
 ### Fixed

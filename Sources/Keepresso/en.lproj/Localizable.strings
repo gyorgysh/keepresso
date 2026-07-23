@@ -351,6 +351,7 @@
 "Import Keepresso Settings" = "Import Keepresso Settings";
 "Exported to %@." = "Exported to %@.";
 "Settings imported." = "Settings imported.";
+"Settings imported. %d command hook(s) were disabled for safety. Review them in Automation before turning them on." = "Settings imported. %d command hook(s) were disabled for safety. Review them in Automation before turning them on.";
 "Couldn't export settings: %@" = "Couldn't export settings: %@";
 "Couldn't read the file: %@" = "Couldn't read the file: %@";
 "That file isn't a Keepresso settings export." = "That file isn't a Keepresso settings export.";

@@ -351,6 +351,7 @@
 "Import Keepresso Settings" = "Keepresso-Einstellungen importieren";
 "Exported to %@." = "Nach %@ exportiert.";
 "Settings imported." = "Einstellungen importiert.";
+"Settings imported. %d command hook(s) were disabled for safety. Review them in Automation before turning them on." = "Einstellungen importiert. %d Befehlshook(s) wurden aus Sicherheitsgründen deaktiviert. Sieh sie dir vor dem Aktivieren in der Automatisierung an.";
 "Couldn't export settings: %@" = "Einstellungen konnten nicht exportiert werden: %@";
 "Couldn't read the file: %@" = "Die Datei konnte nicht gelesen werden: %@";
 "That file isn't a Keepresso settings export." = "Diese Datei ist kein Keepresso-Einstellungsexport.";

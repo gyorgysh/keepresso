@@ -22,7 +22,10 @@ jobs:
     environment: release # add a required reviewer to this environment in repo settings
     steps:
       - uses: actions/checkout@v5
-      - uses: maxim-lobanov/setup-xcode@v1
+      # Pinned to a commit SHA (v1.7.0): this third-party action runs in the
+      # same job that later handles the signing cert and Sparkle key, so a
+      # moved tag must not be able to swap in new code.
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90
         with:
           xcode-version: latest-stable
       - name: Install tools
@@ -35,8 +38,12 @@ jobs:
       - name: Install Sparkle tools
         run: |
           SPARKLE_VERSION=2.6.4
+          SPARKLE_SHA256=50612a06038abc931f16011d7903b8326a362c1074dabccb718404ce8e585f0b
           curl -fsSL -o "$RUNNER_TEMP/sparkle.tar.xz" \
             "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+          # This binary is later run with the EdDSA signing key on disk, so
+          # verify it against a known hash before trusting it.
+          echo "$SPARKLE_SHA256  $RUNNER_TEMP/sparkle.tar.xz" | shasum -a 256 -c -
           mkdir -p "$RUNNER_TEMP/sparkle"
           tar -xJf "$RUNNER_TEMP/sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle"
           GA="$(find "$RUNNER_TEMP/sparkle" -path '*/bin/generate_appcast' -type f | head -1)"

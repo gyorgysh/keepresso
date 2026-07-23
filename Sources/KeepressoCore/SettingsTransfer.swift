@@ -78,3 +78,30 @@ extension SettingsTransfer {
         return transfer.settings
     }
 }
+
+extension KeepressoSettings {
+    /// Neutralize the one code-execution vector an imported settings file can
+    /// carry: `.shell` event hooks run arbitrary commands through `/bin/sh -c`
+    /// (see ``SystemHookRunner``), so a crafted export could otherwise run a
+    /// command the moment its event fires. Disable every `.shell` hook on
+    /// import rather than delete it: the user keeps their commands, sees them
+    /// in Preferences ▸ Automation, and re-enables the ones they trust with one
+    /// click. `.webhook` (scheme-restricted to http/https) and `.runShortcut`
+    /// (a user's own named Shortcut) aren't silent code execution, so they pass
+    /// through untouched, as do hooks already disabled.
+    ///
+    /// - Returns: a copy with imported shell hooks switched off, and how many
+    ///   were switched off, so the caller can tell the user.
+    public func disarmingImportedShellHooks() -> (settings: KeepressoSettings, disabledCount: Int) {
+        var copy = self
+        var disabled = 0
+        copy.eventHooks = eventHooks.map { hook in
+            guard case .shell = hook.action, hook.enabled else { return hook }
+            disabled += 1
+            var off = hook
+            off.enabled = false
+            return off
+        }
+        return (copy, disabled)
+    }
+}

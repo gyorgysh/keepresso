@@ -351,6 +351,7 @@
 "Import Keepresso Settings" = "Keepresso 設定を読み込む";
 "Exported to %@." = "%@ に書き出しました。";
 "Settings imported." = "設定を読み込みました。";
+"Settings imported. %d command hook(s) were disabled for safety. Review them in Automation before turning them on." = "設定を読み込みました。安全のため、%d個のコマンドフックを無効にしました。オンにする前に、自動化で確認してください。";
 "Couldn't export settings: %@" = "設定を書き出せませんでした：%@";
 "Couldn't read the file: %@" = "ファイルを読み取れませんでした：%@";
 "That file isn't a Keepresso settings export." = "そのファイルは Keepresso の設定書き出しファイルではありません。";

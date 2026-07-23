@@ -351,6 +351,7 @@
 "Import Keepresso Settings" = "Keepresso beállítások importálása";
 "Exported to %@." = "Exportálva ide: %@.";
 "Settings imported." = "Beállítások importálva.";
+"Settings imported. %d command hook(s) were disabled for safety. Review them in Automation before turning them on." = "Beállítások importálva. %d parancshook biztonságból letiltva. Tekintse át őket az Automatizálás alatt, mielőtt bekapcsolja őket.";
 "Couldn't export settings: %@" = "Nem sikerült exportálni a beállításokat: %@";
 "Couldn't read the file: %@" = "Nem sikerült beolvasni a fájlt: %@";
 "That file isn't a Keepresso settings export." = "Ez a fájl nem Keepresso-beállításexport.";

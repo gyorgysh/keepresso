@@ -495,12 +495,14 @@ public enum AgentHooks {
 
     /// The shell command an installed hook runs. Hooks execute under a
     /// non-interactive `sh -c` whose PATH can be launchd-minimal, so the
-    /// app's real CLI path is baked in first, PATH lookup is the fallback
-    /// (survives the app moving, brew relinks it), and the canonical
-    /// /Applications path is the last resort. The trailing `:` pins exit 0:
-    /// a missing CLI must never disturb the session.
+    /// app's real CLI path is baked in first and the canonical /Applications
+    /// path is the fallback. Both are absolute: a bare `command -v keepresso`
+    /// PATH lookup is deliberately avoided so a stale hook left behind after
+    /// the app is deleted can't be hijacked by an unrelated `keepresso` on
+    /// PATH. The trailing `:` pins exit 0: a missing CLI must never disturb
+    /// the session.
     static func hookCommand(event: String, cliPath: String) -> String {
-        "c=\(shellSingleQuoted(cliPath)); [ -x \"$c\" ] || c=\"$(command -v keepresso)\" || "
+        "c=\(shellSingleQuoted(cliPath)); [ -x \"$c\" ] || "
             + "c=/Applications/Keepresso.app/Contents/Helpers/keepresso; "
             + "\"$c\" agent-hook \(event); : # \(hookMarker)"
     }
