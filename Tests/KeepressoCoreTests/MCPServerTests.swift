@@ -82,6 +82,20 @@ private func json(_ line: String?) throws -> [String: Any] {
     #expect(server.handle(line: "   ") == nil)
 }
 
+@Test func explicitNullIdsAreAccepted() throws {
+    let (server, _) = makeServer()
+
+    // A null-id request is answered, echoing the null id back.
+    let pong = try json(server.handle(line: #"{"jsonrpc":"2.0","id":null,"method":"ping"}"#))
+    #expect(pong["id"] is NSNull)
+    #expect((pong["result"] as? [String: Any]) != nil)
+    #expect(pong["error"] == nil)
+
+    // Notification methods stay silent whatever their id field carries.
+    #expect(server.handle(line: #"{"jsonrpc":"2.0","id":null,"method":"notifications/initialized"}"#) == nil)
+    #expect(server.handle(line: #"{"jsonrpc":"2.0","id":9,"method":"notifications/cancelled"}"#) == nil)
+}
+
 @Test func protocolErrorsAreWellFormed() throws {
     let (server, _) = makeServer()
 

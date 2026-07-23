@@ -61,8 +61,10 @@ public struct MCPServer {
         let method = object["method"] as? String ?? ""
         let params = object["params"] as? [String: Any] ?? [:]
 
-        // Notifications get no response, whatever the method.
-        guard let id else { return nil }
+        // Notifications get no response, including when a client stamps one
+        // with an explicit null id. A null id on a regular request is
+        // accepted and echoed back as null in the response.
+        guard let id, !method.hasPrefix("notifications/") else { return nil }
 
         switch method {
         case "initialize":
