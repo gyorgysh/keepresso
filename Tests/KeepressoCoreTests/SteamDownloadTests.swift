@@ -20,12 +20,36 @@ import Foundation
 }
 
 @Test func stateFlagBitsJudgeDownloadActivity() {
+    // The flag half only; a user-paused download KEEPS 1026 (observed live),
+    // which is why the probe also demands write recency.
     #expect(SteamDownload.isActive(stateFlags: 1026))  // running (1024 | 2)
     #expect(SteamDownload.isActive(stateFlags: 1024))
     #expect(!SteamDownload.isActive(stateFlags: 2))    // queued, not running
     #expect(!SteamDownload.isActive(stateFlags: 4))    // fully installed
     #expect(!SteamDownload.isActive(stateFlags: 6))    // installed + update required
-    #expect(!SteamDownload.isActive(stateFlags: 518))  // paused mid-update
+}
+
+@Test func recentWriteWalkJudgesLiveness() throws {
+    let dir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keepresso-steam-tests-\(UUID().uuidString)")
+    let nested = dir.appendingPathComponent("1030300/Game.app/Contents")
+    try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+
+    // A missing or empty tree: no liveness.
+    #expect(!SteamDownload.hasRecentWrite(under: dir.appendingPathComponent("absent")))
+    #expect(!SteamDownload.hasRecentWrite(under: dir))
+
+    // A fresh chunk write counts.
+    let chunk = nested.appendingPathComponent("chunk.bin")
+    try Data("x".utf8).write(to: chunk)
+    #expect(SteamDownload.hasRecentWrite(under: dir))
+
+    // The same file judged from a "now" past the window: stale, a pause.
+    #expect(!SteamDownload.hasRecentWrite(
+        under: dir,
+        now: Date().addingTimeInterval(SteamDownload.writeRecencyWindow + 5)
+    ))
 }
 
 @Test func libraryFoldersParse() {

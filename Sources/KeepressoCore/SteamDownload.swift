@@ -2,24 +2,65 @@ import Foundation
 
 /// Detection of an in-progress Steam download or update, so the Mac stays
 /// awake until the game is ready. Reads Steam's own bookkeeping, no Steam
-/// API and no permission involved: every library's `appmanifest_*.acf`
-/// carries a `StateFlags` value whose `UpdateRunning` bit (0x400) turns on
-/// exactly while Steam is downloading or verifying and turns off when the
-/// download finishes, pauses, or Steam quits. Verified against a live
-/// download: queued reads 2, running reads 1026, installed reads 4.
+/// API and no permission involved. Two conditions, both verified against a
+/// live download:
+///
+/// 1. A library's `appmanifest_*.acf` has the `UpdateRunning` bit (0x400) in
+///    `StateFlags`: queued reads 2, downloading reads 1026, installed reads
+///    4. The bit alone is not enough: a download the user actively stops
+///    KEEPS 1026, observed live.
+/// 2. Chunks are actually landing: something under that library's
+///    `steamapps/downloading/` was written within the last minute. Writes
+///    are continuous during a real download and stop within seconds of a
+///    pause, so this is the liveness half of the judgment.
 ///
 /// Leftover folders under `steamapps/downloading/` from aborted downloads
 /// linger for months, which is why presence on disk is deliberately not the
-/// signal.
+/// signal either.
 public enum SteamDownload {
-    /// The `StateFlags` bit Steam sets while an update is actively running.
+    /// The `StateFlags` bit Steam sets while an update is running (which
+    /// includes paused-by-the-user, hence the recency check).
     public static let updateRunningFlag = 0x400
 
-    /// Whether a manifest's `StateFlags` means "downloading right now".
-    /// Paused and merely-queued updates drop this bit, and a paused download
-    /// should let the Mac sleep.
+    /// How fresh the newest write under `downloading/` must be for a flagged
+    /// update to count as actually downloading. Long enough to ride out
+    /// brief verification reads, short enough that a paused download
+    /// releases promptly (the trigger's own grace stacks on top).
+    public static let writeRecencyWindow: TimeInterval = 60
+
+    /// The flag half of the judgment: whether `StateFlags` claims a running
+    /// update. Steam leaves this set while paused, so callers must also
+    /// check write recency.
     public static func isActive(stateFlags: Int) -> Bool {
         stateFlags & updateRunningFlag != 0
+    }
+
+    /// Whether anything under `directory` was modified within
+    /// ``writeRecencyWindow``. Walks lazily and stops at the first fresh
+    /// file, which during a real download is one of the first visited.
+    static func hasRecentWrite(
+        under directory: URL,
+        now: Date = Date(),
+        fileManager: FileManager = .default
+    ) -> Bool {
+        let cutoff = now.addingTimeInterval(-writeRecencyWindow)
+        guard let walker = fileManager.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else { return false }
+        for case let file as URL in walker {
+            // Only real files count: Steam creates the folder skeleton the
+            // moment a download is queued, so fresh directory mtimes say
+            // nothing about bytes actually flowing.
+            let values = try? file.resourceValues(
+                forKeys: [.contentModificationDateKey, .isRegularFileKey])
+            guard values?.isRegularFile == true else { continue }
+            if let modified = values?.contentModificationDate, modified > cutoff {
+                return true
+            }
+        }
+        return false
     }
 
     /// Steam's default install root for the current user.
@@ -98,11 +139,18 @@ public final class FileSteamDownloadMonitor: SteamDownloadMonitoring {
             let manifests = (try? fm.contentsOfDirectory(at: library, includingPropertiesForKeys: nil))?
                 .filter { $0.lastPathComponent.hasPrefix("appmanifest_") && $0.pathExtension == "acf" }
                 ?? []
-            for manifest in manifests {
+            let flagged = manifests.contains { manifest in
                 guard let text = try? String(contentsOf: manifest, encoding: .utf8),
                       let flags = SteamDownload.stateFlags(fromACF: text)
-                else { continue }
-                if SteamDownload.isActive(stateFlags: flags) { return true }
+                else { return false }
+                return SteamDownload.isActive(stateFlags: flags)
+            }
+            // The walk only runs when a manifest claims a running update, so
+            // the common no-download case never touches the chunk folders.
+            if flagged, SteamDownload.hasRecentWrite(
+                under: library.appendingPathComponent("downloading", isDirectory: true)
+            ) {
+                return true
             }
         }
         return false
