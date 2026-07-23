@@ -85,9 +85,11 @@ extension Preset {
             name: "Meetings",
             ruleSet: RuleSet(combine: .any, rules: [.mediaInUse(.camera), .mediaInUse(.microphone)])
         ),
-        // Local play: a frontmost game, or simply a controller in hand (the
-        // controller rule needs no permission and catches couch sessions
-        // where the game hides the frontmost signal behind a launcher).
+        // Local play: a frontmost game, a controller in hand (the controller
+        // rule needs no permission and catches couch sessions where the game
+        // hides the frontmost signal behind a launcher), a running Steam
+        // download, or sustained traffic above 1 MB/s (launcher patches and
+        // non-Steam store downloads that leave no other trace).
         Preset(
             id: "gaming",
             name: "Gaming",
@@ -95,6 +97,7 @@ extension Preset {
                 .gaming,
                 .controllerConnected,
                 .steamDownload,
+                .throughput(kilobytesPerSecond: 1024),
             ])
         ),
         // The gaming trigger covers a frontmost game or streaming client; the

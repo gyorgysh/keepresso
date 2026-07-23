@@ -88,4 +88,7 @@ private final class FakeSteam: SteamDownloadMonitoring {
     #expect(rule.requiredPermission == nil)
     let gaming = Preset.builtIns.first { $0.id == "gaming" }
     #expect(gaming?.ruleSet.rules.contains(.steamDownload) == true)
+    // 1024 KB/s renders as the "1 MB/s" the preset promises.
+    #expect(gaming?.ruleSet.rules.contains(.throughput(kilobytesPerSecond: 1024)) == true)
+    #expect(NetworkThroughput.rateLabel(kilobytesPerSecond: 1024) == "1 MB/s")
 }
