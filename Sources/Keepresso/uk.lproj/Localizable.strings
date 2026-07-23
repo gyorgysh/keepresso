@@ -198,7 +198,6 @@
 "Idle" = "Простій";
 "System can sleep" = "Система може заснути";
 "No conditions yet" = "Умов поки немає";
-"Battery below %d%%, letting the Mac sleep" = "Заряд нижче %d%%, Mac може заснути";
 "Stops in %@" = "Зупиниться через %@";
 "Awake for %@" = "Не спить уже %@";
 "Active" = "Активно";

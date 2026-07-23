@@ -86,13 +86,26 @@ struct MenuBarContent: View {
             Divider()
 
             if model.triggersEnabled && !model.triggersPaused {
-                Text("Activation is controlled by triggers.\nEdit them in Preferences.")
-                    .font(type.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("Pause Triggers") { model.pauseTriggers() }
-                    .prominentActionStyle()
-                    .frame(maxWidth: .infinity)
+                // Pausing means "let my Mac sleep", so live automation
+                // leases come first: the row offers ending them, and only
+                // once none are live does it offer the pause itself.
+                if session.liveLeases.isEmpty {
+                    Text("Activation is controlled by triggers.\nEdit them in Preferences.")
+                        .font(type.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Pause Triggers") { model.pauseTriggers() }
+                        .prominentActionStyle()
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Text("Activation is controlled by triggers.\nEnd the automation leases before pausing.")
+                        .font(type.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("End Automation Leases") { model.endAutomationLeases() }
+                        .prominentActionStyle()
+                        .frame(maxWidth: .infinity)
+                }
             } else {
                 if model.triggersEnabled {
                     Text("Triggers paused. Controlling manually for now.")
@@ -528,7 +541,7 @@ struct MenuBarContent: View {
         // Safety pauses override everything else: say so, or an otherwise
         // satisfied session looks stuck for no visible reason.
         if session.pausedByBattery {
-            return L("Battery below %d%%, letting the Mac sleep", model.pauseBelowBatteryPercent)
+            return L("Battery below %d%%, Keepresso sessions paused until plugged in", model.pauseBelowBatteryPercent)
         }
         if session.pausedByThermal {
             if let celsius = model.thermalGuard.currentCelsius {
@@ -606,6 +619,10 @@ struct MenuBarContent: View {
         let _ = liveRefresh
         let leases = session.liveLeases
         if !leases.isEmpty {
+            // During a safety pause nothing is actually held awake: the
+            // leases are waiting for the pause to lift, and claiming
+            // otherwise would contradict the pause explanation above.
+            let paused = session.pausedByBattery || session.pausedByThermal
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
                     Image(systemName: "bolt.badge.clock")
@@ -613,9 +630,13 @@ struct MenuBarContent: View {
                         .font(type.caption)
                         .frame(width: 16)
                         .accessibilityHidden(true)
-                    Text(leases.count == 1
-                        ? L("Held awake by an automation lease")
-                        : L("Held awake by %d automation leases", leases.count))
+                    Text(paused
+                        ? (leases.count == 1
+                            ? L("An automation lease is waiting (safety pause)")
+                            : L("%d automation leases are waiting (safety pause)", leases.count))
+                        : (leases.count == 1
+                            ? L("Held awake by an automation lease")
+                            : L("Held awake by %d automation leases", leases.count)))
                         .font(type.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

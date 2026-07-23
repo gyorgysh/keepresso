@@ -226,7 +226,6 @@ _DYN = {
     "Idle": {"hu": "Tétlen", "es": "Inactivo", "fr": "Inactif", "de": "Inaktiv", "zh-Hans": "空闲"},
     "System can sleep": {"hu": "A rendszer elalhat", "es": "El sistema puede suspenderse", "fr": "Le système peut dormir", "de": "System darf schlafen", "zh-Hans": "系统可以睡眠"},
     "No conditions yet": {"hu": "Még nincsenek feltételek", "es": "Aún no hay condiciones", "fr": "Aucune condition pour l’instant", "de": "Noch keine Bedingungen", "zh-Hans": "尚无条件"},
-    "Battery below %d%%, letting the Mac sleep": {"hu": "Az akkumulátor %d%% alatt, a Mac elalhat", "es": "Batería por debajo del %d%%, dejando que el Mac se suspenda", "fr": "Batterie sous %d%%, le Mac peut dormir", "de": "Akku unter %d%%, Mac darf schlafen", "zh-Hans": "电量低于 %d%%，让 Mac 睡眠"},
     "Stops in %@": {"hu": "Leáll %@ múlva", "es": "Se detiene en %@", "fr": "S’arrête dans %@", "de": "Stoppt in %@", "zh-Hans": "%@ 后停止"},
     "Awake for %@": {"hu": "Ébren %@ ideje", "es": "Despierto durante %@", "fr": "Éveillé depuis %@", "de": "Wach seit %@", "zh-Hans": "已唤醒 %@"},
     "Active": {"hu": "Aktív", "es": "Activo", "fr": "Actif", "de": "Aktiv", "zh-Hans": "已激活"},

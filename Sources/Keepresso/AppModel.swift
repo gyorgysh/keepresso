@@ -300,8 +300,18 @@ final class AppModel {
             triggersPaused = false // always starts unpaused
             // Stop on both transitions: turning gating on hands activation to
             // the gate; turning it off would otherwise leave a gate-held
-            // session running as a "manual" one with a stale duration.
-            session.stop()
+            // session running as a "manual" one with a stale duration. Leases
+            // are their own demand source, though: a lease-held session
+            // survives the flip untouched, and turning gating off while
+            // leases are live hands the session to them instead of stopping
+            // it out from under the agent's work.
+            if !session.isLeaseHeld {
+                if !newValue, session.isActive, !session.liveLeases.isEmpty {
+                    session.handOffToLeases()
+                } else {
+                    session.stop()
+                }
+            }
             applyTriggerGate()
             persist()
         }
@@ -326,7 +336,16 @@ final class AppModel {
         guard settings.triggersEnabled, !triggersPaused else { return }
         triggersPaused = true
         applyTriggerGate()
-        session.stop(cause: cause)
+        // Live leases are their own demand source with their own explicit
+        // end control (the menu offers "End Automation Leases" before this
+        // while any are live): hand the session to them instead of a stop
+        // that lease demand would flap right back on the next tick.
+        if session.isActive, !session.liveLeases.isEmpty {
+            session.handOffToLeases()
+            session.reconcile()
+        } else {
+            session.stop(cause: cause)
+        }
     }
 
     /// Hand activation back to the trigger engine. No-op if not currently paused.
@@ -1345,6 +1364,21 @@ final class AppModel {
     /// with no feedback. Clients discover the revocation on heartbeat.
     private func revokeLeases() {
         leaseEngine.revokeAll(now: Date())
+    }
+
+    /// The menu's explicit lease stop, offered ahead of Pause Triggers while
+    /// leases are live: revoke every lease so clients hear "revoked" on
+    /// their next heartbeat. A lease-held session stops silently (a user
+    /// gesture, not a natural end, so no end action fires); a trigger-held
+    /// one just loses its lease rows on the immediate reconcile.
+    func endAutomationLeases() {
+        revokeLeases()
+        if session.isLeaseHeld {
+            session.stop()
+        } else {
+            session.reconcile()
+        }
+        syncWidgetState()
     }
 
     // MARK: - Teach-your-agent helpers

@@ -198,7 +198,6 @@
 "Idle" = "空闲";
 "System can sleep" = "系统可以睡眠";
 "No conditions yet" = "尚无条件";
-"Battery below %d%%, letting the Mac sleep" = "电量低于 %d%%，让 Mac 睡眠";
 "Stops in %@" = "%@ 后停止";
 "Awake for %@" = "已唤醒 %@";
 "Active" = "已激活";

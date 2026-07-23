@@ -198,7 +198,6 @@
 "Idle" = "Inactif";
 "System can sleep" = "Le système peut dormir";
 "No conditions yet" = "Aucune condition pour l’instant";
-"Battery below %d%%, letting the Mac sleep" = "Batterie sous %d%%, le Mac peut dormir";
 "Stops in %@" = "S’arrête dans %@";
 "Awake for %@" = "Éveillé depuis %@";
 "Active" = "Actif";

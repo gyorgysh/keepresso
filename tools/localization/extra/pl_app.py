@@ -198,7 +198,6 @@ APP = {
     'Idle': 'Bezczynność',
     'System can sleep': 'System może zasnąć',
     'No conditions yet': 'Brak warunków',
-    'Battery below %d%%, letting the Mac sleep': 'Bateria poniżej %d%%, Mac może zasnąć',
     'Stops in %@': 'Zatrzyma się za %@',
     'Awake for %@': 'Czuwa od %@',
     'Active': 'Aktywne',

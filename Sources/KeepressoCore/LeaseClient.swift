@@ -37,6 +37,9 @@ public struct LeaseClient {
     /// launch), and how often it looks.
     public static let ackTimeout: TimeInterval = 10
     public static let ackInterval: TimeInterval = 0.2
+    /// The ack loop's iteration bound: the wall-clock deadline alone would
+    /// stretch by the size of a backwards clock jump landing mid-acquire.
+    static let maxAckPolls = Int(ackTimeout / ackInterval)
 
     public init(
         store: LeaseRecordStoring,
@@ -116,6 +119,7 @@ public struct LeaseClient {
         // the app never confirmed must not linger and silently hold the Mac
         // awake once the app next launches.
         let deadline = instant.addingTimeInterval(Self.ackTimeout)
+        var polls = 0
         while true {
             if let snapshot = readStatus(), isPidAlive(snapshot.pid) {
                 if snapshot.leasesEnabled == false {
@@ -136,12 +140,13 @@ public struct LeaseClient {
                         ? "Lease \(id) renewed."
                         : "Lease \(id) acquired."
                     if !snapshot.isActive {
-                        human += " Keepresso is safety-paused; the Mac is not being held awake right now."
+                        human += " Keepresso is safety-paused. The Mac is not being held awake right now."
                     }
                     return LeaseOutcome(exitCode: 0, json: encode(payload), human: human)
                 }
             }
-            guard now() < deadline else { break }
+            polls += 1
+            guard now() < deadline, polls <= Self.maxAckPolls else { break }
             sleep(Self.ackInterval)
         }
         rollBack(id: id, renewed: renewed, previous: existing)
@@ -191,12 +196,29 @@ public struct LeaseClient {
         }
         store.write(fresh)
 
-        let appRunning = readStatus().map { isPidAlive($0.pid) } ?? false
-        struct Payload: Codable { var id: String, expiresAt: Date, appRunning: Bool }
+        let snapshot = readStatus()
+        let appRunning = snapshot.map { isPidAlive($0.pid) } ?? false
+        struct Payload: Codable {
+            var id: String, expiresAt: Date, appRunning: Bool, isActive: Bool
+        }
         let payload = Payload(
-            id: id, expiresAt: AutomationLease.expiryDate(of: fresh), appRunning: appRunning)
-        if appRunning {
+            id: id,
+            expiresAt: AutomationLease.expiryDate(of: fresh),
+            appRunning: appRunning,
+            isActive: appRunning && snapshot?.isActive == true
+        )
+        if payload.isActive {
             return LeaseOutcome(exitCode: 0, json: encode(payload), human: "Lease \(id) extended.")
+        }
+        if appRunning {
+            // The lease is extended and will resume, but a safety pause
+            // (battery, thermal) means nothing holds the Mac awake right
+            // now; the caller must not assume it stayed up.
+            return LeaseOutcome(
+                exitCode: 0,
+                json: encode(payload),
+                human: "Lease \(id) extended, but Keepresso is safety-paused. The Mac is not being held awake right now."
+            )
         }
         // The record is written (leases survive an app relaunch), but nothing
         // is holding the Mac awake right now; the caller should know.

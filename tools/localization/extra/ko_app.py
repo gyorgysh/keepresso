@@ -198,7 +198,6 @@ APP = {
     "Idle": "유휴",
     "System can sleep": "시스템이 잠들 수 있음",
     "No conditions yet": "아직 조건 없음",
-    "Battery below %d%%, letting the Mac sleep": "배터리가 %d%% 미만이어서 Mac이 잠들도록 함",
     "Stops in %@": "%@ 후 중지",
     "Awake for %@": "%@ 동안 깨어 있음",
     "Active": "활성",

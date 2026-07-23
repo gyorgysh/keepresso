@@ -163,6 +163,27 @@ private final class FakeLeaseStore: LeaseRecordStoring {
 }
 
 @MainActor
+@Test func engineClampsFutureDatedRecordsAfterClockRollback() {
+    // A clock set backwards leaves updatedAt in the future, which would
+    // silently extend the lease by the size of the jump. The engine pulls
+    // the timestamps back to now, healing the on-disk record too, so the
+    // horizon is one TTL from the present and clients read the same view.
+    let store = FakeLeaseStore([
+        record(updatedAt: base.addingTimeInterval(7_200), ttl: 300)
+    ])
+    let engine = LeaseEngine(store: store)
+
+    let live = engine.tick(now: base)
+    #expect(live.count == 1)
+    #expect(live.first?.expiresAt == base.addingTimeInterval(300))
+    #expect(store.records[idA]?.updatedAt == base)
+
+    // One TTL later the healed record expires on schedule.
+    #expect(engine.tick(now: base.addingTimeInterval(301)).isEmpty)
+    #expect(store.records[idA]?.state == .expired)
+}
+
+@MainActor
 @Test func revokeAllEndsOnlyActiveLeases() {
     let store = FakeLeaseStore([
         record(id: idA),

@@ -198,7 +198,6 @@
 "Idle" = "Tétlen";
 "System can sleep" = "A rendszer elalhat";
 "No conditions yet" = "Még nincsenek feltételek";
-"Battery below %d%%, letting the Mac sleep" = "Az akkumulátor %d%% alatt, a Mac elalhat";
 "Stops in %@" = "Leáll %@ múlva";
 "Awake for %@" = "Ébren %@ ideje";
 "Active" = "Aktív";

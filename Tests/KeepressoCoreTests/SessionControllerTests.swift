@@ -859,3 +859,95 @@ private func leaseSummary(
     controller.reconcile()
     #expect(controller.isActive) // no timed cap crept in
 }
+
+@MainActor
+@Test func thermalPauseOutranksLeaseDemand() {
+    let (controller, fake, clock) = makeController()
+    controller.pauseWhenHot = true
+    let provider = FakeLeaseProvider()
+    controller.leases = provider
+
+    provider.summaries = [leaseSummary()]
+    controller.reconcile(thermal: .clear)
+    #expect(controller.isActive)
+
+    controller.reconcile(thermal: .hot)
+    #expect(controller.isActive == false)
+    #expect(fake.held.isEmpty)
+
+    // Still hot, and an internal reconcile with no reading: lease demand
+    // cannot reactivate through either path.
+    clock.advance(1)
+    controller.reconcile(thermal: .hot)
+    #expect(controller.isActive == false)
+    controller.reconcile()
+    #expect(controller.isActive == false)
+
+    // Cooled down: the surviving lease resumes the session.
+    controller.reconcile(thermal: .clear)
+    #expect(controller.isActive)
+    #expect(fake.held == [.system])
+}
+
+@MainActor
+@Test func leaseExpiryNoticedLateSkipsTheEndAction() {
+    let fake = FakeAssertions()
+    let clock = Clock()
+    let endActor = RecordingEndActor()
+    let controller = SessionController(assertions: fake, endActor: endActor, now: { clock.now })
+    controller.endAction = .sleepMac
+    let provider = FakeLeaseProvider()
+    controller.leases = provider
+
+    provider.summaries = [leaseSummary()]
+    controller.reconcile()
+    #expect(controller.isActive)
+
+    // The Mac slept across the lease's expiry: the end is noticed hours
+    // late and must not re-sleep the Mac someone just woke.
+    clock.advance(3_600)
+    provider.summaries = []
+    controller.reconcile()
+    #expect(controller.isActive == false)
+    #expect(controller.log.events.last?.kind == .leaseReleased)
+
+    clock.advance(SessionController.endActionDebounce + 1)
+    controller.reconcile()
+    #expect(endActor.performed.isEmpty)
+}
+
+@MainActor
+@Test func handOffToLeasesConvertsAGateHeldSessionInPlace() {
+    let (controller, fake, clock) = makeController()
+    controller.options = SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true)
+    let gate = StubGate(true)
+    let provider = FakeLeaseProvider()
+    controller.triggerGate = gate
+    controller.leases = provider
+
+    provider.summaries = [leaseSummary()]
+    controller.reconcile()
+    #expect(controller.isActive)
+    #expect(controller.isLeaseHeld == false)
+    let begun = controller.startedAt
+    let logged = controller.log.events.count
+
+    // The app pauses triggers: the gate detaches and the session hands
+    // over to the live lease with no stop/restart pair in the log.
+    controller.triggerGate = nil
+    controller.handOffToLeases()
+    clock.advance(1)
+    controller.reconcile()
+    #expect(controller.isActive)
+    #expect(controller.isLeaseHeld)
+    #expect(controller.startedAt == begun)
+    #expect(controller.log.events.count == logged)
+    #expect(fake.held == [.system]) // lease sessions never hold the display
+
+    // The lease ending promptly afterwards is a natural lease end.
+    clock.advance(1)
+    provider.summaries = []
+    controller.reconcile()
+    #expect(controller.isActive == false)
+    #expect(controller.log.events.last?.kind == .leaseReleased)
+}

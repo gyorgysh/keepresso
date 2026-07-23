@@ -47,6 +47,16 @@ public final class SessionController {
     /// takes ownership back.
     private var leaseHeld = false
 
+    /// Whether the running session is sustained by leases alone, for hosts
+    /// that must choose between stopping a session and handing it over (the
+    /// app's trigger pause, the menu's explicit lease stop).
+    public var isLeaseHeld: Bool { leaseHeld }
+
+    /// The last reconcile instant that saw live lease demand, so a lease end
+    /// noticed long after it happened (the Mac slept across the expiry) can
+    /// skip the end action, mirroring the timed path's staleness rule.
+    private var lastLeaseDemandAt: Date?
+
     /// Fire a "still brewing" reminder once the active session has run this long,
     /// or `nil` (the default) to never remind. Guards against a Mac left awake and
     /// forgotten. Resets with each new session.
@@ -490,6 +500,7 @@ public final class SessionController {
         let summaries = leases?.tick(now: instant) ?? []
         if summaries != liveLeases { liveLeases = summaries }
         let leaseDemand = !summaries.isEmpty
+        if leaseDemand { lastLeaseDemandAt = instant }
 
         switch battery {
         case .discharging(let percent):
@@ -596,7 +607,7 @@ public final class SessionController {
                 if leaseHeld {
                     stop(
                         reason: L("Automation lease ended"),
-                        effects: .natural(kind: .leaseReleased)
+                        effects: leaseEndEffects(at: instant)
                     )
                 } else {
                     setActive(false, at: instant)
@@ -633,7 +644,7 @@ public final class SessionController {
         } else if isActive, leaseHeld, !leaseDemand {
             stop(
                 reason: L("Automation lease ended"),
-                effects: .natural(kind: .leaseReleased)
+                effects: leaseEndEffects(at: instant)
             )
             flushPendingEndAction(at: instant)
             return
@@ -736,6 +747,29 @@ public final class SessionController {
         formatter.maximumUnitCount = 2
         // At least a minute, so a just-crossed one-shot never reads "0 minutes".
         return formatter.string(from: TimeInterval(max(60, total))) ?? ""
+    }
+
+    /// Keep an active session running when trigger gating is paused or turned
+    /// off while live leases still demand it: ownership flips to the leases in
+    /// place (assertions drop to `.system` on the next reconcile, lease expiry
+    /// then ends the session naturally) instead of a stop that lease demand
+    /// would undo one tick later. No-op unless a session is active with a
+    /// live lease and not already lease-held.
+    public func handOffToLeases() {
+        guard isActive, !leaseHeld, !liveLeases.isEmpty else { return }
+        leaseHeld = true
+    }
+
+    /// How a lease-ended stop behaves: a lease end noticed shortly after the
+    /// demand was last seen is a natural end (notification plus the end
+    /// action), but one noticed past ``endActionStaleGrace``, meaning the Mac
+    /// slept across the expiry, must not sleep or lock the just-woken Mac, so
+    /// only the notification fires.
+    private func leaseEndEffects(at instant: Date) -> StopEffects {
+        let late = lastLeaseDemandAt.map {
+            instant.timeIntervalSince($0) > Self.endActionStaleGrace
+        } ?? false
+        return late ? .safetyPause(kind: .leaseReleased) : .natural(kind: .leaseReleased)
     }
 
     /// The activation half of ``setActive(_:at:)`` for a session whose only

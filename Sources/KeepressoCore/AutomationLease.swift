@@ -124,6 +124,20 @@ public enum AutomationLease {
         )
     }
 
+    /// The record with any future-dated timestamps pulled back to `now`.
+    /// Records outlive processes and reboots, so wall clock is the only
+    /// clock they can carry, and a clock set backwards (a manual change, a
+    /// large NTP correction) leaves `updatedAt` in the future, silently
+    /// extending the lease by the size of the jump. Clamping re-anchors
+    /// every horizon to the present and never touches healthy records.
+    public static func normalized(_ record: AutomationLeaseRecord, now: Date) -> AutomationLeaseRecord {
+        var record = record
+        record.createdAt = min(record.createdAt, now)
+        record.updatedAt = min(record.updatedAt, now)
+        record.endedAt = record.endedAt.map { min($0, now) }
+        return record
+    }
+
     /// The engine's judgment of one record at one instant.
     public enum Verdict: Equatable, Sendable {
         /// Counts as demand; keeps the Mac awake.
@@ -279,7 +293,12 @@ public final class LeaseEngine: LeaseProviding {
 
     public func tick(now: Date) -> [LeaseSummary] {
         var live: [LeaseSummary] = []
-        for record in store.loadAll() {
+        for raw in store.loadAll() {
+            // Heal clock-rollback damage on disk, not just in this pass:
+            // clients read the same files, and their view of the expiry
+            // should match the demand the app actually honors.
+            let record = AutomationLease.normalized(raw, now: now)
+            if record != raw { store.write(record) }
             switch AutomationLease.adjudicate(record, now: now) {
             case .live:
                 live.append(LeaseSummary(

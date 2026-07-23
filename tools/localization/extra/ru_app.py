@@ -198,7 +198,6 @@ APP = {
     "Idle": "Простой",
     "System can sleep": "Система может засыпать",
     "No conditions yet": "Условий пока нет",
-    "Battery below %d%%, letting the Mac sleep": "Батарея ниже %d%%, Mac может заснуть",
     "Stops in %@": "Остановится через %@",
     "Awake for %@": "Не спит уже %@",
     "Active": "Активно",
