@@ -462,7 +462,7 @@ struct RulesView: View {
             Button("Game controller connected") { model.addRule(.controllerConnected) }
                 .help("Counts while any game controller is connected, wired or Bluetooth. Rides out a brief reconnect for half a minute.")
             Button("Steam is downloading") { model.addRule(.steamDownload) }
-                .help("Counts while Steam is actively downloading or updating a game in any of its libraries, and lets the Mac sleep once the download finishes or is paused. Reads Steam's own bookkeeping; no permission needed.")
+                .help("Counts while Steam is actively downloading or updating a game in any of its libraries, and lets the Mac sleep once the download finishes or is paused. Reads Steam's own bookkeeping, no permission needed.")
         }
         Section("AI agents") {
             Button("AI agent is working") { model.addRule(.agentActivity(AgentRule())) }

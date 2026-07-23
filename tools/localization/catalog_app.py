@@ -766,6 +766,6 @@ _V117B = {
     'The stutter fix for streaming and online gaming.': {},
     'Gaming': {},
     'Steam is downloading': {},
-    'Counts while Steam is actively downloading or updating a game in any of its libraries, and lets the Mac sleep once the download finishes or is paused. Reads Steam's own bookkeeping; no permission needed.': {},
+    "Counts while Steam is actively downloading or updating a game in any of its libraries, and lets the Mac sleep once the download finishes or is paused. Reads Steam's own bookkeeping, no permission needed.": {},
 }
 APP.update(_V117B)
