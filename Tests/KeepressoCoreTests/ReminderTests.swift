@@ -55,7 +55,7 @@ private func makeController() -> (SessionController, FakeReminder, Clock) {
     clock.advance(2 * 60) // 31 min elapsed
     controller.reconcile()
     #expect(reminder.notices.count == 1) // fired
-    #expect(reminder.notices.first?.body.contains("30 minutes") == true)
+    #expect(reminder.notices.first?.body.contains(SessionController.humanDuration(30 * 60)) == true)
 
     clock.advance(60)
     controller.reconcile()
@@ -76,7 +76,7 @@ private func makeController() -> (SessionController, FakeReminder, Clock) {
     clock.advance(60 * 60)
     controller.reconcile()
     #expect(reminder.notices.count == 2) // second hour, fires again
-    #expect(reminder.notices.last?.body.contains("2 hours") == true)
+    #expect(reminder.notices.last?.body.contains(SessionController.humanDuration(2 * 60 * 60)) == true)
 }
 
 @MainActor
@@ -400,7 +400,7 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
     clock.advance(10 * 60 + 1) // 4:59 left, one second into the window
     controller.reconcile()
     #expect(reminder.notices.count == 1)
-    #expect(reminder.notices.first?.body.contains("5 minutes") == true)
+    #expect(reminder.notices.first?.body.contains(SessionController.humanDuration(5 * 60)) == true)
 }
 
 @MainActor
