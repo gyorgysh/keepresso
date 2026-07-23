@@ -105,10 +105,11 @@ private func evaluate(_ rule: TimeWindowRule, day: Int, hour: Int, minute: Int =
 }
 
 @Test func labelsSummarizeDaysAndTimes() {
-    #expect(TimeWindowRule(startMinutes: 540, endMinutes: 1080, weekdays: [2, 3, 4, 5, 6]).label == "Weekdays 9:00-18:00")
-    #expect(TimeWindowRule(startMinutes: 22 * 60, endMinutes: 6 * 60).label == "Every day 22:00-6:00")
-    #expect(TimeWindowRule(startMinutes: 600, endMinutes: 840, weekdays: [1, 7]).label == "Weekends 10:00-14:00")
-    #expect(TimeWindowRule(startMinutes: 600, endMinutes: 845, weekdays: [2, 4]).label == "Mon, Wed 10:00-14:05")
+    #expect(TimeWindowRule(startMinutes: 540, endMinutes: 1080, weekdays: [2, 3, 4, 5, 6]).label == "\(L("Weekdays")) 9:00-18:00")
+    #expect(TimeWindowRule(startMinutes: 22 * 60, endMinutes: 6 * 60).label == "\(L("Every day")) 22:00-6:00")
+    #expect(TimeWindowRule(startMinutes: 600, endMinutes: 840, weekdays: [1, 7]).label == "\(L("Weekends")) 10:00-14:00")
+    let names = Calendar.current.shortStandaloneWeekdaySymbols
+    #expect(TimeWindowRule(startMinutes: 600, endMinutes: 845, weekdays: [2, 4]).label == "\(names[1]), \(names[3]) 10:00-14:05")
 }
 
 @Test func timeWindowRuleRoundTripsThroughCodable() throws {
