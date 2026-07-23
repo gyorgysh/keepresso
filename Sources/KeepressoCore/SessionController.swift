@@ -32,6 +32,21 @@ public final class SessionController {
     /// Leave `nil` for the classic manual toggle.
     public var triggerGate: TriggerEvaluating?
 
+    /// When set, automation leases are one more demand source, considered in
+    /// both manual and trigger mode: any live lease keeps the Mac awake, and
+    /// the last lease ending is a natural session end (so ``endAction``
+    /// applies). Leave `nil` (the default) and the feature is invisible.
+    public var leases: LeaseProviding?
+
+    /// The leases counting as demand as of the last reconcile, for the menu.
+    public private(set) var liveLeases: [LeaseSummary] = []
+
+    /// True while the running session's only demand is leases: its end is
+    /// attributed to the lease, the timed cap and ``stopIn(_:)`` don't apply,
+    /// and assertions are capped at `.system`. A manual ``start(mode:options:cause:)``
+    /// takes ownership back.
+    private var leaseHeld = false
+
     /// Fire a "still brewing" reminder once the active session has run this long,
     /// or `nil` (the default) to never remind. Guards against a Mac left awake and
     /// forgotten. Resets with each new session.
@@ -245,6 +260,9 @@ public final class SessionController {
         // A restart within the debounce window cancels a pending end action
         // (the session is back on, so sleep/lock would fight the user).
         cancelPendingEndAction()
+        // A manual start takes ownership: lease expiry no longer ends the
+        // session, and the timed cap applies again.
+        leaseHeld = false
         let restarted = isActive
         if let options { self.options = options }
         self.mode = mode
@@ -270,7 +288,7 @@ public final class SessionController {
     /// exactly `interval` ahead. Ignored while idle or while triggers own
     /// activation (a gated session isn't time-boxed).
     public func stopIn(_ interval: TimeInterval) {
-        guard isActive, triggerGate == nil, interval > 0, let startedAt else { return }
+        guard isActive, triggerGate == nil, !leaseHeld, interval > 0, let startedAt else { return }
         let instant = now()
         mode = .timed(duration: instant.timeIntervalSince(startedAt) + interval)
         armEndingSoon(remaining: interval)
@@ -324,6 +342,7 @@ public final class SessionController {
         }
         isActive = false
         startedAt = nil
+        leaseHeld = false
         remindersFired = 0
         endingSoonFired = false
         lastActivityPokeAt = nil
@@ -411,7 +430,8 @@ public final class SessionController {
     /// trigger-gated session (gating ignores the timed cap, so there's nothing
     /// counting down, see ``reconcile(now:systemIdleSeconds:battery:thermal:)``).
     public var remaining: TimeInterval? {
-        guard triggerGate == nil, isActive, let total = mode.duration, let startedAt else { return nil }
+        guard triggerGate == nil, !leaseHeld, isActive, let total = mode.duration, let startedAt
+        else { return nil }
         return max(0, total - now().timeIntervalSince(startedAt))
     }
 
@@ -463,6 +483,13 @@ public final class SessionController {
         thermal: ThermalReading = .unknown
     ) {
         let instant = now ?? self.now()
+
+        // Tick leases first so expiry runs and the menu's rows stay fresh
+        // even when a safety pause below early-returns (the same reason those
+        // paths call `triggerGate?.tick()`).
+        let summaries = leases?.tick(now: instant) ?? []
+        if summaries != liveLeases { liveLeases = summaries }
+        let leaseDemand = !summaries.isEmpty
 
         switch battery {
         case .discharging(let percent):
@@ -550,10 +577,32 @@ public final class SessionController {
         }
 
         if let triggerGate {
-            // Triggers fully own activation; the timed cap doesn't apply.
+            // Triggers own activation, leases union in; the timed cap doesn't
+            // apply. Ownership (`leaseHeld`) tracks what sustains the session
+            // while demand lasts, so the eventual drop is attributed to the
+            // right source.
             triggerGate.tick()
-            setActive(triggerGate.isSatisfied(), at: instant)
-        } else if isActive, let total = mode.duration, let startedAt,
+            let gateOn = triggerGate.isSatisfied()
+            let want = gateOn || leaseDemand
+            if want, isActive { leaseHeld = !gateOn }
+            if want, !isActive {
+                if gateOn {
+                    leaseHeld = false
+                    setActive(true, at: instant)
+                } else {
+                    beginLeaseSession(at: instant)
+                }
+            } else if !want, isActive {
+                if leaseHeld {
+                    stop(
+                        reason: L("Automation lease ended"),
+                        effects: .natural(kind: .leaseReleased)
+                    )
+                } else {
+                    setActive(false, at: instant)
+                }
+            }
+        } else if isActive, !leaseHeld, let total = mode.duration, let startedAt,
                   instant.timeIntervalSince(startedAt) >= total {
             // A deadline noticed long after it passed (Mac slept across it)
             // still ends the session and may notify, but must not fire the
@@ -566,6 +615,25 @@ public final class SessionController {
                 effects: fireAction
                     ? .natural(kind: .sessionEnded)
                     : .safetyPause(kind: .sessionEnded)
+            )
+            // Live leases carry the awake state straight through the expiry:
+            // the timed session ends normally (log, optional notice), then a
+            // lease session begins in the same tick, cancelling the pending
+            // end action before it can fire mid-lease.
+            if leaseDemand {
+                beginLeaseSession(at: instant)
+            } else {
+                flushPendingEndAction(at: instant)
+                return
+            }
+        } else if !isActive, leaseDemand {
+            // A safety pause never reaches this point (the latches above
+            // early-return), so activating on lease demand is always safe.
+            beginLeaseSession(at: instant)
+        } else if isActive, leaseHeld, !leaseDemand {
+            stop(
+                reason: L("Automation lease ended"),
+                effects: .natural(kind: .leaseReleased)
             )
             flushPendingEndAction(at: instant)
             return
@@ -670,6 +738,25 @@ public final class SessionController {
         return formatter.string(from: TimeInterval(max(60, total))) ?? ""
     }
 
+    /// The activation half of ``setActive(_:at:)`` for a session whose only
+    /// demand is leases, with the log attributed to the first live lease.
+    private func beginLeaseSession(at instant: Date) {
+        cancelPendingEndAction()
+        isActive = true
+        startedAt = instant
+        remindersFired = 0
+        lastActivityPokeAt = nil
+        leaseHeld = true
+        let detail = liveLeases.first.map { "\($0.tool): \($0.task)" }
+        log.record(
+            began: true,
+            reason: detail.map { L("Automation lease: %@", $0) } ?? L("Automation lease acquired"),
+            kind: .leaseAcquired,
+            batteryPercent: lastBatteryPercent,
+            at: instant
+        )
+    }
+
     /// Drive `isActive` toward `want` without disturbing it when already there,
     /// so a trigger-held session keeps its original `startedAt`.
     private func setActive(_ want: Bool, at instant: Date) {
@@ -700,6 +787,9 @@ public final class SessionController {
     /// The assertion set implied by the current session and options.
     func desiredAssertions(systemIdleSeconds: TimeInterval?) -> Set<PowerAssertionKind> {
         guard isActive else { return [] }
+        // A lease-held session keeps the system awake, never the display:
+        // unattended work has nobody watching the screen.
+        if leaseHeld { return [.system] }
         var kinds: Set<PowerAssertionKind> = []
         if options.preventSystemSleep { kinds.insert(.system) }
         if options.preventDisplaySleep {

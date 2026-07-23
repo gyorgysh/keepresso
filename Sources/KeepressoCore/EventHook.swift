@@ -94,6 +94,10 @@ public enum EventHookPolicy {
             return [.triggerFired, .sessionStarted]
         case .triggerReleased:
             return [.triggerReleased, .sessionEnded]
+        case .leaseAcquired:
+            return [.sessionStarted]
+        case .leaseReleased:
+            return [.sessionEnded]
         case .batteryPaused:
             return [.batteryPaused, .sessionEnded]
         case .thermalPaused:

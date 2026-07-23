@@ -603,3 +603,259 @@ private final class FakeReminder: ReminderNotifying {
     controller.stopIn(15 * 60) // gated sessions aren't time-boxed
     #expect(controller.mode == .indefinite)
 }
+
+// MARK: - Automation leases
+
+/// A lease provider whose demand the test scripts directly.
+@MainActor
+private final class FakeLeaseProvider: LeaseProviding {
+    var summaries: [LeaseSummary] = []
+    private(set) var ticks = 0
+    private(set) var revokeCalls = 0
+
+    func tick(now: Date) -> [LeaseSummary] {
+        ticks += 1
+        return summaries
+    }
+
+    func revokeAll(now: Date) {
+        revokeCalls += 1
+        summaries = []
+    }
+}
+
+private final class RecordingEndActor: SessionEndActing {
+    private(set) var performed: [SessionEndAction] = []
+    func perform(_ action: SessionEndAction) { performed.append(action) }
+}
+
+@MainActor
+private func leaseSummary(
+    id: String = "aaaaaaaa-1111-2222-3333-444444444444",
+    tool: String = "test-tool",
+    task: String = "a task",
+    expiresAt: Date = Date(timeIntervalSince1970: 1_000_300)
+) -> LeaseSummary {
+    LeaseSummary(id: id, owner: "tester", tool: tool, task: task, expiresAt: expiresAt)
+}
+
+@MainActor
+@Test func leaseDemandActivatesAnIdleController() {
+    let (controller, fake, _) = makeController()
+    let provider = FakeLeaseProvider()
+    controller.leases = provider
+
+    controller.reconcile()
+    #expect(controller.isActive == false)
+
+    provider.summaries = [leaseSummary()]
+    controller.reconcile()
+    #expect(controller.isActive)
+    #expect(fake.held == [.system])
+    #expect(controller.liveLeases.count == 1)
+    #expect(controller.log.events.last?.kind == .leaseAcquired)
+    // Lease sessions never count down.
+    #expect(controller.remaining == nil)
+}
+
+@MainActor
+@Test func leaseSessionNeverHoldsTheDisplayAssertion() {
+    let (controller, fake, _) = makeController()
+    controller.options = SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true)
+    let provider = FakeLeaseProvider()
+    controller.leases = provider
+
+    provider.summaries = [leaseSummary()]
+    controller.reconcile()
+    #expect(fake.held == [.system])
+
+    // A manual session with the same options still gets the display.
+    controller.start()
+    controller.reconcile()
+    #expect(fake.held == [.system, .display])
+}
+
+@MainActor
+@Test func lastLeaseEndFiresTheEndActionAfterDebounce() {
+    let fake = FakeAssertions()
+    let clock = Clock()
+    let endActor = RecordingEndActor()
+    let controller = SessionController(assertions: fake, endActor: endActor, now: { clock.now })
+    controller.endAction = .sleepDisplay
+    let provider = FakeLeaseProvider()
+    controller.leases = provider
+
+    provider.summaries = [leaseSummary()]
+    controller.reconcile()
+    #expect(controller.isActive)
+
+    provider.summaries = []
+    controller.reconcile()
+    #expect(controller.isActive == false)
+    #expect(controller.log.events.last?.kind == .leaseReleased)
+    #expect(fake.held.isEmpty)
+    #expect(endActor.performed.isEmpty) // debounce pending
+
+    clock.advance(SessionController.endActionDebounce)
+    controller.reconcile()
+    #expect(endActor.performed == [.sleepDisplay])
+}
+
+@MainActor
+@Test func manualSessionIgnoresLeaseComingsAndGoings() {
+    let (controller, fake, _) = makeController()
+    let provider = FakeLeaseProvider()
+    controller.leases = provider
+
+    controller.start()
+    provider.summaries = [leaseSummary()]
+    controller.reconcile()
+    #expect(controller.isActive)
+
+    // The lease vanishing changes nothing: the manual demand persists.
+    provider.summaries = []
+    controller.reconcile()
+    #expect(controller.isActive)
+    #expect(fake.held == [.system])
+}
+
+@MainActor
+@Test func manualStartTakesOwnershipOfALeaseSession() {
+    let (controller, _, _) = makeController()
+    let provider = FakeLeaseProvider()
+    controller.leases = provider
+
+    provider.summaries = [leaseSummary()]
+    controller.reconcile()
+    #expect(controller.isActive)
+
+    controller.start()
+    provider.summaries = []
+    controller.reconcile()
+    // The session is manual now; lease expiry no longer ends it.
+    #expect(controller.isActive)
+}
+
+@MainActor
+@Test func timedExpiryConvertsToALeaseSessionWithoutFiringTheEndAction() {
+    let fake = FakeAssertions()
+    let clock = Clock()
+    let endActor = RecordingEndActor()
+    let controller = SessionController(assertions: fake, endActor: endActor, now: { clock.now })
+    controller.endAction = .sleepMac
+    let provider = FakeLeaseProvider()
+    controller.leases = provider
+
+    controller.start(mode: .timed(duration: 60))
+    provider.summaries = [leaseSummary()]
+    clock.advance(61)
+    controller.reconcile()
+
+    // The timed session ended and a lease session took over in the same tick.
+    #expect(controller.isActive)
+    #expect(controller.log.events.last?.kind == .leaseAcquired)
+    #expect(controller.remaining == nil)
+    #expect(fake.held == [.system])
+
+    // The converted session must not fire the timed session's end action.
+    clock.advance(SessionController.endActionDebounce + 1)
+    controller.reconcile()
+    #expect(endActor.performed.isEmpty)
+
+    // The lease ending later is a natural end: now the action fires.
+    provider.summaries = []
+    controller.reconcile()
+    clock.advance(SessionController.endActionDebounce)
+    controller.reconcile()
+    #expect(endActor.performed == [.sleepMac])
+}
+
+@MainActor
+@Test func gateAndLeaseDemandUnionInTriggerMode() {
+    let (controller, fake, _) = makeController()
+    let gate = StubGate(true)
+    let provider = FakeLeaseProvider()
+    controller.triggerGate = gate
+    controller.leases = provider
+
+    controller.reconcile()
+    #expect(controller.isActive)
+    #expect(controller.log.events.last?.kind == .triggerFired)
+
+    // The gate drops but a lease sustains the session.
+    provider.summaries = [leaseSummary()]
+    gate.satisfied = false
+    controller.reconcile()
+    #expect(controller.isActive)
+
+    // The lease ending is attributed to the lease, not the trigger.
+    provider.summaries = []
+    controller.reconcile()
+    #expect(controller.isActive == false)
+    #expect(controller.log.events.last?.kind == .leaseReleased)
+    #expect(fake.held.isEmpty)
+}
+
+@MainActor
+@Test func leaseActivationInTriggerModeLogsTheLease() {
+    let (controller, _, _) = makeController()
+    let gate = StubGate(false)
+    let provider = FakeLeaseProvider()
+    controller.triggerGate = gate
+    controller.leases = provider
+
+    provider.summaries = [leaseSummary()]
+    controller.reconcile()
+    #expect(controller.isActive)
+    #expect(controller.log.events.last?.kind == .leaseAcquired)
+
+    // The gate turning on hands ownership to the triggers; the lease
+    // vanishing then leaves the session up.
+    gate.satisfied = true
+    controller.reconcile()
+    provider.summaries = []
+    controller.reconcile()
+    #expect(controller.isActive)
+}
+
+@MainActor
+@Test func batteryPauseOutranksLeaseDemand() {
+    let (controller, fake, clock) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    let provider = FakeLeaseProvider()
+    controller.leases = provider
+
+    provider.summaries = [leaseSummary()]
+    controller.reconcile(battery: .discharging(50))
+    #expect(controller.isActive)
+
+    controller.reconcile(battery: .discharging(10))
+    #expect(controller.isActive == false)
+    #expect(fake.held.isEmpty)
+
+    // Still paused: lease demand cannot reactivate.
+    clock.advance(1)
+    controller.reconcile(battery: .discharging(10))
+    #expect(controller.isActive == false)
+
+    // Power is back: the surviving lease resumes the session.
+    controller.reconcile(battery: .onAC)
+    #expect(controller.isActive)
+    #expect(fake.held == [.system])
+}
+
+@MainActor
+@Test func stopInIsIgnoredForLeaseHeldSessions() {
+    let (controller, _, clock) = makeController()
+    let provider = FakeLeaseProvider()
+    controller.leases = provider
+
+    provider.summaries = [leaseSummary()]
+    controller.reconcile()
+    controller.stopIn(60)
+    #expect(controller.remaining == nil)
+
+    clock.advance(120)
+    controller.reconcile()
+    #expect(controller.isActive) // no timed cap crept in
+}

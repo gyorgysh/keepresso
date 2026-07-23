@@ -19,6 +19,8 @@ public enum SessionEventKind: String, Codable, Equatable, Sendable {
     case sessionEnded
     case triggerFired
     case triggerReleased
+    case leaseAcquired
+    case leaseReleased
     case batteryPaused
     case thermalPaused
     case startRefused
