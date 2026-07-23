@@ -150,7 +150,8 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
 let engine = HelperEngine(
     runner: ProcessCommandRunner(),
     state: FileRestoreState(),
-    fans: SMCFanController()
+    fans: SMCFanController(),
+    sleepDisabledReader: HelperEngine.readSleepDisabled
 )
 // Settle anything a previous life left behind (crash or reboot mid-hold)
 // before accepting new work.

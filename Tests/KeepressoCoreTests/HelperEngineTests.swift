@@ -23,22 +23,34 @@ private final class FakeRunner: HelperCommandRunning, @unchecked Sendable {
 
 private final class FakeRestoreState: HelperRestoreStatePersisting, @unchecked Sendable {
     private let lock = NSLock()
-    private var stored: Set<HelperRestoreMarker> = []
+    /// Marker to stored value; empty string is a presence-only marker, the
+    /// same shape a legacy empty marker file has on disk.
+    private var stored: [HelperRestoreMarker: String] = [:]
 
     init(_ initial: Set<HelperRestoreMarker> = []) {
-        stored = initial
+        for marker in initial { stored[marker] = "" }
+    }
+
+    init(values: [HelperRestoreMarker: String]) {
+        stored = values
     }
 
     func markers() -> Set<HelperRestoreMarker> {
         lock.lock()
         defer { lock.unlock() }
-        return stored
+        return Set(stored.keys)
     }
 
-    func set(_ marker: HelperRestoreMarker, present: Bool) {
+    func value(for marker: HelperRestoreMarker) -> String? {
         lock.lock()
         defer { lock.unlock() }
-        if present { stored.insert(marker) } else { stored.remove(marker) }
+        return stored[marker]
+    }
+
+    func set(_ marker: HelperRestoreMarker, value: String?) {
+        lock.lock()
+        defer { lock.unlock() }
+        stored[marker] = value
     }
 }
 
@@ -152,6 +164,81 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     runner.failNext = true
     #expect(!engine.setSleepHold(client: 1, holding: true))
     // The pmset write failed, so there is nothing to restore at next launch.
+    #expect(state.markers().isEmpty)
+}
+
+@Test func sleepHoldRestoresThePriorDisableSleepValue() {
+    let runner = FakeRunner()
+    let state = FakeRestoreState()
+    // The user (or another tool) already had disablesleep 1 before the hold.
+    let engine = HelperEngine(runner: runner, state: state, sleepDisabledReader: { true })
+
+    #expect(engine.setSleepHold(client: 1, holding: true))
+    #expect(state.value(for: .sleepDisabled) == "1")
+
+    // Release restores the recorded 1, never a hardcoded 0.
+    #expect(engine.setSleepHold(client: 1, holding: false))
+    #expect(runner.commands == [sleepOn, sleepOn])
+    #expect(state.markers().isEmpty)
+}
+
+@Test func sleepHoldWithPriorZeroKeepsTheClassicRestore() {
+    let runner = FakeRunner()
+    let state = FakeRestoreState()
+    let engine = HelperEngine(runner: runner, state: state, sleepDisabledReader: { false })
+
+    #expect(engine.setSleepHold(client: 1, holding: true))
+    #expect(state.value(for: .sleepDisabled) == "0")
+    #expect(engine.setSleepHold(client: 1, holding: false))
+    #expect(runner.commands == [sleepOn, sleepOff])
+}
+
+@Test func readerFailureFallsBackToRestoringZero() {
+    let runner = FakeRunner()
+    let state = FakeRestoreState()
+    let engine = HelperEngine(runner: runner, state: state, sleepDisabledReader: { nil })
+
+    #expect(engine.setSleepHold(client: 1, holding: true))
+    #expect(state.value(for: .sleepDisabled) == "0")
+    #expect(engine.setSleepHold(client: 1, holding: false))
+    #expect(runner.commands == [sleepOn, sleepOff])
+}
+
+@Test func failedSleepRestoreKeepsTheDebtForNextLaunch() {
+    let runner = FakeRunner()
+    let state = FakeRestoreState()
+    let engine = HelperEngine(runner: runner, state: state, sleepDisabledReader: { true })
+
+    #expect(engine.setSleepHold(client: 1, holding: true))
+    runner.failNext = true
+    #expect(!engine.setSleepHold(client: 1, holding: false))
+    // The restore did not land: the marker and its recorded value survive so
+    // the next daemon launch can settle it.
+    #expect(state.value(for: .sleepDisabled) == "1")
+
+    engine.restoreAtLaunch()
+    #expect(runner.commands.last == sleepOn)
+    #expect(state.markers().isEmpty)
+}
+
+@Test func restoreAtLaunchRestoresTheRecordedValue() {
+    let runner = FakeRunner()
+    let state = FakeRestoreState(values: [.sleepDisabled: "1"])
+    let engine = HelperEngine(runner: runner, state: state)
+
+    engine.restoreAtLaunch()
+    #expect(runner.commands == [sleepOn])
+    #expect(state.markers().isEmpty)
+}
+
+@Test func restoreAtLaunchTreatsALegacyEmptyMarkerAsZero() {
+    let runner = FakeRunner()
+    // A pre-value daemon left an empty marker file behind.
+    let state = FakeRestoreState(values: [.sleepDisabled: ""])
+    let engine = HelperEngine(runner: runner, state: state)
+
+    engine.restoreAtLaunch()
+    #expect(runner.commands == [sleepOff])
     #expect(state.markers().isEmpty)
 }
 

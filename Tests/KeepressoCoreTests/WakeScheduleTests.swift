@@ -220,10 +220,11 @@ private final class RecordingRunner: HelperCommandRunning, @unchecked Sendable {
 }
 
 private final class FakeMarkerState: HelperRestoreStatePersisting, @unchecked Sendable {
-    private var stored: Set<HelperRestoreMarker>
-    init(_ initial: Set<HelperRestoreMarker> = []) { stored = initial }
-    func markers() -> Set<HelperRestoreMarker> { stored }
-    func set(_ marker: HelperRestoreMarker, present: Bool) {
-        if present { stored.insert(marker) } else { stored.remove(marker) }
+    private var stored: [HelperRestoreMarker: String]
+    init(_ initial: Set<HelperRestoreMarker> = []) {
+        stored = Dictionary(uniqueKeysWithValues: initial.map { ($0, "") })
     }
+    func markers() -> Set<HelperRestoreMarker> { Set(stored.keys) }
+    func value(for marker: HelperRestoreMarker) -> String? { stored[marker] }
+    func set(_ marker: HelperRestoreMarker, value: String?) { stored[marker] = value }
 }

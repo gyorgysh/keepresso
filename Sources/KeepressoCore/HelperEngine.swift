@@ -82,13 +82,28 @@ public enum HelperRestoreMarker: String, CaseIterable, Sendable {
     case wakeClearPending = "wake-clear-pending"
 }
 
-/// Persistence seam for the restore markers.
+/// Persistence seam for the restore markers. A marker may carry a small value
+/// payload (the sleep-disabled debt records the exact prior `disablesleep`
+/// setting); markers that only signal presence store an empty value.
 public protocol HelperRestoreStatePersisting: AnyObject, Sendable {
     func markers() -> Set<HelperRestoreMarker>
-    func set(_ marker: HelperRestoreMarker, present: Bool)
+    /// The marker's stored value, or nil when the marker is absent.
+    func value(for marker: HelperRestoreMarker) -> String?
+    /// Store `value` for the marker (empty string is a plain presence
+    /// marker); nil removes it.
+    func set(_ marker: HelperRestoreMarker, value: String?)
 }
 
-/// Real marker store: one empty file per marker in a root-owned directory.
+public extension HelperRestoreStatePersisting {
+    /// Presence-only convenience for the markers that carry no payload.
+    func set(_ marker: HelperRestoreMarker, present: Bool) {
+        set(marker, value: present ? "" : nil)
+    }
+}
+
+/// Real marker store: one file per marker in a root-owned directory, the
+/// marker's value as the file's contents (empty for presence-only markers,
+/// which also keeps pre-1.17 marker files readable).
 public final class FileRestoreState: HelperRestoreStatePersisting {
     private let directory: URL
 
@@ -102,10 +117,14 @@ public final class FileRestoreState: HelperRestoreStatePersisting {
         })
     }
 
-    public func set(_ marker: HelperRestoreMarker, present: Bool) {
-        if present {
+    public func value(for marker: HelperRestoreMarker) -> String? {
+        try? String(contentsOf: url(for: marker), encoding: .utf8)
+    }
+
+    public func set(_ marker: HelperRestoreMarker, value: String?) {
+        if let value {
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try? Data().write(to: url(for: marker))
+            try? Data(value.utf8).write(to: url(for: marker))
         } else {
             try? FileManager.default.removeItem(at: url(for: marker))
         }
@@ -168,14 +187,41 @@ public final class HelperEngine: @unchecked Sendable {
     /// (and the app can tell "boost silently ended" from "still boosting").
     public private(set) var fanHoldDropped = false
 
+    /// Reads the current global `disablesleep` value. A separate seam because
+    /// ``HelperCommandRunning`` only reports exit status; the sleep hold needs
+    /// the prior value so releasing restores it instead of assuming 0.
+    private let sleepDisabledReader: () -> Bool?
+
     public init(
         runner: HelperCommandRunning,
         state: HelperRestoreStatePersisting,
-        fans: FanControlling = NullFanControl()
+        fans: FanControlling = NullFanControl(),
+        sleepDisabledReader: @escaping () -> Bool? = { nil }
     ) {
         self.runner = runner
         self.state = state
         self.fans = fans
+        self.sleepDisabledReader = sleepDisabledReader
+    }
+
+    /// Real reader: `pmset -g` output through the same pure parser the app's
+    /// closed-display toggle uses.
+    public static func readSleepDisabled() -> Bool? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
+        process.arguments = ["-g"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else { return nil }
+            return PMSetSleepControl.parseSleepDisabled(from: String(decoding: data, as: UTF8.self))
+        } catch {
+            return nil
+        }
     }
 
     /// Settle debts from a previous daemon life (crash, kill, reboot
@@ -185,7 +231,7 @@ public final class HelperEngine: @unchecked Sendable {
     public func restoreAtLaunch() {
         let leftovers = state.markers()
         if leftovers.contains(.sleepDisabled) {
-            runner.run("/usr/bin/pmset", ["-a", "disablesleep", "0"])
+            runner.run("/usr/bin/pmset", ["-a", "disablesleep", recordedSleepRestoreValue()])
             state.set(.sleepDisabled, present: false)
         }
         if leftovers.contains(.awdlDown) {
@@ -422,9 +468,28 @@ public final class HelperEngine: @unchecked Sendable {
         mutate()
         let after = !sleepHolders.isEmpty
         guard before != after else { return true }
-        let ok = runner.run("/usr/bin/pmset", ["-a", "disablesleep", after ? "1" : "0"])
-        state.set(.sleepDisabled, present: after && ok)
+        if after {
+            // Snapshot the prior value before forcing 1, so the release edge
+            // restores what was really there (the user's own persistent
+            // toggle, another tool's setting) instead of assuming 0. A failed
+            // read records "0", which matches the pre-value behavior.
+            let prior = sleepDisabledReader() ?? false
+            let ok = runner.run("/usr/bin/pmset", ["-a", "disablesleep", "1"])
+            state.set(.sleepDisabled, value: ok ? (prior ? "1" : "0") : nil)
+            return ok
+        }
+        let ok = runner.run("/usr/bin/pmset", ["-a", "disablesleep", recordedSleepRestoreValue()])
+        // Debt-by-success: a failed restore keeps the marker (and its value)
+        // for the next daemon launch to settle.
+        if ok { state.set(.sleepDisabled, value: nil) }
         return ok
+    }
+
+    /// The value the sleep-disabled debt should restore. Only a recorded "1"
+    /// restores 1; an empty marker written by a pre-1.17 daemon, or anything
+    /// unreadable, restores 0 exactly as those daemons would have.
+    private func recordedSleepRestoreValue() -> String {
+        state.value(for: .sleepDisabled) == "1" ? "1" : "0"
     }
 
     private func applyAWDLUnion(_ mutate: () -> Void) -> Bool {
