@@ -254,3 +254,9 @@ _LEASES_V117 = {
     "Automation lease ended": {"hu": "Automatizálási bérlet véget ért", "es": "Concesión de automatización finalizada", "fr": "Bail d’automatisation terminé", "de": "Automatisierungs-Lease beendet", "zh-Hans": "自动化租约已结束"},
 }
 CORE.update(_LEASES_V117)
+
+# Controller trigger, new in the 1.17 cycle (second batch).
+_V117B = {
+    "Game controller connected": {},
+}
+CORE.update(_V117B)

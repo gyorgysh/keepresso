@@ -28,6 +28,19 @@ Versions follow [Semantic Versioning](https://semver.org).
   new "Allow automation to change the wake schedule" switch is on. It is
   off by default because a scheduled wake is a system-wide change applied
   by the administrator helper.
+- **Teach your agent in one click.** Preferences ▸ Automation can copy the
+  lease protocol as paste-ready agent instructions, copy an MCP setup
+  snippet for Claude Code, Gemini CLI, Grok, or Codex, and reveal the
+  bundled skill folder for copying into an agent's skills directory.
+- **Game controller trigger and display comfort.** A new "Game controller
+  connected" trigger, and an opt-in switch that reports user activity
+  during controller play, so gamepad-only sessions stop dimming the
+  display mid-game (controller input does not always reset the idle
+  timer).
+- **High CPU priority for the game, opt-in.** The Gaming & Streaming
+  Setup can raise the active game or streaming client's CPU priority
+  through the administrator helper while you play, so background work
+  cannot steal frames, and restores it when the bout ends.
 
 ### Fixed
 
