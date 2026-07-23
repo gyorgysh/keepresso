@@ -228,14 +228,27 @@ struct StreamingSetupView: View {
 
     private var watchdogCard: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
+            HStack(spacing: 4) {
                 Label("AWDL watchdog", systemImage: "dot.radiowaves.left.and.right")
                     .font(.headline)
+                    // The radiating waves animate only while the watchdog is
+                    // actively pausing AND the window is on screen: the
+                    // closed window keeps this view alive (see
+                    // WindowVisibilityReader), so an unconditional effect
+                    // would render unseen frames forever.
+                    .symbolEffect(
+                        .variableColor.iterative,
+                        isActive: model.awdlStatus.isPausing && windowVisible
+                    )
+                InfoButton(text: L("macOS scans for AirDrop, Handoff, and Sidecar peers on the same Wi-Fi radio about once a second, and each hop can spike your ping. That reads as stutter in cloud gaming, remote play, and live streams. The watchdog turns those hops off (pausing the AWDL interface) while you play and brings everything back afterward, automatically with the game detection below or manually with the switch."))
                 Spacer()
                 Text(interfaceStateLabel)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Text("The stutter fix for streaming and online gaming.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
             awdlStatusRow
 
