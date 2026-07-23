@@ -15,27 +15,38 @@ struct KeepressoApp: App {
         }
         .menuBarExtraStyle(.window)
 
+        // Every window opts out of external events (`handlesExternalEvents`
+        // with an empty set): `keepresso://` URLs are fully handled by the
+        // AppDelegate, and without the opt-out SwiftUI answers a URL open
+        // that no scene claims (the automation doorbell, a Shortcuts
+        // command) by presenting the first declared window, popping the
+        // Setup checklist over whatever the user is doing.
+
         // The headless-readiness Setup checklist, opened from the menu via
         // `openWindow(id: "setup")`.
         Window("Keepresso Setup", id: Self.setupWindowID) {
             SetupView(model: appDelegate.model)
         }
         .windowResizability(.contentSize)
+        .handlesExternalEvents(matching: [])
 
         Window("Gaming & Streaming", id: Self.streamingWindowID) {
             StreamingSetupView(model: appDelegate.model)
         }
         .windowResizability(.contentSize)
+        .handlesExternalEvents(matching: [])
 
         Window("Preferences", id: Self.preferencesWindowID) {
             PreferencesView(model: appDelegate.model)
         }
         .windowResizability(.contentSize)
+        .handlesExternalEvents(matching: [])
 
         Window("About Keepresso", id: Self.aboutWindowID) {
             AboutView()
         }
         .windowResizability(.contentSize)
+        .handlesExternalEvents(matching: [])
 
         // Opened automatically (from `MenuBarLabelView`) when the helper
         // daemon's self-heal needs the user: approve once more, or reinstall.
@@ -43,6 +54,7 @@ struct KeepressoApp: App {
             HelperAttentionView(model: appDelegate.model)
         }
         .windowResizability(.contentSize)
+        .handlesExternalEvents(matching: [])
 
         // Shown once on first launch (see `MenuBarLabelView`) and reopenable from
         // the menu via `openWindow(id: "welcome")`.
@@ -50,6 +62,7 @@ struct KeepressoApp: App {
             WelcomeView(model: appDelegate.model)
         }
         .windowResizability(.contentSize)
+        .handlesExternalEvents(matching: [])
     }
 
     /// Scene ids shared with the menu's window-opening buttons.
