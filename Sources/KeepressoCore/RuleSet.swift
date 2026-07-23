@@ -49,6 +49,9 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
     /// At least one game controller is connected (with a short release grace,
     /// so a controller briefly rebonding doesn't flap the session).
     case controllerConnected
+    /// Steam is actively downloading or updating a game in any library
+    /// (with a generous release grace bridging between-depot verification).
+    case steamDownload
 
     /// A human-readable summary for the rules UI.
     public var label: String {
@@ -74,6 +77,7 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
             return L("Downloading in \u{201C}%@\u{201D}", url.lastPathComponent)
         case .agentActivity(let rule): return rule.label
         case .controllerConnected:    return L("Game controller connected")
+        case .steamDownload:          return L("Steam is downloading")
         }
     }
 
@@ -213,6 +217,7 @@ public struct TriggerFactory {
     private let downloads: DownloadFolderScanning
     private let agents: AgentActivityMonitoring
     private let controllers: ControllerMonitoring
+    private let steam: SteamDownloadMonitoring
     private let now: () -> Date
 
     public init(
@@ -232,6 +237,7 @@ public struct TriggerFactory {
         downloads: DownloadFolderScanning = FileManagerDownloadScanner(),
         agents: AgentActivityMonitoring = PSAgentActivityMonitor(),
         controllers: ControllerMonitoring = GCControllerMonitor(),
+        steam: SteamDownloadMonitoring = FileSteamDownloadMonitor(),
         now: @escaping () -> Date = Date.init
     ) {
         self.powerSource = powerSource
@@ -250,6 +256,7 @@ public struct TriggerFactory {
         self.downloads = downloads
         self.agents = agents
         self.controllers = controllers
+        self.steam = steam
         self.now = now
     }
 
@@ -319,6 +326,12 @@ public struct TriggerFactory {
             return GracePeriodTrigger(
                 wrapping: ControllerTrigger(monitor: controllers),
                 grace: ControllerTrigger.releaseGrace,
+                now: now
+            )
+        case .steamDownload:
+            return GracePeriodTrigger(
+                wrapping: SteamDownloadTrigger(monitor: steam),
+                grace: SteamDownloadTrigger.releaseGrace,
                 now: now
             )
         }

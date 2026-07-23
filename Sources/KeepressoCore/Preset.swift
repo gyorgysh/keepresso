@@ -94,6 +94,7 @@ extension Preset {
             ruleSet: RuleSet(combine: .any, rules: [
                 .gaming,
                 .controllerConnected,
+                .steamDownload,
             ])
         ),
         // The gaming trigger covers a frontmost game or streaming client; the

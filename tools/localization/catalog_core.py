@@ -258,5 +258,6 @@ CORE.update(_LEASES_V117)
 # Controller trigger, new in the 1.17 cycle (second batch).
 _V117B = {
     "Game controller connected": {},
+    "Steam is downloading": {},
 }
 CORE.update(_V117B)

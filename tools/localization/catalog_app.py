@@ -765,5 +765,7 @@ _V117B = {
     'macOS scans for AirDrop, Handoff, and Sidecar peers on the same Wi-Fi radio about once a second, and each hop can spike your ping. That reads as stutter in cloud gaming, remote play, and live streams. The watchdog turns those hops off (pausing the AWDL interface) while you play and brings everything back afterward, automatically with the game detection below or manually with the switch.': {},
     'The stutter fix for streaming and online gaming.': {},
     'Gaming': {},
+    'Steam is downloading': {},
+    'Counts while Steam is actively downloading or updating a game in any of its libraries, and lets the Mac sleep once the download finishes or is paused. Reads Steam's own bookkeeping; no permission needed.': {},
 }
 APP.update(_V117B)
