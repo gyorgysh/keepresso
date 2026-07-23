@@ -1375,9 +1375,12 @@ final class AppModel {
         pasteboard.setString(text.trimmingCharacters(in: .whitespacesAndNewlines), forType: .string)
     }
 
-    /// Paste-ready MCP configuration per agent flavor.
+    /// Paste-ready MCP configuration per agent flavor. Claude Code, Gemini
+    /// CLI, and Grok all read the same `mcpServers` JSON shape; they get
+    /// their own menu entries anyway because users look for their tool's
+    /// name, not its file format.
     enum MCPSetupFormat {
-        case claudeCodeJSON
+        case mcpServersJSON
         case codexTOML
         case serverPath
     }
@@ -1385,7 +1388,7 @@ final class AppModel {
     func copyMCPSetup(_ format: MCPSetupFormat) {
         let snippet: String
         switch format {
-        case .claudeCodeJSON:
+        case .mcpServersJSON:
             snippet = """
             {
               "mcpServers": {

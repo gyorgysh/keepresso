@@ -923,6 +923,30 @@ private struct AutomationTab: View {
     @Bindable var model: AppModel
     @State private var draft: HookDraft?
     @State private var editingID: UUID?
+    /// Transient feedback after a copy action, with paste guidance. Cleared
+    /// after a few seconds; superseded by the next copy.
+    @State private var copiedConfirmation: String?
+    @State private var copiedResetTask: Task<Void, Never>?
+
+    private func flashCopied(_ message: String) {
+        copiedResetTask?.cancel()
+        withAnimation(.snappy(duration: 0.2)) { copiedConfirmation = message }
+        copiedResetTask = Task {
+            try? await Task.sleep(for: .seconds(6))
+            guard !Task.isCancelled else { return }
+            withAnimation(.snappy(duration: 0.3)) { copiedConfirmation = nil }
+        }
+    }
+
+    private func copyMCP(_ format: AppModel.MCPSetupFormat) {
+        model.copyMCPSetup(format)
+        switch format {
+        case .serverPath:
+            flashCopied(L("Copied. Use it as the MCP server command in your agent's settings."))
+        case .mcpServersJSON, .codexTOML:
+            flashCopied(L("Copied. Paste it into your agent's MCP configuration file."))
+        }
+    }
 
     var body: some View {
         Form {
@@ -1057,17 +1081,30 @@ private struct AutomationTab: View {
                 set: { model.automationWakeControlEnabled = $0 }
             ))
             HStack(spacing: 8) {
-                Button("Copy Agent Instructions") { model.copyAgentInstructions() }
+                Button("Copy Agent Instructions") {
+                    model.copyAgentInstructions()
+                    flashCopied(L("Copied. Paste it to your agent in a new chat to teach it to manage Keepresso."))
+                }
                 Menu("Copy MCP Setup") {
-                    Button("For Claude Code (JSON)") { model.copyMCPSetup(.claudeCodeJSON) }
-                    Button("For Codex (TOML)") { model.copyMCPSetup(.codexTOML) }
-                    Button("Server path only") { model.copyMCPSetup(.serverPath) }
+                    Button("For Claude Code (JSON)") { copyMCP(.mcpServersJSON) }
+                    Button("For Gemini CLI (JSON)") { copyMCP(.mcpServersJSON) }
+                    Button("For Grok (JSON)") { copyMCP(.mcpServersJSON) }
+                    Button("For Codex (TOML)") { copyMCP(.codexTOML) }
+                    Divider()
+                    Button("Server path only") { copyMCP(.serverPath) }
                 }
                 .fixedSize()
                 Button("Reveal Skill Folder") { model.revealAgentSkill() }
                 Spacer(minLength: 0)
             }
             .controlSize(.small)
+            if let copiedConfirmation {
+                Label(copiedConfirmation, systemImage: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.green)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
+            }
         } header: {
             sectionHeader("Automation access", info: L("A lease is a bounded keep-awake grant an outside tool asks for through the keepresso command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning leases off ends any live lease. The wake schedule switch is separate and off by default because a scheduled wake is a system-wide change applied by the administrator helper: leave it off unless a tool you trust should plan wake-ups for you."))
         }
