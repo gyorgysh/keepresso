@@ -1343,6 +1343,78 @@ final class AppModel {
         leaseEngine.revokeAll(now: Date())
     }
 
+    // MARK: - Teach-your-agent helpers
+
+    /// The bundled skill folder inside Resources.
+    private var agentSkillURL: URL {
+        Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Resources/AgentSkill/keep-awake", isDirectory: true)
+    }
+
+    /// The embedded MCP server binary, absolute path of THIS install (a dev
+    /// build's path differs from /Applications).
+    private var mcpServerPath: String {
+        Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/keepresso-mcp").path
+    }
+
+    /// Copy the bundled skill's protocol text for pasting into an agent chat
+    /// or an instructions file. The YAML frontmatter is dropped (it is skill
+    /// metadata, not prompt content), and the canonical /Applications paths
+    /// are rewritten to this install's real location.
+    func copyAgentInstructions() {
+        let skill = agentSkillURL.appendingPathComponent("SKILL.md")
+        guard var text = try? String(contentsOf: skill, encoding: .utf8) else { return }
+        if text.hasPrefix("---"),
+           let end = text.range(of: "\n---\n", range: text.index(text.startIndex, offsetBy: 3)..<text.endIndex) {
+            text = String(text[end.upperBound...])
+        }
+        text = text.replacingOccurrences(
+            of: "/Applications/Keepresso.app", with: Bundle.main.bundlePath)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text.trimmingCharacters(in: .whitespacesAndNewlines), forType: .string)
+    }
+
+    /// Paste-ready MCP configuration per agent flavor.
+    enum MCPSetupFormat {
+        case claudeCodeJSON
+        case codexTOML
+        case serverPath
+    }
+
+    func copyMCPSetup(_ format: MCPSetupFormat) {
+        let snippet: String
+        switch format {
+        case .claudeCodeJSON:
+            snippet = """
+            {
+              "mcpServers": {
+                "keepresso": {
+                  "command": "\(mcpServerPath)"
+                }
+              }
+            }
+            """
+        case .codexTOML:
+            snippet = """
+            [mcp_servers.keepresso]
+            command = "\(mcpServerPath)"
+            enabled = true
+            """
+        case .serverPath:
+            snippet = mcpServerPath
+        }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(snippet, forType: .string)
+    }
+
+    /// Show the bundled skill folder in Finder so it can be copied into an
+    /// agent's skills directory.
+    func revealAgentSkill() {
+        NSWorkspace.shared.activateFileViewerSelecting([agentSkillURL])
+    }
+
     // MARK: - Automation wake requests
 
     /// Whether outside tools may change the wake schedule (Preferences ▸

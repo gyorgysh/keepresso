@@ -968,7 +968,7 @@ private struct AutomationTab: View {
 
     private var endActionSection: some View {
         Section {
-            Picker("On session end", selection: Binding(
+            Picker("After the last session ends", selection: Binding(
                 get: { model.endAction },
                 set: { model.endAction = $0 }
             )) {
@@ -983,7 +983,7 @@ private struct AutomationTab: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         } header: {
-            sectionHeader("After the session ends", info: L("When a keep-awake session ends on its own (a timer expiring, or trigger conditions dropping), Keepresso can put the display to sleep, lock the screen, start the screen saver, or sleep the Mac. Off by default so a timed session never surprises you. Manual stops, and the battery and thermal safety pauses, never run this action. A brief debounce cancels it if the session restarts right away."))
+            sectionHeader("After the session ends", info: L("When the last thing keeping the Mac awake ends on its own (a timer expiring, trigger conditions dropping, or the final automation lease releasing), Keepresso can put the display to sleep, lock the screen, start the screen saver, or sleep the Mac. Leases count: while any lease is live the session continues and nothing fires. Off by default so a timed session never surprises you. Manual stops, and the battery and thermal safety pauses, never run this action. A brief debounce cancels it if the session restarts right away."))
         } footer: {
             sectionFooter("Fires a few seconds after a natural end, not on a manual stop or a safety pause.")
         }
@@ -1056,6 +1056,18 @@ private struct AutomationTab: View {
                 get: { model.automationWakeControlEnabled },
                 set: { model.automationWakeControlEnabled = $0 }
             ))
+            HStack(spacing: 8) {
+                Button("Copy Agent Instructions") { model.copyAgentInstructions() }
+                Menu("Copy MCP Setup") {
+                    Button("For Claude Code (JSON)") { model.copyMCPSetup(.claudeCodeJSON) }
+                    Button("For Codex (TOML)") { model.copyMCPSetup(.codexTOML) }
+                    Button("Server path only") { model.copyMCPSetup(.serverPath) }
+                }
+                .fixedSize()
+                Button("Reveal Skill Folder") { model.revealAgentSkill() }
+                Spacer(minLength: 0)
+            }
+            .controlSize(.small)
         } header: {
             sectionHeader("Automation access", info: L("A lease is a bounded keep-awake grant an outside tool asks for through the keepresso command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning leases off ends any live lease. The wake schedule switch is separate and off by default because a scheduled wake is a system-wide change applied by the administrator helper: leave it off unless a tool you trust should plan wake-ups for you."))
         }
