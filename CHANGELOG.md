@@ -3,6 +3,36 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Changed
+
+- **Ending automation leases is now a menu action.** While leases are live,
+  the menu offers "End Automation Leases" in place of "Pause Triggers", so
+  stopping agent work and pausing triggers are two deliberate steps. Pausing
+  or turning off triggers no longer stops a session that live leases are
+  sustaining: the leases keep it, and ending them is the explicit gesture.
+
+### Fixed
+
+- **Automation commands no longer pop the Setup window.** A `keepresso://`
+  URL arriving with no window to claim it (the lease doorbell, a Shortcuts
+  command) could make macOS present the Setup checklist out of nowhere.
+- **The menu tells leases "held" from "waiting" apart.** During a battery or
+  thermal pause the lease rows now say the leases are waiting for the pause
+  to lift instead of claiming the Mac is held awake. `keepresso lease
+  heartbeat` also reports whether the Mac is actually being held right now.
+- **Waking no longer triggers a stale end action.** A lease that expired
+  while the Mac slept used to run your end-of-session action (sleep, lock)
+  moments after you woke the Mac. A lease end noticed late now skips the
+  action, matching timed sessions.
+- **Lease expiry survives clock changes.** Setting the clock backwards no
+  longer extends live leases by the size of the jump; their horizons stay
+  anchored to the present.
+- **The MCP server accepts null request ids.** Requests with a JSON-RPC
+  null id are answered, and notifications carrying one are ignored instead
+  of being answered with an error.
+
 ## [1.17.0] - 2026-07-23
 
 ### Added
