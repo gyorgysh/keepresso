@@ -33,14 +33,34 @@ Versions follow [Semantic Versioning](https://semver.org).
   snippet for Claude Code, Gemini CLI, Grok, or Codex, and reveal the
   bundled skill folder for copying into an agent's skills directory.
 - **Game controller trigger and display comfort.** A new "Game controller
-  connected" trigger, and an opt-in switch that reports user activity
-  during controller play, so gamepad-only sessions stop dimming the
-  display mid-game (controller input does not always reset the idle
-  timer).
+  connected" trigger counts any connected gamepad, including the Steam
+  Controller, which macOS itself never reports as one (detected
+  permission-free at the hardware level, and only while the controller is
+  actually on, not just its receiver plugged in). An opt-in switch reports
+  user activity during controller play, so gamepad-only sessions stop
+  dimming the display mid-game.
+- **Steam download trigger.** A new "Steam is downloading" condition keeps
+  the Mac awake while a game actually downloads or updates, in any Steam
+  library, and lets it sleep once it finishes or you pause it. Reads
+  Steam's own bookkeeping plus live download activity, with no permission
+  needed.
+- **Gaming preset.** A new built-in preset covers the whole gaming life:
+  playing (or a cloud client), a controller in hand, a Steam download
+  running, or sustained traffic above 1 MB/s (launcher patches). Cloud
+  Gaming gains the controller condition too.
 - **High CPU priority for the game, opt-in.** The Gaming & Streaming
   Setup can raise the active game or streaming client's CPU priority
   through the administrator helper while you play, so background work
   cannot steal frames, and restores it when the bout ends.
+
+### Changed
+
+- **A tidier menu panel and Setup window.** The panel's live statuses
+  (automation leases, fan boost, AWDL pause) now share one card instead of
+  trailing as loose captions. The AWDL watchdog introduces itself as the
+  stutter fix it is, with a plain-words explainer and a live animation
+  while pausing, and helper-only controls show a lock with an inline
+  install instead of a dead switch.
 
 ### Fixed
 

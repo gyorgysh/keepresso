@@ -85,7 +85,14 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   games category, anything running from a **Steam** library (many Steam games
   skip the declaration), and the cloud and game-streaming clients: **GeForce
   NOW, Boosteroid, Parsec, Moonlight, Shadow**. A five-minute grace means
-  alt-tabbing to Discord doesn't drop the session.
+  alt-tabbing to Discord doesn't drop the session. A **controller condition**
+  counts any connected gamepad, DualSense, Xbox, and Steam Controller
+  included (detected permission-free even though macOS reports it as a
+  keyboard and mouse), and a **Steam download condition** holds the Mac
+  awake while a game actually downloads, releasing when it finishes or you
+  pause it. While you play, opt-in comforts keep the display awake during
+  controller-only sessions and give the game **high CPU priority** through
+  the administrator helper, restored when the bout ends.
 - 📶 **Gaming & Streaming Setup.** macOS hops the Wi-Fi radio off-channel for
   AWDL (AirDrop, Handoff, Sidecar) about once a second, which shows up as
   50-100 ms ping spikes mid-game or mid-stream. A dedicated window diagnoses
@@ -100,9 +107,10 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   radio-hygiene checks: wired network, Wi-Fi channel alignment with AWDL's
   social channels (44 in the EU, 149 in the US and Canada), Bluetooth, Game Mode.
 - 🎛️ **Presets.** Apply a named trigger bundle in one click, built-in (AI Agent,
-  Meetings, Cloud Gaming, Remote Control, On AC Power, External Display
-  Connected, Remote Session (SSH), Backup Running, Media Render) or your own
-  saved rule sets. Deleted a built-in? "Restore default presets" brings it back.
+  Gaming, Cloud Gaming, Meetings, Remote Control, On AC Power, External
+  Display Connected, Remote Session (SSH), Backup Running, Media Render) or
+  your own saved rule sets. Deleted a built-in? "Restore default presets"
+  brings it back.
 - 👋 **First-run setup.** A welcome window on a new Mac points out that Keepresso
   lives in the menu bar (no Dock icon) and sets you up in one click for how you
   work: agentic coding, gaming and streaming, meetings and calls, or remote
