@@ -24,6 +24,20 @@ Standalone holds (this process holds the assertion, caffeinate-style):
   keepresso -d                  also keep the display awake (combinable)
   keepresso -u                  declare user activity: wake the display now
 
+Automation leases (bounded keep-awake grants for scripts and agents; the
+app unions all live leases and lets the Mac sleep after the last one ends):
+  keepresso lease acquire --id <uuid> --tool <name> --task <label>
+                          --ttl <seconds> [--owner <name>]
+                          [--max-lifetime <seconds>] [--json]
+  keepresso lease heartbeat --id <uuid> [--ttl <seconds>] [--json]
+  keepresso lease release --id <uuid> [--json]
+  keepresso lease list [--json]
+
+  Heartbeat before half the TTL elapses; the max lifetime (7 day cap) is a
+  ceiling heartbeats cannot extend. Exit codes: 0 ok, 1 local failure,
+  2 app not running or no acknowledgment, 3 lease not found or ended,
+  4 leases disabled in Preferences, 64 usage.
+
 Other:
   keepresso help | version
 
@@ -31,6 +45,8 @@ Examples:
   keepresso start --for 90      brew a 90 minute session in the app
   keepresso -w $$ &              stay awake while this shell lives
   ffmpeg -i in.mov out.mp4 && keepresso stop
+  ID=$(uuidgen); keepresso lease acquire --id "$ID" --tool render \\
+    --task "overnight export" --ttl 600
 """
 
 func fail(_ message: String, code: Int32) -> Never {
@@ -175,6 +191,31 @@ func runHold(_ hold: CLIRequest.Hold) -> Never {
     dispatchMain()
 }
 
+// MARK: - Automation leases
+
+/// `keepresso lease <verb> ...`: run the shared client and render its
+/// outcome. The parent pid is recorded on acquired leases for `lease list`.
+func runLease(_ command: CLIRequest.LeaseCommand) -> Never {
+    let outcome = LeaseClient.real(ownerPid: getppid()).run(command)
+    let json: Bool = {
+        switch command {
+        case .acquire(_, _, _, _, _, _, let json),
+             .heartbeat(_, _, let json),
+             .release(_, let json),
+             .list(let json):
+            return json
+        }
+    }()
+    if json {
+        print(outcome.json)
+    } else if outcome.exitCode == 0 {
+        print(outcome.human)
+    } else {
+        FileHandle.standardError.write(Data("keepresso: \(outcome.human)\n".utf8))
+    }
+    exit(outcome.exitCode)
+}
+
 // MARK: - Agent hooks
 
 /// `keepresso agent-hook <event>`: reduce the JSON payload on stdin to a
@@ -208,4 +249,6 @@ case .hold(let hold):
     runHold(hold)
 case .agentHook(let event):
     runAgentHook(event: event)
+case .lease(let command):
+    runLease(command)
 }

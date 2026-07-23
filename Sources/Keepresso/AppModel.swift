@@ -142,6 +142,9 @@ final class AppModel {
         self.session.endAction = loaded.endAction
         self.session.pauseBelowBatteryPercent = loaded.pauseBelowBatteryPercent
         self.session.pauseWhenHot = loaded.thermalSafety?.stopBrewing ?? false
+        // Leases surviving a relaunch are picked up by the first tick's
+        // directory scan; no launch-time special case.
+        self.session.leases = loaded.automationLeasesEnabled ? leaseEngine : nil
         let hooks = EventHookDispatcher(runner: SystemHookRunner())
         hooks.hooks = loaded.eventHooks
         self.hookDispatcher = hooks
@@ -238,6 +241,7 @@ final class AppModel {
         let wasActive = session.isActive
         pauseTriggers()
         if wasActive {
+            revokeLeases()
             session.stop()
         } else {
             session.start(mode: settings.defaultMode)
@@ -1226,6 +1230,7 @@ final class AppModel {
         session.endAction = newSettings.endAction
         session.pauseBelowBatteryPercent = newSettings.pauseBelowBatteryPercent
         session.pauseWhenHot = newSettings.thermalSafety?.stopBrewing ?? false
+        session.leases = newSettings.automationLeasesEnabled ? leaseEngine : nil
         hookDispatcher.hooks = newSettings.eventHooks
         applyWakeScheduleToSystem()
         // The guard's didSet queues fan/pause releases if it was mid-emergency.
@@ -1260,23 +1265,30 @@ final class AppModel {
         let endsAt = session.remaining.map {
             Date(timeIntervalSinceReferenceDate: (Date().timeIntervalSinceReferenceDate + $0).rounded())
         }
-        widgetSync.write(SharedSessionState(
-            isActive: session.isActive,
-            endsAt: endsAt,
-            triggersEnabled: settings.triggersEnabled,
-            triggersPaused: triggersPaused
-        ))
+        widgetSync.write(
+            SharedSessionState(
+                isActive: session.isActive,
+                endsAt: endsAt,
+                triggersEnabled: settings.triggersEnabled,
+                triggersPaused: triggersPaused
+            ),
+            leaseIDs: session.liveLeases.map(\.id).sorted(),
+            leasesEnabled: settings.automationLeasesEnabled
+        )
     }
 
     /// On quit, leave the widgets showing "off": the session's assertions die
     /// with this process, and a stale "Brewing" tile would lie until the next
     /// launch.
     func writeWidgetStateStopped() {
-        widgetSync.write(SharedSessionState(
-            isActive: false,
-            triggersEnabled: settings.triggersEnabled,
-            triggersPaused: triggersPaused
-        ))
+        widgetSync.write(
+            SharedSessionState(
+                isActive: false,
+                triggersEnabled: settings.triggersEnabled,
+                triggersPaused: triggersPaused
+            ),
+            leasesEnabled: settings.automationLeasesEnabled
+        )
     }
 
     /// Consume a pending widget command, if any, and drive the app through the
@@ -1301,6 +1313,34 @@ final class AppModel {
         syncWidgetState()
     }
 
+    // MARK: - Automation leases
+
+    /// The engine the session polls for lease demand, and the revocation
+    /// surface for explicit stops.
+    @ObservationIgnored private let leaseEngine = LeaseEngine()
+
+    /// Whether outside tools may hold automation leases (Preferences ▸
+    /// Automation). Turning it off revokes every live lease, so their
+    /// clients hear "revoked" at the next heartbeat instead of wondering
+    /// why the Mac sleeps.
+    var automationLeasesEnabled: Bool {
+        get { settings.automationLeasesEnabled }
+        set {
+            settings.automationLeasesEnabled = newValue
+            if !newValue { revokeLeases() }
+            session.leases = newValue ? leaseEngine : nil
+            persist()
+            syncWidgetState()
+        }
+    }
+
+    /// An explicit user stop must win over lease demand: end every live
+    /// lease first, or the session would flap back on the very next tick
+    /// with no feedback. Clients discover the revocation on heartbeat.
+    private func revokeLeases() {
+        leaseEngine.revokeAll(now: Date())
+    }
+
     // MARK: - URL scheme commands
 
     /// Handle a `keepresso://` command from ``URLCommand/parse(_:)``. Acts like
@@ -1310,6 +1350,14 @@ final class AppModel {
     /// command on the next once-a-second reconcile, turning it into a no-op
     /// with no feedback to the script that fired it.
     func handle(_ command: URLCommand) {
+        // The lease doorbell is not a session command: it must not pause
+        // triggers or touch the session, only bring the next reconcile (and
+        // the acquire acknowledgment in status.json) forward to now.
+        if command == .syncLeases {
+            session.reconcile()
+            syncWidgetState()
+            return
+        }
         // Capture before pausing: pauseTriggers() stops the session. Pass
         // .command so pausing a trigger-held session logs the stop as the
         // command that caused it, not "Stopped manually".
@@ -1319,15 +1367,19 @@ final class AppModel {
         case .start(let mode):
             session.start(mode: mode, cause: .command)
         case .stop:
+            revokeLeases()
             session.stop(cause: .command)
         case .toggle:
             // Mirror toggleManual(), using the saved default duration rather
             // than the controller's in-memory mode (never seeded after launch).
             if wasActive {
+                revokeLeases()
                 session.stop(cause: .command)
             } else {
                 session.start(mode: settings.defaultMode, cause: .command)
             }
+        case .syncLeases:
+            break // handled above
         }
     }
 

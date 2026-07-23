@@ -167,3 +167,97 @@ import Foundation
     // ISO 8601, not a raw interval, so `jq` users can read it.
     #expect((object?["writtenAt"] as? String)?.hasSuffix("Z") == true)
 }
+
+// MARK: - Lease commands
+
+private let leaseId = "aaaaaaaa-1111-2222-3333-444444444444"
+
+@Test func leaseAcquireParsesItsFlags() throws {
+    let parsed = try CLIRequest.parse([
+        "lease", "acquire",
+        "--id", leaseId.uppercased(), // canonicalized to lowercase
+        "--tool", "claude-code",
+        "--task", "overnight refactor",
+        "--ttl", "300",
+        "--max-lifetime", "14400",
+        "--owner", "me",
+        "--json",
+    ])
+    #expect(parsed == .lease(.acquire(
+        id: leaseId, owner: "me", tool: "claude-code", task: "overnight refactor",
+        ttlSeconds: 300, maxLifetimeSeconds: 14_400, json: true
+    )))
+}
+
+@Test func leaseAcquireRequiresItsCoreFlags() {
+    #expect(throws: CLIUsageError.self) {
+        try CLIRequest.parse(["lease", "acquire", "--tool", "t", "--task", "x", "--ttl", "60"])
+    }
+    #expect(throws: CLIUsageError.self) {
+        try CLIRequest.parse(["lease", "acquire", "--id", leaseId, "--task", "x", "--ttl", "60"])
+    }
+    #expect(throws: CLIUsageError.self) {
+        try CLIRequest.parse(["lease", "acquire", "--id", leaseId, "--tool", "t", "--ttl", "60"])
+    }
+    #expect(throws: CLIUsageError.self) {
+        try CLIRequest.parse(["lease", "acquire", "--id", leaseId, "--tool", "t", "--task", "x"])
+    }
+}
+
+@Test func leaseFlagsRejectJunk() {
+    #expect(throws: CLIUsageError.self) { try CLIRequest.parse(["lease"]) }
+    #expect(throws: CLIUsageError.self) { try CLIRequest.parse(["lease", "renew"]) }
+    #expect(throws: CLIUsageError.self) {
+        try CLIRequest.parse(["lease", "heartbeat", "--id", "not-a-uuid"])
+    }
+    #expect(throws: CLIUsageError.self) {
+        try CLIRequest.parse(["lease", "heartbeat", "--id", leaseId, "--ttl", "-5"])
+    }
+    #expect(throws: CLIUsageError.self) {
+        try CLIRequest.parse(["lease", "list", "--frobnicate", "on"])
+    }
+    #expect(throws: CLIUsageError.self) {
+        try CLIRequest.parse(["lease", "release", "--id", leaseId, "--id", leaseId])
+    }
+}
+
+@Test func leaseHeartbeatReleaseAndListParse() throws {
+    #expect(try CLIRequest.parse(["lease", "heartbeat", "--id", leaseId, "--ttl", "600"])
+        == .lease(.heartbeat(id: leaseId, ttlSeconds: 600, json: false)))
+    #expect(try CLIRequest.parse(["lease", "release", "--id", leaseId])
+        == .lease(.release(id: leaseId, json: false)))
+    #expect(try CLIRequest.parse(["lease", "list", "--json"])
+        == .lease(.list(json: true)))
+}
+
+@Test func syncLeasesURLRoundTrips() {
+    let command = CLIRequest.RemoteCommand.syncLeases
+    #expect(command.urlString == "keepresso://sync-leases")
+    #expect(URLCommand.parse(URL(string: command.urlString)!) == .syncLeases)
+}
+
+@Test func statusSnapshotLeaseFieldsSurviveBothDirections() throws {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keepresso-tests-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    // New writer, new reader.
+    StatusFile.write(
+        StatusSnapshot(
+            isActive: true, pid: 1, writtenAt: Date(timeIntervalSince1970: 1_800_000_000),
+            leaseIDs: [leaseId], leasesEnabled: true
+        ),
+        to: url
+    )
+    #expect(StatusFile.read(from: url)?.leaseIDs == [leaseId])
+
+    // A file from an app that predates leases still decodes; the lease
+    // fields read as unknown.
+    StatusFile.write(
+        StatusSnapshot(isActive: true, pid: 1, writtenAt: Date(timeIntervalSince1970: 1_800_000_000)),
+        to: url
+    )
+    let old = StatusFile.read(from: url)
+    #expect(old?.leaseIDs == nil)
+    #expect(old?.leasesEnabled == nil)
+}

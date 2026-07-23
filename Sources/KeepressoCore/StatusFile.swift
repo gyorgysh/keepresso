@@ -19,6 +19,13 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
     /// The writing app's process id.
     public var pid: Int32
     public var writtenAt: Date
+    /// Ids of the automation leases counting as demand, the acquire
+    /// acknowledgment channel. Optional: files written by older apps lack it,
+    /// which acquire treats as "app too old to grant leases".
+    public var leaseIDs: [String]?
+    /// Whether the lease API preference is on, so a refused acquire can tell
+    /// "disabled" from "not acknowledged yet".
+    public var leasesEnabled: Bool?
 
     public init(
         isActive: Bool,
@@ -27,7 +34,9 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
         triggersPaused: Bool = false,
         appVersion: String? = nil,
         pid: Int32,
-        writtenAt: Date
+        writtenAt: Date,
+        leaseIDs: [String]? = nil,
+        leasesEnabled: Bool? = nil
     ) {
         self.isActive = isActive
         self.endsAt = endsAt
@@ -36,6 +45,8 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
         self.appVersion = appVersion
         self.pid = pid
         self.writtenAt = writtenAt
+        self.leaseIDs = leaseIDs
+        self.leasesEnabled = leasesEnabled
     }
 }
 

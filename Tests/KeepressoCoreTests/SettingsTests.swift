@@ -145,3 +145,15 @@ import Foundation
     #expect(fine.endingSoonNoticeSeconds == 120)
     #expect(fine.pauseBelowBatteryPercent == 40)
 }
+
+@Test func automationLeasesDefaultOnAndDecodeForgivingly() throws {
+    #expect(KeepressoSettings().automationLeasesEnabled)
+    // A blob saved before the field existed keeps the default.
+    let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: Data("{}".utf8))
+    #expect(decoded.automationLeasesEnabled)
+    let off = try JSONDecoder().decode(
+        KeepressoSettings.self,
+        from: Data(#"{"automationLeasesEnabled":false}"#.utf8)
+    )
+    #expect(!off.automationLeasesEnabled)
+}

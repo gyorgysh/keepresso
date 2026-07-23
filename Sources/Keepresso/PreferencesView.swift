@@ -928,6 +928,7 @@ private struct AutomationTab: View {
         Form {
             endActionSection
             scheduledWakeSection
+            automationLeasesSection
             eventHooksSection
         }
         .formStyle(.grouped)
@@ -1040,6 +1041,19 @@ private struct AutomationTab: View {
             sectionHeader("Scheduled wake", info: L("Wake the Mac at a set time through the administrator helper (pmset schedule / repeat), then optionally start a keep-awake session so it does not fall back asleep before the job runs. Pair with an end-of-session action above for wake, work, sleep. Scheduled wake is reliable on AC power. On battery the firmware may skip it. macOS only allows one system-wide repeating power schedule, so enabling ours replaces whatever was there. The controls stay locked until the helper is installed and ready, the same rule as the thermal fan boost."))
         } footer: {
             wakeScheduleFooter
+        }
+    }
+
+    // MARK: Automation leases
+
+    private var automationLeasesSection: some View {
+        Section {
+            Toggle("Allow automation leases", isOn: Binding(
+                get: { model.automationLeasesEnabled },
+                set: { model.automationLeasesEnabled = $0 }
+            ))
+        } header: {
+            sectionHeader("Automation leases", info: L("A lease is a bounded keep-awake grant an outside tool asks for through the keepresso command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning this off ends any live lease."))
         }
     }
 

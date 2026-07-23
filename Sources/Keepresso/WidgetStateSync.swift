@@ -12,16 +12,26 @@ final class WidgetStateSync {
     /// The App Group defaults shared with the widget extension, or `nil` when
     /// the group entitlement isn't available (unsigned dev builds).
     private let defaults = WidgetBridge.groupDefaults()
-    /// The last state written, so the per-second tick only writes on change.
-    private var lastState: SharedSessionState?
+    /// Everything the change check compares, so the per-second tick only
+    /// writes on change. Lease ids are part of it: widgets don't render
+    /// leases, but `status.json` is the acquire acknowledgment channel, and a
+    /// second lease arriving during an active session changes nothing else.
+    private struct Written: Equatable {
+        var state: SharedSessionState
+        var leaseIDs: [String]
+        var leasesEnabled: Bool
+    }
+    private var last: Written?
     private let appVersion =
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
 
     /// Write `state` and reload the widgets, but only when it actually changed:
     /// the ticker calls this every second and the no-op path is the common one.
-    func write(_ state: SharedSessionState) {
-        guard state != lastState else { return }
-        lastState = state
+    func write(_ state: SharedSessionState, leaseIDs: [String] = [], leasesEnabled: Bool = true) {
+        let written = Written(state: state, leaseIDs: leaseIDs, leasesEnabled: leasesEnabled)
+        guard written != last else { return }
+        let stateChanged = state != last?.state
+        last = written
         StatusFile.write(StatusSnapshot(
             isActive: state.isActive,
             endsAt: state.endsAt,
@@ -29,9 +39,13 @@ final class WidgetStateSync {
             triggersPaused: state.triggersPaused,
             appVersion: appVersion,
             pid: ProcessInfo.processInfo.processIdentifier,
-            writtenAt: Date()
+            writtenAt: Date(),
+            leaseIDs: leaseIDs,
+            leasesEnabled: leasesEnabled
         ))
-        guard let defaults else { return }
+        // Widgets don't render leases: skip the reload when only the lease
+        // side of the snapshot moved.
+        guard stateChanged, let defaults else { return }
         WidgetBridge.writeState(state, to: defaults)
         WidgetCenter.shared.reloadTimelines(ofKind: WidgetBridge.statusWidgetKind)
         if #available(macOS 26.0, *) {

@@ -13,10 +13,14 @@ import Foundation
 ///   time (later today, or tomorrow if it already passed; 24-hour HH:MM)
 /// - `keepresso://stop`
 /// - `keepresso://toggle`
+/// - `keepresso://sync-leases`: rescan automation inputs now (and launch the
+///   app if needed). Carries no parameters on purpose: lease data travels in
+///   validated files, the URL is only the doorbell.
 public enum URLCommand: Equatable, Sendable {
     case start(mode: SessionMode)
     case stop
     case toggle
+    case syncLeases
 
     /// Parses a `keepresso://` URL into a command, or `nil` if it's not one
     /// Keepresso recognises (wrong scheme, unknown host, or a malformed
@@ -44,6 +48,8 @@ public enum URLCommand: Equatable, Sendable {
             return .stop
         case "toggle":
             return .toggle
+        case "sync-leases":
+            return .syncLeases
         default:
             return nil
         }

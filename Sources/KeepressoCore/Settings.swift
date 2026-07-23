@@ -84,6 +84,10 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     /// start `false` and see it once; settings saved before this field existed
     /// decode to `true` (see ``init(from:)``), so upgrading users aren't shown it.
     public var hasOnboarded: Bool
+    /// Whether outside tools (scripts, AI agents) may hold automation leases
+    /// through the CLI and the MCP server. On by default; turning it off ends
+    /// any live lease.
+    public var automationLeasesEnabled: Bool
 
     public init(
         options: SleepPreventionOptions = .default,
@@ -114,7 +118,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         startOnLaunch: Bool = false,
         presets: [Preset] = Preset.builtIns,
         seededPresetIDs: [String] = Preset.builtIns.map(\.id),
-        hasOnboarded: Bool = false
+        hasOnboarded: Bool = false,
+        automationLeasesEnabled: Bool = true
     ) {
         self.options = options
         self.defaultMode = defaultMode
@@ -145,6 +150,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.presets = presets
         self.seededPresetIDs = seededPresetIDs
         self.hasOnboarded = hasOnboarded
+        self.automationLeasesEnabled = automationLeasesEnabled
     }
 
     /// Append any built-in preset this user has never been offered. Called once
@@ -245,6 +251,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         // them with the welcome window. Only a genuinely fresh install (the
         // memberwise default) starts false and sees it.
         hasOnboarded = try c.decodeIfPresent(Bool.self, forKey: .hasOnboarded) ?? true
+        automationLeasesEnabled = try c.decodeIfPresent(Bool.self, forKey: .automationLeasesEnabled) ?? true
     }
 
     /// The out-of-the-box quick "stop in N" shortcuts: 15 and 30 minutes, 1 hour.

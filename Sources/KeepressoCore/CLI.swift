@@ -21,6 +21,25 @@ public enum CLIRequest: Equatable, Sendable {
     /// Hidden from the help text: installed hook commands are its only
     /// intended caller.
     case agentHook(event: String)
+    /// Manage automation leases (bounded keep-awake grants for scripts and
+    /// agents), executed by ``LeaseClient``.
+    case lease(LeaseCommand)
+
+    /// One `keepresso lease` operation, fully validated by the parser.
+    public enum LeaseCommand: Equatable, Sendable {
+        case acquire(
+            id: String,
+            owner: String?,
+            tool: String,
+            task: String,
+            ttlSeconds: Int,
+            maxLifetimeSeconds: Int?,
+            json: Bool
+        )
+        case heartbeat(id: String, ttlSeconds: Int?, json: Bool)
+        case release(id: String, json: Bool)
+        case list(json: Bool)
+    }
 
     /// A command delivered to the app (launching it if needed) via
     /// `open <url>`. Mirrors what ``URLCommand/parse(_:)`` accepts on the
@@ -29,6 +48,9 @@ public enum CLIRequest: Equatable, Sendable {
         case start(durationMinutes: Double?, untilTime: String?)
         case stop
         case toggle
+        /// The lease doorbell: rescan automation inputs, launching the app
+        /// if needed. Parameterless by design.
+        case syncLeases
 
         /// The `keepresso://` URL that carries this command.
         public var urlString: String {
@@ -43,6 +65,8 @@ public enum CLIRequest: Equatable, Sendable {
                 return "keepresso://stop"
             case .toggle:
                 return "keepresso://toggle"
+            case .syncLeases:
+                return "keepresso://sync-leases"
             }
         }
 
@@ -113,6 +137,8 @@ public enum CLIRequest: Equatable, Sendable {
                 throw CLIUsageError("agent-hook takes exactly one event name")
             }
             return .agentHook(event: arguments[1])
+        case "lease":
+            return .lease(try parseLease(Array(arguments.dropFirst())))
         default:
             guard first.hasPrefix("-") else {
                 throw CLIUsageError("unknown command '\(first)' (run 'keepresso help')")
@@ -157,6 +183,97 @@ public enum CLIRequest: Equatable, Sendable {
             throw CLIUsageError("use either --for or --until, not both")
         }
         return .start(durationMinutes: minutes, untilTime: until)
+    }
+
+    // MARK: - lease options
+
+    private static func parseLease(_ arguments: [String]) throws -> LeaseCommand {
+        guard let verb = arguments.first else {
+            throw CLIUsageError("lease needs a verb: acquire, heartbeat, release, or list")
+        }
+        var flags = try leaseFlags(Array(arguments.dropFirst()))
+        let json = flags.removeValue(forKey: "--json") != nil
+
+        func take(_ name: String) -> String? { flags.removeValue(forKey: name) }
+        func requireId() throws -> String {
+            guard let raw = take("--id") else {
+                throw CLIUsageError("lease \(verb) needs --id <uuid>")
+            }
+            guard let id = AutomationLease.canonicalId(raw) else {
+                throw CLIUsageError("'\(raw)' is not a UUID (try: uuidgen)")
+            }
+            return id
+        }
+        func seconds(_ name: String) throws -> Int? {
+            guard let raw = take(name) else { return nil }
+            guard let value = Int(raw), value > 0 else {
+                throw CLIUsageError("'\(raw)' is not a positive number of seconds")
+            }
+            return value
+        }
+
+        let command: LeaseCommand
+        switch verb {
+        case "acquire":
+            let id = try requireId()
+            guard let tool = take("--tool"), !tool.isEmpty else {
+                throw CLIUsageError("lease acquire needs --tool <name>")
+            }
+            guard let task = take("--task"), !task.isEmpty else {
+                throw CLIUsageError("lease acquire needs --task <label>")
+            }
+            guard let ttl = try seconds("--ttl") else {
+                throw CLIUsageError("lease acquire needs --ttl <seconds>")
+            }
+            command = .acquire(
+                id: id,
+                owner: take("--owner"),
+                tool: tool,
+                task: task,
+                ttlSeconds: ttl,
+                maxLifetimeSeconds: try seconds("--max-lifetime"),
+                json: json
+            )
+        case "heartbeat":
+            command = .heartbeat(id: try requireId(), ttlSeconds: try seconds("--ttl"), json: json)
+        case "release":
+            command = .release(id: try requireId(), json: json)
+        case "list":
+            command = .list(json: json)
+        default:
+            throw CLIUsageError("unknown lease verb '\(verb)' (acquire, heartbeat, release, list)")
+        }
+        guard flags.isEmpty else {
+            throw CLIUsageError("unknown lease option '\(flags.keys.sorted().first!)'")
+        }
+        return command
+    }
+
+    /// Collects `--flag value` pairs (and the value-less `--json`), rejecting
+    /// anything that is not a recognised flag shape.
+    private static func leaseFlags(_ arguments: [String]) throws -> [String: String] {
+        var flags: [String: String] = [:]
+        var index = 0
+        while index < arguments.count {
+            let name = arguments[index]
+            guard name.hasPrefix("--") else {
+                throw CLIUsageError("unexpected argument '\(name)'")
+            }
+            if name == "--json" {
+                flags[name] = ""
+                index += 1
+                continue
+            }
+            guard index + 1 < arguments.count else {
+                throw CLIUsageError("\(name) needs a value")
+            }
+            guard flags[name] == nil else {
+                throw CLIUsageError("\(name) given twice")
+            }
+            flags[name] = arguments[index + 1]
+            index += 2
+        }
+        return flags
     }
 
     /// HH:MM, 24-hour, the same shape ``URLCommand`` accepts in `until=`.

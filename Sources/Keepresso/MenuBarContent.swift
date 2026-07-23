@@ -157,6 +157,8 @@ struct MenuBarContent: View {
                 optionToggles
             }
 
+            leaseStatusLine
+
             fanStatusLine
 
             awdlStatusLine
@@ -566,6 +568,54 @@ struct MenuBarContent: View {
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
+            }
+        }
+    }
+
+    /// Live automation leases, so a lease-held session explains itself in the
+    /// place the user looks first: one caption line, then up to four
+    /// tool-and-task rows with their expiry countdowns. Refreshes on the 1s
+    /// tick.
+    @ViewBuilder
+    private var leaseStatusLine: some View {
+        let _ = liveRefresh
+        let leases = session.liveLeases
+        if !leases.isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Image(systemName: "bolt.badge.clock")
+                        .foregroundStyle(.secondary)
+                        .font(type.caption)
+                        .accessibilityHidden(true)
+                    Text(leases.count == 1
+                        ? L("Held awake by an automation lease")
+                        : L("Held awake by %d automation leases", leases.count))
+                        .font(type.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                ForEach(leases.prefix(4), id: \.id) { lease in
+                    HStack(spacing: 6) {
+                        Text("\(lease.tool): \(lease.task)")
+                            .font(type.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer(minLength: 4)
+                        Text(Self.graceCountdown(max(0, lease.expiresAt.timeIntervalSinceNow)))
+                            .font(type.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .contentTransition(.numericText(countsDown: true))
+                    }
+                    .padding(.leading, 20)
+                }
+                if leases.count > 4 {
+                    Text(L("and %d more", leases.count - 4))
+                        .font(type.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 20)
+                }
             }
         }
     }
