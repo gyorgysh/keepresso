@@ -162,3 +162,35 @@ private final class HoldRecorder {
     #expect(controller.boostedPID == nil)
     #expect(recorder.calls.isEmpty)
 }
+
+// MARK: - Steam hardware HID dedup
+
+@Test func steamHardwareCollapsesInterfacesAndIgnoresVirtuals() {
+    // The real puck: several USB interfaces at one location plus lizard-mode
+    // virtual keyboard/mouse children.
+    #expect(SteamControllerHID.distinctHardwareCount(devices: [
+        ("USB", 34_734_080), ("USB", 34_734_080), ("USB", 34_734_080),
+        ("Virtual", 0), ("Virtual", 0),
+    ]) == 1)
+    // Two pucks on two ports.
+    #expect(SteamControllerHID.distinctHardwareCount(devices: [
+        ("USB", 1), ("USB", 1), ("USB", 2),
+    ]) == 2)
+    // Stale virtuals with no hardware left: nothing.
+    #expect(SteamControllerHID.distinctHardwareCount(devices: [
+        ("Virtual", 0), ("Virtual", nil),
+    ]) == 0)
+    // A physical device with no usable location still counts once.
+    #expect(SteamControllerHID.distinctHardwareCount(devices: [
+        ("Bluetooth", nil), ("Bluetooth", 0),
+    ]) == 1)
+    #expect(SteamControllerHID.distinctHardwareCount(devices: []) == 0)
+}
+
+@Test func gamingPresetsIncludeTheControllerRule() {
+    let gaming = Preset.builtIns.first { $0.id == "gaming" }
+    #expect(gaming?.ruleSet.rules.contains(.controllerConnected) == true)
+    #expect(gaming?.ruleSet.rules.contains(.gaming) == true)
+    let cloud = Preset.builtIns.first { $0.id == "cloud-gaming" }
+    #expect(cloud?.ruleSet.rules.contains(.controllerConnected) == true)
+}

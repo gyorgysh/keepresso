@@ -85,17 +85,30 @@ extension Preset {
             name: "Meetings",
             ruleSet: RuleSet(combine: .any, rules: [.mediaInUse(.camera), .mediaInUse(.microphone)])
         ),
+        // Local play: a frontmost game, or simply a controller in hand (the
+        // controller rule needs no permission and catches couch sessions
+        // where the game hides the frontmost signal behind a launcher).
+        Preset(
+            id: "gaming",
+            name: "Gaming",
+            ruleSet: RuleSet(combine: .any, rules: [
+                .gaming,
+                .controllerConnected,
+            ])
+        ),
         // The gaming trigger covers a frontmost game or streaming client; the
         // app rules keep the session alive while a cloud client runs in the
         // background (queueing for a rig, downloading) without being
         // frontmost. Deliberately only the session-scoped clients: Parsec and
         // friends often autostart for hosting, so a while-running rule for
-        // them would pin the Mac awake around the clock.
+        // them would pin the Mac awake around the clock. The controller rule
+        // covers the whole couch session, menus and rig queues included.
         Preset(
             id: "cloud-gaming",
             name: "Cloud Gaming",
             ruleSet: RuleSet(combine: .any, rules: [
                 .gaming,
+                .controllerConnected,
                 .app(AppRule(bundleID: "com.nvidia.gfnpc.mall", name: "NVIDIA GeForce NOW")),
                 .app(AppRule(bundleID: "com.boosteroid.macclient", name: "Boosteroid")),
             ])

@@ -1,5 +1,6 @@
 import Foundation
 import GameController
+import IOKit.hid
 
 // MARK: - Monitor seam
 
@@ -11,12 +12,69 @@ public protocol ControllerMonitoring: AnyObject {
     var connectedCount: Int { get }
 }
 
-/// Real backend over the GameController framework. `GCController.controllers()`
-/// tracks connects and disconnects on its own once the process has a run
-/// loop (the app always does), and reading it involves no TCC prompt.
+/// Real backend: the GameController framework plus a HID sweep for Steam
+/// hardware. `GCController.controllers()` tracks connects and disconnects on
+/// its own once the process has a run loop (the app always does) and covers
+/// DualSense, DualShock, Xbox, and most modern pads, but it never reports
+/// Valve hardware: a Steam Controller without Steam Input presents itself as
+/// a keyboard and mouse ("lizard mode"). Plain HID *enumeration* still sees
+/// the device, needs no permission (only reading input reports is TCC-gated,
+/// and this never opens a device), and is cached briefly like the other
+/// probes.
 public final class GCControllerMonitor: ControllerMonitoring {
-    public init() {}
-    public var connectedCount: Int { GCController.controllers().count }
+    private let steamHardware: TTLCache<Int>
+
+    public convenience init() {
+        self.init(steamProbe: SteamControllerHID.probeSystem)
+    }
+
+    /// The probe and clock are injectable so the cache can be unit-tested.
+    init(
+        ttl: TimeInterval = 3,
+        now: @escaping () -> Date = Date.init,
+        steamProbe: @escaping () -> Int
+    ) {
+        steamHardware = TTLCache(ttl: ttl, now: now, probe: steamProbe)
+    }
+
+    public var connectedCount: Int {
+        // The two sources never overlap: the framework refuses Valve
+        // hardware, and the sweep matches only Valve's vendor id.
+        GCController.controllers().count + steamHardware.current
+    }
+}
+
+/// Permission-free detection of Steam Controller hardware (wired, dongle, or
+/// the Steam Controller puck) at the HID layer.
+enum SteamControllerHID {
+    /// Valve's USB vendor id.
+    static let valveVendorID = 0x28DE
+
+    /// Count physical Valve devices currently attached.
+    static func probeSystem() -> Int {
+        let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
+        IOHIDManagerSetDeviceMatching(manager, [kIOHIDVendorIDKey: valveVendorID] as CFDictionary)
+        defer { IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone)) }
+        guard let devices = IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice> else { return 0 }
+        return distinctHardwareCount(devices: devices.map { device in
+            (
+                transport: IOHIDDeviceGetProperty(device, kIOHIDTransportKey as CFString) as? String,
+                location: IOHIDDeviceGetProperty(device, kIOHIDLocationIDKey as CFString) as? Int
+            )
+        })
+    }
+
+    /// Pure dedup over the enumeration: one physical device fans out into
+    /// several HID interfaces (the puck shows four) plus virtual
+    /// keyboard/mouse children from lizard mode. Virtual entries are ignored
+    /// outright (they can outlive the hardware), and the rest collapse to
+    /// distinct location ids, or one device when locations are missing.
+    static func distinctHardwareCount(devices: [(transport: String?, location: Int?)]) -> Int {
+        let physical = devices.filter { ($0.transport ?? "") != "Virtual" }
+        guard !physical.isEmpty else { return 0 }
+        let locations = Set(physical.compactMap(\.location)).subtracting([0])
+        return locations.isEmpty ? 1 : locations.count
+    }
 }
 
 // MARK: - Trigger
