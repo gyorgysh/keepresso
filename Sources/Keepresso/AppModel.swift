@@ -1416,6 +1416,10 @@ final class AppModel {
         if command == .syncLeases {
             processAutomationWakeRequest()
             session.reconcile()
+            // Unconditional write: a stale status.json left by another
+            // process (an old instance's quit snapshot) must not swallow
+            // this acknowledgment.
+            widgetSync.forceNextWrite()
             syncWidgetState()
             return
         }

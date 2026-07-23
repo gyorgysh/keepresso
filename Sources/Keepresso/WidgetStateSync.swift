@@ -66,6 +66,17 @@ final class WidgetStateSync {
         }
     }
 
+    /// Drop the change-detection cache so the next ``write`` lands on disk
+    /// unconditionally. The cache compares against this process's memory,
+    /// not the file, so a foreign write to `status.json` (an older app
+    /// instance's dying "stopped" snapshot during a single-instance
+    /// takeover) would otherwise stick until the state next changes. The
+    /// automation doorbell forces a write for exactly that reason: an
+    /// acquire acknowledgment must reflect this process, not the corpse.
+    func forceNextWrite() {
+        last = nil
+    }
+
     /// Consume a pending widget command (a Control Center / widget button press
     /// left in the App Group), or `nil` if there's none.
     func consumeCommand() -> WidgetCommand? {
