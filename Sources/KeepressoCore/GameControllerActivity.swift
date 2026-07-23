@@ -50,29 +50,60 @@ enum SteamControllerHID {
     /// Valve's USB vendor id.
     static let valveVendorID = 0x28DE
 
-    /// Count physical Valve devices currently attached.
+    /// Wireless receivers (the standalone dongle and the Steam Controller
+    /// puck). A receiver sits on the bus whether or not a controller is
+    /// talking to it, so its interfaces alone must never count as a
+    /// controller.
+    static let receiverProductIDs: Set<Int> = [0x1142, 0x1304]
+
+    /// One HID interface, reduced to what the count needs.
+    struct Device: Equatable, Sendable {
+        var transport: String?
+        var productID: Int?
+        var location: Int?
+    }
+
+    /// Count Steam Controllers currently live.
     static func probeSystem() -> Int {
         let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
         IOHIDManagerSetDeviceMatching(manager, [kIOHIDVendorIDKey: valveVendorID] as CFDictionary)
         defer { IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone)) }
         guard let devices = IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice> else { return 0 }
         return distinctHardwareCount(devices: devices.map { device in
-            (
+            Device(
                 transport: IOHIDDeviceGetProperty(device, kIOHIDTransportKey as CFString) as? String,
+                productID: IOHIDDeviceGetProperty(device, kIOHIDProductIDKey as CFString) as? Int,
                 location: IOHIDDeviceGetProperty(device, kIOHIDLocationIDKey as CFString) as? Int
             )
         })
     }
 
-    /// Pure dedup over the enumeration: one physical device fans out into
-    /// several HID interfaces (the puck shows four) plus virtual
-    /// keyboard/mouse children from lizard mode. Virtual entries are ignored
-    /// outright (they can outlive the hardware), and the rest collapse to
-    /// distinct location ids, or one device when locations are missing.
-    static func distinctHardwareCount(devices: [(transport: String?, location: Int?)]) -> Int {
+    /// Pure judgment over the enumeration, shaped by probing real hardware
+    /// in both states:
+    /// - One physical device fans out into several HID interfaces (the puck
+    ///   shows five at one location); interfaces collapse by location id.
+    /// - A controller actively talking creates Valve *virtual*
+    ///   keyboard/mouse children (lizard mode). Those children vanish the
+    ///   moment the controller powers off while the receiver's interfaces
+    ///   stay, so for receivers the virtuals ARE the live-controller
+    ///   evidence: a receiver counts only while they exist.
+    /// - Directly attached controllers (wired) count by presence alone.
+    static func distinctHardwareCount(devices: [Device]) -> Int {
+        let hasLiveVirtuals = devices.contains { ($0.transport ?? "") == "Virtual" }
         let physical = devices.filter { ($0.transport ?? "") != "Virtual" }
-        guard !physical.isEmpty else { return 0 }
-        let locations = Set(physical.compactMap(\.location)).subtracting([0])
+        let direct = physical.filter { !receiverProductIDs.contains($0.productID ?? -1) }
+        let receivers = physical.filter { receiverProductIDs.contains($0.productID ?? -1) }
+        var count = collapsedByLocation(direct)
+        if hasLiveVirtuals {
+            count += collapsedByLocation(receivers)
+        }
+        return count
+    }
+
+    /// Distinct location ids, or one device when locations are missing.
+    private static func collapsedByLocation(_ devices: [Device]) -> Int {
+        guard !devices.isEmpty else { return 0 }
+        let locations = Set(devices.compactMap(\.location)).subtracting([0])
         return locations.isEmpty ? 1 : locations.count
     }
 }
