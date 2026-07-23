@@ -3,7 +3,7 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
-## [1.17.0] - Unreleased
+## [1.17.0] - 2026-07-23
 
 ### Added
 
@@ -17,21 +17,22 @@ Versions follow [Semantic Versioning](https://semver.org).
   inspired by a proposal from @quasar2333 in PR #3.
 - **MCP server for agents.** The app bundle now ships `keepresso-mcp`
   (Contents/Helpers), a Model Context Protocol server any MCP-capable agent
-  can use to acquire and release leases, read Keepresso's status, and read
-  the system wake schedule.
-- **Bundled agent skill.** A ready-to-copy skill folder
-  (Contents/Resources/AgentSkill/keep-awake) teaches agents the
-  acquire-heartbeat-release protocol.
+  can use to manage leases, read Keepresso's status, and read the system
+  wake schedule.
+- **Bundled agent skill.** A ready-to-install skill folder
+  (Contents/Resources/AgentSkill/keep-awake) teaches an agent the whole
+  protocol, both the `keepresso` command line and the MCP server.
 - **Wake schedule for automation, opt-in.** `keepresso wake status` reads
   the system's scheduled wakes for anyone. `keepresso wake set` / `clear`
   (and the matching MCP tools) can change the schedule, but only while the
   new "Allow automation to change the wake schedule" switch is on. It is
   off by default because a scheduled wake is a system-wide change applied
   by the administrator helper.
-- **Teach your agent in one click.** Preferences ▸ Automation can copy the
-  lease protocol as paste-ready agent instructions, copy an MCP setup
-  snippet for Claude Code, Gemini CLI, Grok, or Codex, and reveal the
-  bundled skill folder for copying into an agent's skills directory.
+- **Teach your agent in one click.** Preferences ▸ Automation reveals the
+  bundled skill so you can install it straight from disk. For agents
+  without a skills folder it copies the full skill as paste-ready
+  instructions, and MCP setup snippets are ready for Claude Code, Gemini
+  CLI, Grok, and Codex.
 - **Game controller trigger and display comfort.** A new "Game controller
   connected" trigger counts any connected gamepad, including the Steam
   Controller, which macOS itself never reports as one (detected
@@ -44,14 +45,15 @@ Versions follow [Semantic Versioning](https://semver.org).
   library, and lets it sleep once it finishes or you pause it. Reads
   Steam's own bookkeeping plus live download activity, with no permission
   needed.
-- **Gaming preset.** A new built-in preset covers the whole gaming life:
-  playing (or a cloud client), a controller in hand, a Steam download
+- **Gaming preset.** A new built-in preset covers a gaming session end to
+  end: playing (or a cloud client), a controller in hand, a Steam download
   running, or sustained traffic above 1 MB/s (launcher patches). Cloud
   Gaming gains the controller condition too.
 - **High CPU priority for the game, opt-in.** The Gaming & Streaming
   Setup can raise the active game or streaming client's CPU priority
   through the administrator helper while you play, so background work
-  cannot steal frames, and restores it when the bout ends.
+  cannot steal frames. Normal priority comes back when you stop playing,
+  and always when the game quits.
 
 ### Changed
 
