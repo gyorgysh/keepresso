@@ -494,3 +494,54 @@ private struct CLILinkFixture {
     #expect(fans.restoreCalls == 1)
     #expect(state.markers().isEmpty)
 }
+
+// MARK: - Priority holds
+
+private let boostPid = "/usr/bin/renice -10 -p 4242"
+private let restorePid = "/usr/bin/renice 0 -p 4242"
+
+@Test func priorityHoldRenicesOnUnionEdges() {
+    let runner = FakeRunner()
+    let engine = HelperEngine(runner: runner, state: FakeRestoreState())
+
+    #expect(engine.setPriorityHold(client: 1, holding: true, pid: 4242))
+    #expect(runner.commands == [boostPid])
+    #expect(!engine.isIdle)
+
+    // A second client holding the same pid: no extra write.
+    #expect(engine.setPriorityHold(client: 2, holding: true, pid: 4242))
+    #expect(runner.commands == [boostPid])
+
+    // Last holder leaving restores nice 0.
+    #expect(engine.setPriorityHold(client: 2, holding: false, pid: 4242))
+    #expect(runner.commands == [boostPid])
+    #expect(engine.setPriorityHold(client: 1, holding: false, pid: 4242))
+    #expect(runner.commands == [boostPid, restorePid])
+    #expect(engine.isIdle)
+}
+
+@Test func priorityHoldSwitchesPidsCleanly() {
+    let runner = FakeRunner()
+    let engine = HelperEngine(runner: runner, state: FakeRestoreState())
+
+    _ = engine.setPriorityHold(client: 1, holding: true, pid: 4242)
+    // The same client re-holding a different pid boosts the new one and
+    // restores the old one.
+    _ = engine.setPriorityHold(client: 1, holding: true, pid: 5555)
+    #expect(runner.commands.contains("/usr/bin/renice -10 -p 5555"))
+    #expect(runner.commands.contains(restorePid))
+}
+
+@Test func priorityHoldReleasesOnDisconnectAndRejectsBadPids() {
+    let runner = FakeRunner()
+    let engine = HelperEngine(runner: runner, state: FakeRestoreState())
+
+    #expect(!engine.setPriorityHold(client: 1, holding: true, pid: 0))
+    #expect(!engine.setPriorityHold(client: 1, holding: true, pid: -5))
+    #expect(runner.commands.isEmpty)
+
+    _ = engine.setPriorityHold(client: 1, holding: true, pid: 4242)
+    engine.clientDisconnected(1)
+    #expect(runner.commands == [boostPid, restorePid])
+    #expect(engine.isIdle)
+}

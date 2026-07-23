@@ -46,6 +46,9 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
     /// judged by its process subtree's smoothed CPU, with a release grace once
     /// every session goes idle.
     case agentActivity(AgentRule)
+    /// At least one game controller is connected (with a short release grace,
+    /// so a controller briefly rebonding doesn't flap the session).
+    case controllerConnected
 
     /// A human-readable summary for the rules UI.
     public var label: String {
@@ -70,6 +73,7 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
         case .downloadInFolder(let url):
             return L("Downloading in \u{201C}%@\u{201D}", url.lastPathComponent)
         case .agentActivity(let rule): return rule.label
+        case .controllerConnected:    return L("Game controller connected")
         }
     }
 
@@ -208,6 +212,7 @@ public struct TriggerFactory {
     private let throughput: NetworkThroughputReading
     private let downloads: DownloadFolderScanning
     private let agents: AgentActivityMonitoring
+    private let controllers: ControllerMonitoring
     private let now: () -> Date
 
     public init(
@@ -226,6 +231,7 @@ public struct TriggerFactory {
         throughput: NetworkThroughputReading = GetifaddrsThroughputReader(),
         downloads: DownloadFolderScanning = FileManagerDownloadScanner(),
         agents: AgentActivityMonitoring = PSAgentActivityMonitor(),
+        controllers: ControllerMonitoring = GCControllerMonitor(),
         now: @escaping () -> Date = Date.init
     ) {
         self.powerSource = powerSource
@@ -243,6 +249,7 @@ public struct TriggerFactory {
         self.throughput = throughput
         self.downloads = downloads
         self.agents = agents
+        self.controllers = controllers
         self.now = now
     }
 
@@ -308,6 +315,12 @@ public struct TriggerFactory {
             return rule.grace > 0
                 ? GracePeriodTrigger(wrapping: trigger, grace: rule.grace, now: now)
                 : trigger
+        case .controllerConnected:
+            return GracePeriodTrigger(
+                wrapping: ControllerTrigger(monitor: controllers),
+                grace: ControllerTrigger.releaseGrace,
+                now: now
+            )
         }
     }
 

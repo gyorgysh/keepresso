@@ -459,6 +459,8 @@ struct RulesView: View {
         Section("Gaming") {
             Button("Playing a game") { model.addRule(.gaming) }
                 .help("Counts only while a game (or a cloud-gaming app) is the active window, not just running in the background. Keeps holding for 5 minutes after you switch away.")
+            Button("Game controller connected") { model.addRule(.controllerConnected) }
+                .help("Counts while any game controller is connected, wired or Bluetooth. Rides out a brief reconnect for half a minute.")
         }
         Section("AI agents") {
             Button("AI agent is working") { model.addRule(.agentActivity(AgentRule())) }
@@ -548,6 +550,7 @@ struct RulesView: View {
         case .bluetoothDevice:         return "antenna.radiowaves.left.and.right"
         case .calendarEvent:           return "calendar"
         case .gaming:                  return "gamecontroller"
+        case .controllerConnected:     return "gamecontroller.fill"
         case .throughput:              return "arrow.up.arrow.down"
         case .downloadInFolder:        return "arrow.down.circle"
         case .agentActivity:           return "sparkles"

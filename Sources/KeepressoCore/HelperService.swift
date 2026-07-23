@@ -35,7 +35,8 @@ public enum HelperService {
     /// `fanHoldDropped` (the app's view of a surrendered boost).
     /// 5: added `sleepNow` (`pmset sleepnow` for the session-end action).
     /// 6: added the wake-schedule verb (`applyWakeSchedule`, one composite
-    ///    `pmset schedule` / `pmset repeat` step).
+    ///    `pmset schedule` / `pmset repeat` step) and, still unshipped, the
+    ///    game priority boost's connection-scoped `setPriorityHold`.
     public static let protocolVersion = 6
 
     /// The code-signing requirement one side demands of the other: an
@@ -103,6 +104,11 @@ public enum HelperService {
     /// firmware refusals), so the app can stop claiming a boost the hardware
     /// no longer has and release its side of the hold.
     func fanHoldDropped(reply: @escaping @Sendable (Bool) -> Void)
+    /// Take or release this connection's CPU-priority hold on `pid` (the
+    /// game priority boost: renice needs root for negative values). Released
+    /// automatically when the connection dies; priority itself dies with the
+    /// target process, so there is no cross-reboot restore debt.
+    func setPriorityHold(_ holding: Bool, pid: Int, reply: @escaping @Sendable (Bool) -> Void)
     /// Put the Mac to sleep immediately (`pmset sleepnow`). Fire-and-forget
     /// from the caller's perspective: the machine may sleep before the reply
     /// lands, so a missing reply is not a failure.
@@ -140,6 +146,9 @@ public protocol PrivilegedHelperCalling: AnyObject, Sendable {
     /// Whether the daemon surrendered the forced-fan hold on its own, `nil`
     /// when no daemon answered.
     func fanHoldDropped() -> Bool?
+    /// Take or release the CPU-priority hold on `pid` (see
+    /// ``HelperXPCProtocol/setPriorityHold(_:pid:reply:)``).
+    func setPriorityHold(_ holding: Bool, pid: Int) -> Bool
     /// Ask the daemon to put the Mac to sleep (`pmset sleepnow`).
     func sleepNow() -> Bool
     /// Apply the full desired wake schedule (see
@@ -165,6 +174,8 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     private var wantsAWDLHold = false
     /// The wanted fan boost percent, or nil for no fan hold.
     private var wantsFanHold: Int?
+    /// The pid whose priority we want raised, or nil for no priority hold.
+    private var wantsPriorityHold: Int?
 
     /// How long a call may wait on the daemon before counting as failed.
     /// Generous enough for launchd to spawn it on first contact.
@@ -212,6 +223,13 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         wantsFanHold = holding ? percent : nil
         lock.unlock()
         return call { proxy, done in proxy.setFanHold(holding, percent: percent, reply: done) }
+    }
+
+    public func setPriorityHold(_ holding: Bool, pid: Int) -> Bool {
+        lock.lock()
+        wantsPriorityHold = holding ? pid : nil
+        lock.unlock()
+        return call { proxy, done in proxy.setPriorityHold(holding, pid: pid, reply: done) }
     }
 
     public func fanHoldDropped() -> Bool? {
@@ -291,6 +309,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     private func releaseConnectionUnlessHeld() {
         lock.lock()
         let held = wantsSleepHold || wantsAWDLHold || wantsFanHold != nil
+            || wantsPriorityHold != nil
         let stale = held ? nil : connection
         if !held { connection = nil }
         lock.unlock()
@@ -340,11 +359,14 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         let sleep = wantsSleepHold
         let awdl = wantsAWDLHold
         let fan = wantsFanHold
+        let priority = wantsPriorityHold
         lock.unlock()
-        guard sleep || awdl || fan != nil, let proxy = proxyForAsyncUse() else { return }
+        guard sleep || awdl || fan != nil || priority != nil,
+              let proxy = proxyForAsyncUse() else { return }
         if sleep { proxy.setSleepHold(true) { _ in } }
         if awdl { proxy.setAWDLHold(true) { _ in } }
         if let fan { proxy.setFanHold(true, percent: fan) { _ in } }
+        if let priority { proxy.setPriorityHold(true, pid: priority) { _ in } }
     }
 }
 

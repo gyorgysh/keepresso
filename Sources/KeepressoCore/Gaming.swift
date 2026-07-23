@@ -11,15 +11,20 @@ public struct GamingSnapshot: Equatable, Sendable {
     /// often skip the category declaration (ports, Wine wrappers), but they
     /// all live under a `steamapps` library folder.
     public var frontmostBundlePath: String?
+    /// The frontmost app's process id, for features that act on the game
+    /// process itself (the CPU priority boost). Nil when nothing is frontmost.
+    public var frontmostPID: Int32?
 
     public init(
         frontmostBundleID: String? = nil,
         frontmostCategoryType: String? = nil,
-        frontmostBundlePath: String? = nil
+        frontmostBundlePath: String? = nil,
+        frontmostPID: Int32? = nil
     ) {
         self.frontmostBundleID = frontmostBundleID
         self.frontmostCategoryType = frontmostCategoryType
         self.frontmostBundlePath = frontmostBundlePath
+        self.frontmostPID = frontmostPID
     }
 }
 
@@ -65,7 +70,8 @@ public final class WorkspaceGamingMonitor: GamingMonitoring {
         return GamingSnapshot(
             frontmostBundleID: app.bundleIdentifier,
             frontmostCategoryType: category,
-            frontmostBundlePath: app.bundleURL?.path
+            frontmostBundlePath: app.bundleURL?.path,
+            frontmostPID: app.processIdentifier
         )
     }
 }
@@ -104,6 +110,10 @@ public final class GamingTrigger: Trigger {
     public func isSatisfied() -> Bool {
         Self.isGame(monitor.current)
     }
+
+    /// The monitor's latest reading, for features that need more than the
+    /// boolean (the priority boost wants the game's pid).
+    public var currentSnapshot: GamingSnapshot { monitor.current }
 
     /// Pure decision function, exposed for direct unit testing.
     ///

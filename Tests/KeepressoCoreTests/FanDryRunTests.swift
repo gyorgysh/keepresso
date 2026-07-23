@@ -15,6 +15,7 @@ private final class FakeFanHelper: PrivilegedHelperCalling, @unchecked Sendable 
     func setSleepDisabled(_ disabled: Bool) -> Bool { true }
     func setSleepHold(_ holding: Bool) -> Bool { true }
     func setAWDLHold(_ holding: Bool) -> Bool { true }
+    func setPriorityHold(_ holding: Bool, pid: Int) -> Bool { true }
 
     func setFanHold(_ holding: Bool, percent: Int) -> Bool {
         lock.lock()
@@ -72,6 +73,7 @@ private final class RigHelper: PrivilegedHelperCalling, @unchecked Sendable {
     func setSleepDisabled(_ disabled: Bool) -> Bool { true }
     func setSleepHold(_ holding: Bool) -> Bool { true }
     func setAWDLHold(_ holding: Bool) -> Bool { true }
+    func setPriorityHold(_ holding: Bool, pid: Int) -> Bool { inner.setPriorityHold(holding, pid: pid) }
 
     func setFanHold(_ holding: Bool, percent: Int) -> Bool {
         let ok = inner.setFanHold(holding, percent: percent)

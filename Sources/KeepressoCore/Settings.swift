@@ -92,6 +92,14 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     /// CLI and the MCP server. Off by default: unlike a lease, a wake
     /// schedule is a root-applied system change, so it stays opt-in.
     public var automationWakeControlEnabled: Bool
+    /// Raise the frontmost game's CPU priority through the administrator
+    /// helper while playing, restoring it after (see
+    /// ``GamePriorityController``). Off by default.
+    public var gamePriorityBoost: Bool
+    /// Declare user activity while a game is played with a controller, so
+    /// gamepad-only sessions don't dim the display (see
+    /// ``ControllerActivityPoker``). Off by default.
+    public var controllerPokeWhileGaming: Bool
 
     public init(
         options: SleepPreventionOptions = .default,
@@ -124,7 +132,9 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         seededPresetIDs: [String] = Preset.builtIns.map(\.id),
         hasOnboarded: Bool = false,
         automationLeasesEnabled: Bool = true,
-        automationWakeControlEnabled: Bool = false
+        automationWakeControlEnabled: Bool = false,
+        gamePriorityBoost: Bool = false,
+        controllerPokeWhileGaming: Bool = false
     ) {
         self.options = options
         self.defaultMode = defaultMode
@@ -157,6 +167,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.hasOnboarded = hasOnboarded
         self.automationLeasesEnabled = automationLeasesEnabled
         self.automationWakeControlEnabled = automationWakeControlEnabled
+        self.gamePriorityBoost = gamePriorityBoost
+        self.controllerPokeWhileGaming = controllerPokeWhileGaming
     }
 
     /// Append any built-in preset this user has never been offered. Called once
@@ -259,6 +271,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         hasOnboarded = try c.decodeIfPresent(Bool.self, forKey: .hasOnboarded) ?? true
         automationLeasesEnabled = try c.decodeIfPresent(Bool.self, forKey: .automationLeasesEnabled) ?? true
         automationWakeControlEnabled = try c.decodeIfPresent(Bool.self, forKey: .automationWakeControlEnabled) ?? false
+        gamePriorityBoost = try c.decodeIfPresent(Bool.self, forKey: .gamePriorityBoost) ?? false
+        controllerPokeWhileGaming = try c.decodeIfPresent(Bool.self, forKey: .controllerPokeWhileGaming) ?? false
     }
 
     /// The out-of-the-box quick "stop in N" shortcuts: 15 and 30 minutes, 1 hour.

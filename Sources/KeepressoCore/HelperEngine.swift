@@ -178,6 +178,9 @@ public final class HelperEngine: @unchecked Sendable {
     private var awdlHolders: Set<Int> = []
     /// Client → wanted fan boost percent; the effective target is the max.
     private var fanHolders: [Int: Int] = [:]
+    /// Client → pid whose CPU priority is raised while a game plays. The
+    /// effective set is the union of held pids.
+    private var priorityHolders: [Int: Int] = [:]
     /// Consecutive failed fan writes; past the cap the engine surrenders the
     /// hold instead of fighting the firmware forever.
     private var fanFailureStreak = 0
@@ -362,6 +365,25 @@ public final class HelperEngine: @unchecked Sendable {
         }
     }
 
+    /// Take or release `client`'s CPU-priority hold on `pid` (the frontmost
+    /// game or streaming client). Raising priority needs root, which is why
+    /// this lives in the daemon at all. Deliberately no on-disk restore
+    /// marker, unlike the sleep and fan debts: priority dies with the target
+    /// process, and after a crash or reboot the recorded pid could belong to
+    /// an innocent newcomer, so restoring it would be worse than the leak.
+    public func setPriorityHold(client: Int, holding: Bool, pid: Int) -> Bool {
+        guard pid > 0 else { return false }
+        lock.lock()
+        defer { lock.unlock() }
+        return applyPriorityUnion {
+            if holding {
+                priorityHolders[client] = pid
+            } else {
+                priorityHolders.removeValue(forKey: client)
+            }
+        }
+    }
+
     /// A client connection died (app quit or crashed): release everything it
     /// held, restoring the system defaults if it was the last holder. This is
     /// the daemon-era version of the old loops' pid watch.
@@ -371,6 +393,7 @@ public final class HelperEngine: @unchecked Sendable {
         _ = applySleepUnion { sleepHolders.remove(client) }
         _ = applyAWDLUnion { awdlHolders.remove(client) }
         _ = applyFanUnion { fanHolders.removeValue(forKey: client) }
+        _ = applyPriorityUnion { priorityHolders.removeValue(forKey: client) }
     }
 
     /// Re-down `awdl0` while any hold is live: macOS re-raises the interface
@@ -429,7 +452,8 @@ public final class HelperEngine: @unchecked Sendable {
     public var isIdle: Bool {
         lock.lock()
         defer { lock.unlock() }
-        return sleepHolders.isEmpty && awdlHolders.isEmpty && fanHolders.isEmpty
+        return sleepHolders.isEmpty && awdlHolders.isEmpty
+            && fanHolders.isEmpty && priorityHolders.isEmpty
     }
 
     // MARK: - CLI symlink
@@ -526,6 +550,29 @@ public final class HelperEngine: @unchecked Sendable {
         }
         let ok = fans.restoreAuto()
         state.set(.fanForced, present: !ok)
+        return ok
+    }
+
+    /// The boost every held pid gets. Modest on purpose: enough to win
+    /// scheduling against background work, not enough to starve the system.
+    static let priorityNice = -10
+
+    /// Priority version of the union edge: renice newly held pids down (a
+    /// negative nice needs root) and restore departures to 0. Restores are
+    /// best-effort, the game may have quit already, which is also why there
+    /// is no re-assert tick: nice sticks for the life of the process.
+    private func applyPriorityUnion(_ mutate: () -> Void) -> Bool {
+        let before = Set(priorityHolders.values)
+        mutate()
+        let after = Set(priorityHolders.values)
+        guard before != after else { return true }
+        var ok = true
+        for pid in after.subtracting(before) {
+            ok = runner.run("/usr/bin/renice", [String(Self.priorityNice), "-p", String(pid)]) && ok
+        }
+        for pid in before.subtracting(after) {
+            _ = runner.run("/usr/bin/renice", ["0", "-p", String(pid)])
+        }
         return ok
     }
 

@@ -168,6 +168,8 @@ final class AppModel {
         self.awdl.autoWithGaming = loaded.awdlAutoWithGaming
         self.gamingWatcher.grace = loaded.awdlGraceSeconds
         self.closedDisplayAuto.onlyWhileBrewing = loaded.closedDisplayOnlyWhileBrewing
+        self.controllerPoker.enabled = loaded.controllerPokeWhileGaming
+        self.gamePriority.autoWithGaming = loaded.gamePriorityBoost
         // Decision log → outbound hooks + disk. After every stored property
         // is initialized so weak self is legal.
         self.session.log.onRecord = { [weak hooks, weak logPersister, weak self] event in
@@ -1240,6 +1242,8 @@ final class AppModel {
         virtualDisplay.config = newSettings.virtualDisplay
         awdl.autoWithGaming = newSettings.awdlAutoWithGaming
         closedDisplayAuto.onlyWhileBrewing = newSettings.closedDisplayOnlyWhileBrewing
+        controllerPoker.enabled = newSettings.controllerPokeWhileGaming
+        gamePriority.autoWithGaming = newSettings.gamePriorityBoost
         if !newSettings.closedDisplayOnlyWhileBrewing {
             // An import that turns the automation off must also release any
             // hold it had (autoTick won't, it early-returns once it's off).
@@ -2045,14 +2049,72 @@ final class AppModel {
     @ObservationIgnored private var wasGamingActive = false
     @ObservationIgnored private var sawAWDLError = false
 
-    /// Once-a-second pulse for the watchdog's auto mode. Detects a game directly
-    /// via ``gamingWatcher`` (no trigger or active session required). The guard
-    /// keeps the per-tick task from spawning while the feature is off.
+    /// Sees connected game controllers for the poke and the trigger-free
+    /// Setup toggle.
+    @ObservationIgnored private let controllerMonitor = GCControllerMonitor()
+
+    /// Declares user activity during controller play (gamepad input doesn't
+    /// reliably reset the HID idle timer). Enabled flag mirrored from settings.
+    @ObservationIgnored let controllerPoker = ControllerActivityPoker()
+
+    /// Boosts the frontmost game's CPU priority through the helper daemon.
+    /// Lazy so the hold closure can capture self after init completes.
+    @ObservationIgnored private(set) lazy var gamePriority = GamePriorityController { [weak self] holding, pid in
+        guard let self, self.helperInstalled else { return }
+        let client = self.helperClient
+        Task.detached { _ = client.setPriorityHold(holding, pid: pid) }
+    }
+
+    /// Raise the frontmost game's CPU priority while playing (Gaming &
+    /// Streaming Setup). Helper-only; the view locks the toggle otherwise.
+    var gamePriorityBoost: Bool {
+        get { settings.gamePriorityBoost }
+        set {
+            settings.gamePriorityBoost = newValue
+            gamePriority.autoWithGaming = newValue // turning off releases now
+            persist()
+        }
+    }
+
+    /// Keep the display awake during controller play (Gaming & Streaming
+    /// Setup).
+    var controllerPokeWhileGaming: Bool {
+        get { settings.controllerPokeWhileGaming }
+        set {
+            settings.controllerPokeWhileGaming = newValue
+            controllerPoker.enabled = newValue
+            persist()
+        }
+    }
+
+    /// Once-a-second pulse for every gaming-driven automation: the AWDL
+    /// watchdog's auto mode, the game priority boost, and the controller
+    /// activity poke. Detects a game directly via ``gamingWatcher`` (no
+    /// trigger or active session required). The guard keeps per-tick work
+    /// from running while every gaming feature is off.
     func awdlAutoTick() {
-        guard settings.awdlAutoWithGaming else { return }
+        let wantsPulse = settings.awdlAutoWithGaming
+            || settings.gamePriorityBoost
+            || settings.controllerPokeWhileGaming
+        guard wantsPulse else { return }
         gamingWatcher.tick() // advance the grace window once per pulse
+        let gameInFront = gamingWatcher.wrappedIsSatisfied
         let gamingActive = gamingWatcher.isSatisfied()
-        notifyAWDLEdges(gameInFront: gamingWatcher.wrappedIsSatisfied, gamingActive: gamingActive)
+
+        gamePriority.autoTick(
+            gameFrontmost: gameInFront,
+            gamingActive: gamingActive,
+            frontmostPID: (gamingWatcher.wrappedTrigger as? GamingTrigger)?
+                .currentSnapshot.frontmostPID
+        )
+        controllerPoker.tick(
+            gamingActive: gamingActive,
+            controllerConnected: controllerMonitor.connectedCount > 0,
+            sessionActive: session.isActive
+        )
+
+        guard settings.awdlAutoWithGaming else { return }
+        notifyAWDLEdges(gameInFront: gameInFront, gamingActive: gamingActive)
         // Same stale-registration suspicion as ``closedDisplayAutoTick()``.
         let awdlFailed = awdl.lastError != nil
         if awdlFailed, !sawAWDLError, helperInstalled {

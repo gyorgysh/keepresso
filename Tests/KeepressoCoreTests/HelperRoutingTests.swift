@@ -35,6 +35,11 @@ private final class FakeHelperClient: PrivilegedHelperCalling, @unchecked Sendab
         return holdSucceeds
     }
 
+    func setPriorityHold(_ holding: Bool, pid: Int) -> Bool {
+        record("setPriorityHold(\(holding), \(pid))")
+        return holdSucceeds
+    }
+
     func setFanHold(_ holding: Bool, percent: Int) -> Bool {
         record("setFanHold(\(holding), \(percent))")
         return holdSucceeds

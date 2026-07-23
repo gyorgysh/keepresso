@@ -30,6 +30,7 @@ struct StreamingSetupView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     jitterCard
+                    gameComfortCard
                     watchdogCard
                     ForEach(model.streaming.checks) { check in
                         CheckRow(check: check)
@@ -175,6 +176,49 @@ struct StreamingSetupView: View {
     }
 
     // MARK: - AWDL watchdog
+
+    /// Frame-comfort features while a game (or a streaming client like
+    /// Parsec) is the active window.
+    private var gameComfortCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("While you play", systemImage: "gamecontroller")
+                .font(.headline)
+
+            switchRow("Give the game high CPU priority", isOn: Binding(
+                get: { model.gamePriorityBoost },
+                set: { model.gamePriorityBoost = $0 }
+            ))
+            .disabled(!model.helperInstalled)
+            if model.helperInstalled {
+                Text("Raises the active game or streaming app's CPU priority through the administrator helper, so background work (builds, backups, agent sessions) cannot steal frames. Normal priority comes back after you stop playing, and always when the game quits.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("Needs the administrator helper (Preferences ▸ General): raising a process's priority is a root-only change.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if model.gamePriority.boostedPID != nil {
+                Label(L("Boosting the current game."), systemImage: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.green)
+            }
+
+            switchRow("Keep the display awake with a controller", isOn: Binding(
+                get: { model.controllerPokeWhileGaming },
+                set: { model.controllerPokeWhileGaming = $0 }
+            ))
+            Text("Controller input does not always count as user activity, so a gamepad-only session can dim or sleep the display mid-game. While a game is in front, a controller is connected, and a keep-awake session is active, Keepresso reports activity for you every half minute.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
+    }
 
     private var watchdogCard: some View {
         VStack(alignment: .leading, spacing: 6) {
