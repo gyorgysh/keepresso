@@ -35,9 +35,10 @@ public enum HelperService {
     /// `fanHoldDropped` (the app's view of a surrendered boost).
     /// 5: added `sleepNow` (`pmset sleepnow` for the session-end action).
     /// 6: added the wake-schedule verb (`applyWakeSchedule`, one composite
-    ///    `pmset schedule` / `pmset repeat` step) and, still unshipped, the
-    ///    game priority boost's connection-scoped `setPriorityHold`.
-    public static let protocolVersion = 6
+    ///    `pmset schedule` / `pmset repeat` step). Shipped in v1.16.1.
+    /// 7: added the game priority boost's connection-scoped
+    ///    `setPriorityHold`.
+    public static let protocolVersion = 7
 
     /// The code-signing requirement one side demands of the other: an
     /// Apple-issued certificate, the expected identifier, and the same team as
