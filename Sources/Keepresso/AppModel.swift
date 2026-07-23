@@ -1273,7 +1273,9 @@ final class AppModel {
                 triggersPaused: triggersPaused
             ),
             leaseIDs: session.liveLeases.map(\.id).sorted(),
-            leasesEnabled: settings.automationLeasesEnabled
+            leasesEnabled: settings.automationLeasesEnabled,
+            lastWakeRequestId: lastWakeRequestId,
+            lastWakeRequestOutcome: lastWakeRequestOutcome
         )
     }
 
@@ -1341,6 +1343,63 @@ final class AppModel {
         leaseEngine.revokeAll(now: Date())
     }
 
+    // MARK: - Automation wake requests
+
+    /// Whether outside tools may change the wake schedule (Preferences ▸
+    /// Automation). Off by default: a wake schedule is a root-applied
+    /// system change, so it stays opt-in, unlike leases.
+    var automationWakeControlEnabled: Bool {
+        get { settings.automationWakeControlEnabled }
+        set {
+            settings.automationWakeControlEnabled = newValue
+            persist()
+        }
+    }
+
+    /// The last processed request and its outcome, mirrored into
+    /// `status.json` so `keepresso wake set` / `clear` can confirm.
+    @ObservationIgnored private var lastWakeRequestId: String?
+    @ObservationIgnored private var lastWakeRequestOutcome: String?
+
+    /// Process a pending automation wake request, if any. Runs on the
+    /// `sync-leases` doorbell; the request file is consumed either way so a
+    /// rejected request can never fire arbitrarily later.
+    private func processAutomationWakeRequest() {
+        guard let request = AutomationWakeRequestFile.read() else { return }
+        AutomationWakeRequestFile.delete()
+        let outcome: AutomationWakeOutcome
+        if !settings.automationWakeControlEnabled {
+            outcome = .disabled
+        } else {
+            switch AutomationWakeControl.adjudicate(request, now: Date()) {
+            case .invalid:
+                outcome = .invalid
+            case .apply(nil):
+                // Clearing is always allowed, helper or not, matching the
+                // Preferences "Turn Off Wake Schedule" path.
+                wakeSchedule = nil
+                outcome = .applied
+            case .apply(let config?):
+                if canEditWakeSchedule {
+                    // Keep the user's session-on-wake behavior; the request
+                    // only speaks about times.
+                    var merged = config
+                    if let existing = settings.wakeSchedule {
+                        merged.startSessionOnWake = existing.startSessionOnWake
+                        merged.sessionDurationSeconds = existing.sessionDurationSeconds
+                        merged.presetID = existing.presetID
+                    }
+                    wakeSchedule = merged
+                    outcome = .applied
+                } else {
+                    outcome = .helperUnavailable
+                }
+            }
+        }
+        lastWakeRequestId = request.requestId
+        lastWakeRequestOutcome = outcome.rawValue
+    }
+
     // MARK: - URL scheme commands
 
     /// Handle a `keepresso://` command from ``URLCommand/parse(_:)``. Acts like
@@ -1350,10 +1409,12 @@ final class AppModel {
     /// command on the next once-a-second reconcile, turning it into a no-op
     /// with no feedback to the script that fired it.
     func handle(_ command: URLCommand) {
-        // The lease doorbell is not a session command: it must not pause
-        // triggers or touch the session, only bring the next reconcile (and
-        // the acquire acknowledgment in status.json) forward to now.
+        // The automation doorbell is not a session command: it must not
+        // pause triggers or touch the session, only process pending
+        // automation inputs and bring the next reconcile (and the
+        // acknowledgments in status.json) forward to now.
         if command == .syncLeases {
+            processAutomationWakeRequest()
             session.reconcile()
             syncWidgetState()
             return

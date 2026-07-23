@@ -38,6 +38,13 @@ app unions all live leases and lets the Mac sleep after the last one ends):
   2 app not running or no acknowledgment, 3 lease not found or ended,
   4 leases disabled in Preferences, 64 usage.
 
+Wake schedule (reading is always allowed; changing it works only while
+"Allow automation to change the wake schedule" is on in Preferences):
+  keepresso wake status [--json]
+  keepresso wake set --at "2026-07-24 07:30" [--json]
+  keepresso wake set --repeat MTWRF --time 07:30 [--json]
+  keepresso wake clear [--json]
+
 Other:
   keepresso help | version
 
@@ -216,6 +223,33 @@ func runLease(_ command: CLIRequest.LeaseCommand) -> Never {
     exit(outcome.exitCode)
 }
 
+// MARK: - Wake schedule
+
+func runWake(_ command: CLIRequest.WakeCommand) -> Never {
+    let client = WakeClient.real()
+    let outcome: LeaseOutcome
+    let json: Bool
+    switch command {
+    case .status(let wantsJSON):
+        outcome = client.status()
+        json = wantsJSON
+    case .set(let oneShot, let repeatDays, let repeatTime, let wantsJSON):
+        outcome = client.apply(oneShot: oneShot, repeatDays: repeatDays, repeatTime: repeatTime)
+        json = wantsJSON
+    case .clear(let wantsJSON):
+        outcome = client.apply(oneShot: nil, repeatDays: nil, repeatTime: nil)
+        json = wantsJSON
+    }
+    if json {
+        print(outcome.json)
+    } else if outcome.exitCode == 0 {
+        print(outcome.human)
+    } else {
+        FileHandle.standardError.write(Data("keepresso: \(outcome.human)\n".utf8))
+    }
+    exit(outcome.exitCode)
+}
+
 // MARK: - Agent hooks
 
 /// `keepresso agent-hook <event>`: reduce the JSON payload on stdin to a
@@ -251,4 +285,6 @@ case .agentHook(let event):
     runAgentHook(event: event)
 case .lease(let command):
     runLease(command)
+case .wake(let command):
+    runWake(command)
 }

@@ -26,6 +26,10 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
     /// Whether the lease API preference is on, so a refused acquire can tell
     /// "disabled" from "not acknowledged yet".
     public var leasesEnabled: Bool?
+    /// The last automation wake request the app processed and how it ended,
+    /// the acknowledgment channel for `keepresso wake set` / `clear`.
+    public var lastWakeRequestId: String?
+    public var lastWakeRequestOutcome: String?
 
     public init(
         isActive: Bool,
@@ -36,7 +40,9 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
         pid: Int32,
         writtenAt: Date,
         leaseIDs: [String]? = nil,
-        leasesEnabled: Bool? = nil
+        leasesEnabled: Bool? = nil,
+        lastWakeRequestId: String? = nil,
+        lastWakeRequestOutcome: String? = nil
     ) {
         self.isActive = isActive
         self.endsAt = endsAt
@@ -47,6 +53,8 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
         self.writtenAt = writtenAt
         self.leaseIDs = leaseIDs
         self.leasesEnabled = leasesEnabled
+        self.lastWakeRequestId = lastWakeRequestId
+        self.lastWakeRequestOutcome = lastWakeRequestOutcome
     }
 }
 

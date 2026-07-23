@@ -1044,7 +1044,7 @@ private struct AutomationTab: View {
         }
     }
 
-    // MARK: Automation leases
+    // MARK: Automation access
 
     private var automationLeasesSection: some View {
         Section {
@@ -1052,8 +1052,12 @@ private struct AutomationTab: View {
                 get: { model.automationLeasesEnabled },
                 set: { model.automationLeasesEnabled = $0 }
             ))
+            Toggle("Allow automation to change the wake schedule", isOn: Binding(
+                get: { model.automationWakeControlEnabled },
+                set: { model.automationWakeControlEnabled = $0 }
+            ))
         } header: {
-            sectionHeader("Automation leases", info: L("A lease is a bounded keep-awake grant an outside tool asks for through the keepresso command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning this off ends any live lease."))
+            sectionHeader("Automation access", info: L("A lease is a bounded keep-awake grant an outside tool asks for through the keepresso command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning leases off ends any live lease. The wake schedule switch is separate and off by default because a scheduled wake is a system-wide change applied by the administrator helper: leave it off unless a tool you trust should plan wake-ups for you."))
         }
     }
 

@@ -88,6 +88,10 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     /// through the CLI and the MCP server. On by default; turning it off ends
     /// any live lease.
     public var automationLeasesEnabled: Bool
+    /// Whether outside tools may change the system wake schedule through the
+    /// CLI and the MCP server. Off by default: unlike a lease, a wake
+    /// schedule is a root-applied system change, so it stays opt-in.
+    public var automationWakeControlEnabled: Bool
 
     public init(
         options: SleepPreventionOptions = .default,
@@ -119,7 +123,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         presets: [Preset] = Preset.builtIns,
         seededPresetIDs: [String] = Preset.builtIns.map(\.id),
         hasOnboarded: Bool = false,
-        automationLeasesEnabled: Bool = true
+        automationLeasesEnabled: Bool = true,
+        automationWakeControlEnabled: Bool = false
     ) {
         self.options = options
         self.defaultMode = defaultMode
@@ -151,6 +156,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.seededPresetIDs = seededPresetIDs
         self.hasOnboarded = hasOnboarded
         self.automationLeasesEnabled = automationLeasesEnabled
+        self.automationWakeControlEnabled = automationWakeControlEnabled
     }
 
     /// Append any built-in preset this user has never been offered. Called once
@@ -252,6 +258,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         // memberwise default) starts false and sees it.
         hasOnboarded = try c.decodeIfPresent(Bool.self, forKey: .hasOnboarded) ?? true
         automationLeasesEnabled = try c.decodeIfPresent(Bool.self, forKey: .automationLeasesEnabled) ?? true
+        automationWakeControlEnabled = try c.decodeIfPresent(Bool.self, forKey: .automationWakeControlEnabled) ?? false
     }
 
     /// The out-of-the-box quick "stop in N" shortcuts: 15 and 30 minutes, 1 hour.

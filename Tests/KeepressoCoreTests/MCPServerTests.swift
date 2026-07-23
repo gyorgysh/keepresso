@@ -33,8 +33,19 @@ private func makeServer(
         isPidAlive: { $0 == 77 },
         defaultOwner: "tester"
     )
+    let wakeClient = WakeClient(
+        now: { base },
+        writeRequest: { _ in },
+        readStatus: { effective },
+        nudgeApp: { true },
+        sleep: { _ in },
+        isPidAlive: { $0 == 77 },
+        readSched: { SystemWakeState() },
+        generateId: { idA }
+    )
     let server = MCPServer(
         leaseClient: client,
+        wakeClient: wakeClient,
         readStatus: { effective },
         isPidAlive: { $0 == 77 },
         wakeState: { SystemWakeState(scheduledWakes: [base], repeatingSummary: "wakeorpoweron at 4:00AM every day") },
@@ -94,6 +105,7 @@ private func json(_ line: String?) throws -> [String: Any] {
     #expect(tools.compactMap { $0["name"] as? String } == [
         "acquire_lease", "heartbeat_lease", "release_lease",
         "list_leases", "get_status", "get_wake_schedule",
+        "set_wake_schedule", "clear_wake_schedule",
     ])
     // Every tool carries a JSON Schema for its input.
     #expect(tools.allSatisfy { ($0["inputSchema"] as? [String: Any])?["type"] as? String == "object" })

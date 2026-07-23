@@ -15,6 +15,8 @@ public struct MCPServer {
     public static let protocolVersion = "2025-06-18"
 
     public var leaseClient: LeaseClient
+    /// Wake set/clear operations; status reads go through `wakeState`.
+    public var wakeClient: WakeClient
     /// The app's status snapshot plus liveness, as `keepresso status --json`.
     public var readStatus: () -> StatusSnapshot?
     public var isPidAlive: (Int32) -> Bool
@@ -26,6 +28,7 @@ public struct MCPServer {
 
     public init(
         leaseClient: LeaseClient,
+        wakeClient: WakeClient,
         readStatus: @escaping () -> StatusSnapshot? = { StatusFile.read() },
         isPidAlive: @escaping (Int32) -> Bool = { kill($0, 0) == 0 || errno == EPERM },
         wakeState: @escaping () -> SystemWakeState = { PMSetWakeScheduleReader().current() },
@@ -33,6 +36,7 @@ public struct MCPServer {
         serverVersion: String = "dev"
     ) {
         self.leaseClient = leaseClient
+        self.wakeClient = wakeClient
         self.readStatus = readStatus
         self.isPidAlive = isPidAlive
         self.wakeState = wakeState
@@ -134,6 +138,22 @@ public struct MCPServer {
             return statusOutcome()
         case "get_wake_schedule":
             return wakeOutcome()
+        case "set_wake_schedule":
+            var oneShot: Date?
+            if let raw = string("one_shot") {
+                guard let parsed = ISO8601DateFormatter().date(from: raw) else {
+                    return argumentError("one_shot must be an ISO 8601 date")
+                }
+                oneShot = parsed
+            }
+            let days = string("repeat_days")
+            let time = string("repeat_time")
+            guard oneShot != nil || (days != nil && time != nil) else {
+                return argumentError("set_wake_schedule needs one_shot, or repeat_days with repeat_time")
+            }
+            return wakeClient.apply(oneShot: oneShot, repeatDays: days, repeatTime: time)
+        case "clear_wake_schedule":
+            return wakeClient.apply(oneShot: nil, repeatDays: nil, repeatTime: nil)
         default:
             return nil
         }
@@ -220,6 +240,23 @@ public struct MCPServer {
         [
             "name": "get_wake_schedule",
             "description": "The system's scheduled wakes (pmset -g sched): one-shot wake times and the repeating event, if any.",
+            "inputSchema": ["type": "object", "properties": [String: Any]()],
+        ],
+        [
+            "name": "set_wake_schedule",
+            "description": "Schedule the Mac to wake: a one-shot instant, a repeating time, or both. Works only while the user has enabled \"Allow automation to change the wake schedule\" in Keepresso's preferences; a disabled or invalid request is reported as an error.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "one_shot": ["type": "string", "description": "ISO 8601 wake instant, at least 30 seconds out and less than a year away."],
+                    "repeat_days": ["type": "string", "description": "Weekday letters MTWRFSU (subset) for a repeating wake."],
+                    "repeat_time": ["type": "string", "description": "24-hour HH:MM local time for the repeating wake."],
+                ],
+            ],
+        ],
+        [
+            "name": "clear_wake_schedule",
+            "description": "Clear Keepresso's wake schedule. Honored only while the same preference is enabled.",
             "inputSchema": ["type": "object", "properties": [String: Any]()],
         ],
     ]

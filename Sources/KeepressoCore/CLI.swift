@@ -24,6 +24,17 @@ public enum CLIRequest: Equatable, Sendable {
     /// Manage automation leases (bounded keep-awake grants for scripts and
     /// agents), executed by ``LeaseClient``.
     case lease(LeaseCommand)
+    /// Read or change the system wake schedule, executed by ``WakeClient``.
+    /// Changes are honored only while the default-off preference is on.
+    case wake(WakeCommand)
+
+    /// One `keepresso wake` operation.
+    public enum WakeCommand: Equatable, Sendable {
+        case status(json: Bool)
+        /// Install a one-shot and/or repeating wake. At least one part set.
+        case set(oneShot: Date?, repeatDays: String?, repeatTime: String?, json: Bool)
+        case clear(json: Bool)
+    }
 
     /// One `keepresso lease` operation, fully validated by the parser.
     public enum LeaseCommand: Equatable, Sendable {
@@ -139,6 +150,8 @@ public enum CLIRequest: Equatable, Sendable {
             return .agentHook(event: arguments[1])
         case "lease":
             return .lease(try parseLease(Array(arguments.dropFirst())))
+        case "wake":
+            return .wake(try parseWake(Array(arguments.dropFirst())))
         default:
             guard first.hasPrefix("-") else {
                 throw CLIUsageError("unknown command '\(first)' (run 'keepresso help')")
@@ -274,6 +287,78 @@ public enum CLIRequest: Equatable, Sendable {
             index += 2
         }
         return flags
+    }
+
+    // MARK: - wake options
+
+    private static func parseWake(_ arguments: [String]) throws -> WakeCommand {
+        guard let verb = arguments.first else {
+            throw CLIUsageError("wake needs a verb: status, set, or clear")
+        }
+        var flags = try leaseFlags(Array(arguments.dropFirst()))
+        let json = flags.removeValue(forKey: "--json") != nil
+
+        let command: WakeCommand
+        switch verb {
+        case "status":
+            command = .status(json: json)
+        case "clear":
+            command = .clear(json: json)
+        case "set":
+            let oneShot = try flags.removeValue(forKey: "--at").map { raw -> Date in
+                guard let date = Self.parseWakeDate(raw) else {
+                    throw CLIUsageError("'\(raw)' is not a date like \"2026-07-24 07:30\"")
+                }
+                return date
+            }
+            let days = try flags.removeValue(forKey: "--repeat").map { raw -> String in
+                guard AutomationWakeControl.hasValidWeekdays(raw) else {
+                    throw CLIUsageError("'\(raw)' has no valid weekday letters (use MTWRFSU)")
+                }
+                return raw
+            }
+            let time = try flags.removeValue(forKey: "--time").map { raw -> String in
+                guard Self.isValidClockTime(raw) else {
+                    throw CLIUsageError("'\(raw)' is not a 24-hour time like 07:30")
+                }
+                return raw
+            }
+            guard (days == nil) == (time == nil) else {
+                throw CLIUsageError("--repeat and --time go together")
+            }
+            guard oneShot != nil || days != nil else {
+                throw CLIUsageError("wake set needs --at, or --repeat with --time")
+            }
+            command = .set(oneShot: oneShot, repeatDays: days, repeatTime: time, json: json)
+        default:
+            throw CLIUsageError("unknown wake verb '\(verb)' (status, set, clear)")
+        }
+        guard flags.isEmpty else {
+            throw CLIUsageError("unknown wake option '\(flags.keys.sorted().first!)'")
+        }
+        return command
+    }
+
+    /// "YYYY-MM-DD HH:MM", local time, the shape `wake set --at` accepts.
+    static func parseWakeDate(_ raw: String, calendar: Calendar = .current) -> Date? {
+        let parts = raw.split(separator: " ")
+        guard parts.count == 2 else { return nil }
+        let dateParts = parts[0].split(separator: "-")
+        let timeParts = parts[1].split(separator: ":")
+        guard dateParts.count == 3, timeParts.count == 2,
+              let year = Int(dateParts[0]), year >= 2000,
+              let month = Int(dateParts[1]), (1...12).contains(month),
+              let day = Int(dateParts[2]), (1...31).contains(day),
+              let hour = Int(timeParts[0]), (0...23).contains(hour),
+              let minute = Int(timeParts[1]), (0...59).contains(minute)
+        else { return nil }
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        components.hour = hour
+        components.minute = minute
+        return calendar.date(from: components)
     }
 
     /// HH:MM, 24-hour, the same shape ``URLCommand`` accepts in `until=`.

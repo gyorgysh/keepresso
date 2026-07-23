@@ -20,6 +20,8 @@ final class WidgetStateSync {
         var state: SharedSessionState
         var leaseIDs: [String]
         var leasesEnabled: Bool
+        var lastWakeRequestId: String?
+        var lastWakeRequestOutcome: String?
     }
     private var last: Written?
     private let appVersion =
@@ -27,8 +29,17 @@ final class WidgetStateSync {
 
     /// Write `state` and reload the widgets, but only when it actually changed:
     /// the ticker calls this every second and the no-op path is the common one.
-    func write(_ state: SharedSessionState, leaseIDs: [String] = [], leasesEnabled: Bool = true) {
-        let written = Written(state: state, leaseIDs: leaseIDs, leasesEnabled: leasesEnabled)
+    func write(
+        _ state: SharedSessionState,
+        leaseIDs: [String] = [],
+        leasesEnabled: Bool = true,
+        lastWakeRequestId: String? = nil,
+        lastWakeRequestOutcome: String? = nil
+    ) {
+        let written = Written(
+            state: state, leaseIDs: leaseIDs, leasesEnabled: leasesEnabled,
+            lastWakeRequestId: lastWakeRequestId, lastWakeRequestOutcome: lastWakeRequestOutcome
+        )
         guard written != last else { return }
         let stateChanged = state != last?.state
         last = written
@@ -41,7 +52,9 @@ final class WidgetStateSync {
             pid: ProcessInfo.processInfo.processIdentifier,
             writtenAt: Date(),
             leaseIDs: leaseIDs,
-            leasesEnabled: leasesEnabled
+            leasesEnabled: leasesEnabled,
+            lastWakeRequestId: lastWakeRequestId,
+            lastWakeRequestOutcome: lastWakeRequestOutcome
         ))
         // Widgets don't render leases: skip the reload when only the lease
         // side of the snapshot moved.

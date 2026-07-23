@@ -31,6 +31,7 @@ func appVersion() -> String {
 
 let server = MCPServer(
     leaseClient: .real(ownerPid: getppid()),
+    wakeClient: .real(),
     serverVersion: appVersion()
 )
 
