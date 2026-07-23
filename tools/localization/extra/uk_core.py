@@ -222,3 +222,11 @@ CORE.update({
     '%@ (%@)': '%@ (%@)',
 
 })
+
+
+# Automation leases (decision-log strings), new in the 1.17 cycle.
+CORE.update({
+    "Automation lease: %@": "Оренда автоматизації: %@",
+    "Automation lease acquired": "Оренду автоматизації отримано",
+    "Automation lease ended": "Оренду автоматизації завершено",
+})

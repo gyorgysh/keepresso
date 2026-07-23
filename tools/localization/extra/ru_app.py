@@ -582,4 +582,13 @@ APP.update({
     'Webhook': 'Вебхук',
     'https://…': 'https://…',
 
+    # 1.17.0 automation leases
+    'Held awake by an automation lease': 'Аренда автоматизации не даёт Mac заснуть',
+    'Held awake by %d automation leases': '%d аренд автоматизации не дают Mac заснуть',
+    'and %d more': 'и ещё %d',
+    'Allow automation leases': 'Разрешать аренду автоматизации',
+    'Allow automation to change the wake schedule': 'Разрешать автоматизации менять расписание пробуждения',
+    'Automation access': 'Доступ к автоматизации',
+    'A lease is a bounded keep-awake grant an outside tool asks for through the keepresso command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning leases off ends any live lease. The wake schedule switch is separate and off by default because a scheduled wake is a system-wide change applied by the administrator helper: leave it off unless a tool you trust should plan wake-ups for you.': 'Аренда представляет собой ограниченное по времени разрешение не давать Mac уснуть, которое запрашивает внешний инструмент через командную строку keepresso или встроенный MCP-сервер: например, ИИ-агент, работающий по ночам, скрипт рендеринга или задача резервного копирования. У каждой аренды есть срок, который владелец должен постоянно продлевать, а также жёсткий предел в семь дней, поэтому упавший инструмент никогда не сможет держать Mac бодрствующим вечно. Меню показывает каждую активную аренду, кнопка «Остановить» завершает их все, и Mac снова может уснуть после окончания последней. Выключение аренд завершает любую активную аренду. Переключатель расписания пробуждения отдельный и по умолчанию выключен, поскольку запланированное пробуждение представляет собой системное изменение, которое выполняет помощник администратора: оставьте его выключенным, если только доверенному инструменту не нужно планировать пробуждения за вас.',
+
 })

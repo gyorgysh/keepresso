@@ -220,4 +220,9 @@ CORE.update({
     'waiting counts': 'espera conta',
     '%@ (%@)': '%@ (%@)',
 
+    # v1.17 automation leases
+    'Automation lease: %@': 'Concessão de automação: %@',
+    'Automation lease acquired': 'Concessão de automação obtida',
+    'Automation lease ended': 'Concessão de automação encerrada',
+
 })

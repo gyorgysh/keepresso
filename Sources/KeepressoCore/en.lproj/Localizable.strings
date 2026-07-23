@@ -193,3 +193,6 @@
 "Paused on high temperature" = "Paused on high temperature";
 "Paused, the Mac is running hot" = "Paused, the Mac is running hot";
 "Serious" = "Serious";
+"Automation lease: %@" = "Automation lease: %@";
+"Automation lease acquired" = "Automation lease acquired";
+"Automation lease ended" = "Automation lease ended";

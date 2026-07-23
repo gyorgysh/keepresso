@@ -246,3 +246,11 @@ _THERMAL_V115 = {
     "Serious": {"hu": "Súlyos", "es": "Grave", "fr": "Élevé", "de": "Hoch", "zh-Hans": "严重"},
 }
 CORE.update(_THERMAL_V115)
+
+# Automation leases (decision-log strings), new in the 1.17 cycle.
+_LEASES_V117 = {
+    "Automation lease: %@": {"hu": "Automatizálási bérlet: %@", "es": "Concesión de automatización: %@", "fr": "Bail d’automatisation : %@", "de": "Automatisierungs-Lease: %@", "zh-Hans": "自动化租约：%@"},
+    "Automation lease acquired": {"hu": "Automatizálási bérlet megszerezve", "es": "Concesión de automatización obtenida", "fr": "Bail d’automatisation obtenu", "de": "Automatisierungs-Lease erhalten", "zh-Hans": "已获取自动化租约"},
+    "Automation lease ended": {"hu": "Automatizálási bérlet véget ért", "es": "Concesión de automatización finalizada", "fr": "Bail d’automatisation terminé", "de": "Automatisierungs-Lease beendet", "zh-Hans": "自动化租约已结束"},
+}
+CORE.update(_LEASES_V117)

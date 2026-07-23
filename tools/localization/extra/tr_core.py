@@ -221,3 +221,10 @@ CORE.update({
     '%@ (%@)': '%@ (%@)',
 
 })
+
+# v1.17 automation leases
+CORE.update({
+    "Automation lease: %@": "Otomasyon kirası: %@",
+    "Automation lease acquired": "Otomasyon kirası alındı",
+    "Automation lease ended": "Otomasyon kirası sona erdi",
+})

@@ -222,3 +222,11 @@ CORE.update({
     '%@ (%@)': '%@（%@）',
 
 })
+
+
+# v1.17 automation leases (keepresso CLI / MCP server)
+CORE.update({
+    'Automation lease: %@': '自動化租約：%@',
+    'Automation lease acquired': '已取得自動化租約',
+    'Automation lease ended': '自動化租約已結束',
+})

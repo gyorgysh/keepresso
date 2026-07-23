@@ -555,3 +555,10 @@
 "Without the administrator helper, sleep uses System Events and may ask for Automation access once. Install the helper under Preferences ▸ General for instant, silent sleep." = "没有管理员助理时，睡眠走 System Events，可能请求一次自动化权限。在偏好设置 ▸ 通用安装助理可即时、静默睡眠。";
 "https://…" = "https://…";
 "−%d%% battery" = "−%d%% 电量";
+"Held awake by an automation lease" = "由一个自动化租约保持唤醒";
+"Held awake by %d automation leases" = "由 %d 个自动化租约保持唤醒";
+"and %d more" = "还有 %d 个";
+"Allow automation leases" = "允许自动化租约";
+"Allow automation to change the wake schedule" = "允许自动化更改唤醒计划";
+"Automation access" = "自动化访问";
+"A lease is a bounded keep-awake grant an outside tool asks for through the keepresso command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning leases off ends any live lease. The wake schedule switch is separate and off by default because a scheduled wake is a system-wide change applied by the administrator helper: leave it off unless a tool you trust should plan wake-ups for you." = "自动化租约是外部工具通过 keepresso 命令行或内置 MCP 服务器申请的一种有限期保持唤醒授权：例如通宵工作的 AI 代理、渲染脚本，或备份任务。每个租约都有时限，其持有者必须不断续期，此外还有严格的七天上限，因此即使工具崩溃，也永远无法让 Mac 永久保持唤醒。菜单会显示所有存活的租约，“停止”会一次性结束全部，最后一个结束后 Mac 便可再次睡眠。关闭租约功能会结束所有存活租约。唤醒计划开关是独立的，默认关闭，因为计划唤醒是由管理员助理执行的系统级更改：除非你信任的工具应替你安排唤醒时间，否则请保持关闭。";

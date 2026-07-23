@@ -193,3 +193,6 @@
 "Paused on high temperature" = "高温で一時停止";
 "Paused, the Mac is running hot" = "一時停止、Mac が高温";
 "Serious" = "深刻";
+"Automation lease: %@" = "自動化リース: %@";
+"Automation lease acquired" = "自動化リース取得";
+"Automation lease ended" = "自動化リース終了";

@@ -193,3 +193,6 @@
 "Paused on high temperature" = "Приостановлено из-за высокой температуры";
 "Paused, the Mac is running hot" = "Приостановлено, Mac разогрелся";
 "Serious" = "Серьёзное";
+"Automation lease: %@" = "Аренда автоматизации: %@";
+"Automation lease acquired" = "Аренда автоматизации получена";
+"Automation lease ended" = "Аренда автоматизации завершена";

@@ -419,6 +419,13 @@ APP = {
     "Many external drives and NAS volumes park or disconnect after a few minutes idle, and the next thing that touches them stalls while they spin back up. Keepresso rewrites a tiny hidden marker file in the folder you choose, just enough activity to keep the volume awake. Pick an interval shorter than the drive's own idle timeout. This runs whenever Keepresso is running, with or without a keep-awake session, so a drive stays ready even when the Mac is free to sleep.": '많은 외장 드라이브와 NAS 볼륨은 몇 분간 유휴 상태가 지나면 정지하거나 연결이 끊기며, 그다음에 접근하는 작업은 다시 회전을 시작할 때까지 멈춰 있게 됩니다. Keepresso는 사용자가 선택한 폴더에 있는 작은 숨김 표시 파일을 다시 기록하여, 볼륨을 깨어 있게 유지할 만큼의 활동만 만들어 냅니다. 드라이브 자체의 유휴 시간 제한보다 짧은 간격을 선택하십시오. 이 작업은 깨어 있게 유지 세션 유무와 관계없이 Keepresso가 실행되는 동안 항상 실행되므로, Mac이 자유롭게 잠들 수 있는 상태에서도 드라이브는 계속 준비된 상태를 유지합니다.',
     'Stops an external drive or NAS from spinning down.': '외장 드라이브나 NAS가 회전을 멈추지 않도록 합니다.',
     '3 minutes': '3분',
+    'Held awake by an automation lease': '자동화 임대에 의해 깨어 있게 유지됨',
+    'Held awake by %d automation leases': '%d개의 자동화 임대에 의해 깨어 있게 유지됨',
+    'and %d more': '외 %d개',
+    'Allow automation leases': '자동화 임대 허용',
+    'Allow automation to change the wake schedule': '자동화가 깨우기 일정을 변경하도록 허용',
+    'Automation access': '자동화 접근',
+    'A lease is a bounded keep-awake grant an outside tool asks for through the keepresso command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning leases off ends any live lease. The wake schedule switch is separate and off by default because a scheduled wake is a system-wide change applied by the administrator helper: leave it off unless a tool you trust should plan wake-ups for you.': '임대는 외부 도구가 keepresso 명령줄이나 번들 MCP 서버를 통해 요청하는 시간 제한 깨어 있게 유지 권한입니다. 예를 들어 밤새 작업하는 AI 에이전트, 렌더링 스크립트, 백업 작업 등입니다. 각 임대에는 소유자가 계속 갱신해야 하는 시간 제한이 있고, 최대 7일이라는 엄격한 상한도 있어 충돌한 도구가 Mac을 영구히 깨어 있게 유지할 수 없습니다. 메뉴에는 현재 활성 중인 모든 임대가 표시되며, 중지를 누르면 모두 종료되고 마지막 임대가 끝나면 Mac은 다시 잠들 수 있습니다. 임대를 끄면 활성 임대도 모두 종료됩니다. 깨우기 일정 스위치는 별도이며 기본적으로 꺼져 있는데, 예약된 깨우기는 관리자 도우미가 적용하는 시스템 전역 변경이기 때문입니다. 신뢰하는 도구가 대신 깨우기를 계획하도록 하려는 경우가 아니라면 꺼 두십시오.',
 }
 
 

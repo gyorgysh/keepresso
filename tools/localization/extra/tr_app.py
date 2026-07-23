@@ -576,3 +576,14 @@ APP.update({
     'https://…': 'https://…',
 
 })
+
+# v1.17 automation leases
+APP.update({
+    "Held awake by an automation lease": "Bir otomasyon kirası tarafından uyanık tutuluyor",
+    "Held awake by %d automation leases": "%d otomasyon kirası tarafından uyanık tutuluyor",
+    "and %d more": "ve %d tane daha",
+    "Allow automation leases": "Otomasyon kiralarına izin ver",
+    "Allow automation to change the wake schedule": "Otomasyonun uyandırma planını değiştirmesine izin ver",
+    "Automation access": "Otomasyon erişimi",
+    "A lease is a bounded keep-awake grant an outside tool asks for through the keepresso command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning leases off ends any live lease. The wake schedule switch is separate and off by default because a scheduled wake is a system-wide change applied by the administrator helper: leave it off unless a tool you trust should plan wake-ups for you.": "Kira, dışarıdaki bir aracın keepresso komut satırı veya birlikte gelen MCP sunucusu üzerinden istediği, süreyle sınırlı bir uyanık tutma iznidir: gece boyu çalışan bir yapay zeka aracısı, bir işleme betiği, bir yedekleme işi. Her kiranın sahibinin yenilemesi gereken bir süre sınırı ve kesin bir yedi günlük tavanı vardır, böylece çöken bir araç Mac'i sonsuza kadar uyanık tutamaz. Menü her canlı kirayı gösterir, Durdur hepsini sona erdirir, son kira bittiğinde Mac yeniden uyuyabilir. Kiraları kapatmak canlı olan her kirayı sona erdirir. Uyandırma planı anahtarı ayrıdır ve varsayılan olarak kapalıdır, çünkü zamanlanmış bir uyandırma, yönetici yardımcısı tarafından uygulanan sistem genelinde bir değişikliktir: yalnızca güvendiğiniz bir aracın sizin için uyandırma planlaması gerekiyorsa açın.",
+})

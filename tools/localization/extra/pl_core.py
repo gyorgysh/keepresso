@@ -221,4 +221,9 @@ CORE.update({
     'waiting counts': 'oczekiwanie się liczy',
     '%@ (%@)': '%@ (%@)',
 
+    # Automation leases (decision-log strings), new in the 1.17 cycle.
+    'Automation lease: %@': 'Dzierżawa automatyzacji: %@',
+    'Automation lease acquired': 'Dzierżawa automatyzacji przyznana',
+    'Automation lease ended': 'Dzierżawa automatyzacji zakończona',
+
 })

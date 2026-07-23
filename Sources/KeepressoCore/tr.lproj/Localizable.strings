@@ -193,3 +193,6 @@
 "Paused on high temperature" = "Yüksek sıcaklıkta duraklatıldı";
 "Paused, the Mac is running hot" = "Duraklatıldı, Mac aşırı ısınıyor";
 "Serious" = "Ciddi";
+"Automation lease: %@" = "Otomasyon kirası: %@";
+"Automation lease acquired" = "Otomasyon kirası alındı";
+"Automation lease ended" = "Otomasyon kirası sona erdi";

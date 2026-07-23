@@ -221,4 +221,9 @@ CORE.update({
     'waiting counts': 'ожидание считается',
     '%@ (%@)': '%@ (%@)',
 
+    # 1.17.0 automation leases
+    "Automation lease: %@": "Аренда автоматизации: %@",
+    "Automation lease acquired": "Аренда автоматизации получена",
+    "Automation lease ended": "Аренда автоматизации завершена",
+
 })

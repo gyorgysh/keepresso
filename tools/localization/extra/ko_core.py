@@ -220,5 +220,8 @@ CORE.update({
     '+%ds': '+%d초',
     'waiting counts': '대기도 작업으로 계산',
     '%@ (%@)': '%@ (%@)',
+    'Automation lease: %@': '자동화 임대: %@',
+    'Automation lease acquired': '자동화 임대 획득됨',
+    'Automation lease ended': '자동화 임대 종료됨',
 
 })

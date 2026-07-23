@@ -25,6 +25,7 @@ targets:
       - path: Sources/Keepresso
         excludes:
           - sh.gyorgy.keepresso.helper.plist
+          - AgentSkill
       # The privileged helper's launchd plist. SMAppService.daemon(plistName:)
       # requires it at Contents/Library/LaunchDaemons inside the app bundle.
       - path: Sources/Keepresso/sh.gyorgy.keepresso.helper.plist
@@ -32,6 +33,12 @@ targets:
           copyFiles:
             destination: wrapper
             subpath: Contents/Library/LaunchDaemons
+      # The bundled agent skill, copied as a folder so users can copy the
+      # whole directory into their agent's skills folder (see Preferences ▸
+      # Automation and docs). Lands at Contents/Resources/AgentSkill.
+      - path: Sources/Keepresso/AgentSkill
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: KeepressoCore
         product: KeepressoCore

@@ -577,3 +577,16 @@ APP.update({
     'https://…': 'https://…',
 
 })
+
+
+# v1.17 automation leases (keepresso CLI / MCP server)
+APP.update({
+    'Held awake by an automation lease': '由一個自動化租約保持喚醒',
+    'Held awake by %d automation leases': '由 %d 個自動化租約保持喚醒',
+    'and %d more': '還有 %d 個',
+    'Allow automation leases': '允許自動化租約',
+    'Allow automation to change the wake schedule': '允許自動化變更喚醒排程',
+    'Automation access': '自動化存取權',
+    'A lease is a bounded keep-awake grant an outside tool asks for through the keepresso command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning leases off ends any live lease. The wake schedule switch is separate and off by default because a scheduled wake is a system-wide change applied by the administrator helper: leave it off unless a tool you trust should plan wake-ups for you.':
+        '租約是外部工具透過 keepresso 命令列或內建 MCP 伺服器要求的一段限時保持喚醒授權：例如通宵工作的 AI 代理、轉譯指令碼，或備份工作。每份租約都有時間上限，且持有者必須持續續約，另外還有七天的硬性上限，因此當機的工具絕不會讓 Mac 永久保持喚醒。選單會顯示每份有效租約，按下「停止」可全部結束，最後一份結束後 Mac 便可再次進入睡眠。關閉租約功能會結束所有有效租約。喚醒排程開關是獨立的功能，預設為關閉，因為排程喚醒是由系統管理員輔助程式套用的系統層級變更：除非您信任某個工具可代您安排喚醒時間，否則請保持關閉。',
+})

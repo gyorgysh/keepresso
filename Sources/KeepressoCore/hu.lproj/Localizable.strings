@@ -193,3 +193,6 @@
 "Paused on high temperature" = "Szüneteltetve magas hőmérséklet miatt";
 "Paused, the Mac is running hot" = "Szüneteltetve, a Mac forró";
 "Serious" = "Súlyos";
+"Automation lease: %@" = "Automatizálási bérlet: %@";
+"Automation lease acquired" = "Automatizálási bérlet megszerezve";
+"Automation lease ended" = "Automatizálási bérlet véget ért";

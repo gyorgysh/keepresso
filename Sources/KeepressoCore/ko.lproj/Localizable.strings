@@ -193,3 +193,6 @@
 "Paused on high temperature" = "고온으로 일시 정지됨";
 "Paused, the Mac is running hot" = "일시 정지됨, Mac 온도가 높음";
 "Serious" = "심각";
+"Automation lease: %@" = "자동화 임대: %@";
+"Automation lease acquired" = "자동화 임대 획득됨";
+"Automation lease ended" = "자동화 임대 종료됨";

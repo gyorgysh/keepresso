@@ -5,6 +5,38 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 ## [1.17.0] - Unreleased
 
+### Added
+
+- **Automation leases.** Scripts and AI agents can now hold the Mac awake
+  through bounded leases: `keepresso lease acquire` with a time limit the
+  owner must keep renewing, `heartbeat`, `release`, and `list`. Live leases
+  show in the menu with their countdowns, Stop ends them all, and the Mac
+  can sleep again (running your end-of-session action) after the last one
+  finishes. A crashed tool's lease simply expires. Governed by a new
+  Preferences ▸ Automation switch, on by default. The lease concept was
+  inspired by a proposal from @quasar2333 in PR #3.
+- **MCP server for agents.** The app bundle now ships `keepresso-mcp`
+  (Contents/Helpers), a Model Context Protocol server any MCP-capable agent
+  can use to acquire and release leases, read Keepresso's status, and read
+  the system wake schedule.
+- **Bundled agent skill.** A ready-to-copy skill folder
+  (Contents/Resources/AgentSkill/keep-awake) teaches agents the
+  acquire-heartbeat-release protocol.
+- **Wake schedule for automation, opt-in.** `keepresso wake status` reads
+  the system's scheduled wakes for anyone. `keepresso wake set` / `clear`
+  (and the matching MCP tools) can change the schedule, but only while the
+  new "Allow automation to change the wake schedule" switch is on. It is
+  off by default because a scheduled wake is a system-wide change applied
+  by the administrator helper.
+
+### Fixed
+
+- **Closed-display mode restores your exact sleep setting.** Releasing a
+  sleep hold (or recovering after a crash) now puts `pmset disablesleep`
+  back to the value it had before the hold, instead of always 0. If you
+  keep the setting enabled yourself, Keepresso no longer switches it off
+  behind your back.
+
 ### Security
 
 - **Imported settings can't run commands unseen.** Importing a settings file

@@ -193,3 +193,6 @@
 "Paused on high temperature" = "En pause : température élevée";
 "Paused, the Mac is running hot" = "En pause, le Mac chauffe";
 "Serious" = "Élevé";
+"Automation lease: %@" = "Bail d’automatisation : %@";
+"Automation lease acquired" = "Bail d’automatisation obtenu";
+"Automation lease ended" = "Bail d’automatisation terminé";

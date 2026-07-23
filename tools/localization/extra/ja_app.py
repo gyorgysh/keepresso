@@ -575,4 +575,13 @@ APP.update({
     'Webhook': 'Webhook',
     'https://…': 'https://…',
 
+    # 1.17.0 leases (7)
+    'Held awake by an automation lease': '自動化リースによりスリープ防止中',
+    'Held awake by %d automation leases': '自動化リース %d 件によりスリープ防止中',
+    'and %d more': '他 %d 件',
+    'Allow automation leases': '自動化リースを許可',
+    'Allow automation to change the wake schedule': '自動化による起床スケジュールの変更を許可',
+    'Automation access': '自動化アクセス',
+    'A lease is a bounded keep-awake grant an outside tool asks for through the keepresso command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning leases off ends any live lease. The wake schedule switch is separate and off by default because a scheduled wake is a system-wide change applied by the administrator helper: leave it off unless a tool you trust should plan wake-ups for you.': 'リースとは、keepresso コマンドラインや同梱の MCP サーバーを通じて外部ツールが要求する、期限付きのスリープ防止権限です。夜間に作業する AI エージェント、レンダリングスクリプト、バックアップジョブなどが対象です。各リースには保有ツールが更新し続けなければならない期限に加えて最長7日間の上限があり、クラッシュしたツールが Mac を永久に起こしたままにすることはありません。メニューには有効なリースがすべて表示され、「停止」ですべて終了し、最後の1つが終わると Mac は再びスリープできます。リースをオフにすると、有効なリースはすべて終了します。起床スケジュールのスイッチは別物で、既定はオフです。スケジュール起床は管理者ヘルパーが適用するシステム全体の変更なので、信頼できるツールに起床の計画を任せたい場合以外はオフのままにしてください。',
+
 })

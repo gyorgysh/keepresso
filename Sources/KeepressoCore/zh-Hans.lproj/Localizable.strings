@@ -193,3 +193,6 @@
 "Paused on high temperature" = "因温度过高已暂停";
 "Paused, the Mac is running hot" = "已暂停，Mac 过热";
 "Serious" = "严重";
+"Automation lease: %@" = "自动化租约：%@";
+"Automation lease acquired" = "已获取自动化租约";
+"Automation lease ended" = "自动化租约已结束";

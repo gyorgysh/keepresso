@@ -253,6 +253,35 @@ Keepresso fits the way Macs are used now, and where they're headed:
 The use cases are effectively limitless. Modern UI, a solid and well-tested
 foundation, and a quiet must-have for the next decade of computing.
 
+### Automation leases, CLI, and MCP
+
+Any tool can hold the Mac awake for exactly the lifetime of a task through a
+bounded lease: acquire with a TTL, heartbeat while working, release when
+done. Leases union, a crashed tool's lease simply expires, and after the
+last one ends the Mac can sleep again (running your configured
+end-of-session action). Works for AI agents, render scripts, backup jobs,
+anything that can run a command:
+
+```sh
+ID=$(uuidgen)
+keepresso lease acquire --id "$ID" --tool render --task "overnight export" --ttl 600
+# ... long work with periodic: keepresso lease heartbeat --id "$ID"
+keepresso lease release --id "$ID"
+```
+
+MCP-capable agents get the same operations from the bundled server; point
+your MCP configuration at:
+
+```
+/Applications/Keepresso.app/Contents/Helpers/keepresso-mcp
+```
+
+A ready-to-copy agent skill ships in the app at
+`Contents/Resources/AgentSkill/keep-awake`. Agents can also read the system
+wake schedule with `keepresso wake status`, and, if you flip the default-off
+switch in Preferences ▸ Automation, schedule wake-ups with
+`keepresso wake set`.
+
 ## Install
 
 **Homebrew:**
