@@ -128,10 +128,7 @@ public enum AutomationWakeRequestFile {
     }
 
     public static func write(_ request: AutomationWakeRequest, to url: URL = defaultURL()) {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        guard let data = try? encoder.encode(request) else { return }
+        guard let data = AutomationJSON.encodeData(request) else { return }
         try? FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: url, options: .atomic)
@@ -139,9 +136,7 @@ public enum AutomationWakeRequestFile {
 
     public static func read(from url: URL = defaultURL()) -> AutomationWakeRequest? {
         guard let data = try? Data(contentsOf: url) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try? decoder.decode(AutomationWakeRequest.self, from: data)
+        return AutomationJSON.decode(AutomationWakeRequest.self, from: data)
     }
 
     public static func delete(at url: URL = defaultURL()) {
@@ -191,11 +186,8 @@ public struct WakeClient {
             var repeatingSummary: String?
         }
         let state = readSched()
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let report = Report(scheduledWakes: state.scheduledWakes, repeatingSummary: state.repeatingSummary)
-        let data = (try? encoder.encode(report)) ?? Data("{}".utf8)
+        let json = AutomationJSON.encode(report)
         var lines: [String] = []
         if state.scheduledWakes.isEmpty && state.repeatingSummary == nil {
             lines.append("No scheduled wakes.")
@@ -208,7 +200,7 @@ public struct WakeClient {
         }
         return LeaseOutcome(
             exitCode: 0,
-            json: String(decoding: data, as: UTF8.self),
+            json: json,
             human: lines.joined(separator: "\n")
         )
     }
@@ -260,11 +252,8 @@ public struct WakeClient {
             var requestId: String
             var outcome: String
         }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = (try? encoder.encode(
-            Payload(requestId: request.requestId, outcome: outcome.rawValue))) ?? Data("{}".utf8)
-        let json = String(decoding: data, as: UTF8.self)
+        let json = AutomationJSON.encode(
+            Payload(requestId: request.requestId, outcome: outcome.rawValue))
         switch outcome {
         case .applied:
             let human = request.isClear ? "Wake schedule cleared." : "Wake schedule applied."
@@ -284,27 +273,14 @@ public struct WakeClient {
 
     private func failure(_ code: Int32, _ message: String) -> LeaseOutcome {
         struct Payload: Codable { var error: String }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = (try? encoder.encode(Payload(error: message))) ?? Data("{}".utf8)
-        return LeaseOutcome(exitCode: code, json: String(decoding: data, as: UTF8.self), human: message)
+        return LeaseOutcome(
+            exitCode: code, json: AutomationJSON.encode(Payload(error: message)), human: message)
     }
 }
 
 public extension WakeClient {
     /// The production client, sharing the lease doorbell.
     static func real() -> WakeClient {
-        WakeClient(nudgeApp: {
-            let open = Process()
-            open.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-            open.arguments = ["-g", CLIRequest.RemoteCommand.syncLeases.urlString]
-            do {
-                try open.run()
-            } catch {
-                return false
-            }
-            open.waitUntilExit()
-            return open.terminationStatus == 0
-        })
+        WakeClient(nudgeApp: AppDoorbell.ring)
     }
 }

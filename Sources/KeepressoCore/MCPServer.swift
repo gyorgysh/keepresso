@@ -281,10 +281,6 @@ public struct MCPServer {
     }
 
     private func encodeJSON<T: Encodable>(_ payload: T) -> String {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = (try? encoder.encode(payload)) ?? Data("{}".utf8)
-        return String(decoding: data, as: UTF8.self)
+        AutomationJSON.encode(payload)
     }
 }

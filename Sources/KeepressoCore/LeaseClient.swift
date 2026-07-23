@@ -108,7 +108,7 @@ public struct LeaseClient {
         store.write(record)
 
         guard nudgeApp() else {
-            store.delete(id: id)
+            rollBack(id: id, renewed: renewed, previous: existing)
             return failure(2, "could not reach the Keepresso app. Is it installed?")
         }
 
@@ -119,7 +119,7 @@ public struct LeaseClient {
         while true {
             if let snapshot = readStatus(), isPidAlive(snapshot.pid) {
                 if snapshot.leasesEnabled == false {
-                    store.delete(id: id)
+                    rollBack(id: id, renewed: renewed, previous: existing)
                     return failure(4, "automation leases are disabled in Keepresso's preferences.")
                 }
                 if snapshot.leaseIDs?.contains(id) == true {
@@ -144,8 +144,20 @@ public struct LeaseClient {
             guard now() < deadline else { break }
             sleep(Self.ackInterval)
         }
-        store.delete(id: id)
+        rollBack(id: id, renewed: renewed, previous: existing)
         return failure(2, "the Keepresso app did not acknowledge the lease. Update the app if it predates automation leases.")
+    }
+
+    /// Undo a failed acquire without collateral damage: a fresh record is
+    /// deleted, but a renewal restores the previously acknowledged record, so
+    /// a lost doorbell or a slow ack on a retry cannot end a lease that was
+    /// live before it.
+    private func rollBack(id: String, renewed: Bool, previous: AutomationLeaseRecord?) {
+        if renewed, let previous {
+            store.write(previous)
+        } else {
+            store.delete(id: id)
+        }
     }
 
     public func heartbeat(id: String, ttlSeconds: Int?) -> LeaseOutcome {
@@ -169,9 +181,13 @@ public struct LeaseClient {
         var fresh = record
         fresh.updatedAt = instant
         if let ttlSeconds {
-            fresh.ttlSeconds = AutomationLease.clampedTTL(ttlSeconds)
-            fresh.maxLifetimeSeconds = AutomationLease.clampedMaxLifetime(
-                fresh.maxLifetimeSeconds, ttl: fresh.ttlSeconds)
+            // The horizon may move, the ceiling may not: the skill, the MCP
+            // tool description, and the UI all promise heartbeats can never
+            // extend the maximum lifetime, so the new ttl is capped at the
+            // recorded ceiling instead of raising it (the read-side clamp
+            // floors the lifetime at the ttl).
+            fresh.ttlSeconds = min(
+                AutomationLease.clampedTTL(ttlSeconds), fresh.maxLifetimeSeconds)
         }
         store.write(fresh)
 
@@ -248,11 +264,7 @@ public struct LeaseClient {
     }
 
     private func encode<T: Encodable>(_ payload: T) -> String {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = (try? encoder.encode(payload)) ?? Data("{}".utf8)
-        return String(decoding: data, as: UTF8.self)
+        AutomationJSON.encode(payload)
     }
 }
 
@@ -264,18 +276,7 @@ public extension LeaseClient {
     static func real(ownerPid: Int32? = nil) -> LeaseClient {
         LeaseClient(
             store: FileLeaseStore(),
-            nudgeApp: {
-                let open = Process()
-                open.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-                open.arguments = ["-g", CLIRequest.RemoteCommand.syncLeases.urlString]
-                do {
-                    try open.run()
-                } catch {
-                    return false
-                }
-                open.waitUntilExit()
-                return open.terminationStatus == 0
-            },
+            nudgeApp: AppDoorbell.ring,
             ownerPid: ownerPid
         )
     }

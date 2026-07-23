@@ -147,6 +147,39 @@ private func snapshot(
     #expect(world.store.records[idA]?.createdAt == base.addingTimeInterval(200))
 }
 
+@Test func failedReacquireOfALiveLeaseRestoresThePriorRecord() {
+    let world = World()
+    world.statusScript = [snapshot(leaseIDs: [idA])]
+    let client = world.client()
+    _ = client.acquire(id: idA, owner: nil, tool: "t", task: "x", ttlSeconds: 300, maxLifetimeSeconds: nil)
+
+    // The retry the skill prescribes after a lost response hits an app that
+    // never acks this time. The previously acknowledged lease must survive.
+    world.statusScript = [snapshot()]
+    world.now = base.addingTimeInterval(100)
+    var outcome = client.acquire(
+        id: idA, owner: nil, tool: "t", task: "retry",
+        ttlSeconds: 600, maxLifetimeSeconds: nil
+    )
+    #expect(outcome.exitCode == 2)
+    var record = world.store.records[idA]
+    #expect(record?.ttlSeconds == 300)
+    #expect(record?.updatedAt == base)
+    #expect(record?.task == "x")
+
+    // Same when the doorbell itself cannot ring.
+    world.nudgeResult = false
+    world.now = base.addingTimeInterval(200)
+    outcome = client.acquire(
+        id: idA, owner: nil, tool: "t", task: "retry",
+        ttlSeconds: 600, maxLifetimeSeconds: nil
+    )
+    #expect(outcome.exitCode == 2)
+    record = world.store.records[idA]
+    #expect(record?.ttlSeconds == 300)
+    #expect(record?.updatedAt == base)
+}
+
 @Test func acquireClampsHostileDurations() {
     let world = World()
     world.statusScript = [snapshot(leaseIDs: [idA])]
@@ -173,6 +206,26 @@ private func snapshot(
     let outcome = world.client().heartbeat(id: idA, ttlSeconds: nil)
     #expect(outcome.exitCode == 0)
     #expect(world.store.records[idA]?.updatedAt == world.now)
+}
+
+@Test func heartbeatCannotExtendTheLifetimeCeiling() {
+    let world = World()
+    world.store.records[idA] = AutomationLeaseRecord(
+        id: idA, owner: "o", tool: "t", task: "x",
+        createdAt: base, updatedAt: base, ttlSeconds: 300, maxLifetimeSeconds: 600
+    )
+    world.statusScript = [snapshot()]
+    world.now = base.addingTimeInterval(100)
+
+    // A ttl far beyond the ceiling: the promised invariant is that
+    // heartbeats can never move the hard ceiling.
+    let outcome = world.client().heartbeat(id: idA, ttlSeconds: 86_400)
+    #expect(outcome.exitCode == 0)
+    let record = world.store.records[idA]!
+    #expect(record.maxLifetimeSeconds == 600)
+    #expect(AutomationLease.expiryDate(of: record) == base.addingTimeInterval(600))
+    #expect(AutomationLease.adjudicate(record, now: base.addingTimeInterval(601))
+        == .lapsed(reason: "lifetime-cap"))
 }
 
 @Test func heartbeatOfAnEndedOrMissingLeaseFails() {
