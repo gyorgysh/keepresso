@@ -1361,22 +1361,13 @@ final class AppModel {
         Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/keepresso-mcp").path
     }
 
-    /// Copy the bundled skill's protocol text for pasting into an agent chat
-    /// or an instructions file. The YAML frontmatter is dropped (it is skill
-    /// metadata, not prompt content), and the canonical /Applications paths
-    /// are rewritten to this install's real location.
+    /// Copy a simple text pointing to the bundled skill folder path.
     func copyAgentInstructions() {
-        let skill = agentSkillURL.appendingPathComponent("SKILL.md")
-        guard var text = try? String(contentsOf: skill, encoding: .utf8) else { return }
-        if text.hasPrefix("---"),
-           let end = text.range(of: "\n---\n", range: text.index(text.startIndex, offsetBy: 3)..<text.endIndex) {
-            text = String(text[end.upperBound...])
-        }
-        text = text.replacingOccurrences(
-            of: "/Applications/Keepresso.app", with: Bundle.main.bundlePath)
+        let skillPath = agentSkillURL.appendingPathComponent("SKILL.md").path
+        let text = "Install SKILL.md from \(skillPath) globally"
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(text.trimmingCharacters(in: .whitespacesAndNewlines), forType: .string)
+        pasteboard.setString(text, forType: .string)
     }
 
     /// Paste-ready MCP configuration per agent flavor. Claude Code, Gemini
