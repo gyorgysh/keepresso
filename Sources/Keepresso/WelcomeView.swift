@@ -99,7 +99,7 @@ struct WelcomeView: View {
     /// under it and the window hugs the content exactly; on a low-resolution
     /// one the checklist scrolls behind the footer instead of running off
     /// screen.
-    private var scrollCap: CGFloat { max(320, screenHeight - 130 * type.scale) }
+    private var scrollCap: CGFloat { max(300, screenHeight - 230 * type.scale) }
 
     private static let scrollSpace = "welcome-scroll"
 
@@ -117,10 +117,16 @@ struct WelcomeView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // The cup is a fixed header across every step, so the brand stays
+            // put and picking a use case still "pours" it (the payoff for the
+            // choice) no matter which step you're on.
+            BrewingCupView(isActive: cupBrewing, scale: 2.0 * type.scale)
+                .padding(.top, 22)
+                .padding(.bottom, 4)
             ScrollView {
                 stepContent
                     .padding(.horizontal, 24)
-                    .padding(.top, 24)
+                    .padding(.top, 10)
                     .padding(.bottom, 12)
                     .id(step)
                     .background(GeometryReader { proxy in
@@ -218,10 +224,9 @@ struct WelcomeView: View {
     /// in the wrong language before reading anything else.
     private var welcomeStep: some View {
         VStack(spacing: 14) {
-            BrewingCupView(isActive: cupBrewing, scale: 2.6 * type.scale)
             Text("Welcome to Keepresso")
                 .font(type.title2.bold())
-            Text("Keepresso keeps your Mac awake on your terms, right from the menu bar. No Dock icon, no fuss.")
+            Text("Keepresso keeps your Mac awake from the menu bar, with no Dock icon and no main window.")
                 .font(type.callout)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
@@ -230,9 +235,9 @@ struct WelcomeView: View {
                 pointRow("cursorarrow.click",
                          "Click the cup in the menu bar to keep your Mac awake, and click again to let it sleep.")
                 pointRow("wand.and.stars",
-                         "Or set up triggers and it stays awake on its own, only while you're on a call, downloading, gaming, and the like.")
+                         "Or set up triggers, so it stays awake automatically only while you are on a call, downloading, or gaming.")
                 pointRow("checkmark.shield",
-                         "It looks after your Mac too, stepping aside on low battery or when things run hot.")
+                         "It also protects your Mac, pausing on low battery or high temperature.")
             }
             .padding(.top, 2)
             languagePicker
@@ -261,7 +266,7 @@ struct WelcomeView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("When should it stay awake?")
                 .font(type.callout.weight(.semibold))
-            Text("Pick how you use your Mac. Keepresso sets up matching triggers, then keeps the Mac awake only while those conditions hold and lets it sleep the rest of the time. Fine-tune or add your own anytime in Preferences.")
+            Text("Choose how you use your Mac and Keepresso sets up matching triggers. It then keeps the Mac awake only while those conditions hold, and lets it sleep otherwise. You can adjust or add triggers in Preferences.")
                 .font(type.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -310,7 +315,7 @@ struct WelcomeView: View {
             ) {
                 helperControl
             }
-            Text("That's everything. Keepresso waits in the menu bar by the clock. Click the cup anytime, and Preferences has the rest.")
+            Text("Keepresso runs in the menu bar. Click the cup at any time, or open Preferences for everything else.")
                 .font(type.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -330,7 +335,7 @@ struct WelcomeView: View {
             HStack {
                 // Leading: "Learn more" on the first step, "Back" afterwards.
                 if step.isFirst {
-                    Link("Learn more", destination: AppInfo.repository)
+                    Link("Learn more", destination: AppInfo.website)
                         .font(type.callout)
                 } else {
                     Button("Back") {

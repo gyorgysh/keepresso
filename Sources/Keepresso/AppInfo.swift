@@ -19,4 +19,8 @@ enum AppInfo {
     /// Project home. Placeholder until the GitHub remote is set; update here when
     /// the repository URL is known.
     static let repository = URL(string: "https://github.com/gyorgysh/keepresso")!
+
+    /// The public website: the destination for a person's "Learn more", where
+    /// the repository is aimed at contributors.
+    static let website = URL(string: "https://keepresso.com")!
 }
