@@ -118,6 +118,7 @@ final class StatusItemBridge: NSObject, NSMenuDelegate {
         menu.addItem(entry(L("Preferences…"), #selector(openPreferences), key: ","))
         menu.addItem(entry(L("Headless Setup…"), #selector(openSetup)))
         menu.addItem(entry(L("Gaming & Streaming…"), #selector(openStreaming)))
+        menu.addItem(entry(L("Welcome to Keepresso…"), #selector(openWelcome)))
         menu.addItem(entry(L("About Keepresso"), #selector(openAbout)))
         let check = entry(L("Check for Updates…"), #selector(checkForUpdates))
         check.isEnabled = updater.canCheckForUpdates
@@ -144,6 +145,7 @@ final class StatusItemBridge: NSObject, NSMenuDelegate {
     @objc private func openPreferences() { open(KeepressoApp.preferencesWindowID) }
     @objc private func openSetup() { open(KeepressoApp.setupWindowID) }
     @objc private func openStreaming() { open(KeepressoApp.streamingWindowID) }
+    @objc private func openWelcome() { open(KeepressoApp.welcomeWindowID) }
     @objc private func openAbout() { open(KeepressoApp.aboutWindowID) }
     @objc private func checkForUpdates() { updater.checkForUpdates() }
     @objc private func quit() { NSApp.terminate(nil) }

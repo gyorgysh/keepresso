@@ -43,16 +43,33 @@ struct WelcomeView: View {
     private static let useCases: [UseCase] = [
         UseCase(id: "ai-agent", title: "Agentic coding",
                 detail: "Stay awake while Claude, Codex, or Grok is running.", icon: "terminal"),
-        UseCase(id: "cloud-gaming", title: "Gaming & streaming",
-                detail: "Stay awake while a game or cloud-gaming app is in front.", icon: "gamecontroller"),
         UseCase(id: "meetings", title: "Meetings & calls",
                 detail: "Stay awake whenever the camera or microphone is in use.", icon: "video"),
+        UseCase(id: "cloud-gaming", title: "Gaming & streaming",
+                detail: "Stay awake while a game or cloud-gaming app is in front.", icon: "gamecontroller"),
+        UseCase(id: "external-display", title: "Docked to a display",
+                detail: "Stay awake whenever an external display is connected.", icon: "display.2"),
+        UseCase(id: "on-ac-power", title: "Plugged into power",
+                detail: "Stay awake whenever your Mac is running on AC power.", icon: "powerplug"),
         UseCase(id: "remote-session", title: "Remote access",
                 detail: "Stay awake while someone is connected over SSH.", icon: "network"),
         UseCase(id: manualID, title: "Keep it manual for now",
                 detail: "Just toggle keep-awake yourself, and set up your own triggers later in Preferences.",
                 icon: "hand.tap"),
     ]
+
+    /// The onboarding is a short paged flow: an intro, then the "how do you use
+    /// your Mac" picker, then the general setup rows. Only Get Started on the
+    /// last step completes onboarding (sets ``AppModel/hasOnboarded``), so a
+    /// user who closes early still sees the welcome again next launch.
+    private enum Step: Int, CaseIterable {
+        case welcome, useCase, setup
+        var isFirst: Bool { self == .welcome }
+        var isLast: Bool { self == Step.allCases.last }
+        var previous: Step { Step(rawValue: rawValue - 1) ?? self }
+        var next: Step { Step(rawValue: rawValue + 1) ?? self }
+    }
+    @State private var step: Step = .welcome
 
     /// Whether the hero cup is brewing: a live session, or a use case just
     /// picked (the pour is the payoff for the choice; the manual opt-out
@@ -97,10 +114,11 @@ struct WelcomeView: View {
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                checklist
+                stepContent
                     .padding(.horizontal, 24)
                     .padding(.top, 24)
                     .padding(.bottom, 12)
+                    .id(step)
                     .background(GeometryReader { proxy in
                         Color.clear.preference(
                             key: ChecklistFrameKey.self,
@@ -170,74 +188,89 @@ struct WelcomeView: View {
         screenHeight = NSScreen.main?.visibleFrame.height ?? 800
     }
 
-    private var checklist: some View {
-        VStack(spacing: 18) {
-            VStack(spacing: 10) {
-                BrewingCupView(isActive: cupBrewing, scale: 2.8 * type.scale)
-                Text("Welcome to Keepresso")
-                    .font(type.title2.bold())
-                Text("Keepresso keeps your Mac awake on your terms. It lives in the menu bar near the clock, with no Dock icon. Click its cup any time to start or stop.")
-                    .font(type.callout)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                languagePicker
-            }
-            .entrance(0, revealed: revealed, animated: !reduceMotion)
-
-            VStack(alignment: .leading, spacing: 10) {
-                Divider()
-                    .padding(.bottom, 8)
-                Text("How do you use your Mac?")
-                    .font(type.callout.weight(.semibold))
-                Text("Pick one to set up matching triggers, or keep it manual and add your own later. You can change this any time in Preferences.")
-                    .font(type.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                ForEach(Self.useCases) { useCase in
-                    useCaseRow(useCase)
-                }
-                if selectedUseCase == "cloud-gaming" {
-                    gamingJitterCallout
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-            }
-            .animation(.snappy(duration: 0.25), value: selectedUseCase)
-            .entrance(1, revealed: revealed, animated: !reduceMotion)
-
-            VStack(alignment: .leading, spacing: 14) {
-                Divider()
-                    .padding(.bottom, 4)
-                setupRow(
-                    icon: "power",
-                    title: "Launch at login",
-                    detail: "Start Keepresso automatically when you log in."
-                ) {
-                    Toggle("", isOn: Binding(
-                        get: { launchAtLogin },
-                        set: { LoginItem.setEnabled($0); launchAtLogin = LoginItem.isEnabled }
-                    ))
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                }
-                setupRow(
-                    icon: "bell.badge",
-                    title: "Notifications",
-                    detail: "Let Keepresso remind you when a long session is still keeping the Mac awake."
-                ) {
-                    notificationControl
-                }
-                setupRow(
-                    icon: "checkmark.seal",
-                    title: "Administrator helper",
-                    detail: "Approve a small helper once and the privileged extras (lid-closed mode, AWDL pausing) never ask for your password again. Set and forget; removable in Preferences."
-                ) {
-                    helperControl
-                }
-            }
-            .entrance(2, revealed: revealed, animated: !reduceMotion)
+    /// The current step's content. Each step is one of the sections that used
+    /// to be stacked on a single scrolling page.
+    @ViewBuilder
+    private var stepContent: some View {
+        switch step {
+        case .welcome: welcomeStep
+        case .useCase: useCaseStep
+        case .setup:   setupStep
         }
+    }
+
+    /// Step 1: what Keepresso is, plus a language picker for anyone who landed
+    /// in the wrong language before reading anything else.
+    private var welcomeStep: some View {
+        VStack(spacing: 10) {
+            BrewingCupView(isActive: cupBrewing, scale: 2.8 * type.scale)
+            Text("Welcome to Keepresso")
+                .font(type.title2.bold())
+            Text("Keepresso keeps your Mac awake on your terms. It lives in the menu bar near the clock, with no Dock icon. Click its cup any time to start or stop.")
+                .font(type.callout)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            languagePicker
+        }
+        .frame(maxWidth: .infinity)
+        .entrance(0, revealed: revealed, animated: !reduceMotion)
+    }
+
+    /// Step 2: pick how you use your Mac to seed a matching preset in one tap.
+    private var useCaseStep: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("How do you use your Mac?")
+                .font(type.callout.weight(.semibold))
+            Text("Pick one to set up matching triggers, or keep it manual and add your own later. You can change this any time in Preferences.")
+                .font(type.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(Self.useCases) { useCase in
+                useCaseRow(useCase)
+            }
+            if selectedUseCase == "cloud-gaming" {
+                gamingJitterCallout
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .animation(.snappy(duration: 0.25), value: selectedUseCase)
+        .entrance(0, revealed: revealed, animated: !reduceMotion)
+    }
+
+    /// Step 3: a couple of general options. Each acts only when its own control
+    /// is used; reaching this step prompts for nothing.
+    private var setupStep: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            setupRow(
+                icon: "power",
+                title: "Launch at login",
+                detail: "Start Keepresso automatically when you log in."
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { launchAtLogin },
+                    set: { LoginItem.setEnabled($0); launchAtLogin = LoginItem.isEnabled }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            }
+            setupRow(
+                icon: "bell.badge",
+                title: "Notifications",
+                detail: "Let Keepresso remind you when a long session is still keeping the Mac awake."
+            ) {
+                notificationControl
+            }
+            setupRow(
+                icon: "checkmark.seal",
+                title: "Administrator helper",
+                detail: "Approve a small helper once and the privileged extras (lid-closed mode, AWDL pausing) never ask for your password again. Set and forget; removable in Preferences."
+            ) {
+                helperControl
+            }
+        }
+        .entrance(0, revealed: revealed, animated: !reduceMotion)
     }
 
     /// Pinned under the scroll area, so Get Started is always on screen no
@@ -249,18 +282,48 @@ struct WelcomeView: View {
         VStack(spacing: 14) {
             Divider()
             HStack {
-                Link("Learn more", destination: AppInfo.repository)
-                    .font(type.callout)
-                Spacer()
-                Button("Get Started") {
-                    model.hasOnboarded = true
-                    dismiss()
+                // Leading: "Learn more" on the first step, "Back" afterwards.
+                if step.isFirst {
+                    Link("Learn more", destination: AppInfo.repository)
+                        .font(type.callout)
+                } else {
+                    Button("Back") {
+                        withAnimation(.easeInOut(duration: 0.2)) { step = step.previous }
+                    }
                 }
-                .prominentActionStyle()
-                .keyboardShortcut(.defaultAction)
+                Spacer()
+                stepDots
+                Spacer()
+                // Trailing: advance, or finish onboarding on the last step.
+                if step.isLast {
+                    Button("Get Started") {
+                        model.hasOnboarded = true
+                        dismiss()
+                    }
+                    .prominentActionStyle()
+                    .keyboardShortcut(.defaultAction)
+                } else {
+                    Button("Continue") {
+                        withAnimation(.easeInOut(duration: 0.2)) { step = step.next }
+                    }
+                    .prominentActionStyle()
+                    .keyboardShortcut(.defaultAction)
+                }
             }
         }
         .entrance(3, revealed: revealed, animated: !reduceMotion)
+    }
+
+    /// Small progress dots between the footer buttons, one per step.
+    private var stepDots: some View {
+        HStack(spacing: 6) {
+            ForEach(Step.allCases, id: \.self) { s in
+                Circle()
+                    .fill(s == step ? Color.keepressoBrew : Color.secondary.opacity(0.3))
+                    .frame(width: 6, height: 6)
+            }
+        }
+        .accessibilityHidden(true)
     }
 
     /// A soft fade with a compact chevron over the scroll area's last points.
