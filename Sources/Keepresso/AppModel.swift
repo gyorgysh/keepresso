@@ -267,6 +267,12 @@ final class AppModel {
     /// the default mode (a saved "until 18:00" would go stale by tomorrow).
     func startUntil(hour: Int, minute: Int) {
         guard let mode = SessionMode.until(hour: hour, minute: minute) else { return }
+        // Take manual ownership first, exactly like `toggleManual` and the URL
+        // command path. Without this, starting while trigger gating is active
+        // but unsatisfied makes `start()`'s synchronous reconcile immediately
+        // release the session (triggers not met) and fire the end action, so
+        // asking to "keep awake until 18:00" could instead sleep or lock the Mac.
+        pauseTriggers()
         session.start(mode: mode)
     }
 
@@ -1012,7 +1018,7 @@ final class AppModel {
                     break
                 }
                 thermalLiftedClosedDisplay = true
-                setClosedDisplay(false)
+                setClosedDisplay(false, userInitiated: false)
             case .resumeBrewing:
                 notifier.notify(
                     title: L("Temperatures recovered"),
@@ -1021,7 +1027,7 @@ final class AppModel {
                 )
                 if thermalLiftedClosedDisplay {
                     thermalLiftedClosedDisplay = false
-                    if helperInstalled { setClosedDisplay(true) }
+                    if helperInstalled { setClosedDisplay(true, userInitiated: false) }
                 }
             }
         }
@@ -1304,6 +1310,21 @@ final class AppModel {
         }
         triggersPaused = false // a fresh config always comes in unpaused, like launch
         applyTriggerGate()
+        // Any imported feature that speaks through a notification (safety
+        // pauses, reminders, the password notice for the helperless auto
+        // features) needs authorization, exactly as `init` and the per-feature
+        // setters request it. Without this, an import on a Mac that never
+        // granted notifications would let a battery or thermal pause stop the
+        // session with no banner, looking as if the app just quit.
+        if newSettings.pauseBelowBatteryPercent != nil
+            || newSettings.thermalSafety?.stopBrewing == true
+            || newSettings.reminderAfter != nil
+            || newSettings.notifyOnEnd
+            || newSettings.endingSoonNoticeSeconds != nil
+            || newSettings.closedDisplayOnlyWhileBrewing
+            || newSettings.awdlAutoWithGaming {
+            notifier.requestAuthorization()
+        }
         registerHotKey()
         persist()
     }
@@ -1857,7 +1878,13 @@ final class AppModel {
     /// active app first or the system password dialog can appear unfocused
     /// behind other windows, leaving the menu in a stuck-looking state. With
     /// the helper installed there is no dialog, so no focus grab either.
-    func setClosedDisplay(_ on: Bool) {
+    func setClosedDisplay(_ on: Bool, userInitiated: Bool = true) {
+        // A user toggling closed-display during a thermal pause has taken over
+        // the intent: cancel any pending "restore on cooldown" so recovery
+        // doesn't silently turn it back on against their choice. The thermal
+        // lift/restore calls pass `userInitiated: false` so they don't clear
+        // their own pending restore.
+        if userInitiated { thermalLiftedClosedDisplay = false }
         if !helperInstalled {
             NSApp.activate(ignoringOtherApps: true)
         }

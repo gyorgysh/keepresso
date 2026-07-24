@@ -12,8 +12,8 @@ final class CGVirtualDisplayBackend: VirtualDisplaying {
     func start(_ config: VirtualDisplayConfig) -> Bool {
         display.stop() // replace any existing display
         let id = display.start(
-            withWidth: UInt32(max(0, config.width)),
-            height: UInt32(max(0, config.height)),
+            withWidth: UInt32(min(max(0, config.width), Int(UInt32.max))),
+            height: UInt32(min(max(0, config.height), Int(UInt32.max))),
             hiDPI: config.hiDPI,
             name: "Keepresso Virtual Display"
         )

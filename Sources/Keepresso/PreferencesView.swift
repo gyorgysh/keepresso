@@ -489,7 +489,13 @@ private struct GeneralTab: View {
         .animation(.snappy(duration: 0.25), value: model.fanDryRun.phase)
         .animation(.snappy(duration: 0.25), value: model.closedDisplayError)
         .animation(.snappy(duration: 0.25), value: model.closedDisplayAutoError)
-        .onAppear { model.refreshClosedDisplay() }
+        .onAppear {
+            model.refreshClosedDisplay()
+            // Re-read the login-item state on appear: it can drift if the user
+            // changed it in System Settings, or the app was moved out of
+            // /Applications, while this tab was built but not shown.
+            launchAtLogin = LoginItem.isEnabled
+        }
     }
 
     /// The fan boost strength a fresh "Boost fans first" toggle starts at.

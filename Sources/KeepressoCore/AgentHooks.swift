@@ -435,7 +435,14 @@ public enum AgentHooks {
             guard let data = try? Data(contentsOf: url),
                   let record = try? decoder.decode(HookRecord.self, from: data) else { continue }
             if now.timeIntervalSince(record.updatedAt) < staleAfter {
-                records.append(record)
+                // Fresh, but a record carrying a pid must still have a live one:
+                // a SIGKILL'd agent leaves a sub-staleAfter "working" record, and
+                // a pid reused by another detected session would otherwise be
+                // stamped working from it. A record with no pid (nothing to
+                // verify) is trusted as before.
+                if record.agentPid.map(isAlive) ?? true {
+                    records.append(record)
+                }
             } else if record.agentPid.map(isAlive) == true,
                       record.state == .working
                           || (record.state == .waiting && record.detail == "waiting-approval") {

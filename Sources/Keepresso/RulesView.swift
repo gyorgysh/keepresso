@@ -101,6 +101,12 @@ struct RulesView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .onChange(of: model.rules.count) { _, _ in
+            // The rule rows use positional ids, so a removal elsewhere renumbers
+            // them. Dismiss any open schedule editor rather than let its captured
+            // index write its edit into whatever rule shifted into that slot.
+            timeEditorIndex = nil
+        }
     }
 
     @ViewBuilder

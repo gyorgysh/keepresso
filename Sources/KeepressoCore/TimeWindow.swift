@@ -35,8 +35,12 @@ public struct TimeWindowRule: Codable, Equatable, Hashable, Sendable {
         default:
             // The system's short weekday symbols, so day names follow the app's
             // language (index 0 = Sunday, matching Calendar's 1...7 numbering).
+            // Guard the index: a corrupt or imported weekday outside 1...7 would
+            // otherwise crash the app when the rules list renders this label.
             let names = Calendar.current.shortStandaloneWeekdaySymbols
-            return weekdays.sorted().map { names[$0 - 1] }.joined(separator: ", ")
+            return weekdays.sorted()
+                .compactMap { (1...7).contains($0) ? names[$0 - 1] : nil }
+                .joined(separator: ", ")
         }
     }
 }

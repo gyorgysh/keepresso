@@ -240,8 +240,41 @@ public struct RuleSet: Codable, Equatable, Sendable {
         self.rules = rules
     }
 
+    /// Forgiving decoder, mirroring the pattern used across the settings types.
+    /// A rule case added by a newer build (reached via a version downgrade, or
+    /// a set exported from a newer version and imported) is dropped rather than
+    /// throwing. A synthesized `[TriggerRule]` decode fails the whole array on
+    /// one unknown element, and because ``KeepressoSettings`` loads through
+    /// `try?` that would silently reset every setting to defaults; dropping only
+    /// the unreadable rules keeps the rest of the configuration intact.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        combine = try c.decodeIfPresent(CombineMode.self, forKey: .combine) ?? .any
+        var decoded: [TriggerRule] = []
+        if var array = try? c.nestedUnkeyedContainer(forKey: .rules) {
+            while !array.isAtEnd {
+                let before = array.currentIndex
+                if let rule = try? array.decode(TriggerRule.self) {
+                    decoded.append(rule)
+                } else {
+                    // A failed decode above doesn't consume the element, so
+                    // read a value of any shape to step the cursor past it.
+                    _ = try? array.decode(DiscardedRule.self)
+                }
+                if array.currentIndex == before { break } // never spin
+            }
+        }
+        rules = decoded
+    }
+
     /// An empty rule set (which a ``TriggerEngine`` treats as "never fire").
     public static let empty = RuleSet()
+}
+
+/// Consumes one element of any shape from an unkeyed container, so the lossy
+/// ``RuleSet`` decoder can skip a rule case it doesn't recognize.
+private struct DiscardedRule: Decodable {
+    init(from decoder: Decoder) throws {}
 }
 
 /// Rebuilds live ``Trigger``s and ``TriggerEngine``s from persisted ``RuleSet``s.

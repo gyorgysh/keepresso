@@ -105,7 +105,14 @@ public final class SessionController {
     /// manual or trigger-gated, until it's fed a reading at or above it again
     /// (or an on-AC reading). `nil` (the default) never overrides on battery
     /// level.
-    public var pauseBelowBatteryPercent: Int?
+    public var pauseBelowBatteryPercent: Int? {
+        didSet {
+            // Turning the feature off clears a latched pause at once, so a
+            // `start()` in the same tick isn't refused by a stale latch.
+            // `reconcile` also clears it, but only on the next tick.
+            if pauseBelowBatteryPercent == nil { pausedByBattery = false }
+        }
+    }
 
     /// The power situation fed to ``reconcile(now:systemIdleSeconds:battery:thermal:)``.
     ///
@@ -192,8 +199,14 @@ public final class SessionController {
 
     /// Whether the thermal guard's stop-brewing stage is enabled: the host
     /// sets it from ``ThermalSafetyConfig/stopBrewing``. Off means any stale
-    /// thermal latch is cleared on the next reconcile.
-    public var pauseWhenHot = false
+    /// thermal latch is cleared at once (and again on the next reconcile).
+    public var pauseWhenHot = false {
+        didSet {
+            // Same as the battery latch: disabling clears immediately so a
+            // start() in the same tick isn't refused by a stale thermal latch.
+            if !pauseWhenHot { pausedByThermal = false }
+        }
+    }
 
     /// True once the thermal guard force-stopped the session, so reactivation
     /// waits for the guard's all-clear (dwell and hysteresis live there, not
@@ -678,21 +691,31 @@ public final class SessionController {
     /// then restore the pre-dim level the moment they return (or when the
     /// session ends, via ``stop``). Idempotent: the pre-dim level is captured
     /// once and only transitions touch the hardware. Any precondition dropping
-    /// (session ended, option turned off, display unsupported) restores first.
+    /// (session ended, a lease taking over, option turned off, display
+    /// unsupported) restores first. Not while a lease holds the session: an
+    /// unattended lease deliberately drops the display assertion (nobody is
+    /// watching the screen), so leave the panel and its brightness alone.
     private func maybeDim(systemIdleSeconds: TimeInterval?) {
         guard isActive,
+              !leaseHeld,
               options.preventDisplaySleep,
               let threshold = options.dimDisplayAfter,
               brightness.isSupported
         else { restoreBrightness(); return }
 
-        if let idle = systemIdleSeconds, idle >= threshold {
-            if preDimLevel == nil {
-                preDimLevel = brightness.currentBrightness() ?? 1
-                brightness.setBrightness(max(0, min(1, options.dimFloor)))
+        // No idle reading this tick: hold whatever state we're in. Treating an
+        // unknown idle time as "active" would flicker a dimmed panel back up.
+        guard let idle = systemIdleSeconds else { return }
+        if idle >= threshold {
+            // Only dim once the current level actually reads back: a failed read
+            // must not be assumed to be full brightness, or restoring later would
+            // snap the panel to 100% instead of the user's setting.
+            if preDimLevel == nil, let current = brightness.currentBrightness() {
+                preDimLevel = current
+                brightness.setBrightness(options.dimFloor)
             }
         } else {
-            // Active again (or no idle reading this tick): undo the dim.
+            // Definitely active again: undo the dim.
             restoreBrightness()
         }
     }
@@ -703,6 +726,15 @@ public final class SessionController {
         guard let level = preDimLevel else { return }
         brightness.setBrightness(level)
         preDimLevel = nil
+    }
+
+    /// Restore any "dim, don't sleep" brightness change without ending the
+    /// session, for app termination where ``stop`` isn't called. Brightness is a
+    /// persistent display setting the OS won't undo on exit the way it releases
+    /// power assertions, so quitting mid-dim would otherwise leave the panel
+    /// dark. Idempotent and a no-op when nothing was dimmed.
+    public func restoreDisplayBrightness() {
+        restoreBrightness()
     }
 
     /// Report user activity to the OS on a slow cadence while a keep-active
@@ -762,7 +794,7 @@ public final class SessionController {
     /// ``armEndingSoon(remaining:)``); never fires for indefinite or
     /// trigger-gated sessions.
     private func maybeNotifyEndingSoon(at instant: Date) {
-        guard isActive, triggerGate == nil, !endingSoonFired,
+        guard isActive, triggerGate == nil, !leaseHeld, !endingSoonFired,
               let notice = endingSoonNotice, notice > 0,
               let total = mode.duration, let startedAt else { return }
         let remaining = total - instant.timeIntervalSince(startedAt)

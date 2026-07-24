@@ -15,7 +15,12 @@ import IOKit
 public enum SMCCodec {
     /// "F0Ac" → the UInt32 the SMC protocol carries key names in.
     public static func fourCC(_ name: String) -> UInt32 {
-        precondition(name.utf8.count == 4, "SMC keys are exactly four characters")
+        // SMC keys are exactly four bytes. A non-conforming name can only come
+        // from a fan index >= 10 (no real Mac has that many) or a malformed
+        // discovered key; return an invalid 0 key so the read/write simply
+        // fails, honoring this file's "degrade to nil, never crash" contract
+        // rather than trapping the (root) daemon.
+        guard name.utf8.count == 4 else { return 0 }
         return name.utf8.reduce(0) { ($0 << 8) | UInt32($1) }
     }
 
@@ -62,7 +67,10 @@ public enum SMCCodec {
             let raw = Float(value).bitPattern
             return [0, 8, 16, 24].map { UInt8((raw >> $0) & 0xff) }
         case "fpe2":
-            let raw = UInt16((value * 4).rounded())
+            // Clamp to the 14.2 fixed-point range before scaling, mirroring the
+            // `ui8` clamp below: an out-of-range value (e.g. a bogus fan max)
+            // would otherwise trap the UInt16 conversion in the root daemon.
+            let raw = UInt16((min(max(value, 0), 16383.75) * 4).rounded())
             return [UInt8(raw >> 8), UInt8(raw & 0xff)]
         case "ui8 ":
             return [UInt8(min(max(value, 0), 255))]

@@ -197,3 +197,15 @@ private func json(_ line: String?) throws -> [String: Any] {
     let text = ((list["result"] as? [String: Any])?["content"] as? [[String: Any]])?.first?["text"] as? String
     #expect(text?.contains("\"state\" : \"released\"") == true)
 }
+
+@Test func outOfRangeNumericArgumentIsRejectedNotCrashed() throws {
+    let (server, store) = makeServer()
+    // A ttl far past Int range (or +inf from something like 1e400) must not trap
+    // the Int conversion and abort the whole server; it comes back as an
+    // ordinary tool error and nothing is acquired.
+    let response = try json(server.handle(
+        line: #"{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"acquire_lease","arguments":{"tool":"agent","task":"work","ttl_seconds":1e19}}}"#
+    ))
+    #expect((response["result"] as? [String: Any])?["isError"] as? Bool == true)
+    #expect(store.records.isEmpty)
+}

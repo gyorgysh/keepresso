@@ -173,7 +173,8 @@ public enum CLIRequest: Equatable, Sendable {
                 guard index + 1 < options.count else {
                     throw CLIUsageError("\(option) needs a value in minutes")
                 }
-                guard let value = Double(options[index + 1]), value > 0 else {
+                guard let value = Double(options[index + 1]), value > 0,
+                      value <= SessionMode.maxTimedMinutes else {
                     throw CLIUsageError("'\(options[index + 1])' is not a positive number of minutes")
                 }
                 minutes = value

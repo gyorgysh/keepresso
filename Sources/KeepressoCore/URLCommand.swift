@@ -36,7 +36,8 @@ public enum URLCommand: Equatable, Sendable {
         case "start":
             let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
             if let raw = query?.first(where: { $0.name == "duration" })?.value {
-                guard let minutes = Double(raw), minutes > 0 else { return nil }
+                guard let minutes = Double(raw), minutes > 0,
+                      minutes <= SessionMode.maxTimedMinutes else { return nil }
                 return .start(mode: .timed(duration: minutes * 60))
             }
             if let raw = query?.first(where: { $0.name == "until" })?.value {

@@ -161,3 +161,23 @@ private final class ConstNetwork: NetworkMonitoring {
 private final class ConstWorkspace: WorkspaceMonitoring {
     let current: WorkspaceSnapshot; init(_ s: WorkspaceSnapshot) { current = s }
 }
+
+// MARK: - Forgiving decode (unknown rule types)
+
+@Test func ruleSetDropsUnknownRuleInsteadOfWipingEverything() throws {
+    // A newer build's rule case (reached via a downgrade, or a set exported from
+    // a newer version and imported) must drop only that rule, not throw the
+    // whole decode — which, because settings load through `try?`, would silently
+    // reset every setting to defaults.
+    let original = RuleSet(combine: .all, rules: [.gaming, .audioPlaying])
+    let data = try JSONEncoder().encode(original)
+    var object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    var rules = try #require(object["rules"] as? [Any])
+    rules.insert(["futureRuleFromANewerBuild": [String: Any]()], at: 1)
+    object["rules"] = rules
+    let spliced = try JSONSerialization.data(withJSONObject: object)
+
+    let decoded = try JSONDecoder().decode(RuleSet.self, from: spliced)
+    #expect(decoded.combine == .all)                       // other fields survive
+    #expect(decoded.rules == [.gaming, .audioPlaying])     // known rules kept, in order
+}

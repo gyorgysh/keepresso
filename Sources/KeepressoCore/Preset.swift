@@ -79,15 +79,15 @@ extension Preset {
             ruleSet: RuleSet(combine: .any, rules: [.process("ffmpeg")])
         ),
         // Camera or microphone in use covers every meeting app at once,
-        // including calls running in a browser tab. Audio playing also holds
-        // the session while you only listen on a call (muted, camera off, but
-        // you can still hear the others), at the cost of also counting music.
+        // including calls running in a browser tab, and keeps holding through a
+        // mute: call apps keep the mic engaged when you mute (mute is
+        // software-side, the orange mic indicator stays lit). Deliberately not
+        // "audio playing", which would also count music and defeat the point of
+        // a call-scoped preset.
         Preset(
             id: "meetings",
             name: "Meetings",
-            ruleSet: RuleSet(combine: .any, rules: [
-                .mediaInUse(.camera), .mediaInUse(.microphone), .audioPlaying,
-            ])
+            ruleSet: RuleSet(combine: .any, rules: [.mediaInUse(.camera), .mediaInUse(.microphone)])
         ),
         // Local play: a frontmost game, a controller in hand (the controller
         // rule needs no permission and catches couch sessions where the game

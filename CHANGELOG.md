@@ -25,6 +25,16 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- **"Until a time" keeps the Mac awake instead of sleeping it.** Choosing a
+  stop time while triggers were on, but no trigger was currently met, could
+  start and then immediately end the session, running your end-of-session
+  action (sleep or lock) moments later. It now takes manual control first,
+  like the menu's Keep Awake, so the Mac stays awake until the time you picked.
+- **Your settings survive an unrecognized trigger.** Opening settings written
+  by a newer version (after a downgrade, or importing an exported file) no
+  longer resets everything to defaults when they contain a trigger this
+  version doesn't know. The unknown trigger is skipped and the rest of your
+  configuration is kept.
 - **Automation commands no longer pop the Setup window.** A `keepresso://`
   URL arriving with no window to claim it (the lease doorbell, a Shortcuts
   command) could make macOS present the Setup checklist out of nowhere.

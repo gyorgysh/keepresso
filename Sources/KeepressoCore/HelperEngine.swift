@@ -17,8 +17,12 @@ public final class ProcessCommandRunner: HelperCommandRunning {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = arguments
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
+        // Discard output to the null device rather than into Pipes we never
+        // read: an unread pipe that fills its ~64 KB buffer would wedge the
+        // child (and this `waitUntilExit`) forever. These commands are quiet
+        // today, but the null device removes the latent deadlock outright.
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
             process.waitUntilExit()
@@ -405,9 +409,11 @@ public final class HelperEngine: @unchecked Sendable {
     /// from its timer; a no-op with no holders.
     public func awdlTick() {
         lock.lock()
-        let holding = !awdlHolders.isEmpty
-        lock.unlock()
-        if holding {
+        defer { lock.unlock() }
+        // Hold the lock across the write. Releasing it first let a concurrent
+        // `clientDisconnected` bring `awdl0` back up and clear the marker in
+        // between, after which this tick re-downed it with no holder left.
+        if !awdlHolders.isEmpty {
             runner.run("/sbin/ifconfig", ["awdl0", "down"])
         }
     }
@@ -419,35 +425,29 @@ public final class HelperEngine: @unchecked Sendable {
     /// firmware forever; ``fanHoldDropped`` records that it happened.
     public func fanTick() {
         lock.lock()
-        guard let target = fanHolders.values.max() else {
-            lock.unlock()
-            return
-        }
-        let failures = fanFailureStreak
-        lock.unlock()
-
+        defer { lock.unlock() }
+        // Hold the lock across the whole tick, including the SMC write. The old
+        // read-then-unlock-then-write let a concurrent `clientDisconnected`
+        // release the last holder and restore auto in between, after which this
+        // re-forced the fans with the `.fanForced` marker already cleared, so
+        // nothing (not even the next launch's recovery, which keys off the
+        // marker) would put them back. `writeFanTarget`/`restoreAuto`/`state.set`
+        // all run under this same lock on the union edges, so there's no
+        // reentrancy.
+        guard let target = fanHolders.values.max() else { return }
         if writeFanTarget(target) {
-            lock.lock()
             fanFailureStreak = 0
-            lock.unlock()
             return
         }
-        lock.lock()
-        fanFailureStreak = failures + 1
-        let giveUp = fanFailureStreak >= Self.maxFanFailures
-        if giveUp {
-            fanHolders.removeAll()
-            fanFailureStreak = 0
-            fanHoldDropped = true
-        }
-        lock.unlock()
-        if giveUp {
-            // Same rule as the union edge: the marker clears only when the
-            // restore actually landed, so a crash after a failed restore
-            // still settles the debt at the next daemon launch.
-            let ok = fans.restoreAuto()
-            state.set(.fanForced, present: !ok)
-        }
+        fanFailureStreak += 1
+        guard fanFailureStreak >= Self.maxFanFailures else { return }
+        fanHolders.removeAll()
+        fanFailureStreak = 0
+        fanHoldDropped = true
+        // The marker clears only when the restore actually landed, so a crash
+        // after a failed restore still settles the debt at the next launch.
+        let ok = fans.restoreAuto()
+        state.set(.fanForced, present: !ok)
     }
 
     /// Whether nothing is held, so an idle daemon may exit (launchd relaunches

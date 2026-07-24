@@ -36,4 +36,10 @@ public enum SessionMode: Hashable, Codable, Sendable {
         ) else { return nil }
         return .timed(duration: next.timeIntervalSince(now))
     }
+
+    /// Upper bound on a caller-supplied timed duration, in minutes, for the URL
+    /// scheme and CLI. Guards against an absurd or non-finite value (e.g.
+    /// `1e400` parsing to `+inf`) that would otherwise create an effectively
+    /// infinite "timed" session. A year is well past any real keep-awake need.
+    public static let maxTimedMinutes: Double = 366 * 24 * 60
 }

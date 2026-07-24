@@ -126,6 +126,15 @@ public final class CPULoadTrigger: Trigger {
     /// dropping an active session on a transient hiccup.
     static func step(_ state: SmoothingState, sample: Double?, thresholdPercent: Int) -> SmoothingState {
         var next = state
+        // A non-positive threshold is malformed (the picker never makes one).
+        // Treat it as "never satisfied" instead of the always-true it would
+        // otherwise compute (average >= 0), so a corrupt or imported rule can't
+        // pin the Mac awake with nothing able to release it.
+        guard thresholdPercent > 0 else {
+            next.average = nil
+            next.isSatisfied = false
+            return next
+        }
         if let sample {
             let clamped = min(max(sample, 0), 1)
             next.average = state.average.map { $0 + alpha * (clamped - $0) } ?? clamped

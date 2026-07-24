@@ -187,6 +187,11 @@ struct WelcomeView: View {
             step = .welcome
             revealed = false
             refreshScreenHeight()
+            // The closed window keeps this view alive, so re-read the state the
+            // setup rows show or they'd be stale on reopen (e.g. login item or
+            // notifications changed in Preferences since it was last open).
+            launchAtLogin = LoginItem.isEnabled
+            Task { notificationStatus = await model.notificationAuthorizationStatus() }
             withAnimation { revealed = true }
         }
         .onAppear {

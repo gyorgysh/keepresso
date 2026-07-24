@@ -243,6 +243,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // "Dim, don't sleep" lowers the built-in panel's brightness, a persistent
+        // display setting the OS won't restore on exit the way it releases power
+        // assertions. Put it back before we go, or quitting mid-dim leaves the
+        // screen dark. A no-op when nothing was dimmed, so it's safe even on the
+        // yield-to-peer path below (nothing is dimmed that early).
+        model.session.restoreDisplayBrightness()
         // A duplicate handing over to the copy that stays up must not write
         // "stopped" into the shared widget state: that copy owns it and may be
         // keeping the Mac awake right now.

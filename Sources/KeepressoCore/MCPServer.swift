@@ -99,7 +99,13 @@ public struct MCPServer {
     private func call(tool: String, arguments: [String: Any]) -> LeaseOutcome? {
         func string(_ key: String) -> String? { arguments[key] as? String }
         func seconds(_ key: String) -> Int? {
-            (arguments[key] as? Int) ?? (arguments[key] as? Double).map(Int.init)
+            if let i = arguments[key] as? Int { return i }
+            // `Int(_: Double)` traps on NaN/±inf/out-of-range, so a hostile or
+            // sloppy `1e19` (or `1e400` → +inf) from stdin would abort the
+            // whole server. `Int(exactly:)` returns nil instead; the callers'
+            // `> 0` guards then reject it as a normal argument error.
+            if let d = arguments[key] as? Double { return Int(exactly: d.rounded()) }
+            return nil
         }
         func argumentError(_ message: String) -> LeaseOutcome {
             LeaseOutcome(exitCode: 64, json: "{\"error\": \"\(message)\"}", human: message)
