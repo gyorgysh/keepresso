@@ -79,11 +79,15 @@ extension Preset {
             ruleSet: RuleSet(combine: .any, rules: [.process("ffmpeg")])
         ),
         // Camera or microphone in use covers every meeting app at once,
-        // including calls running in a browser tab.
+        // including calls running in a browser tab. Audio playing also holds
+        // the session while you only listen on a call (muted, camera off, but
+        // you can still hear the others), at the cost of also counting music.
         Preset(
             id: "meetings",
             name: "Meetings",
-            ruleSet: RuleSet(combine: .any, rules: [.mediaInUse(.camera), .mediaInUse(.microphone)])
+            ruleSet: RuleSet(combine: .any, rules: [
+                .mediaInUse(.camera), .mediaInUse(.microphone), .audioPlaying,
+            ])
         ),
         // Local play: a frontmost game, a controller in hand (the controller
         // rule needs no permission and catches couch sessions where the game
@@ -113,6 +117,7 @@ extension Preset {
             ruleSet: RuleSet(combine: .any, rules: [
                 .gaming,
                 .controllerConnected,
+                .steamDownload,
                 .app(AppRule(bundleID: "com.nvidia.gfnpc.mall", name: "NVIDIA GeForce NOW")),
                 .app(AppRule(bundleID: "com.boosteroid.macclient", name: "Boosteroid")),
             ])

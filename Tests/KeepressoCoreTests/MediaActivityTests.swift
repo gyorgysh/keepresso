@@ -213,11 +213,13 @@ private final class FakeMediaMonitor: MediaActivityMonitoring {
     #expect(CoreMediaActivityMonitor.enclosingAppBundleURL(forExecutablePath: "/usr/bin/some-tool") == nil)
 }
 
-@Test func meetingsPresetWatchesCameraAndMicrophone() {
+@Test func meetingsPresetWatchesCameraMicrophoneAndAudio() {
     let meetings = Preset.builtIns.first { $0.id == "meetings" }
     #expect(meetings != nil)
     #expect(meetings?.ruleSet.combine == .any)
-    #expect(meetings?.ruleSet.rules == [.mediaInUse(.camera), .mediaInUse(.microphone)])
+    // Audio playing joins camera + mic so listening on a muted, camera-off call
+    // still holds the session.
+    #expect(meetings?.ruleSet.rules == [.mediaInUse(.camera), .mediaInUse(.microphone), .audioPlaying])
 }
 
 @Test func meetingsPresetReachesExistingUsersViaSeeding() {
