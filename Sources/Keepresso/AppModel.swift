@@ -1,5 +1,7 @@
 import AppKit
+import Darwin
 import Observation
+import UniformTypeIdentifiers
 import UserNotifications
 import KeepressoCore
 
@@ -398,6 +400,29 @@ final class AppModel {
         panel.message = L("Keep awake while downloads are in progress in this folder.")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         addRule(.downloadInFolder(url))
+    }
+
+    /// Prompt for an application to scope a microphone rule to, returning its
+    /// display name and bundle id (read from the chosen bundle, so it is always
+    /// the real id, never a guess). Opens on an explicit click only. Restricted
+    /// to `.app` bundles, starting in /Applications. Returns `nil` if cancelled
+    /// or the pick has no bundle id.
+    func pickApplication() -> (name: String, bundleID: String)? {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.applicationBundle]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.prompt = L("Choose")
+        panel.message = L("Keep awake while this app is using the microphone (on a call).")
+        guard panel.runModal() == .OK, let url = panel.url, let bundle = Bundle(url: url),
+              let id = bundle.bundleIdentifier
+        else { return nil }
+        let name = (bundle.infoDictionary?["CFBundleDisplayName"] as? String)
+            ?? (bundle.infoDictionary?["CFBundleName"] as? String)
+            ?? url.deletingPathExtension().lastPathComponent
+        return (name, id)
     }
 
     /// Owns the live engine gating the session and the menu's rule-state cache.
@@ -2267,5 +2292,64 @@ final class AppModel {
                 return (app.localizedName ?? id, id)
             }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    /// The apps capturing the microphone right now, resolved to their top-level
+    /// app identity (name + bundle id), for the "add the app using your mic
+    /// now" affordance in the mic-scope editor. Reads the per-process CoreAudio
+    /// state (unprivileged, no prompt); each capturing process, often an
+    /// Electron helper, is resolved back to its enclosing `.app` so the picker
+    /// shows "Discord" and stores `com.hnc.Discord`, not the helper id.
+    func micAppsInUse() -> [(name: String, bundleID: String)] {
+        var seen = Set<String>()
+        var apps: [(name: String, bundleID: String)] = []
+        for capturer in CoreMediaActivityMonitor.currentMicCapturers() {
+            let resolved = Self.resolveCapturingApp(pid: capturer.pid, rawBundleID: capturer.bundleID)
+            guard seen.insert(resolved.bundleID).inserted else { continue }
+            apps.append(resolved)
+        }
+        return apps.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    /// Well-known call apps offered as one-click choices in the mic-scope
+    /// editor, for when the user is setting up a rule while not currently on a
+    /// call. Kept short and to bundle ids that are stable and verified; anything
+    /// else is added via the live "using the mic now" list or the app picker,
+    /// both of which read the real bundle id and never guess.
+    static let callAppPresets: [(name: String, bundleID: String)] = [
+        ("Discord", "com.hnc.Discord"),
+        ("Slack", "com.tinyspeck.slackmacgap"),
+        ("Zoom", "us.zoom.xos"),
+        ("Microsoft Teams", "com.microsoft.teams2"),
+        ("FaceTime", "com.apple.FaceTime"),
+        ("Webex", "com.cisco.webexmeetingsapp"),
+    ]
+
+    /// Resolve a microphone-capturing process to its top-level app. Prefers the
+    /// enclosing `.app` bundle read from the executable path (so an Electron
+    /// helper maps to its parent app), then a running-app lookup by pid, and
+    /// finally the raw bundle id CoreAudio reported (still matchable by prefix).
+    private static func resolveCapturingApp(pid: pid_t, rawBundleID: String) -> (name: String, bundleID: String) {
+        if let path = executablePath(forPID: pid),
+           let url = CoreMediaActivityMonitor.enclosingAppBundleURL(forExecutablePath: path),
+           let bundle = Bundle(url: url),
+           let id = bundle.bundleIdentifier {
+            let name = (bundle.infoDictionary?["CFBundleDisplayName"] as? String)
+                ?? (bundle.infoDictionary?["CFBundleName"] as? String)
+                ?? url.deletingPathExtension().lastPathComponent
+            return (name, id)
+        }
+        if let running = NSRunningApplication(processIdentifier: pid),
+           let id = running.bundleIdentifier {
+            return (running.localizedName ?? id, id)
+        }
+        return (rawBundleID, rawBundleID)
+    }
+
+    private static func executablePath(forPID pid: pid_t) -> String? {
+        var buffer = [CChar](repeating: 0, count: 4096)
+        let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
+        guard length > 0 else { return nil }
+        return String(cString: buffer)
     }
 }

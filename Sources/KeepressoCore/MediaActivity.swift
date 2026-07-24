@@ -12,11 +12,41 @@ public struct MediaActivitySnapshot: Equatable, Sendable {
     public var microphoneInUse: Bool
     /// Some process is playing sound through an audio output device.
     public var audioPlaying: Bool
+    /// Bundle ids of the processes currently capturing the microphone, from
+    /// the macOS 14 per-process CoreAudio API. Lets an app-scoped mic rule ask
+    /// "is *Discord* on a call" rather than "is *anything* using the mic".
+    ///
+    /// These are the *capturing* process's ids, which for Electron/Chromium
+    /// call apps is a child helper (`com.hnc.Discord.helper.Renderer`), not the
+    /// top-level app, so callers match by bundle-id prefix. Empty when the mic
+    /// is idle, or when the process API is unavailable; the device-level
+    /// ``microphoneInUse`` stays the authority for the unscoped rule.
+    public var micCapturingBundleIDs: Set<String>
 
-    public init(cameraInUse: Bool = false, microphoneInUse: Bool = false, audioPlaying: Bool = false) {
+    public init(
+        cameraInUse: Bool = false,
+        microphoneInUse: Bool = false,
+        audioPlaying: Bool = false,
+        micCapturingBundleIDs: Set<String> = []
+    ) {
         self.cameraInUse = cameraInUse
         self.microphoneInUse = microphoneInUse
         self.audioPlaying = audioPlaying
+        self.micCapturingBundleIDs = micCapturingBundleIDs
+    }
+}
+
+/// One process captured from the microphone right now: its pid and the bundle
+/// id CoreAudio reported for it. The pid lets the UI resolve an Electron helper
+/// back to its top-level app (via its executable path) when offering "add the
+/// app using your mic now"; matching itself only needs the bundle id.
+public struct MicCapturer: Equatable, Sendable {
+    public let pid: pid_t
+    public let bundleID: String
+
+    public init(pid: pid_t, bundleID: String) {
+        self.pid = pid
+        self.bundleID = bundleID
     }
 }
 
@@ -62,10 +92,14 @@ public final class CoreMediaActivityMonitor: MediaActivityMonitoring {
     /// The real probe: sweep CoreMediaIO video devices and CoreAudio devices.
     static func probeSystem() -> MediaActivitySnapshot {
         let audio = audioActivity()
+        // Only walk the per-process list when the mic is actually live: an idle
+        // mic yields an empty capturer set without touching the process API.
+        let capturers = audio.inputRunning ? currentMicCapturers() : []
         return MediaActivitySnapshot(
             cameraInUse: cameraInUse(),
             microphoneInUse: audio.inputRunning,
-            audioPlaying: audio.outputRunning
+            audioPlaying: audio.outputRunning,
+            micCapturingBundleIDs: Set(capturers.map(\.bundleID))
         )
     }
 
@@ -154,6 +188,91 @@ public final class CoreMediaActivityMonitor: MediaActivityMonitoring {
         return AudioObjectGetPropertyDataSize(device, &address, 0, nil, &dataSize) == noErr
             && dataSize > 0
     }
+
+    // MARK: - CoreAudio (per-process microphone capture, macOS 14+)
+
+    /// The processes capturing from the microphone right now, each with the
+    /// bundle id CoreAudio attributes to it. Reads the process-object list
+    /// (`kAudioHardwarePropertyProcessObjectList`) and keeps those whose
+    /// `kAudioProcessPropertyIsRunningInput` flag is set.
+    ///
+    /// Unprivileged: this reads process *state*, never opening a capture
+    /// stream, so no microphone TCC prompt appears (the app has no mic
+    /// entitlement and needs none). The macOS 14 deployment floor guarantees
+    /// the process API exists.
+    public static func currentMicCapturers() -> [MicCapturer] {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyProcessObjectList,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let system = AudioObjectID(kAudioObjectSystemObject)
+        var dataSize: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(system, &address, 0, nil, &dataSize) == noErr,
+              dataSize > 0
+        else { return [] }
+        var processes = [AudioObjectID](repeating: 0, count: Int(dataSize) / MemoryLayout<AudioObjectID>.size)
+        guard AudioObjectGetPropertyData(system, &address, 0, nil, &dataSize, &processes) == noErr
+        else { return [] }
+
+        var capturers: [MicCapturer] = []
+        for process in processes where processFlag(process, kAudioProcessPropertyIsRunningInput) {
+            guard let bundleID = processBundleID(process), !bundleID.isEmpty else { continue }
+            capturers.append(MicCapturer(pid: processPID(process), bundleID: bundleID))
+        }
+        return capturers
+    }
+
+    private static func processFlag(_ process: AudioObjectID, _ selector: AudioObjectPropertySelector) -> Bool {
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        return AudioObjectGetPropertyData(process, &address, 0, nil, &size, &value) == noErr && value != 0
+    }
+
+    private static func processBundleID(_ process: AudioObjectID) -> String? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioProcessPropertyBundleID,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var size = UInt32(MemoryLayout<CFString?>.size)
+        var out: CFString?
+        let status = withUnsafeMutablePointer(to: &out) { ptr in
+            AudioObjectGetPropertyData(process, &address, 0, nil, &size, ptr)
+        }
+        return status == noErr ? out as String? : nil
+    }
+
+    private static func processPID(_ process: AudioObjectID) -> pid_t {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioProcessPropertyPID,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var pid: pid_t = -1
+        var size = UInt32(MemoryLayout<pid_t>.size)
+        _ = AudioObjectGetPropertyData(process, &address, 0, nil, &size, &pid)
+        return pid
+    }
+
+    /// The URL of the outermost `.app` bundle enclosing an executable path, or
+    /// `nil` when the path is not inside an app bundle. Resolves a capturing
+    /// process (often an Electron helper buried inside the app) back to its
+    /// top-level app, e.g.
+    /// `/Applications/Discord.app/Contents/Frameworks/Discord Helper (Renderer).app/Contents/MacOS/Discord Helper (Renderer)`
+    /// → `/Applications/Discord.app`. Pure string work, no filesystem I/O, so
+    /// the app layer can turn a ``MicCapturer`` pid into a clean bundle id and
+    /// name for the "add the app using your mic now" picker.
+    public static func enclosingAppBundleURL(forExecutablePath path: String) -> URL? {
+        let components = (path as NSString).pathComponents
+        guard let index = components.firstIndex(where: { $0.hasSuffix(".app") }) else { return nil }
+        return URL(fileURLWithPath: NSString.path(withComponents: Array(components[...index])))
+    }
 }
 
 /// Fires while any process is using the camera or the microphone: a video
@@ -176,10 +295,23 @@ public final class MediaInUseTrigger: Trigger {
     /// The device kind this trigger watches.
     public var device: Device
 
+    /// Optional bundle-id scope for the microphone. `nil` (the default) is the
+    /// unscoped rule: satisfied while *any* process uses the mic. Non-`nil`
+    /// scopes it to those apps, so it fires only while one of them is on a
+    /// call. An empty array matches nothing (a half-configured scope must not
+    /// pin the Mac awake). Ignored for ``Device/camera``, which has no
+    /// per-process API to scope by.
+    public var appFilter: [String]?
+
     private let monitor: MediaActivityMonitoring
 
-    public init(device: Device, monitor: MediaActivityMonitoring = CoreMediaActivityMonitor()) {
+    public init(
+        device: Device,
+        appFilter: [String]? = nil,
+        monitor: MediaActivityMonitoring = CoreMediaActivityMonitor()
+    ) {
         self.device = device
+        self.appFilter = appFilter
         self.monitor = monitor
     }
 
@@ -188,9 +320,28 @@ public final class MediaInUseTrigger: Trigger {
     public func isSatisfied() -> Bool {
         let snapshot = monitor.current
         switch device {
-        case .camera:     return snapshot.cameraInUse
-        case .microphone: return snapshot.microphoneInUse
+        case .camera:
+            return snapshot.cameraInUse
+        case .microphone:
+            guard let filter = appFilter else { return snapshot.microphoneInUse }
+            return Self.captures(filter, in: snapshot.micCapturingBundleIDs)
         }
+    }
+
+    /// Whether any capturing bundle id belongs to one of the `targets`. A
+    /// target matches a capturer that equals it or is a child of it, i.e. the
+    /// capturer's id is `target` or starts with `target + "."`. That prefix
+    /// rule is what lets a rule for `com.hnc.Discord` catch Discord's actual
+    /// capturer, the helper `com.hnc.Discord.helper.Renderer`, while a native
+    /// call app (whose own process captures) matches exactly. Empty targets, or
+    /// empty target strings, never match. Exposed for direct unit testing.
+    static func captures(_ targets: [String], in capturing: Set<String>) -> Bool {
+        for target in targets where !target.isEmpty {
+            if capturing.contains(where: { $0 == target || $0.hasPrefix(target + ".") }) {
+                return true
+            }
+        }
+        return false
     }
 }
 

@@ -25,6 +25,11 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
     case cpuLoad(thresholdPercent: Int)
     /// Any process is using the camera or the microphone (a call, a recording).
     case mediaInUse(MediaInUseTrigger.Device)
+    /// The microphone is in use by one of a chosen set of apps (Discord, Slack,
+    /// Zoom, ...), matched by bundle id. A sibling of ``mediaInUse`` rather than
+    /// a parameter on it, so existing saved rules and presets decode unchanged;
+    /// the camera has no per-process API, so scoping is microphone-only.
+    case micInUse(MicInUseRule)
     /// Sound is playing through any output device (with a release grace).
     case audioPlaying
     /// Any VPN configuration is connected.
@@ -65,6 +70,7 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
         case .volumeMounted(let name): return L("Volume \u{201C}%@\u{201D} mounted", name)
         case .cpuLoad(let threshold): return L("CPU above %d%%", threshold)
         case .mediaInUse(let device): return device.label
+        case .micInUse(let rule):     return rule.label
         case .audioPlaying:           return L("Audio playing")
         case .vpnConnected:           return L("VPN connected")
         case .bluetoothDevice(let name):
@@ -177,6 +183,44 @@ public struct AgentRule: Codable, Equatable, Hashable, Sendable {
     }
 }
 
+/// One app watched by a ``MicInUseRule``: its bundle id (how it is matched)
+/// plus an optional friendly name for the UI, mirroring ``AppRule``. Matching
+/// is always by ``bundleID`` (by prefix, so an app's Electron helper
+/// subprocess counts), so a stale or missing name never changes behavior.
+public struct ScopedApp: Codable, Equatable, Hashable, Sendable {
+    /// Bundle identifier of the app to watch, e.g. `com.hnc.Discord`.
+    public var bundleID: String
+    /// Friendly display name (e.g. "Discord"), set when the rule is built from
+    /// a known app (the "using the mic now" list, a preset, or the app picker).
+    public var name: String?
+
+    public init(bundleID: String, name: String? = nil) {
+        self.bundleID = bundleID
+        self.name = name
+    }
+}
+
+/// A persisted "microphone in use by specific apps" rule: keep awake only while
+/// one of ``apps`` is capturing the microphone, i.e. that app is on a call.
+/// Reads the macOS 14 per-process CoreAudio API, unprivileged and prompt-free.
+/// Microphone only: the camera has no equivalent per-process API to scope by.
+public struct MicInUseRule: Codable, Equatable, Hashable, Sendable {
+    /// The apps to watch, by bundle id (+ optional friendly name). An empty
+    /// list matches nothing, so the rule holds nothing awake until an app is
+    /// added; the editor drops the whole rule when its last app is removed.
+    public var apps: [ScopedApp]
+
+    public init(apps: [ScopedApp] = []) {
+        self.apps = apps
+    }
+
+    public var label: String {
+        guard !apps.isEmpty else { return L("Microphone in use by app") }
+        let names = apps.map { $0.name ?? $0.bundleID }.joined(separator: ", ")
+        return L("Microphone in use by %@", names)
+    }
+}
+
 /// A named set of trigger rules plus how they combine, the persisted shape of
 /// a trigger configuration.
 public struct RuleSet: Codable, Equatable, Sendable {
@@ -284,6 +328,12 @@ public struct TriggerFactory {
             return CPULoadTrigger(thresholdPercent: threshold, reader: cpu)
         case .mediaInUse(let device):
             return MediaInUseTrigger(device: device, monitor: media)
+        case .micInUse(let rule):
+            return MediaInUseTrigger(
+                device: .microphone,
+                appFilter: rule.apps.map(\.bundleID),
+                monitor: media
+            )
         case .audioPlaying:
             return GracePeriodTrigger(
                 wrapping: AudioPlayingTrigger(monitor: media),

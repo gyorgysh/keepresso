@@ -101,6 +101,104 @@ private final class FakeMediaMonitor: MediaActivityMonitoring {
     #expect(!engine.isSatisfied())
 }
 
+// MARK: - App-scoped microphone (Discord/Slack/... calls)
+
+@Test func captureMatcherMatchesExactAndHelperPrefix() {
+    // A native call app captures under its own id (exact match); an Electron
+    // app captures under a child helper id (prefix match).
+    let capturing: Set<String> = ["com.hnc.Discord.helper.Renderer", "com.apple.FaceTime"]
+    #expect(MediaInUseTrigger.captures(["com.hnc.Discord"], in: capturing))        // helper prefix
+    #expect(MediaInUseTrigger.captures(["com.apple.FaceTime"], in: capturing))     // exact
+    #expect(MediaInUseTrigger.captures(["com.tinyspeck.slackmacgap", "com.hnc.Discord"], in: capturing))
+}
+
+@Test func captureMatcherRejectsNonMatchesAndEmptyScope() {
+    let capturing: Set<String> = ["com.hnc.Discord.helper.Renderer"]
+    #expect(!MediaInUseTrigger.captures(["com.tinyspeck.slackmacgap"], in: capturing))
+    #expect(!MediaInUseTrigger.captures([], in: capturing))          // empty scope never matches
+    #expect(!MediaInUseTrigger.captures([""], in: capturing))        // empty id never matches
+    // A sibling-prefix must not false-match: "com.hnc.Disc" is not a bundle
+    // ancestor of "com.hnc.Discord..." (the dot boundary guards against it).
+    #expect(!MediaInUseTrigger.captures(["com.hnc.Disc"], in: capturing))
+}
+
+@Test func scopedMicTriggerFiresOnlyForListedApps() {
+    let monitor = FakeMediaMonitor(microphone: true)
+    monitor.snapshot = MediaActivitySnapshot(
+        microphoneInUse: true,
+        micCapturingBundleIDs: ["com.hnc.Discord.helper.Renderer"]
+    )
+    // Unscoped mic use is Discord; a Slack-scoped rule stays quiet...
+    let slack = MediaInUseTrigger(device: .microphone, appFilter: ["com.tinyspeck.slackmacgap"], monitor: monitor)
+    #expect(!slack.isSatisfied())
+    // ...while a Discord-scoped rule fires on the helper via the prefix rule.
+    let discord = MediaInUseTrigger(device: .microphone, appFilter: ["com.hnc.Discord"], monitor: monitor)
+    #expect(discord.isSatisfied())
+    // The unscoped rule still fires on any mic use.
+    let any = MediaInUseTrigger(device: .microphone, monitor: monitor)
+    #expect(any.isSatisfied())
+}
+
+@Test func scopedMicTriggerWithEmptyFilterNeverHolds() {
+    // A half-configured scope (no apps) must not pin the Mac awake even while
+    // the mic is genuinely in use.
+    let monitor = FakeMediaMonitor(microphone: true)
+    monitor.snapshot = MediaActivitySnapshot(
+        microphoneInUse: true,
+        micCapturingBundleIDs: ["com.hnc.Discord.helper.Renderer"]
+    )
+    let empty = MediaInUseTrigger(device: .microphone, appFilter: [], monitor: monitor)
+    #expect(!empty.isSatisfied())
+}
+
+@Test func factoryBuildsScopedMicTrigger() {
+    let monitor = FakeMediaMonitor(microphone: true)
+    monitor.snapshot = MediaActivitySnapshot(
+        microphoneInUse: true,
+        micCapturingBundleIDs: ["com.tinyspeck.slackmacgap.helper"]
+    )
+    let factory = TriggerFactory(media: monitor)
+    let rule = TriggerRule.micInUse(MicInUseRule(apps: [ScopedApp(bundleID: "com.tinyspeck.slackmacgap", name: "Slack")]))
+    let engine = factory.makeEngine(from: RuleSet(rules: [rule]))
+    #expect(engine.isSatisfied())
+
+    // A different app on the mic no longer satisfies the Slack-scoped rule.
+    monitor.snapshot = MediaActivitySnapshot(
+        microphoneInUse: true,
+        micCapturingBundleIDs: ["com.hnc.Discord.helper.Renderer"]
+    )
+    #expect(!engine.isSatisfied())
+}
+
+@Test func micInUseRuleLabelAndCodableRoundTrip() throws {
+    let rule = TriggerRule.micInUse(MicInUseRule(apps: [
+        ScopedApp(bundleID: "com.hnc.Discord", name: "Discord"),
+        ScopedApp(bundleID: "com.tinyspeck.slackmacgap", name: "Slack"),
+    ]))
+    #expect(rule.label == "Microphone in use by Discord, Slack")
+    #expect(rule.requiredPermission == nil)   // reads process state, no TCC permission
+    let data = try JSONEncoder().encode([rule])
+    #expect(try JSONDecoder().decode([TriggerRule].self, from: data) == [rule])
+}
+
+@Test func oldUnscopedMediaInUseJSONStillDecodes() throws {
+    // The wire format of the pre-existing unscoped rule must not change when the
+    // sibling `.micInUse` case is added, or upgraders lose their saved rules.
+    let json = Data(#"[{"mediaInUse":{"_0":"microphone"}}]"#.utf8)
+    #expect(try JSONDecoder().decode([TriggerRule].self, from: json) == [.mediaInUse(.microphone)])
+}
+
+@Test func enclosingAppBundleResolvesElectronHelperToItsApp() {
+    // The mic capturer is a helper buried in Frameworks; resolve to the app.
+    let helper = "/Applications/Discord.app/Contents/Frameworks/Discord Helper (Renderer).app/Contents/MacOS/Discord Helper (Renderer)"
+    #expect(CoreMediaActivityMonitor.enclosingAppBundleURL(forExecutablePath: helper)?.path == "/Applications/Discord.app")
+    // A native app whose own binary captures resolves to itself.
+    let native = "/Applications/FaceTime.app/Contents/MacOS/FaceTime"
+    #expect(CoreMediaActivityMonitor.enclosingAppBundleURL(forExecutablePath: native)?.path == "/Applications/FaceTime.app")
+    // A plain CLI outside any bundle has no enclosing app.
+    #expect(CoreMediaActivityMonitor.enclosingAppBundleURL(forExecutablePath: "/usr/bin/some-tool") == nil)
+}
+
 @Test func meetingsPresetWatchesCameraAndMicrophone() {
     let meetings = Preset.builtIns.first { $0.id == "meetings" }
     #expect(meetings != nil)

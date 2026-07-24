@@ -5,6 +5,16 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- **Keep awake for calls in a specific app.** A new trigger holds the Mac
+  awake only while a chosen app is using the microphone, that is, while it is
+  on a call (Slack, Discord, Zoom, and the like). A foreground app or an
+  always-connected external microphone no longer counts on its own. Add it in
+  Preferences ▸ Triggers under "Microphone in use by app", choosing the app
+  that is on the mic right now, a common call app, or any app you pick. No
+  extra permission needed. Suggested by @joshuas99 (#5).
+
 ### Changed
 
 - **Ending automation leases is now a menu action.** While leases are live,

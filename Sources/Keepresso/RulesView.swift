@@ -130,6 +130,9 @@ struct RulesView: View {
             if case .agentActivity(let agentRule) = rule {
                 agentOptionsMenu(index: index, agentRule: agentRule)
             }
+            if case .micInUse(let micRule) = rule {
+                micOptionsMenu(index: index, micRule: micRule)
+            }
 
             Button {
                 model.removeRule(at: index)
@@ -188,6 +191,69 @@ struct RulesView: View {
         .menuStyle(.borderlessButton)
         .fixedSize()
         .help("App match & grace period")
+    }
+
+    /// In-place editor for a mic-scope rule: the apps it watches (click one to
+    /// stop watching it) and an "Add app" submenu. Removing the last app drops
+    /// the whole rule, since an empty scope would hold nothing awake.
+    private func micOptionsMenu(index: Int, micRule: MicInUseRule) -> some View {
+        Menu {
+            Section("Keeping awake for calls in") {
+                ForEach(micRule.apps, id: \.bundleID) { app in
+                    Button {
+                        let remaining = micRule.apps.filter { $0.bundleID != app.bundleID }
+                        if remaining.isEmpty {
+                            model.removeRule(at: index)
+                        } else {
+                            model.updateRule(at: index, to: .micInUse(MicInUseRule(apps: remaining)))
+                        }
+                    } label: {
+                        // A checkmark reads "currently watched"; clicking removes it.
+                        Label(app.name ?? app.bundleID, systemImage: "checkmark")
+                    }
+                }
+            }
+            Divider()
+            Menu("Add app") {
+                micAppChoices { app in
+                    guard !micRule.apps.contains(where: { $0.bundleID == app.bundleID }) else { return }
+                    model.updateRule(at: index, to: .micInUse(MicInUseRule(apps: micRule.apps + [app])))
+                }
+            }
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Which apps count")
+    }
+
+    /// Shared app chooser for the mic-scope rule, used both when adding the rule
+    /// and when adding apps to an existing one. Offers the apps using the mic
+    /// right now (foolproof: real bundle id, no guessing), a short list of
+    /// common call apps, and a "Choose app…" panel. Built lazily when the menu
+    /// opens, so the live list is fresh.
+    @ViewBuilder
+    private func micAppChoices(_ add: @escaping (ScopedApp) -> Void) -> some View {
+        let live = model.micAppsInUse()
+        if !live.isEmpty {
+            Section("Using the mic now") {
+                ForEach(live, id: \.bundleID) { app in
+                    Button(app.name) { add(ScopedApp(bundleID: app.bundleID, name: app.name)) }
+                }
+            }
+        }
+        Section("Common call apps") {
+            ForEach(AppModel.callAppPresets, id: \.bundleID) { app in
+                Button(app.name) { add(ScopedApp(bundleID: app.bundleID, name: app.name)) }
+            }
+        }
+        Divider()
+        Button("Choose app\u{2026}") {
+            if let picked = model.pickApplication() {
+                add(ScopedApp(bundleID: picked.bundleID, name: picked.name))
+            }
+        }
     }
 
     private func isAgentRule(_ rule: TriggerRule) -> Bool {
@@ -454,6 +520,10 @@ struct RulesView: View {
         Section("Media") {
             Button("Camera in use") { model.addRule(.mediaInUse(.camera)) }
             Button("Microphone in use") { model.addRule(.mediaInUse(.microphone)) }
+            Menu("Microphone in use by app\u{2026}") {
+                micAppChoices { app in model.addRule(.micInUse(MicInUseRule(apps: [app]))) }
+            }
+            .help("Keeps the Mac awake only while a chosen app is using the microphone, i.e. on a call (Discord, Slack, Zoom, and the like), so an idle browser tab or Voice Memos doesn't. Reads which app holds the mic, no permission needed. If you're on a call now, the app appears under \u{201C}Using the mic now\u{201D}.")
             Button("Audio playing") { model.addRule(.audioPlaying) }
         }
         Section("Gaming") {
@@ -547,6 +617,7 @@ struct RulesView: View {
         case .cpuLoad:                 return "cpu"
         case .mediaInUse(.camera):     return "video"
         case .mediaInUse(.microphone): return "mic"
+        case .micInUse:                return "mic.fill"
         case .audioPlaying:            return "speaker.wave.2"
         case .vpnConnected:            return "lock.shield"
         case .bluetoothDevice:         return "antenna.radiowaves.left.and.right"
