@@ -111,4 +111,15 @@ public enum AutomationSync {
         guard let auto = automationWake, auto > now else { return manualFuture }
         return manualFuture.map { min($0, auto) } ?? auto
     }
+
+    /// Whether to keep the last-known automations rather than adopt a new, empty
+    /// discovery result. Discovery reads small files a scheduler may be
+    /// mid-rewrite, so a one-off empty read must not drop armed wakes or make a
+    /// wake handler miss its hold. A genuinely emptied source still takes effect
+    /// once `maxEmptyStreak` consecutive empty reads have gone by.
+    public static func shouldKeepLastKnown(
+        newIsEmpty: Bool, hadAutomations: Bool, emptyStreak: Int, maxEmptyStreak: Int
+    ) -> Bool {
+        newIsEmpty && hadAutomations && emptyStreak < maxEmptyStreak
+    }
 }

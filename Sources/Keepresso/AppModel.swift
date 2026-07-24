@@ -688,6 +688,19 @@ final class AppModel {
         armAutomationWakesIfChanged()
     }
 
+    /// Discover automations and compute the next wake WITHOUT applying, so the
+    /// launch path can apply the full effective schedule (manual + automation)
+    /// in one step. Without this, launch applies before discovery has run and a
+    /// wake persisted from a previous run (pmset survives reboots) is cancelled,
+    /// then only re-armed a tick later.
+    func primeAutomationDiscovery() {
+        automationSyncController.refresh()
+        let config = settings.automationSync
+        automationNextWake = config.enabled
+            ? AutomationSync.nextWake(automationSyncController.automations, config: config, after: Date())
+            : nil
+    }
+
     private func armAutomationWakesIfChanged() {
         let config = settings.automationSync
         automationNextWake = config.enabled

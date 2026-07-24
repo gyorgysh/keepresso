@@ -224,7 +224,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Start a session right away if "Start keep-awake on launch" is on.
         model.startOnLaunchIfNeeded()
         // Re-sync wake schedules with the helper (settings survive; the system
-        // schedule is the source of truth for the machine).
+        // schedule is the source of truth for the machine). Discover local
+        // automations first so a wake persisted from a previous run is re-armed
+        // in the same apply rather than dropped before the first discovery tick.
+        model.primeAutomationDiscovery()
         model.applyWakeScheduleToSystem()
         model.refreshSystemWakeState()
         // Wake-and-brew: a system wake near a Keepresso schedule can start a

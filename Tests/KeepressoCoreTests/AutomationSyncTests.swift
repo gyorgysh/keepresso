@@ -76,6 +76,18 @@ private func claude(_ key: String, _ cron: String, enabled: Bool = true) -> Sche
     #expect(AutomationSync.effectiveOneShot(manual: nil, automationWake: nil, now: now) == nil)
 }
 
+@Test func keepLastKnownRidesOutABriefEmptyReadThenGivesWay() {
+    // Held while we had automations and the empty streak is still short (a
+    // schedule file caught mid-rewrite).
+    #expect(AutomationSync.shouldKeepLastKnown(newIsEmpty: true, hadAutomations: true, emptyStreak: 0, maxEmptyStreak: 2))
+    #expect(AutomationSync.shouldKeepLastKnown(newIsEmpty: true, hadAutomations: true, emptyStreak: 1, maxEmptyStreak: 2))
+    // Gives way once the streak is exhausted (a genuine deletion).
+    #expect(!AutomationSync.shouldKeepLastKnown(newIsEmpty: true, hadAutomations: true, emptyStreak: 2, maxEmptyStreak: 2))
+    // Never engages for a non-empty read, or when there was nothing to keep.
+    #expect(!AutomationSync.shouldKeepLastKnown(newIsEmpty: false, hadAutomations: true, emptyStreak: 0, maxEmptyStreak: 2))
+    #expect(!AutomationSync.shouldKeepLastKnown(newIsEmpty: true, hadAutomations: false, emptyStreak: 0, maxEmptyStreak: 2))
+}
+
 @Test func syncConfigDecodesForgivingly() throws {
     // An empty object falls back to every default (off, 15 min hold, 3 min lead).
     let config = try JSONDecoder().decode(AutomationSyncConfig.self, from: Data("{}".utf8))
