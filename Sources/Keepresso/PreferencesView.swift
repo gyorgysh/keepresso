@@ -1141,7 +1141,7 @@ private struct AutomationTab: View {
                 .foregroundStyle(.secondary)
             Text("No local scheduled runs found")
                 .font(.callout.weight(.medium))
-            Text("Add one in Claude Desktop (Routines ▸ New routine ▸ Local) or Codex, then refresh. Cloud routines run on the vendor's servers and need no wake.")
+            Text("Add one in Claude Desktop (Routines ▸ New routine ▸ Local) or Codex (Scheduled tasks ▸ Create), then refresh. Cloud routines run on the vendor's servers and need no wake.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -1397,6 +1397,10 @@ private struct AutomationTab: View {
                     model.copyAgentInstructions()
                     flashCopied(L("Copied. Paste it to your agent in a new chat to teach it to manage Keepresso."))
                 }
+                // A borderless button-style menu so it reads like the plain
+                // buttons beside it (accent text, a small chevron) and adapts to
+                // light and dark, instead of the default pull-down's bezel that
+                // looked like a washed-out gray fill on a dark background.
                 Menu("Copy MCP Setup") {
                     Button("For Claude Code (JSON)") { copyMCP(.mcpServersJSON) }
                     Button("For Gemini CLI (JSON)") { copyMCP(.mcpServersJSON) }
@@ -1405,6 +1409,8 @@ private struct AutomationTab: View {
                     Divider()
                     Button("Server path only") { copyMCP(.serverPath) }
                 }
+                .menuStyle(.button)
+                .buttonStyle(.borderless)
                 .fixedSize()
                 Button("Reveal Skill Folder") { model.revealAgentSkill() }
                 Spacer(minLength: 0)
