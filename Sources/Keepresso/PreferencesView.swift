@@ -955,6 +955,11 @@ private struct AutomationTab: View {
     /// after a few seconds; superseded by the next copy.
     @State private var copiedConfirmation: String?
     @State private var copiedResetTask: Task<Void, Never>?
+    /// A separate confirmation for the run-instructions copy in Scheduled AI
+    /// runs, kept apart so it shows next to that button, not up in the
+    /// Automation access section where ``copiedConfirmation`` lives.
+    @State private var runInstructionsCopied = false
+    @State private var runInstructionsResetTask: Task<Void, Never>?
 
     private func flashCopied(_ message: String) {
         copiedResetTask?.cancel()
@@ -963,6 +968,16 @@ private struct AutomationTab: View {
             try? await Task.sleep(for: .seconds(6))
             guard !Task.isCancelled else { return }
             withAnimation(.snappy(duration: 0.3)) { copiedConfirmation = nil }
+        }
+    }
+
+    private func flashRunInstructionsCopied() {
+        runInstructionsResetTask?.cancel()
+        withAnimation(.snappy(duration: 0.2)) { runInstructionsCopied = true }
+        runInstructionsResetTask = Task {
+            try? await Task.sleep(for: .seconds(6))
+            guard !Task.isCancelled else { return }
+            withAnimation(.snappy(duration: 0.3)) { runInstructionsCopied = false }
         }
     }
 
@@ -1060,6 +1075,39 @@ private struct AutomationTab: View {
                     Text("30 minutes").tag(TimeInterval(30 * 60))
                     Text("1 hour").tag(TimeInterval(60 * 60))
                 }
+                automationRunLeaseGuidance
+            }
+        }
+    }
+
+    /// Points past the fixed window: for a run that outlasts it, the task's own
+    /// agent should hold a lease for the whole session. Offers a paste-ready
+    /// directive to drop into the scheduled task's prompt, so this is something
+    /// a user can actually set up, not just read about in the tooltip.
+    @ViewBuilder
+    private var automationRunLeaseGuidance: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("This window is a fallback. For a run that lasts longer, have the task's own agent hold a Keepresso lease for the whole session, so the Mac stays awake until the work is done, then sleeps.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if !model.automationLeasesEnabled {
+                Label(L("Leases are off. Turn on \u{201C}Allow automation leases\u{201D} under Automation access for the agent's lease to hold."), systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Button("Copy Run Instructions") {
+                model.copyAutomationRunInstructions()
+                flashRunInstructionsCopied()
+            }
+            .controlSize(.small)
+            if runInstructionsCopied {
+                Label("Copied. Paste it into the scheduled task's prompt, so its agent holds the Mac awake for the run.", systemImage: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.green)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
             }
         }
     }

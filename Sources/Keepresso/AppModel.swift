@@ -1670,6 +1670,26 @@ final class AppModel {
         NSWorkspace.shared.activateFileViewerSelecting([agentSkillURL])
     }
 
+    /// Copy a paste-ready directive for a scheduled task's own prompt: have its
+    /// agent hold a Keepresso lease for the whole run, so the Mac stays awake
+    /// past the fixed hold window and only sleeps once the work is actually done.
+    /// Assumes the skill or MCP is already set up (see the buttons above); this
+    /// is the "what to do during the run" half.
+    func copyAutomationRunInstructions() {
+        let text = """
+        Keep this Mac awake for the entire run using Keepresso. Use the \
+        "keep-awake" skill if you have it, or Keepresso's MCP tools \
+        (acquire_lease, heartbeat_lease, release_lease). Acquire one lease when \
+        the run starts, with a UUID you generate once; send a heartbeat before \
+        half its TTL elapses; and release it in your cleanup path when you \
+        finish, even on error. If Keepresso reports that automation leases are \
+        disabled, tell me and continue without one.
+        """
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
+
     // MARK: - Automation wake requests
 
     /// Whether outside tools may change the wake schedule (Preferences ▸
