@@ -70,6 +70,10 @@ struct WelcomeView: View {
         var next: Step { Step(rawValue: rawValue + 1) ?? self }
     }
     @State private var step: Step = .welcome
+    /// Whether the window is actually on screen. The closed window keeps this
+    /// view (and `step`) alive, so watching visibility lets us restart the tour
+    /// at step one on each reopen instead of landing on the last step shown.
+    @State private var windowVisible = false
 
     /// Whether the hero cup is brewing: a live session, or a use case just
     /// picked (the pour is the payoff for the choice; the manual opt-out
@@ -168,6 +172,17 @@ struct WelcomeView: View {
         .font(type.body)
         .glassWindowBackground()
         .centersAndFrontsWindow()
+        .background(WindowVisibilityReader(isVisible: $windowVisible))
+        .onChange(of: windowVisible) { _, visible in
+            // Restart the tour whenever the window comes back on screen: the
+            // closed window keeps `step` alive, so a reopen would otherwise show
+            // the last step. Reset the entrance so the first step fades in too.
+            guard visible else { return }
+            step = .welcome
+            revealed = false
+            refreshScreenHeight()
+            withAnimation { revealed = true }
+        }
         .onAppear {
             // Status reads only; showing the window never prompts for anything.
             model.helper.refresh()
@@ -202,27 +217,51 @@ struct WelcomeView: View {
     /// Step 1: what Keepresso is, plus a language picker for anyone who landed
     /// in the wrong language before reading anything else.
     private var welcomeStep: some View {
-        VStack(spacing: 10) {
-            BrewingCupView(isActive: cupBrewing, scale: 2.8 * type.scale)
+        VStack(spacing: 14) {
+            BrewingCupView(isActive: cupBrewing, scale: 2.6 * type.scale)
             Text("Welcome to Keepresso")
                 .font(type.title2.bold())
-            Text("Keepresso keeps your Mac awake on your terms. It lives in the menu bar near the clock, with no Dock icon. Click its cup any time to start or stop.")
+            Text("Keepresso keeps your Mac awake on your terms, right from the menu bar. No Dock icon, no fuss.")
                 .font(type.callout)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 10) {
+                pointRow("cursorarrow.click",
+                         "Click the cup in the menu bar to keep your Mac awake, and click again to let it sleep.")
+                pointRow("wand.and.stars",
+                         "Or set up triggers and it stays awake on its own, only while you're on a call, downloading, gaming, and the like.")
+                pointRow("checkmark.shield",
+                         "It looks after your Mac too, stepping aside on low battery or when things run hot.")
+            }
+            .padding(.top, 2)
             languagePicker
         }
         .frame(maxWidth: .infinity)
         .entrance(0, revealed: revealed, animated: !reduceMotion)
     }
 
+    /// One orienting bullet on the welcome step: an accent icon and a short line.
+    private func pointRow(_ icon: String, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(type.callout)
+                .foregroundStyle(Color.keepressoBrew)
+                .frame(width: 22 * type.scale)
+            Text(LocalizedStringKey(text))
+                .font(type.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+    }
+
     /// Step 2: pick how you use your Mac to seed a matching preset in one tap.
     private var useCaseStep: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("How do you use your Mac?")
+            Text("When should it stay awake?")
                 .font(type.callout.weight(.semibold))
-            Text("Pick one to set up matching triggers, or keep it manual and add your own later. You can change this any time in Preferences.")
+            Text("Pick how you use your Mac. Keepresso sets up matching triggers, then keeps the Mac awake only while those conditions hold and lets it sleep the rest of the time. Fine-tune or add your own anytime in Preferences.")
                 .font(type.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -242,6 +281,8 @@ struct WelcomeView: View {
     /// is used; reaching this step prompts for nothing.
     private var setupStep: some View {
         VStack(alignment: .leading, spacing: 14) {
+            Text("A few basics")
+                .font(type.callout.weight(.semibold))
             setupRow(
                 icon: "power",
                 title: "Launch at login",
@@ -269,6 +310,11 @@ struct WelcomeView: View {
             ) {
                 helperControl
             }
+            Text("That's everything. Keepresso waits in the menu bar by the clock. Click the cup anytime, and Preferences has the rest.")
+                .font(type.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 2)
         }
         .entrance(0, revealed: revealed, animated: !reduceMotion)
     }
