@@ -1564,12 +1564,21 @@ private struct AutomationTab: View {
                     let next = model.systemWakeState.scheduledWakes
                         .map { $0.formatted(date: .abbreviated, time: .shortened) }
                         .joined(separator: ", ")
-                    Text(L("System one-shot wakes: %@", next))
+                    Text(L("Scheduled wakes on this Mac: %@", next))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 if let repeating = model.systemWakeState.repeatingSummary {
-                    Text(L("System repeating: %@", repeating))
+                    Text(L("Repeating wake on this Mac: %@", repeating))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if !model.systemWakeState.scheduledWakes.isEmpty
+                    || model.systemWakeState.repeatingSummary != nil {
+                    // The list above is the whole-Mac pmset schedule, not just
+                    // ours: say so, since a wake showing while our toggle is off
+                    // otherwise reads as a leftover we won't clear.
+                    Text(L("Keepresso sets and clears only its own. Wakes from macOS or other apps (Do Not Disturb, backups) stay, and turning this schedule off clears Keepresso's."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
