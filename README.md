@@ -43,6 +43,10 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   duration), or **until a wall-clock time** ("until 18:00", today or tomorrow).
 - 🌙 **Yield the screen saver.** Let the screen saver or display sleep kick in
   after _N_ minutes idle while the system itself stays awake.
+- 🔅 **Dim, don't sleep.** On a long held session, let the built-in display drop
+  to its dimmest a few minutes after you step away, staying awake but dark, then
+  snap back to your brightness the moment you return or the session ends. Kinder
+  to the panel and the battery on overnight sessions than a screen left fully lit.
 - 🟢 **Keep me active (defeat idle detectors).** A plain power assertion keeps the
   Mac awake but doesn't reset app-level or enterprise idle detection. Optionally
   tell macOS you're active too, so remote-desktop and VDI sessions, meeting
@@ -73,6 +77,13 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   is, a pending permission prompt counts as working (so the Mac waits for your
   answer), and background subagents count too. The menu lists every session with
   a live working / idle state and where it runs.
+- ⏰ **Wake for scheduled AI runs.** Keepresso reads the recurring tasks your
+  local AI tools schedule (Claude Desktop routines, Codex automations), wakes the
+  Mac a few minutes before each run, and holds it awake long enough to finish,
+  even with the lid shut. It reads only the schedule and name, never the prompt,
+  ignores cloud routines (those run on the vendor's servers, no wake needed), and
+  you switch on the tools you want woken for. A run that needs longer can hold a
+  lease until it's done.
 - ⏹️ **Stop in 15, one click.** A row of quick "Stop in" buttons (15 min, 30 min,
   1 h out of the box, editable) turns a running session into a timed one, so the
   Mac goes back to sleeping on its own without you remembering to toggle off.
@@ -80,7 +91,9 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 - 🎥 **Never sleeps mid-meeting.** The camera/microphone conditions catch every
   meeting app at once, including calls running in a browser tab, and read only
   the device's in-use state (the green-dot signal), never the stream, so no
-  camera or microphone permission is ever requested.
+  camera or microphone permission is ever requested. You can also scope the
+  microphone to one app, so only a real call in Slack, Discord, or Zoom holds the
+  Mac awake, not any app that happens to open the mic.
 - 🎮 **Game-aware.** The "Playing a game" condition spots apps that declare a
   games category, anything running from a **Steam** library (many Steam games
   skip the declaration), and the cloud and game-streaming clients: **GeForce

@@ -3,7 +3,7 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
-## [Unreleased]
+## [1.18.0] - 2026-07-24
 
 ### Added
 
@@ -15,7 +15,9 @@ Versions follow [Semantic Versioning](https://semver.org).
   routines (those run on the vendor's servers whether the Mac is awake or not).
   For a run longer than the window, an agent can hold a Keepresso lease to keep
   the Mac awake until it finishes. Turn it on in Preferences ▸ Automation ▸
-  Scheduled AI runs. See `docs/AUTOMATION_SYNC.md`. Inspired by @quasar2333's
+  Scheduled AI runs, then switch on each tool you want woken for (Claude
+  Desktop, Codex), each off until you opt in so nothing you don't use is ever
+  woken for. See `docs/AUTOMATION_SYNC.md`. Inspired by @quasar2333's
   power-orchestration work in #3, reworked into an extensible framework that
   syncs several schedulers.
 - **Keep awake for calls in a specific app.** A new trigger holds the Mac
@@ -25,6 +27,12 @@ Versions follow [Semantic Versioning](https://semver.org).
   Preferences ▸ Triggers under "Microphone in use by app", choosing the app
   that is on the mic right now, a common call app, or any app you pick. No
   extra permission needed. Suggested by @joshuas99 (#5).
+- **Dim the display instead of leaving it lit.** When a session is holding the
+  display awake, Keepresso can drop the built-in screen to its dimmest a few
+  minutes after you step away, keeping it awake but dark, then restore your
+  brightness the moment you return or the session ends. Kinder to the panel and
+  the battery on overnight sessions than a screen left fully lit. Turn on "Dim
+  the display when idle" under Prevent display sleep.
 
 ### Changed
 
@@ -33,6 +41,13 @@ Versions follow [Semantic Versioning](https://semver.org).
   stopping agent work and pausing triggers are two deliberate steps. Pausing
   or turning off triggers no longer stops a session that live leases are
   sustaining: the leases keep it, and ending them is the explicit gesture.
+- **A clearer first-run welcome.** The welcome window is now a short three-step
+  flow that explains how Keepresso works as you go (the cup, triggers, and the
+  built-in battery and heat safety), instead of one long page. You can reopen it
+  any time from the menu under "Welcome to Keepresso…".
+- **Cloud Gaming preset holds through downloads.** The built-in Cloud Gaming
+  preset now also stays awake while Steam is downloading, matching the local
+  Gaming preset.
 
 ### Fixed
 
