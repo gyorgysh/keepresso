@@ -21,6 +21,20 @@ private final class FakeActivity: ActivitySimulating {
     func poke() { pokeCount += 1 }
 }
 
+/// Records brightness set calls and serves a controllable current level.
+private final class FakeBrightness: BrightnessControlling {
+    var supported: Bool
+    var level: Double
+    private(set) var setLevels: [Double] = []
+    init(supported: Bool = true, level: Double = 0.8) {
+        self.supported = supported
+        self.level = level
+    }
+    var isSupported: Bool { supported }
+    func currentBrightness() -> Double? { supported ? level : nil }
+    func setBrightness(_ newLevel: Double) { level = newLevel; setLevels.append(newLevel) }
+}
+
 @MainActor
 @Test func keepActivePokesOnceOnActivationThenOnTheInterval() {
     let clock = Clock()
@@ -66,6 +80,75 @@ private final class FakeActivity: ActivitySimulating {
     // Once they step away past the threshold, it pokes promptly.
     controller.reconcile(systemIdleSeconds: 30)
     #expect(activity.pokeCount == 2)
+}
+
+// MARK: - Dim, don't sleep
+
+@MainActor
+@Test func dimDropsBrightnessAfterIdleAndRestoresOnActivity() {
+    let clock = Clock()
+    let brightness = FakeBrightness(level: 0.8)
+    let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(
+        preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 300, dimFloor: 0))
+
+    // Still at the keyboard: no dim.
+    controller.reconcile(systemIdleSeconds: 10)
+    #expect(brightness.level == 0.8)
+
+    // Idle past the threshold: dim to the floor, remembering the 0.8.
+    controller.reconcile(systemIdleSeconds: 300)
+    #expect(brightness.level == 0)
+    // A second idle tick doesn't write again (idempotent).
+    let writes = brightness.setLevels.count
+    controller.reconcile(systemIdleSeconds: 360)
+    #expect(brightness.setLevels.count == writes)
+
+    // The user returns: restore the pre-dim brightness.
+    controller.reconcile(systemIdleSeconds: 1)
+    #expect(brightness.level == 0.8)
+}
+
+@MainActor
+@Test func dimRestoresBrightnessWhenTheSessionStops() {
+    let clock = Clock()
+    let brightness = FakeBrightness(level: 0.7)
+    let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(
+        preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 60, dimFloor: 0.05))
+    controller.reconcile(systemIdleSeconds: 90)
+    #expect(brightness.level == 0.05)   // dimmed
+
+    controller.stop()
+    #expect(brightness.level == 0.7)    // restored on stop
+}
+
+@MainActor
+@Test func dimStaysInertWhenUnsupportedOrUnconfigured() {
+    let clock = Clock()
+    // Unsupported display: never touches brightness, even when idle.
+    let unsupported = FakeBrightness(supported: false, level: 0.9)
+    let a = SessionController(assertions: FakeAssertions(), brightness: unsupported, now: { clock.now })
+    a.start(options: SleepPreventionOptions(
+        preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 30))
+    a.reconcile(systemIdleSeconds: 300)
+    #expect(unsupported.setLevels.isEmpty)
+
+    // Dim not configured (dimDisplayAfter nil): idle never dims.
+    let supported = FakeBrightness(level: 0.9)
+    let b = SessionController(assertions: FakeAssertions(), brightness: supported, now: { clock.now })
+    b.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    b.reconcile(systemIdleSeconds: 300)
+    #expect(supported.setLevels.isEmpty)
+    #expect(!b.consumesIdleReading)     // no idle read needed when nothing uses it
+}
+
+@MainActor
+@Test func dimConfigMakesTheControllerConsumeIdle() {
+    let controller = SessionController(assertions: FakeAssertions())
+    controller.start(options: SleepPreventionOptions(
+        preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 120))
+    #expect(controller.consumesIdleReading)
 }
 
 @MainActor

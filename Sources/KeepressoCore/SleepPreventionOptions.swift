@@ -25,6 +25,21 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
     /// Only meaningful when ``preventDisplaySleep`` is `true`.
     public var allowScreenSaverAfter: TimeInterval?
 
+    /// When set, dim the display to ``dimFloor`` after this many seconds of
+    /// inactivity instead of leaving it fully lit, restoring the previous
+    /// brightness on the next activity or when the session ends ("dim, don't
+    /// sleep"). Unlike ``allowScreenSaverAfter`` the display assertion is kept,
+    /// so the panel stays awake, just dark. `nil` means never dim. Only
+    /// meaningful when ``preventDisplaySleep`` is `true`, and mutually exclusive
+    /// with ``allowScreenSaverAfter`` (after idle you either let the display
+    /// sleep or dim it, not both).
+    public var dimDisplayAfter: TimeInterval?
+
+    /// The brightness to dim to when ``dimDisplayAfter`` fires, in `0...1`.
+    /// Defaults to `0` (the dimmest backlight; the display stays awake, just
+    /// dark).
+    public var dimFloor: Double
+
     /// Also report user activity to the OS while the session runs, defeating
     /// app-level and enterprise idle detection (remote-desktop, meeting
     /// presence, corporate idle-logout) that a plain power assertion doesn't
@@ -35,11 +50,15 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
         preventSystemSleep: Bool = true,
         preventDisplaySleep: Bool = false,
         allowScreenSaverAfter: TimeInterval? = nil,
+        dimDisplayAfter: TimeInterval? = nil,
+        dimFloor: Double = 0,
         simulateUserActivity: Bool = false
     ) {
         self.preventSystemSleep = preventSystemSleep
         self.preventDisplaySleep = preventDisplaySleep
         self.allowScreenSaverAfter = allowScreenSaverAfter
+        self.dimDisplayAfter = dimDisplayAfter
+        self.dimFloor = dimFloor
         self.simulateUserActivity = simulateUserActivity
     }
 
@@ -47,7 +66,8 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
     public static let `default` = SleepPreventionOptions()
 
     private enum CodingKeys: String, CodingKey {
-        case preventSystemSleep, preventDisplaySleep, allowScreenSaverAfter, simulateUserActivity
+        case preventSystemSleep, preventDisplaySleep, allowScreenSaverAfter
+        case dimDisplayAfter, dimFloor, simulateUserActivity
     }
 
     /// Forgiving decoder: each field falls back to its default when absent, so a
@@ -58,6 +78,8 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
         preventSystemSleep = try c.decodeIfPresent(Bool.self, forKey: .preventSystemSleep) ?? true
         preventDisplaySleep = try c.decodeIfPresent(Bool.self, forKey: .preventDisplaySleep) ?? false
         allowScreenSaverAfter = try c.decodeIfPresent(TimeInterval.self, forKey: .allowScreenSaverAfter)
+        dimDisplayAfter = try c.decodeIfPresent(TimeInterval.self, forKey: .dimDisplayAfter)
+        dimFloor = try c.decodeIfPresent(Double.self, forKey: .dimFloor) ?? 0
         simulateUserActivity = try c.decodeIfPresent(Bool.self, forKey: .simulateUserActivity) ?? false
     }
 }

@@ -138,11 +138,17 @@ public final class SessionController {
     private let reminder: ReminderNotifying?
     private let activity: ActivitySimulating
     private let endActor: SessionEndActing
+    private let brightness: BrightnessControlling
     private let now: () -> Date
 
     /// When the keep-active poke last fired this session, so it runs on a slow
     /// cadence (``activityPokeInterval``) rather than every reconcile.
     private var lastActivityPokeAt: Date?
+
+    /// The display brightness before dim-don't-sleep dimmed it, or `nil` when
+    /// not currently dimmed. Set once on the idle transition and cleared on
+    /// restore, so dim/restore stays idempotent under the 1 Hz caller.
+    private var preDimLevel: Double?
 
     /// How often ``options`` `simulateUserActivity` reports activity to the OS.
     /// Comfortably under the shortest common idle timeout (a minute or two).
@@ -222,12 +228,14 @@ public final class SessionController {
         reminder: ReminderNotifying? = nil,
         activity: ActivitySimulating = IOKitActivitySimulator(),
         endActor: SessionEndActing = SystemEndActionPerformer(),
+        brightness: BrightnessControlling = NullBrightness(),
         now: @escaping () -> Date = Date.init
     ) {
         self.assertions = assertions
         self.reminder = reminder
         self.activity = activity
         self.endActor = endActor
+        self.brightness = brightness
         self.now = now
     }
 
@@ -356,6 +364,7 @@ public final class SessionController {
         remindersFired = 0
         endingSoonFired = false
         lastActivityPokeAt = nil
+        restoreBrightness()
         assertions.releaseAll()
         reminder?.cancelPending()
         guard wasActive else { return }
@@ -452,6 +461,7 @@ public final class SessionController {
     /// read when this is false, which is the default.
     public var consumesIdleReading: Bool {
         (options.preventDisplaySleep && options.allowScreenSaverAfter != nil)
+            || (options.preventDisplaySleep && options.dimDisplayAfter != nil)
             || options.simulateUserActivity
     }
 
@@ -658,7 +668,41 @@ public final class SessionController {
         maybeRemind(at: instant)
         maybeNotifyEndingSoon(at: instant)
         maybePokeActivity(at: instant, systemIdleSeconds: systemIdleSeconds)
+        maybeDim(systemIdleSeconds: systemIdleSeconds)
         flushPendingEndAction(at: instant)
+    }
+
+    /// Dim, don't sleep: while a session is holding the display awake and
+    /// dim-after-idle is configured and available, drop brightness to the floor
+    /// once the user has been idle past ``SleepPreventionOptions/dimDisplayAfter``,
+    /// then restore the pre-dim level the moment they return (or when the
+    /// session ends, via ``stop``). Idempotent: the pre-dim level is captured
+    /// once and only transitions touch the hardware. Any precondition dropping
+    /// (session ended, option turned off, display unsupported) restores first.
+    private func maybeDim(systemIdleSeconds: TimeInterval?) {
+        guard isActive,
+              options.preventDisplaySleep,
+              let threshold = options.dimDisplayAfter,
+              brightness.isSupported
+        else { restoreBrightness(); return }
+
+        if let idle = systemIdleSeconds, idle >= threshold {
+            if preDimLevel == nil {
+                preDimLevel = brightness.currentBrightness() ?? 1
+                brightness.setBrightness(max(0, min(1, options.dimFloor)))
+            }
+        } else {
+            // Active again (or no idle reading this tick): undo the dim.
+            restoreBrightness()
+        }
+    }
+
+    /// Put brightness back to the level captured before dimming, if we dimmed.
+    /// A no-op otherwise, so it's safe to call on every stop and losing tick.
+    private func restoreBrightness() {
+        guard let level = preDimLevel else { return }
+        brightness.setBrightness(level)
+        preDimLevel = nil
     }
 
     /// Report user activity to the OS on a slow cadence while a keep-active

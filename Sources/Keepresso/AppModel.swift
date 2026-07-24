@@ -34,6 +34,15 @@ final class AppModel {
     /// Experimental headless virtual display (private CoreGraphics API), off by
     /// default. Uses the real backend; `nil` config means no virtual display.
     let virtualDisplay = VirtualDisplayController(backend: CGVirtualDisplayBackend())
+    /// Built-in display brightness control (private DisplayServices API), for
+    /// dim-don't-sleep. Reports unsupported when unavailable; the UI hides the
+    /// option then. Held here so the controller and the Preferences gate share
+    /// one instance.
+    let brightnessBackend = DisplayServicesBrightnessBackend()
+    /// Whether dim-don't-sleep can run on this Mac (private brightness API
+    /// available and a built-in display present). The Preferences option is
+    /// hidden when false, never shown as a dead toggle.
+    var brightnessSupported: Bool { brightnessBackend.isSupported }
     /// Backs the Gaming & Streaming Setup screen's check list. Populated on
     /// demand via ``refreshStreaming()``, like ``readiness``.
     let streaming = StreamingReadinessController()
@@ -134,7 +143,7 @@ final class AppModel {
             return helperClient.sleepNow()
         })
         let endActor = SystemEndActionPerformer(systemSleeper: systemSleeper)
-        self.session = SessionController(reminder: notifier, endActor: endActor)
+        self.session = SessionController(reminder: notifier, endActor: endActor, brightness: brightnessBackend)
         self.session.options = loaded.options
         self.session.reminderAfter = loaded.reminderAfter
         self.session.reminderRepeats = loaded.reminderRepeats

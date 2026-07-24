@@ -275,6 +275,10 @@ private struct GeneralTab: View {
         Form {
             Section {
                 Toggle("Prevent display sleep", isOn: optionBinding(\.preventDisplaySleep))
+                if session.options.preventDisplaySleep && model.brightnessSupported {
+                    Toggle("Dim the display when idle", isOn: dimBinding)
+                        .help("Instead of holding the screen at full brightness, lower it to its dimmest after a few minutes with no input, then bring it back the moment you return. The display stays awake, just dark: kinder to the panel and the battery on long overnight sessions.")
+                }
                 Toggle("Prevent system sleep", isOn: optionBinding(\.preventSystemSleep))
             } header: {
                 sectionHeader("Keep awake", info: L("Two independent switches. Preventing system sleep keeps the Mac itself running: work finishes, downloads complete, and it stays reachable over the network, while the screen is still free to turn off. Preventing display sleep also keeps the screen lit, which is what you want for a dashboard or a video, and what drains a battery fastest. Most setups want system sleep prevented and display sleep left alone."))
@@ -721,6 +725,24 @@ private struct GeneralTab: View {
         Binding(
             get: { session.options[keyPath: keyPath] },
             set: { newValue in model.updateOptions { $0[keyPath: keyPath] = newValue } }
+        )
+    }
+
+    /// How long with no input before dim-don't-sleep dims the panel.
+    private static let dimDefaultDelay: TimeInterval = 300
+
+    /// On/off binding for dim-don't-sleep. Turning it on picks a sensible delay
+    /// and clears the (never-surfaced) screen-saver yield, since after idle you
+    /// either let the display sleep or dim it, not both.
+    private var dimBinding: Binding<Bool> {
+        Binding(
+            get: { session.options.dimDisplayAfter != nil },
+            set: { on in
+                model.updateOptions {
+                    $0.dimDisplayAfter = on ? Self.dimDefaultDelay : nil
+                    if on { $0.allowScreenSaverAfter = nil }
+                }
+            }
         )
     }
 }
