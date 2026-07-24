@@ -188,6 +188,20 @@ private final class FakeMediaMonitor: MediaActivityMonitoring {
     #expect(try JSONDecoder().decode([TriggerRule].self, from: json) == [.mediaInUse(.microphone)])
 }
 
+@Test func multiIdPresetRuleMatchesEitherVariantAndDedupsLabel() {
+    // A preset like Teams or Telegram carries several bundle ids under one name.
+    let rule = MicInUseRule(apps: [
+        ScopedApp(bundleID: "com.microsoft.teams", name: "Microsoft Teams"),
+        ScopedApp(bundleID: "com.microsoft.teams2", name: "Microsoft Teams"),
+    ])
+    // The shared display name shows once, not "Microsoft Teams, Microsoft Teams".
+    #expect(TriggerRule.micInUse(rule).label == "Microphone in use by Microsoft Teams")
+    let ids = rule.apps.map(\.bundleID)
+    #expect(MediaInUseTrigger.captures(ids, in: ["com.microsoft.teams"]))          // classic client
+    #expect(MediaInUseTrigger.captures(ids, in: ["com.microsoft.teams2.helper"]))  // new client's helper
+    #expect(!MediaInUseTrigger.captures(ids, in: ["com.hnc.Discord.helper.Renderer"]))
+}
+
 @Test func enclosingAppBundleResolvesElectronHelperToItsApp() {
     // The mic capturer is a helper buried in Frameworks; resolve to the app.
     let helper = "/Applications/Discord.app/Contents/Frameworks/Discord Helper (Renderer).app/Contents/MacOS/Discord Helper (Renderer)"

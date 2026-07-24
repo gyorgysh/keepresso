@@ -216,7 +216,13 @@ public struct MicInUseRule: Codable, Equatable, Hashable, Sendable {
 
     public var label: String {
         guard !apps.isEmpty else { return L("Microphone in use by app") }
-        let names = apps.map { $0.name ?? $0.bundleID }.joined(separator: ", ")
+        // De-duplicate display names so a multi-id app (several bundle ids under
+        // one name) reads as "Telegram", not "Telegram, Telegram".
+        var seen = Set<String>()
+        let names = apps.compactMap { app -> String? in
+            let name = app.name ?? app.bundleID
+            return seen.insert(name).inserted ? name : nil
+        }.joined(separator: ", ")
         return L("Microphone in use by %@", names)
     }
 }

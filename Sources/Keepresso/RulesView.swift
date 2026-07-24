@@ -199,9 +199,11 @@ struct RulesView: View {
     private func micOptionsMenu(index: Int, micRule: MicInUseRule) -> some View {
         Menu {
             Section("Keeping awake for calls in") {
-                ForEach(micRule.apps, id: \.bundleID) { app in
+                // Group by display name so a multi-id app (e.g. Telegram's two
+                // builds) shows one row; removing it drops all of its ids.
+                ForEach(displayNames(of: micRule.apps), id: \.self) { name in
                     Button {
-                        let remaining = micRule.apps.filter { $0.bundleID != app.bundleID }
+                        let remaining = micRule.apps.filter { ($0.name ?? $0.bundleID) != name }
                         if remaining.isEmpty {
                             model.removeRule(at: index)
                         } else {
@@ -209,15 +211,16 @@ struct RulesView: View {
                         }
                     } label: {
                         // A checkmark reads "currently watched"; clicking removes it.
-                        Label(app.name ?? app.bundleID, systemImage: "checkmark")
+                        Label(name, systemImage: "checkmark")
                     }
                 }
             }
             Divider()
             Menu("Add app") {
-                micAppChoices { app in
-                    guard !micRule.apps.contains(where: { $0.bundleID == app.bundleID }) else { return }
-                    model.updateRule(at: index, to: .micInUse(MicInUseRule(apps: micRule.apps + [app])))
+                micAppChoices { apps in
+                    let fresh = apps.filter { a in !micRule.apps.contains { $0.bundleID == a.bundleID } }
+                    guard !fresh.isEmpty else { return }
+                    model.updateRule(at: index, to: .micInUse(MicInUseRule(apps: micRule.apps + fresh)))
                 }
             }
         } label: {
@@ -228,30 +231,44 @@ struct RulesView: View {
         .help("Which apps count")
     }
 
+    /// Ordered, de-duplicated display names for a mic rule's apps, so a multi-id
+    /// app (variants sharing one name) collapses to a single editor row.
+    private func displayNames(of apps: [ScopedApp]) -> [String] {
+        var seen = Set<String>()
+        return apps.compactMap { app in
+            let name = app.name ?? app.bundleID
+            return seen.insert(name).inserted ? name : nil
+        }
+    }
+
     /// Shared app chooser for the mic-scope rule, used both when adding the rule
     /// and when adding apps to an existing one. Offers the apps using the mic
     /// right now (foolproof: real bundle id, no guessing), a short list of
     /// common call apps, and a "Choose app…" panel. Built lazily when the menu
     /// opens, so the live list is fresh.
     @ViewBuilder
-    private func micAppChoices(_ add: @escaping (ScopedApp) -> Void) -> some View {
+    private func micAppChoices(_ add: @escaping ([ScopedApp]) -> Void) -> some View {
         let live = model.micAppsInUse()
         if !live.isEmpty {
             Section("Using the mic now") {
                 ForEach(live, id: \.bundleID) { app in
-                    Button(app.name) { add(ScopedApp(bundleID: app.bundleID, name: app.name)) }
+                    Button(app.name) { add([ScopedApp(bundleID: app.bundleID, name: app.name)]) }
                 }
             }
         }
         Section("Common call apps") {
-            ForEach(AppModel.callAppPresets, id: \.bundleID) { app in
-                Button(app.name) { add(ScopedApp(bundleID: app.bundleID, name: app.name)) }
+            // A preset may carry several bundle ids (app variants) under one
+            // name; they're added together as one grouped entry.
+            ForEach(AppModel.callAppPresets, id: \.name) { preset in
+                Button(preset.name) {
+                    add(preset.bundleIDs.map { ScopedApp(bundleID: $0, name: preset.name) })
+                }
             }
         }
         Divider()
         Button("Choose app\u{2026}") {
             if let picked = model.pickApplication() {
-                add(ScopedApp(bundleID: picked.bundleID, name: picked.name))
+                add([ScopedApp(bundleID: picked.bundleID, name: picked.name)])
             }
         }
     }
@@ -521,7 +538,7 @@ struct RulesView: View {
             Button("Camera in use") { model.addRule(.mediaInUse(.camera)) }
             Button("Microphone in use") { model.addRule(.mediaInUse(.microphone)) }
             Menu("Microphone in use by app\u{2026}") {
-                micAppChoices { app in model.addRule(.micInUse(MicInUseRule(apps: [app]))) }
+                micAppChoices { apps in model.addRule(.micInUse(MicInUseRule(apps: apps))) }
             }
             .help("Keeps the Mac awake only while a chosen app is using the microphone, i.e. on a call (Discord, Slack, Zoom, and the like), so an idle browser tab or Voice Memos doesn't. Reads which app holds the mic, no permission needed. If you're on a call now, the app appears under \u{201C}Using the mic now\u{201D}.")
             Button("Audio playing") { model.addRule(.audioPlaying) }

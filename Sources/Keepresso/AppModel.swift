@@ -2313,16 +2313,20 @@ final class AppModel {
 
     /// Well-known call apps offered as one-click choices in the mic-scope
     /// editor, for when the user is setting up a rule while not currently on a
-    /// call. Kept short and to bundle ids that are stable and verified; anything
-    /// else is added via the live "using the mic now" list or the app picker,
-    /// both of which read the real bundle id and never guess.
-    static let callAppPresets: [(name: String, bundleID: String)] = [
-        ("Discord", "com.hnc.Discord"),
-        ("Slack", "com.tinyspeck.slackmacgap"),
-        ("Zoom", "us.zoom.xos"),
-        ("Microsoft Teams", "com.microsoft.teams2"),
-        ("FaceTime", "com.apple.FaceTime"),
-        ("Webex", "com.cisco.webexmeetingsapp"),
+    /// call. Some apps ship under more than one bundle id (Teams classic vs the
+    /// new client, Telegram from the App Store vs Telegram Desktop); the preset
+    /// carries every variant so it matches whichever is installed, since the
+    /// matcher fires on any id in a rule's list. Anything not here is added via
+    /// the live "using the mic now" list or the app picker, both of which read
+    /// the real bundle id and never guess (e.g. TeamSpeak, whose ids vary).
+    static let callAppPresets: [(name: String, bundleIDs: [String])] = [
+        ("Discord", ["com.hnc.Discord"]),
+        ("Slack", ["com.tinyspeck.slackmacgap"]),
+        ("Zoom", ["us.zoom.xos"]),
+        ("Microsoft Teams", ["com.microsoft.teams", "com.microsoft.teams2"]),
+        ("Telegram", ["ru.keepcoder.Telegram", "org.telegram.desktop"]),
+        ("FaceTime", ["com.apple.FaceTime"]),
+        ("Webex", ["com.cisco.webexmeetingsapp"]),
     ]
 
     /// Resolve a microphone-capturing process to its top-level app. Prefers the
