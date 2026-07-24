@@ -976,10 +976,97 @@ private struct AutomationTab: View {
         }
     }
 
+    // MARK: Scheduled AI runs (automation wake sync)
+
+    private var automationSyncSection: some View {
+        Section {
+            Toggle("Wake for scheduled AI runs", isOn: Binding(
+                get: { model.automationSyncConfig.enabled },
+                set: { on in
+                    var config = model.automationSyncConfig
+                    config.enabled = on
+                    model.automationSyncConfig = config
+                }
+            ))
+            if model.automationSyncConfig.enabled {
+                if !model.canEditWakeSchedule {
+                    Text("Waking for these runs needs the administrator helper (install it under General). Until then this list is informational.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if model.syncedAutomations.isEmpty {
+                    Text("No local scheduled tasks found yet. In Claude Desktop, open Routines ▸ New routine ▸ Local; in Codex, add a local automation. Cloud routines aren't listed: they run on the vendor's servers with the lid shut, so they need no wake.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ForEach(model.syncedAutomations) { automation in
+                        automationSyncRow(automation)
+                    }
+                }
+                Picker("Stay awake for", selection: Binding(
+                    get: { model.automationSyncConfig.holdSeconds },
+                    set: { seconds in
+                        var config = model.automationSyncConfig
+                        config.holdSeconds = seconds
+                        model.automationSyncConfig = config
+                    }
+                )) {
+                    Text("5 minutes").tag(TimeInterval(5 * 60))
+                    Text("15 minutes").tag(TimeInterval(15 * 60))
+                    Text("30 minutes").tag(TimeInterval(30 * 60))
+                    Text("1 hour").tag(TimeInterval(60 * 60))
+                }
+            }
+        } header: {
+            sectionHeader("Scheduled AI runs", info: L("Keepresso reads the recurring tasks your local AI tools schedule (Claude Desktop local routines, Codex automations), wakes the Mac a few minutes before each run, and holds it awake for a short window so the run is not skipped. It reads only the schedule and name, never the task's prompt. Cloud routines run on the vendor's servers even with the lid shut, so they are neither listed nor woken for. For a run longer than the window, have the agent hold a Keepresso lease (see the command line and MCP setup below) and the Mac stays awake until it releases."))
+        } footer: {
+            sectionFooter("Wake the Mac for local Claude Desktop and Codex tasks, then hold it awake while they run.")
+        }
+    }
+
+    private func automationSyncRow(_ automation: ScheduledAutomation) -> some View {
+        let muted = model.isAutomationMuted(automation.id)
+        return LabeledContent {
+            Toggle("", isOn: Binding(
+                get: { !model.isAutomationMuted(automation.id) },
+                set: { on in model.setAutomationMuted(automation.id, !on) }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .disabled(!automation.enabled)
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(automation.name)
+                Text(automationSyncSubtitle(automation))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .opacity(muted || !automation.enabled ? 0.5 : 1)
+        }
+    }
+
+    private func automationSyncSubtitle(_ automation: ScheduledAutomation) -> String {
+        guard automation.enabled else {
+            return L("%@ · paused", automation.source.label)
+        }
+        guard let next = automation.recurrence
+            .nextOccurrences(after: Date(), count: 1, calendar: .current).first else {
+            return automation.source.label
+        }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return L("%@ · next %@", automation.source.label, formatter.string(from: next))
+    }
+
     var body: some View {
         Form {
             endActionSection
             scheduledWakeSection
+            automationSyncSection
             automationLeasesSection
             eventHooksSection
         }
@@ -1010,6 +1097,7 @@ private struct AutomationTab: View {
         .onAppear {
             model.helper.refresh()
             model.refreshSystemWakeState()
+            model.refreshSyncedAutomations()
         }
         .onDisappear {
             model.hooksEditing = false

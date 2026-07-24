@@ -71,6 +71,15 @@ final class AppModel {
     private(set) var systemWakeState: SystemWakeState = .empty
     /// Seven-day awake stats from the persisted log.
     private(set) var awakeStats: AwakeStats = .empty
+    /// Discovers local AI automations (Claude Desktop, Codex) to wake for.
+    let automationSyncController = AutomationSyncController()
+    /// The next automation-sync wake currently armed into the system schedule,
+    /// so a re-arm only touches `pmset` when the wake actually moves.
+    @ObservationIgnored private var automationNextWake: Date?
+    /// Throttles the slow-cadence discovery driven off the one-second ticker.
+    @ObservationIgnored private var lastAutomationRefreshAt: Date?
+    /// Avoids opening a second hold window for one system wake.
+    @ObservationIgnored private var lastAutomationHoldAt: Date?
 
     private let store: SettingsStore
     private let notifier: UserNotificationReminder
@@ -614,6 +623,107 @@ final class AppModel {
         }
     }
 
+    // MARK: - Automation wake sync
+
+    /// Settings for syncing wake schedules from local AI automations (Claude
+    /// Desktop, Codex). Toggling on requests notification permission (the hold
+    /// posts a heads-up), refreshes discovery, and arms the next wake; off drops
+    /// the automation wake.
+    var automationSyncConfig: AutomationSyncConfig {
+        get { settings.automationSync }
+        set {
+            let turnedOn = newValue.enabled && !settings.automationSync.enabled
+            settings.automationSync = newValue
+            persist()
+            if turnedOn { notifier.requestAuthorization() }
+            refreshAndArmAutomationWakes()
+        }
+    }
+
+    /// Discovered automations, most recent discovery, for the Automations UI.
+    var syncedAutomations: [ScheduledAutomation] { automationSyncController.automations }
+
+    /// The next automation wake currently armed, for the UI.
+    var automationNextWakeTime: Date? { automationNextWake }
+
+    /// Whether a discovered automation is muted (opted out of syncing).
+    func isAutomationMuted(_ id: String) -> Bool { settings.automationSync.mutedIDs.contains(id) }
+
+    /// Mute or unmute one discovered automation, then re-arm.
+    func setAutomationMuted(_ id: String, _ muted: Bool) {
+        var config = settings.automationSync
+        if muted { config.mutedIDs.insert(id) } else { config.mutedIDs.remove(id) }
+        automationSyncConfig = config
+    }
+
+    /// Re-read the sources now, for the Automations window on appear.
+    func refreshSyncedAutomations() {
+        automationSyncController.refresh()
+        armAutomationWakesIfChanged()
+    }
+
+    /// Slow-cadence discovery + re-arm from the ticker: read the tiny local
+    /// stores at most once a minute, and re-apply the wake only when it moves.
+    func automationSyncTick() {
+        guard settings.automationSync.enabled else {
+            if automationNextWake != nil {
+                automationNextWake = nil
+                applyWakeScheduleToSystem() // drop the automation wake
+            }
+            return
+        }
+        let now = Date()
+        if let last = lastAutomationRefreshAt, now.timeIntervalSince(last) < 60 { return }
+        lastAutomationRefreshAt = now
+        refreshAndArmAutomationWakes()
+    }
+
+    /// Discover, then install the next wake if it changed.
+    func refreshAndArmAutomationWakes() {
+        automationSyncController.refresh()
+        armAutomationWakesIfChanged()
+    }
+
+    private func armAutomationWakesIfChanged() {
+        let config = settings.automationSync
+        let next = config.enabled
+            ? AutomationSync.nextWake(automationSyncController.automations, config: config, after: Date())
+            : nil
+        guard next != automationNextWake else { return }
+        automationNextWake = next
+        applyWakeScheduleToSystem()
+    }
+
+    /// Hold the Mac awake when this system wake was for a synced automation run.
+    /// Returns whether a hold was opened, so the manual wake-and-brew is skipped.
+    /// A scheduled agent can extend the hold by taking a lease; otherwise the
+    /// timed window lets the Mac sleep again when it ends.
+    private func handleAutomationWake() -> Bool {
+        let config = settings.automationSync
+        guard config.enabled else { return false }
+        automationSyncController.refresh()
+        guard let match = AutomationSync.wakeMatch(
+            automationSyncController.automations, config: config, wokeAt: Date()) else { return false }
+        let now = Date()
+        if let last = lastAutomationHoldAt, now.timeIntervalSince(last) < 60 { return true }
+        lastAutomationHoldAt = now
+        // Open a fixed hold window, unless triggers own activation: a plain
+        // session would be released by the gate on the next reconcile (the same
+        // reason the manual wake-and-brew path skips when triggers are on). With
+        // triggers on, the wake still happened and a scheduled agent's own lease
+        // can hold the Mac for the run.
+        if !triggersEnabled, !session.isActive {
+            session.start(mode: .timed(duration: config.holdSeconds), cause: .command)
+        }
+        notifier.notify(
+            title: L("Awake for a scheduled run"),
+            body: L("Keeping this Mac awake for \u{201C}%@\u{201D} to run.", match.automationName),
+            sound: false
+        )
+        refreshAndArmAutomationWakes() // the run we woke for is now current; arm the next
+        return true
+    }
+
     /// Set once Keepresso has attempted to install system wake schedules on
     /// this Mac, so the no-schedule case never touches `pmset`: clearing
     /// there would delete wake schedules the user or another tool set.
@@ -627,6 +737,18 @@ final class AppModel {
     }
     private static let wakeInstalledDefaultsKey = "wakeSchedulesInstalledByKeepresso"
 
+    /// The wake config actually installed: the user's manual schedule with the
+    /// next automation-sync wake layered onto the one-shot slot. The earlier of
+    /// a manual one-shot and the automation wake wins so neither is lost, and
+    /// the manual repeating pair is untouched.
+    private func effectiveWakeConfig() -> WakeScheduleConfig {
+        var config = settings.wakeSchedule ?? WakeScheduleConfig()
+        if let autoWake = automationNextWake, autoWake > Date() {
+            config.oneShot = config.oneShot.map { min($0, autoWake) } ?? autoWake
+        }
+        return config
+    }
+
     /// Push settings to the helper (or clear). Installing needs the helper;
     /// clearing is attempted when it answers so a disable after reinstall
     /// still drops system schedules.
@@ -638,7 +760,7 @@ final class AppModel {
             settings.wakeSchedule?.oneShot = nil
             persist()
         }
-        let config = settings.wakeSchedule ?? WakeScheduleConfig()
+        let config = effectiveWakeConfig()
         // Leave pmset alone when there is nothing to install and Keepresso
         // never installed anything: the system schedules belong to the user
         // or another tool, not to us.
@@ -751,6 +873,9 @@ final class AppModel {
     /// Keepresso schedule with wake-and-brew on, start a session (or apply a
     /// preset).
     func handleSystemWake() {
+        // A synced automation run takes precedence: hold for it and skip the
+        // manual wake-and-brew below.
+        if handleAutomationWake() { return }
         guard let config = settings.wakeSchedule,
               WakeAndBrewPolicy.shouldStartSession(config: config, wakeDate: Date())
         else { return }

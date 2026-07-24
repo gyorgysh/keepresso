@@ -31,6 +31,9 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     public var eventHooks: [EventHook]
     /// Scheduled wake + optional wake-and-brew, or `nil` (the default) for off.
     public var wakeSchedule: WakeScheduleConfig?
+    /// Sync wake schedules from local AI automations (Claude Desktop, Codex):
+    /// wake the Mac for each scheduled run and hold it awake while it runs.
+    public var automationSync: AutomationSyncConfig
     /// Keep a chosen disk/volume spun up, or `nil` (the default) for off.
     public var diskKeepAlive: DiskKeepAliveConfig?
     /// Experimental headless virtual display, or `nil` (the default) for off.
@@ -115,6 +118,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         endAction: SessionEndAction = .none,
         eventHooks: [EventHook] = [],
         wakeSchedule: WakeScheduleConfig? = nil,
+        automationSync: AutomationSyncConfig = AutomationSyncConfig(),
         diskKeepAlive: DiskKeepAliveConfig? = nil,
         virtualDisplay: VirtualDisplayConfig? = nil,
         thermalSafety: ThermalSafetyConfig? = nil,
@@ -149,6 +153,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.endAction = endAction
         self.eventHooks = eventHooks
         self.wakeSchedule = wakeSchedule
+        self.automationSync = automationSync
         self.diskKeepAlive = diskKeepAlive
         self.virtualDisplay = virtualDisplay
         self.thermalSafety = thermalSafety
@@ -243,6 +248,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         endAction = try c.decodeIfPresent(SessionEndAction.self, forKey: .endAction) ?? .none
         eventHooks = try c.decodeIfPresent([EventHook].self, forKey: .eventHooks) ?? []
         wakeSchedule = try c.decodeIfPresent(WakeScheduleConfig.self, forKey: .wakeSchedule)
+        automationSync = try c.decodeIfPresent(AutomationSyncConfig.self, forKey: .automationSync) ?? AutomationSyncConfig()
         diskKeepAlive = try c.decodeIfPresent(DiskKeepAliveConfig.self, forKey: .diskKeepAlive)
         virtualDisplay = try c.decodeIfPresent(VirtualDisplayConfig.self, forKey: .virtualDisplay)
         // ThermalSafetyConfig's own decoder applies the clamps.

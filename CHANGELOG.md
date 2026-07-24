@@ -7,6 +7,15 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 ### Added
 
+- **Wake for scheduled AI runs.** Keepresso can now sync the recurring tasks
+  your local AI tools schedule (Claude Desktop local routines, Codex
+  automations), wake the Mac a few minutes before each run, and hold it awake
+  for a short window so the run isn't skipped, even with the lid shut. It reads
+  only the schedule and name, never the task's prompt, and ignores cloud
+  routines (those run on the vendor's servers whether the Mac is awake or not).
+  For a run longer than the window, an agent can hold a Keepresso lease to keep
+  the Mac awake until it finishes. Turn it on in Preferences ▸ Automation ▸
+  Scheduled AI runs. See `docs/AUTOMATION_SYNC.md`.
 - **Keep awake for calls in a specific app.** A new trigger holds the Mac
   awake only while a chosen app is using the microphone, that is, while it is
   on a call (Slack, Discord, Zoom, and the like). A foreground app or an
