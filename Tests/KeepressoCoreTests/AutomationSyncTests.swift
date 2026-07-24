@@ -19,10 +19,15 @@ private func claude(_ key: String, _ cron: String, enabled: Bool = true) -> Sche
 
 @Test func syncActiveFiltersMutedDisabledAndRespectsMasterSwitch() {
     let all = [claude("on", "0 9 * * *"), claude("off", "0 9 * * *", enabled: false), claude("muted", "0 9 * * *")]
-    var config = AutomationSyncConfig(enabled: true, mutedIDs: ["claude:muted"])
+    var config = AutomationSyncConfig(enabled: true, enabledSources: [.claudeDesktop], mutedIDs: ["claude:muted"])
     #expect(AutomationSync.active(all, config: config).map(\.key) == ["on"])
     // Master switch off: nothing is active even though tasks exist.
     config.enabled = false
+    #expect(AutomationSync.active(all, config: config).isEmpty)
+    // Source not turned on: its runs are discovered but never woken for, so no
+    // platform is forced on.
+    config.enabled = true
+    config.enabledSources = []
     #expect(AutomationSync.active(all, config: config).isEmpty)
 }
 
@@ -30,7 +35,7 @@ private func claude(_ key: String, _ cron: String, enabled: Bool = true) -> Sche
     let cal = utc()
     let morning = claude("morning", "0 9 * * *")
     let dawn = claude("dawn", "0 6 * * *")
-    let config = AutomationSyncConfig(enabled: true, leadSeconds: 180)
+    let config = AutomationSyncConfig(enabled: true, enabledSources: [.claudeDesktop], leadSeconds: 180)
     // Earliest run is 06:00; wake is three minutes before it.
     #expect(AutomationSync.nextWake([morning, dawn], config: config, after: at(2026, 1, 1, 0, 0, cal), calendar: cal)
             == at(2026, 1, 1, 6, 0, cal).addingTimeInterval(-180))
@@ -48,7 +53,7 @@ private func claude(_ key: String, _ cron: String, enabled: Bool = true) -> Sche
 @Test func syncWakeMatchIdentifiesTheRunWeWokeFor() {
     let cal = utc()
     let morning = claude("morning", "0 9 * * *")
-    let config = AutomationSyncConfig(enabled: true, leadSeconds: 180)
+    let config = AutomationSyncConfig(enabled: true, enabledSources: [.claudeDesktop], leadSeconds: 180)
     // We wake at 08:57 (three minutes before the 09:00 run).
     let match = AutomationSync.wakeMatch([morning], config: config,
                                          wokeAt: at(2026, 1, 1, 8, 57, cal), calendar: cal)
@@ -92,6 +97,7 @@ private func claude(_ key: String, _ cron: String, enabled: Bool = true) -> Sche
     // An empty object falls back to every default (off, 15 min hold, 3 min lead).
     let config = try JSONDecoder().decode(AutomationSyncConfig.self, from: Data("{}".utf8))
     #expect(config.enabled == false)
+    #expect(config.enabledSources.isEmpty)
     #expect(config.holdSeconds == AutomationSyncConfig.defaultHold)
     #expect(config.leadSeconds == AutomationSyncConfig.defaultLead)
 }

@@ -654,6 +654,20 @@ final class AppModel {
     /// The next automation wake currently armed, for the UI.
     var automationNextWakeTime: Date? { automationNextWake }
 
+    /// Whether Keepresso wakes for a source's runs. A source stays off until the
+    /// user turns it on, so no platform is forced.
+    func isAutomationSourceEnabled(_ source: ScheduledAutomation.Source) -> Bool {
+        settings.automationSync.enabledSources.contains(source)
+    }
+
+    /// Turn waking on or off for one source, then re-arm. Muting individual runs
+    /// still works on top of an enabled source.
+    func setAutomationSourceEnabled(_ source: ScheduledAutomation.Source, _ on: Bool) {
+        var config = settings.automationSync
+        if on { config.enabledSources.insert(source) } else { config.enabledSources.remove(source) }
+        automationSyncConfig = config
+    }
+
     /// Whether a discovered automation is muted (opted out of syncing).
     func isAutomationMuted(_ id: String) -> Bool { settings.automationSync.mutedIDs.contains(id) }
 

@@ -7,8 +7,13 @@ import Foundation
 public struct AutomationSyncConfig: Equatable, Codable, Sendable {
     /// Master switch. Off means Keepresso arms no wakes and holds for nothing.
     public var enabled: Bool
+    /// Which sources Keepresso actually wakes for. A discovered source is always
+    /// shown, but until the user turns it on here it is never woken for, so no
+    /// platform is forced on and a tool the user does not use never plans wakes.
+    /// Empty by default (opt in per platform).
+    public var enabledSources: Set<ScheduledAutomation.Source>
     /// ``ScheduledAutomation/id`` values the user has muted, so a specific task
-    /// can be excluded without turning the whole feature off.
+    /// can be excluded even while its source is on.
     public var mutedIDs: Set<String>
     /// How long to keep the Mac awake after a scheduled wake, in seconds. A
     /// scheduled agent can extend this by holding a lease; otherwise the Mac
@@ -23,21 +28,24 @@ public struct AutomationSyncConfig: Equatable, Codable, Sendable {
 
     public init(
         enabled: Bool = false,
+        enabledSources: Set<ScheduledAutomation.Source> = [],
         mutedIDs: Set<String> = [],
         holdSeconds: TimeInterval = defaultHold,
         leadSeconds: TimeInterval = defaultLead
     ) {
         self.enabled = enabled
+        self.enabledSources = enabledSources
         self.mutedIDs = mutedIDs
         self.holdSeconds = max(60, holdSeconds)
         self.leadSeconds = max(0, leadSeconds)
     }
 
-    private enum CodingKeys: String, CodingKey { case enabled, mutedIDs, holdSeconds, leadSeconds }
+    private enum CodingKeys: String, CodingKey { case enabled, enabledSources, mutedIDs, holdSeconds, leadSeconds }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        enabledSources = try c.decodeIfPresent(Set<ScheduledAutomation.Source>.self, forKey: .enabledSources) ?? []
         mutedIDs = try c.decodeIfPresent(Set<String>.self, forKey: .mutedIDs) ?? []
         holdSeconds = max(60, try c.decodeIfPresent(TimeInterval.self, forKey: .holdSeconds) ?? Self.defaultHold)
         leadSeconds = max(0, try c.decodeIfPresent(TimeInterval.self, forKey: .leadSeconds) ?? Self.defaultLead)
@@ -49,10 +57,15 @@ public struct AutomationSyncConfig: Equatable, Codable, Sendable {
 /// everything policy-shaped lives here so it's testable with plain values.
 public enum AutomationSync {
     /// The automations Keepresso will actually wake for: the master switch is
-    /// on, the source has them enabled, and the user hasn't muted them.
+    /// on, the run's source is turned on, the source has the run enabled, and the
+    /// user hasn't muted it.
     public static func active(_ automations: [ScheduledAutomation], config: AutomationSyncConfig) -> [ScheduledAutomation] {
         guard config.enabled else { return [] }
-        return automations.filter { $0.enabled && !config.mutedIDs.contains($0.id) }
+        return automations.filter {
+            $0.enabled
+                && config.enabledSources.contains($0.source)
+                && !config.mutedIDs.contains($0.id)
+        }
     }
 
     /// Upcoming wakes across the active automations within `horizon`, sorted by

@@ -1029,8 +1029,17 @@ private struct AutomationTab: View {
                 automationSyncEmptyState
             } else {
                 automationSyncStatusRow
-                ForEach(model.syncedAutomations) { automation in
-                    automationSyncRow(automation)
+                if model.automationSyncConfig.enabledSources.isEmpty {
+                    Text("Turn on a platform to wake for its runs. Left off, they stay listed but are never woken for.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                ForEach(automationSourcesWithRuns, id: \.self) { source in
+                    automationPlatformRow(source)
+                    ForEach(model.syncedAutomations.filter { $0.source == source }) { automation in
+                        automationRunRow(automation, sourceEnabled: model.isAutomationSourceEnabled(source))
+                    }
                 }
                 if let next = model.automationNextWakeTime {
                     Label(L("Next wake %@", Self.wakeStamp.string(from: next)), systemImage: "alarm")
@@ -1097,27 +1106,60 @@ private struct AutomationTab: View {
         .padding(.vertical, 6)
     }
 
-    /// An interactive row: mute or unmute one run, unless its source paused it.
-    private func automationSyncRow(_ automation: ScheduledAutomation) -> some View {
-        let muted = model.isAutomationMuted(automation.id)
-        return LabeledContent {
+    /// The sources that have discovered runs, in the list's existing order, so
+    /// only platforms the user actually has appear (no Codex switch for someone
+    /// who only runs Claude Desktop, and vice versa).
+    private var automationSourcesWithRuns: [ScheduledAutomation.Source] {
+        var ordered: [ScheduledAutomation.Source] = []
+        for automation in model.syncedAutomations where !ordered.contains(automation.source) {
+            ordered.append(automation.source)
+        }
+        return ordered
+    }
+
+    /// A platform header with its own on/off switch. Off by default, so the user
+    /// opts each platform in and none is forced on.
+    private func automationPlatformRow(_ source: ScheduledAutomation.Source) -> some View {
+        LabeledContent {
             Toggle("", isOn: Binding(
-                get: { !model.isAutomationMuted(automation.id) },
-                set: { on in model.setAutomationMuted(automation.id, !on) }
+                get: { model.isAutomationSourceEnabled(source) },
+                set: { on in model.setAutomationSourceEnabled(source, on) }
             ))
             .labelsHidden()
             .toggleStyle(.switch)
             .controlSize(.small)
-            .disabled(!automation.enabled)
         } label: {
+            Text(source.label)
+                .font(.callout.weight(.medium))
+        }
+    }
+
+    /// One run under its platform. With the platform on, a switch mutes or
+    /// unmutes it; with the platform off (or the source itself paused it), the
+    /// run is still listed but dimmed and controlless, since it will not wake.
+    private func automationRunRow(_ automation: ScheduledAutomation, sourceEnabled: Bool) -> some View {
+        let woken = sourceEnabled && automation.enabled && !model.isAutomationMuted(automation.id)
+        return HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(automation.name)
                 Text(automationSyncSubtitle(automation))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            .opacity(muted || !automation.enabled ? 0.5 : 1)
+            Spacer(minLength: 8)
+            if sourceEnabled {
+                Toggle("", isOn: Binding(
+                    get: { !model.isAutomationMuted(automation.id) },
+                    set: { on in model.setAutomationMuted(automation.id, !on) }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .disabled(!automation.enabled)
+            }
         }
+        .padding(.leading, 14)
+        .opacity(woken ? 1 : 0.5)
     }
 
     /// A read-only row for the locked state: name and schedule, no control.
@@ -1169,16 +1211,17 @@ private struct AutomationTab: View {
     var body: some View {
         Form {
             endActionSection
-            scheduledWakeSection
-            automationSyncSection
             automationLeasesSection
             eventHooksSection
+            scheduledWakeSection
+            automationSyncSection
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .animation(.snappy(duration: 0.25), value: model.endAction)
         .animation(.snappy(duration: 0.25), value: model.wakeSchedule != nil)
         .animation(.snappy(duration: 0.25), value: model.automationSyncConfig.enabled)
+        .animation(.snappy(duration: 0.25), value: model.automationSyncConfig.enabledSources)
         .animation(.snappy(duration: 0.25), value: model.helperInstalled)
         .animation(.snappy(duration: 0.25), value: model.helper.awaitingApproval)
         .animation(.snappy(duration: 0.25), value: model.helper.daemonOutdated)
