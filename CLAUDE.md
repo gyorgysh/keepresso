@@ -41,9 +41,41 @@ Homebrew Cask is published and installable at
 `gyorgysh/homebrew-keepresso` tap repo.
 A headless virtual-display feature (private `CGVirtualDisplay` API, behind an
 off-by-default flag) is also done and validated on real headless hardware.
-Current version: 1.15.0 (build 25), shipped 2026-07-17 as the latest tag
-(fifteen UI languages shipped in v1.13, generated from
-Python catalogs in `tools/localization/`). v1.15 adds a thermal safety net
+Current version: 1.18.0 (build 29), prepared on `main` but not yet tagged. The
+latest shipped tag is 1.17.0 (2026-07-23). Fifteen UI languages shipped in v1.13,
+generated from Python catalogs in `tools/localization/`.
+
+v1.18 adds **Scheduled AI runs** (Core `AutomationSync.swift`,
+`ScheduledAutomation.swift`, and the `ClaudeScheduledTasksReader` /
+`CodexAutomationsReader` reader seams; app `AutomationSyncController.swift` and
+the Automation tab in `PreferencesView.swift`): it reads local AI schedulers'
+on-disk tasks (Claude Desktop routine cron, Codex automation RRULE), arms a
+`pmset` firmware wake a few minutes before each run through the helper, and holds
+a short session so the run is not skipped, even lid-shut. It reads only the
+schedule and name, never the prompt, and never wakes for cloud routines.
+Enablement is per source (`enabledSources`, off until opted in) with per-run
+mutes, and the section is helper-gated like Scheduled wake, so `HelperLockedRow`
+gained a `.scheduledAIRuns` context. Also in v1.18: a dim-don't-sleep display
+option (`Brightness.swift` seam plus the app's DisplayServices backend, built-in
+panel only, dims to the floor after idle and restores on return or stop), an
+app-scoped microphone trigger for real call detection, and a paged, teaching
+first-run welcome. See `docs/AUTOMATION_SYNC.md`.
+
+v1.17 shipped automation leases (`AutomationLease.swift`, `LeaseClient.swift`,
+`HelperEngine.swift`): a bounded keep-awake grant an outside tool acquires over
+the `keepresso` CLI or the bundled `keepresso-mcp` stdio MCP server (both under
+`Contents/Helpers`), renewed by heartbeats with a hard ceiling and unioned so the
+last release lets the Mac sleep. It also ships a ready-to-install agent skill
+(`Contents/Resources/AgentSkill/keep-awake`), opt-in automation control of the
+wake schedule, a game-controller trigger, and a Steam-download trigger.
+
+v1.16 added outbound event hooks (a Shortcut, a webhook POST, or a shell command
+on session and trigger events), persisted Activity history across relaunches, and
+richer end-of-session actions. Scheduled wake itself lives in
+`WakeSchedule.swift` and `WakeControl.swift`: a one-shot or repeating `pmset`
+wake through the helper, optionally starting a session on wake.
+
+v1.15 adds a thermal safety net
 (`KeepressoCore/ThermalGuard.swift`: pressure or sensor watch, sustained-heat
 escalation to an optional fan boost then a session pause, hysteresis on
 release), SMC access in Core (`SMC.swift`, unprivileged reads; fan writes are
@@ -54,8 +86,8 @@ its answered protocol version, retired in the background, and never routed
 into the register/unregister repair (which could cost a re-approval). The
 thermal UI keeps unprivileged controls always live and collapses the
 helper-only group (fan boost, fan test, closed-display lift) to a single
-lock row with an inline install when the helper is missing. Post-1.15.0 on
-main, the net is scoped to the left-in-a-bag case: it only escalates with
+lock row with an inline install when the helper is missing. v1.16 scoped the
+net to the left-in-a-bag case: it only escalates with
 the lid shut while `disablesleep` holds the Mac awake (`ThermalArming`,
 ticker-fed `tick(armed:)`), the pause stage always lifts the override
 (`liftSleepDisable` retired), opening the lid releases everything at once,
