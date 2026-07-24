@@ -11,8 +11,11 @@ final class AutomationSyncController {
     private let readers: [LocalAutomationReading]
     /// The most recent discovery across all sources, sorted for display.
     private(set) var automations: [ScheduledAutomation] = []
-    /// When discovery last ran, for a "checked just now" hint in the UI.
-    @ObservationIgnored private(set) var lastRefresh: Date?
+    /// When discovery last read the sources, for a "checked just now" hint in
+    /// the UI. Observed, so the hint updates even when the discovered list is
+    /// unchanged. Stamped on every read, including one ridden out by the
+    /// empty-streak guard, since we did look at disk either way.
+    private(set) var lastRefresh: Date?
     /// Consecutive empty reads while we had automations, so a brief empty patch
     /// (a schedule file mid-rewrite) doesn't immediately drop the list.
     @ObservationIgnored private var emptyStreak = 0
@@ -38,6 +41,7 @@ final class AutomationSyncController {
         let sorted = all.sorted {
             ($0.source.label, $0.name.localizedLowercase) < ($1.source.label, $1.name.localizedLowercase)
         }
+        lastRefresh = Date()
         if AutomationSync.shouldKeepLastKnown(
             newIsEmpty: sorted.isEmpty, hadAutomations: !automations.isEmpty,
             emptyStreak: emptyStreak, maxEmptyStreak: Self.maxEmptyStreak) {
@@ -46,6 +50,5 @@ final class AutomationSyncController {
         }
         emptyStreak = 0
         automations = sorted
-        lastRefresh = Date()
     }
 }

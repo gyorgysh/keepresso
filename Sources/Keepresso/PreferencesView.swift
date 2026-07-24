@@ -980,30 +980,63 @@ private struct AutomationTab: View {
 
     private var automationSyncSection: some View {
         Section {
-            Toggle("Wake for scheduled AI runs", isOn: Binding(
-                get: { model.automationSyncConfig.enabled },
-                set: { on in
-                    var config = model.automationSyncConfig
-                    config.enabled = on
-                    model.automationSyncConfig = config
+            switch model.wakeHelperGate {
+            case .ready:
+                automationSyncReadyContent
+            case .needsHelper, .awaitingApproval, .helperUpdating:
+                automationSyncLockedContent
+            }
+        } header: {
+            sectionHeader("Scheduled AI runs", info: L("Keepresso reads the recurring tasks your local AI tools schedule (Claude Desktop local routines, Codex automations), wakes the Mac a few minutes before each run, and holds it awake for a short window so the run is not skipped. It reads only the schedule and name, never the task's prompt. Cloud routines run on the vendor's servers even with the lid shut, so they are neither listed nor woken for. For a run longer than the window, have the agent hold a Keepresso lease (see the command line and MCP setup below) and the Mac stays awake until it releases."))
+        } footer: {
+            sectionFooter("Wake the Mac for local Claude Desktop and Codex tasks, then hold it awake while they run.")
+        }
+    }
+
+    /// Helper missing, approving, or updating: waking cannot work, so lock the
+    /// section like Scheduled wake above rather than offer live-looking switches
+    /// that do nothing. Already-discovered runs show read-only, so the value
+    /// waiting behind the helper is visible and worth installing for.
+    @ViewBuilder
+    private var automationSyncLockedContent: some View {
+        HelperLockedRow(model: model, context: .scheduledAIRuns)
+        if !model.syncedAutomations.isEmpty {
+            Text("These local runs would be woken for once the helper is installed.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(model.syncedAutomations) { automation in
+                automationPreviewRow(automation)
+            }
+        }
+    }
+
+    /// Helper ready: the live controls. The master switch reveals which sources
+    /// are scanned and when, the discovered runs (or an empty state), the next
+    /// armed wake, and the hold length.
+    @ViewBuilder
+    private var automationSyncReadyContent: some View {
+        Toggle("Wake for scheduled AI runs", isOn: Binding(
+            get: { model.automationSyncConfig.enabled },
+            set: { on in
+                var config = model.automationSyncConfig
+                config.enabled = on
+                model.automationSyncConfig = config
+            }
+        ))
+        if model.automationSyncConfig.enabled {
+            if model.syncedAutomations.isEmpty {
+                automationSyncEmptyState
+            } else {
+                automationSyncStatusRow
+                ForEach(model.syncedAutomations) { automation in
+                    automationSyncRow(automation)
                 }
-            ))
-            if model.automationSyncConfig.enabled {
-                if !model.canEditWakeSchedule {
-                    Text("Waking for these runs needs the administrator helper (install it under General). Until then this list is informational.")
+                if let next = model.automationNextWakeTime {
+                    Label(L("Next wake %@", Self.wakeStamp.string(from: next)), systemImage: "alarm")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                }
-                if model.syncedAutomations.isEmpty {
-                    Text("No local scheduled tasks found yet. In Claude Desktop, open Routines ▸ New routine ▸ Local; in Codex, add a local automation. Cloud routines aren't listed: they run on the vendor's servers with the lid shut, so they need no wake.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    ForEach(model.syncedAutomations) { automation in
-                        automationSyncRow(automation)
-                    }
                 }
                 Picker("Stay awake for", selection: Binding(
                     get: { model.automationSyncConfig.holdSeconds },
@@ -1019,13 +1052,52 @@ private struct AutomationTab: View {
                     Text("1 hour").tag(TimeInterval(60 * 60))
                 }
             }
-        } header: {
-            sectionHeader("Scheduled AI runs", info: L("Keepresso reads the recurring tasks your local AI tools schedule (Claude Desktop local routines, Codex automations), wakes the Mac a few minutes before each run, and holds it awake for a short window so the run is not skipped. It reads only the schedule and name, never the task's prompt. Cloud routines run on the vendor's servers even with the lid shut, so they are neither listed nor woken for. For a run longer than the window, have the agent hold a Keepresso lease (see the command line and MCP setup below) and the Mac stays awake until it releases."))
-        } footer: {
-            sectionFooter("Wake the Mac for local Claude Desktop and Codex tasks, then hold it awake while they run.")
         }
     }
 
+    /// Which sources are scanned, when they were last read, and a manual re-read.
+    private var automationSyncStatusRow: some View {
+        HStack(spacing: 8) {
+            Text(automationSyncStatusText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Button("Refresh") { model.refreshSyncedAutomations() }
+                .controlSize(.small)
+        }
+    }
+
+    private var automationSyncStatusText: String {
+        guard let checked = model.automationsLastChecked else {
+            return L("Scanning Claude Desktop and Codex")
+        }
+        return L("Scanning Claude Desktop and Codex · checked %@", Self.relativeChecked(checked))
+    }
+
+    /// Enabled with nothing discovered: an invitation, not a dead end. Says
+    /// where to create a run and offers a re-read.
+    private var automationSyncEmptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "calendar")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+            Text("No local scheduled runs found")
+                .font(.callout.weight(.medium))
+            Text("Add one in Claude Desktop (Routines ▸ New routine ▸ Local) or Codex, then refresh. Cloud routines run on the vendor's servers and need no wake.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Refresh") { model.refreshSyncedAutomations() }
+                .controlSize(.small)
+                .padding(.top, 2)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+    }
+
+    /// An interactive row: mute or unmute one run, unless its source paused it.
     private func automationSyncRow(_ automation: ScheduledAutomation) -> some View {
         let muted = model.isAutomationMuted(automation.id)
         return LabeledContent {
@@ -1048,18 +1120,50 @@ private struct AutomationTab: View {
         }
     }
 
+    /// A read-only row for the locked state: name and schedule, no control.
+    private func automationPreviewRow(_ automation: ScheduledAutomation) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "clock")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(automation.name)
+                Text(automationSyncSubtitle(automation))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .opacity(0.6)
+    }
+
     private func automationSyncSubtitle(_ automation: ScheduledAutomation) -> String {
         guard automation.enabled else {
-            return L("%@ · paused", automation.source.label)
+            return L("Paused in %@", automation.source.label)
         }
         guard let next = automation.recurrence
             .nextOccurrences(after: Date(), count: 1, calendar: .current).first else {
             return automation.source.label
         }
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return L("%@ · next %@", automation.source.label, formatter.string(from: next))
+        return L("%@ · next %@", automation.source.label, Self.wakeStamp.string(from: next))
+    }
+
+    /// Medium date + short time, shared by the row subtitles and the next-wake
+    /// line, so the section reads one way.
+    private static let wakeStamp: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f
+    }()
+
+    /// A short "checked …" hint. Very recent reads read as "just now" rather than
+    /// the formatter's blunter "0 seconds ago".
+    private static func relativeChecked(_ date: Date) -> String {
+        if Date().timeIntervalSince(date) < 45 { return L("just now") }
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f.localizedString(for: date, relativeTo: Date())
     }
 
     var body: some View {
@@ -1074,6 +1178,7 @@ private struct AutomationTab: View {
         .scrollContentBackground(.hidden)
         .animation(.snappy(duration: 0.25), value: model.endAction)
         .animation(.snappy(duration: 0.25), value: model.wakeSchedule != nil)
+        .animation(.snappy(duration: 0.25), value: model.automationSyncConfig.enabled)
         .animation(.snappy(duration: 0.25), value: model.helperInstalled)
         .animation(.snappy(duration: 0.25), value: model.helper.awaitingApproval)
         .animation(.snappy(duration: 0.25), value: model.helper.daemonOutdated)

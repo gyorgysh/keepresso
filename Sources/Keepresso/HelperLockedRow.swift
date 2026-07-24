@@ -10,6 +10,7 @@ struct HelperLockedRow: View {
 
     enum Context {
         case wakeSchedule
+        case scheduledAIRuns
         case gamePriority
     }
     let context: Context
@@ -57,6 +58,8 @@ struct HelperLockedRow: View {
             switch context {
             case .wakeSchedule:
                 return L("One step left: allow Keepresso under Login Items in System Settings. Scheduled wake unlocks by itself.")
+            case .scheduledAIRuns:
+                return L("One step left: allow Keepresso under Login Items in System Settings. Waking for scheduled AI runs unlocks by itself.")
             case .gamePriority:
                 return L("One step left: allow Keepresso under Login Items in System Settings. The priority boost unlocks by itself.")
             }
@@ -65,6 +68,8 @@ struct HelperLockedRow: View {
             switch context {
             case .wakeSchedule:
                 return L("The helper is updating itself (no password). Scheduled wake unlocks when that finishes, usually under a minute.")
+            case .scheduledAIRuns:
+                return L("The helper is updating itself (no password). Waking for scheduled AI runs unlocks when that finishes, usually under a minute.")
             case .gamePriority:
                 return L("The helper is updating itself (no password). The priority boost unlocks when that finishes, usually under a minute.")
             }
@@ -72,6 +77,8 @@ struct HelperLockedRow: View {
         switch context {
         case .wakeSchedule:
             return L("Scheduled wake needs the administrator helper, the same one closed-display mode and fan boost use. Install once, and macOS asks for approval in System Settings.")
+        case .scheduledAIRuns:
+            return L("Waking for scheduled AI runs needs the administrator helper, the same one closed-display mode and fan boost use. Install once, and macOS asks for approval in System Settings.")
         case .gamePriority:
             return L("Raising a game's priority is a root-only change, so it needs the administrator helper, the same one closed-display mode and fan boost use. Install once, and macOS asks for approval in System Settings.")
         }

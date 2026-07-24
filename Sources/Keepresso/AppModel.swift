@@ -647,6 +647,10 @@ final class AppModel {
     /// Discovered automations, most recent discovery, for the Automations UI.
     var syncedAutomations: [ScheduledAutomation] { automationSyncController.automations }
 
+    /// When discovery last read the sources, for the "checked …" hint. Nil until
+    /// the first read.
+    var automationsLastChecked: Date? { automationSyncController.lastRefresh }
+
     /// The next automation wake currently armed, for the UI.
     var automationNextWakeTime: Date? { automationNextWake }
 
