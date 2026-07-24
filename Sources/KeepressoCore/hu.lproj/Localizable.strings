@@ -198,3 +198,5 @@
 "Automation lease ended" = "Automatizálási bérlet véget ért";
 "Game controller connected" = "Játékvezérlő csatlakoztatva";
 "Steam is downloading" = "Steam letölt";
+"Microphone in use by %@" = "Mikrofon használatban: %@";
+"Microphone in use by app" = "Mikrofon használatban egy alkalmazásnál";

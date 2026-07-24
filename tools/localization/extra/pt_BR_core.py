@@ -230,3 +230,9 @@ CORE.update({
     'Steam is downloading': 'O Steam está baixando',
 
 })
+
+# 1.18 strings
+CORE.update({
+    "Microphone in use by %@": "Microfone em uso por %@",
+    "Microphone in use by app": "Microfone em uso pelo app",
+})

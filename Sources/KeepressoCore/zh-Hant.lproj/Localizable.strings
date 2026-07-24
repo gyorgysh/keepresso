@@ -198,3 +198,5 @@
 "Automation lease ended" = "自動化租約已結束";
 "Game controller connected" = "已連接遊戲控制器";
 "Steam is downloading" = "Steam 正在下載";
+"Microphone in use by %@" = "%@ 正在使用麥克風";
+"Microphone in use by app" = "App 正在使用麥克風";

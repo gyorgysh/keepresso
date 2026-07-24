@@ -198,3 +198,5 @@
 "Automation lease ended" = "Automation lease ended";
 "Game controller connected" = "Game controller connected";
 "Steam is downloading" = "Steam is downloading";
+"Microphone in use by %@" = "Microphone in use by %@";
+"Microphone in use by app" = "Microphone in use by app";

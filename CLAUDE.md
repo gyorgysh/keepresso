@@ -1,120 +1,62 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code working in this repository. This is a durable map of
+what the project is and where things live, not a feature log. For what shipped
+when, read `CHANGELOG.md`; for scope and what's next, `docs/ROADMAP.md` (kept
+local, not published).
 
 ## What this is
 
-Keepresso is a macOS **menu-bar keep-awake app** (Swift + SwiftUI, macOS 14+),
-distributed open-source via GitHub/Homebrew Cask — **not** the Mac App Store,
-because the App Sandbox blocks the `IOPMAssertion` power APIs it depends on. Keep
-`ENABLE_APP_SANDBOX: false` in `project.yml`; sandboxing the app silently breaks
-its core function.
+Keepresso is a macOS **menu-bar keep-awake app** (Swift + SwiftUI, macOS 14+):
+it holds the Mac awake, either manually or automatically while triggers hold
+(on a call, downloading, gaming, an AI agent working, and so on), and lets it
+sleep otherwise.
 
-The full feature scope and milestone status live in `docs/ROADMAP.md` (kept local,
-not published yet).
-v0.1 through v0.6 are implemented (core engine, trigger engine, auto app
-detection, alarm/reminder, disk keep-alive, headless-readiness Setup screen),
-along with all Polish (next-trigger summary, Preferences window, launch-at-login,
-settings persistence, animated icon) and the App shell (About window, menu
-entries). v1.1 (battery auto-pause, menu-bar countdown, `keepresso://` URL
-scheme, presets) is done too. The Sparkle auto-updater is fully wired in
-(SwiftPM dependency, app-side `Updating` seam in `Keepresso/Updater.swift`,
-Info.plist `SUFeedURL` + a real `SUPublicEDKey` + `SUEnableAutomaticChecks`). A
-closed-display mode (keep running with the lid shut, no external display) is also
-done: since `IOPMAssertion` can't override clamshell sleep, it flips the global
-`pmset disablesleep` setting via an admin prompt (Core seam
-`SleepSettingControlling`/`ClosedDisplayController` in `KeepressoCore/ClosedDisplay.swift`,
-toggle in Preferences ▸ General). As of v1.2 that mode also detects the lid
-actually closing (`AppleClamshellState` via IOKit, `KeepressoCore/LidState.swift`)
-and forces the display itself to sleep (`pmset displaysleepnow`, skipped when an
-external display is attached), instead of leaving the panel lit inside the
-closed lid. v1.2 also added a menu-bar "Pause Triggers" / "Resume Triggers"
-control (`AppModel.pauseTriggers()`/`resumeTriggers()`, in-memory only, resets
-to unpaused on relaunch) so triggers can be stopped without a trip to
-Preferences. Distribution is live end to end: the tag-triggered
-`.github/workflows/release.yml` builds, signs, notarizes, and publishes a real
-DMG + signed Sparkle appcast to GitHub Releases on every `v*` tag (v1.0.0,
-v1.1.0, and v1.1.1 have all shipped this way; see `docs/RELEASING.md`). The
-Homebrew Cask is published and installable at
-`brew install --cask gyorgysh/keepresso/keepresso`; each release still needs
-`Casks/keepresso.rb` bumped (`version` + `sha256`) and pushed to the
-`gyorgysh/homebrew-keepresso` tap repo.
-A headless virtual-display feature (private `CGVirtualDisplay` API, behind an
-off-by-default flag) is also done and validated on real headless hardware.
-Current version: 1.18.0 (build 29), prepared on `main` but not yet tagged. The
-latest shipped tag is 1.17.0 (2026-07-23). Fifteen UI languages shipped in v1.13,
-generated from Python catalogs in `tools/localization/`.
+It is distributed **open-source via GitHub + Homebrew Cask, not the Mac App
+Store**, because the App Sandbox blocks the `IOPMAssertion` power APIs the app
+depends on. Keep `ENABLE_APP_SANDBOX: false` in `project.yml` — sandboxing the
+app silently breaks its core function. The repo is **public**; keep commit
+messages tidy and release-worthy.
 
-v1.18 adds **Scheduled AI runs** (Core `AutomationSync.swift`,
-`ScheduledAutomation.swift`, and the `ClaudeScheduledTasksReader` /
-`CodexAutomationsReader` reader seams; app `AutomationSyncController.swift` and
-the Automation tab in `PreferencesView.swift`): it reads local AI schedulers'
-on-disk tasks (Claude Desktop routine cron, Codex automation RRULE), arms a
-`pmset` firmware wake a few minutes before each run through the helper, and holds
-a short session so the run is not skipped, even lid-shut. It reads only the
-schedule and name, never the prompt, and never wakes for cloud routines.
-Enablement is per source (`enabledSources`, off until opted in) with per-run
-mutes, and the section is helper-gated like Scheduled wake, so `HelperLockedRow`
-gained a `.scheduledAIRuns` context. Also in v1.18: a dim-don't-sleep display
-option (`Brightness.swift` seam plus the app's DisplayServices backend, built-in
-panel only, dims to the floor after idle and restores on return or stop), an
-app-scoped microphone trigger for real call detection, and a paged, teaching
-first-run welcome. See `docs/AUTOMATION_SYNC.md`.
+## Layout
 
-v1.17 shipped automation leases (`AutomationLease.swift`, `LeaseClient.swift`,
-`HelperEngine.swift`): a bounded keep-awake grant an outside tool acquires over
-the `keepresso` CLI or the bundled `keepresso-mcp` stdio MCP server (both under
-`Contents/Helpers`), renewed by heartbeats with a hard ceiling and unioned so the
-last release lets the Mac sleep. It also ships a ready-to-install agent skill
-(`Contents/Resources/AgentSkill/keep-awake`), opt-in automation control of the
-wake schedule, a game-controller trigger, and a Steam-download trigger.
+Two-layer split, deliberately keeping all testable logic out of the UI:
 
-v1.16 added outbound event hooks (a Shortcut, a webhook POST, or a shell command
-on session and trigger events), persisted Activity history across relaunches, and
-richer end-of-session actions. Scheduled wake itself lives in
-`WakeSchedule.swift` and `WakeControl.swift`: a one-shot or repeating `pmset`
-wake through the helper, optionally starting a session on wake.
+- **`Sources/KeepressoCore`** — a SwiftPM library with **no SwiftUI**. This is
+  where behavior lives and where tests go (`Tests/KeepressoCoreTests`). System
+  access (power, network, workspace, disk, SMC, brightness) sits behind protocol
+  seams so tests can inject fakes.
+- **`Sources/Keepresso`** — the SwiftUI `MenuBarExtra` app shell. Thin: views +
+  lifecycle glue, depends on `KeepressoCore`. `AppModel` wires the real backends.
+- **`Sources/KeepressoWidget`** — the widget + Control Center appex. Talks to the
+  app through an App Group (`WidgetBridge` in Core); the group id is resolved at
+  runtime from the process's own signature, never hardcoded.
 
-v1.15 adds a thermal safety net
-(`KeepressoCore/ThermalGuard.swift`: pressure or sensor watch, sustained-heat
-escalation to an optional fan boost then a session pause, hysteresis on
-release), SMC access in Core (`SMC.swift`, unprivileged reads; fan writes are
-root-only through helper protocol 4's connection-scoped `setFanHold`), a
-"Test Fans" dry run (`KeepressoCore/FanDryRun.swift`), and version-aware
-helper handling: after an app update the stale daemon image is recognized by
-its answered protocol version, retired in the background, and never routed
-into the register/unregister repair (which could cost a re-approval). The
-thermal UI keeps unprivileged controls always live and collapses the
-helper-only group (fan boost, fan test, closed-display lift) to a single
-lock row with an inline install when the helper is missing. v1.16 scoped the
-net to the left-in-a-bag case: it only escalates with
-the lid shut while `disablesleep` holds the Mac awake (`ThermalArming`,
-ticker-fed `tick(armed:)`), the pause stage always lifts the override
-(`liftSleepDisable` retired), opening the lid releases everything at once,
-and desktops (no lid) don't show the Thermal section. v1.14 added quick
-"Stop in" buttons with an ending-soon notice, an agent-activity trigger
-(`KeepressoCore/AgentActivity.swift`: transcript evidence, per-session CPU
-baselines) with opt-in Claude Code hook tracking
-(`KeepressoCore/AgentHooks.swift`, merged into `~/.claude/settings.json`), a
-reworked menu panel and grouped Preferences with (i) explanations, and, on
-battery-less desktops, the pmset switch presented as "Disable system sleep"
-instead of closed-display wording. Earlier milestones still in the app: desktop
-widgets (small toggle tile + medium with Start/Stop and trigger pause), the
-Control Center Keep Awake toggle (macOS 26, availability-gated in the shared
-`KeepressoWidget` appex), Bluetooth and calendar triggers, restorable default
-presets, and v1.6's gaming and streaming: a gaming trigger
-(`KeepressoCore/Gaming.swift`, frontmost games app category or a cloud-gaming
-client, 5 min release grace), a Cloud Gaming preset, and a Gaming & Streaming
-Setup window (menu ▸ "Gaming & Streaming…") with a ping jitter test
-(`Jitter.swift`), radio-hygiene checks (`StreamingReadiness.swift`, Bluetooth
-state deliberately via `system_profiler`: IOBluetooth would TCC-prompt), and a
-session-scoped AWDL watchdog (`AWDL.swift`: one root helper per app run behind
-a single admin prompt, flag-file toggled, restores `awdl0` on quit or crash). The widget appex talks to the app through an App Group
-(`WidgetBridge` in Core); the group id is resolved at runtime from the
-process's own signature, never hardcoded. The repo is **public** on GitHub
-(`git@github.com:gyorgysh/keepresso.git`, branch `main`) and the website is
-live, so history is permanent: keep commit messages tidy and release-worthy.
-See `docs/ROADMAP.md` for what's next.
+`project.yml` (XcodeGen) defines the app target and references the local package.
+The generated `Keepresso.xcodeproj` is **git-ignored** — never commit it,
+regenerate it with `xcodegen generate`.
+
+### Where things live
+
+- **Privileged work** goes through a root helper (`SMAppService` daemon, source
+  in `Sources/keepresso-helper`, app-side glue in `HelperManager`/`HelperService`)
+  over a versioned XPC protocol: `pmset` wake schedules, closed-display
+  `disablesleep`, fan holds, priority boost. Password prompts always get a
+  notification first.
+- **Bundled tools** under `Contents/Helpers`: the `keepresso` CLI and the
+  `keepresso-mcp` stdio MCP server (both drive automation leases). A
+  ready-to-install agent skill ships under
+  `Contents/Resources/AgentSkill/keep-awake`.
+- **Localization**: 15 UI languages, generated from Python catalogs in
+  `tools/localization/` (`gen_strings.py`, `check_extra.py`, and the per-language
+  `extra/*` overlays). See the localization notes in memory before a sweep.
+- **Distribution**: the tag-triggered `.github/workflows/release.yml` builds,
+  signs, notarizes, and publishes the DMG + signed Sparkle appcast on every `v*`
+  tag. Each release also needs `Casks/keepresso.rb` bumped (`version` + `sha256`)
+  and pushed to the `gyorgysh/homebrew-keepresso` tap. The Sparkle updater seam
+  is `Keepresso/Updater.swift`. See `docs/RELEASING.md` and the `release` skill.
+- **Docs**: `docs/ROADMAP.md` (scope/status), `docs/RELEASING.md` (ship
+  process), `docs/AUTOMATION_SYNC.md` (Scheduled AI runs design).
 
 ## Commands
 
@@ -131,23 +73,11 @@ open Keepresso.xcodeproj    # build/run the Keepresso scheme with ⌘R
 
 **Toolchain caveat:** with only Command Line Tools (no Xcode.app), `swift test`
 fails — neither XCTest nor swift-testing ships with CLT. To sanity-check core
-logic in that situation, compile the sources plus a small `@main` driver with
+logic then, compile the sources plus a small `@main` driver with
 `swiftc -parse-as-library Sources/KeepressoCore/*.swift driver.swift` and run it.
 The app target (`MenuBarExtra`, Info.plist bundling) requires full Xcode to build.
 
-## Architecture
-
-Two-layer split, deliberately keeping all testable logic out of the UI:
-
-- **`KeepressoCore`** (`Sources/KeepressoCore`) — a SwiftPM library with **no
-  SwiftUI**. This is where behavior lives and where tests go.
-- **`Keepresso`** app (`Sources/Keepresso`) — the SwiftUI `MenuBarExtra` shell.
-  Thin: views + lifecycle glue, depends on `KeepressoCore`.
-
-`project.yml` (XcodeGen) defines the app target and references the local package;
-the generated `.xcodeproj` is **git-ignored** — never commit it, regenerate it.
-
-### Core control flow
+## Core control flow
 
 `SessionController` (`@Observable`, `@MainActor`) is the heart. It does **not**
 run its own timer — the host drives it:
@@ -159,38 +89,33 @@ run its own timer — the host drives it:
 3. `reconcile` expires timed sessions and computes the desired assertion set via
    `desiredAssertions(systemIdleSeconds:)`, then hands it to a `PowerAsserting`.
 
-This timer-injection is intentional: tests advance a fake clock and call
-`reconcile` directly (see `Tests/KeepressoCoreTests`), with a `FakeAssertions`
-standing in for IOKit. **Preserve this seam** — keep new time/idle/power inputs
-injectable rather than reaching for `Date()` or IOKit inside the controller.
+This timer injection is intentional: tests advance a fake clock and call
+`reconcile` directly with a `FakeAssertions` standing in for IOKit. **Preserve
+this seam** — keep new time/idle/power inputs injectable rather than reaching for
+`Date()` or IOKit inside the controller.
 
-### Power assertions
-
-`PowerAsserting` abstracts IOKit. `IOKitPowerAssertionManager` is the real
-backend; it holds at most one assertion per `PowerAssertionKind` (`.system` →
-`kIOPMAssertPreventUserIdleSystemSleep`, `.display` →
-`...DisplaySleep`). `apply(_:reason:)` is **idempotent** — it reconciles live
-assertions to exactly the requested set, so calling it every second is fine.
-
-The system and display assertions are independent on purpose. The "allow screen
-saver after N min" feature works by keeping `.system` while dropping `.display`
-once HID idle passes the threshold — that's the only reason the controller needs
-idle time.
+`PowerAsserting` abstracts IOKit. `IOKitPowerAssertionManager` holds at most one
+assertion per `PowerAssertionKind` (`.system` →
+`kIOPMAssertPreventUserIdleSystemSleep`, `.display` → `...DisplaySleep`).
+`apply(_:reason:)` is **idempotent**, so calling it every second is fine. The
+system and display assertions are independent on purpose: the "allow screen saver
+after N min" feature keeps `.system` while dropping `.display` once HID idle
+passes the threshold, which is the only reason the controller needs idle time.
 
 ## Conventions
 
 - New testable behavior goes in `KeepressoCore` behind a protocol seam if it
-  touches the system (power, network, workspace, disk), mirroring
-  `PowerAsserting`. The app wires the real implementation; tests use a fake.
+  touches the system, mirroring `PowerAsserting`. The app wires the real
+  implementation; tests use a fake.
 - The controller and anything it touches are `@MainActor`.
-- Adding a roadmap feature (triggers, app detection, alarm, disk keep-alive)
-  generally means: a Core component + protocol + tests first, then thin SwiftUI
-  in the app, then check the box in `docs/ROADMAP.md`.
+- A new feature generally means: a Core component + protocol + tests first, then
+  thin SwiftUI in the app, then update `docs/ROADMAP.md`.
 
 ## Writing and UI style
 
 - Never use em dashes in any prose: docs, comments, commit messages, UI copy, or
   chat replies. Use a comma, a colon, parentheses, or two sentences instead.
-- Keep the UI clean and professional: restrained spacing and color, system
-  fonts and SF Symbols, no gratuitous animation or decoration. Prefer clear,
-  plain labels over clever ones.
+- Keep the UI clean and professional: restrained spacing and color, system fonts
+  and SF Symbols, no gratuitous animation or decoration. Prefer clear, plain
+  labels over clever ones.
+</content>

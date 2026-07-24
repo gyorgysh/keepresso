@@ -237,3 +237,9 @@ CORE.update({
     'Game controller connected': '已連接遊戲控制器',
     'Steam is downloading': 'Steam 正在下載',
 })
+
+# 1.18 strings
+CORE.update({
+    "Microphone in use by %@": "%@ 正在使用麥克風",
+    "Microphone in use by app": "App 正在使用麥克風",
+})

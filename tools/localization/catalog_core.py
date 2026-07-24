@@ -261,3 +261,10 @@ _V117B = {
     "Steam is downloading": {"hu": "Steam letölt", "es": "Steam está descargando", "fr": "Steam télécharge", "de": "Steam lädt herunter", "zh-Hans": "Steam 正在下载"},
 }
 CORE.update(_V117B)
+
+# 1.18: Scheduled AI runs, dim-when-idle, mic call trigger, welcome flow
+_V118_CORE = {
+    "Microphone in use by %@": {"hu": "Mikrofon használatban: %@", "es": "Micrófono en uso por %@", "fr": "Microphone utilisé par %@", "de": "Mikrofon in Benutzung von %@", "zh-Hans": "麦克风正被 %@ 使用"},
+    "Microphone in use by app": {"hu": "Mikrofon használatban egy alkalmazásnál", "es": "Micrófono en uso por app", "fr": "Microphone utilisé par une app", "de": "Mikrofon in Benutzung von App", "zh-Hans": "麦克风正被 App 使用"},
+}
+CORE.update(_V118_CORE)

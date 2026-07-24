@@ -198,3 +198,5 @@
 "Automation lease ended" = "Concesión de automatización finalizada";
 "Game controller connected" = "Mando de juego conectado";
 "Steam is downloading" = "Steam está descargando";
+"Microphone in use by %@" = "Micrófono en uso por %@";
+"Microphone in use by app" = "Micrófono en uso por app";
