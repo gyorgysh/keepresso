@@ -101,3 +101,28 @@ private func claude(_ key: String, _ cron: String, enabled: Bool = true) -> Sche
     #expect(config.holdSeconds == AutomationSyncConfig.defaultHold)
     #expect(config.leadSeconds == AutomationSyncConfig.defaultLead)
 }
+
+@Test func syncConfigDropsUnknownEnabledSourceInsteadOfThrowing() throws {
+    // A source a newer build wrote is dropped, not fatal: the known source
+    // survives and decoding does not throw. A throw here would propagate out of
+    // the settings decode and reset every setting via the store's try?.
+    let json = #"{"enabled":true,"enabledSources":["claude","source-from-the-future"],"holdSeconds":900}"#
+    let config = try JSONDecoder().decode(AutomationSyncConfig.self, from: Data(json.utf8))
+    #expect(config.enabled == true)
+    #expect(config.enabledSources == [.claudeDesktop])
+    #expect(config.holdSeconds == 900)
+}
+
+@Test func syncNextWakeSkipsAWakeAlreadyInsideItsLeadWindow() {
+    let cal = utc()
+    let morning = claude("morning", "0 9 * * *")
+    let config = AutomationSyncConfig(enabled: true, enabledSources: [.claudeDesktop], leadSeconds: 180)
+    // now sits inside the 3-minute lead before today's 09:00 run, so today's
+    // wake (08:57) is already past. The next installable wake is tomorrow's,
+    // never a past time (which would collapse to nil at effectiveOneShot and
+    // clear the wake that was just armed).
+    let now = at(2026, 1, 1, 8, 58, cal)
+    let next = AutomationSync.nextWake([morning], config: config, after: now, calendar: cal)
+    #expect(next == at(2026, 1, 2, 9, 0, cal).addingTimeInterval(-180))
+    #expect((next ?? .distantPast) > now)
+}

@@ -45,7 +45,13 @@ public struct AutomationSyncConfig: Equatable, Codable, Sendable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
-        enabledSources = try c.decodeIfPresent(Set<ScheduledAutomation.Source>.self, forKey: .enabledSources) ?? []
+        // Forgiving like the rest of the settings types (see RuleSet): read the
+        // sources as raw strings and keep the ones this build knows. A value a
+        // newer build wrote (a future source) drops just that entry, rather than
+        // throwing and taking every other setting down to defaults with it,
+        // since the settings store loads through a single `try?`.
+        let rawSources = (try? c.decode([String].self, forKey: .enabledSources)) ?? []
+        enabledSources = Set(rawSources.compactMap(ScheduledAutomation.Source.init(rawValue:)))
         mutedIDs = try c.decodeIfPresent(Set<String>.self, forKey: .mutedIDs) ?? []
         holdSeconds = max(60, try c.decodeIfPresent(TimeInterval.self, forKey: .holdSeconds) ?? Self.defaultHold)
         leadSeconds = max(0, try c.decodeIfPresent(TimeInterval.self, forKey: .leadSeconds) ?? Self.defaultLead)
@@ -84,13 +90,22 @@ public enum AutomationSync {
 
     /// The single next moment to wake the Mac across all active automations, or
     /// `nil` if none in the next year. This is what the armer installs.
+    ///
+    /// Only a wake still in the future can be installed. A run already inside its
+    /// lead window has a `wakeTime` in the past (`runTime - lead`), and since the
+    /// occurrences sort by `wakeTime`, that stale one would sort first and win.
+    /// Skip past wakes here so the armer gets the next installable one, not a
+    /// stale time that collapses to `nil` at ``effectiveOneShot`` and clears the
+    /// wake we just armed. (``wakeMatch`` deliberately keeps the past tolerance,
+    /// so this filter stays local to the arming path.)
     public static func nextWake(
         _ automations: [ScheduledAutomation],
         config: AutomationSyncConfig,
         after now: Date,
         calendar: Calendar = .current
     ) -> Date? {
-        upcomingWakes(automations, config: config, after: now, within: 366 * 86400, calendar: calendar).first?.wakeTime
+        upcomingWakes(automations, config: config, after: now, within: 366 * 86400, calendar: calendar)
+            .first { $0.wakeTime > now }?.wakeTime
     }
 
     /// The occurrence the Mac most likely just woke for, or `nil` if this wake

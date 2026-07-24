@@ -10,8 +10,8 @@ There are two kinds of scheduled AI task, and only one needs a Mac that's awake:
 
 | | Where it runs | Needs the Mac awake? | Synced by Keepresso |
 | --- | --- | --- | --- |
-| **Local** (Claude Desktop local routine, Codex automation) | Your Mac | **Yes** — skipped if it sleeps through the time | **Yes** |
-| **Cloud** (Claude cloud routine, ChatGPT task) | The vendor's servers | No — runs with the lid shut | No |
+| **Local** (Claude Desktop local routine, Codex automation) | Your Mac | **Yes**, skipped if it sleeps through the time | **Yes** |
+| **Cloud** (Claude cloud routine, ChatGPT task) | The vendor's servers | No, runs with the lid shut | No |
 
 Cloud routines are neither listed nor woken for: waking the Mac wouldn't change
 whether they run. Keepresso reads only the **schedule and name** of each local
@@ -33,7 +33,7 @@ with the lid shut).
 2. It arms a firmware wake a few minutes before the next run (`pmset`, through
    the administrator helper), re-arming as runs fire.
 3. When the Mac wakes for a run, Keepresso holds a keep-awake session for a
-   short window (default 15 minutes; configurable).
+   short window (default 15 minutes, configurable).
 4. For a run that lasts longer than the window, the agent can take over with a
    **lease** and the Mac stays awake until the agent releases it (below).
 

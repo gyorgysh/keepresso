@@ -1577,8 +1577,11 @@ private struct AutomationTab: View {
                     || model.systemWakeState.repeatingSummary != nil {
                     // The list above is the whole-Mac pmset schedule, not just
                     // ours: say so, since a wake showing while our toggle is off
-                    // otherwise reads as a leftover we won't clear.
-                    Text(L("Keepresso sets and clears only its own. Wakes from macOS or other apps (Do Not Disturb, backups) stay, and turning this schedule off clears Keepresso's."))
+                    // otherwise reads as a leftover we won't clear. Avoid
+                    // promising other apps' wakes are untouched: installing our
+                    // schedule runs pmset cancelall (see HelperEngine), which
+                    // clears them momentarily before macOS re-adds its own.
+                    Text(L("This is the Mac's whole wake schedule, including macOS's own (Do Not Disturb, backups). Turning Keepresso's schedule off clears the wake it set."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
