@@ -73,6 +73,21 @@ private func at(_ y: Int, _ mo: Int, _ d: Int, _ h: Int, _ mi: Int, _ cal: Calen
     #expect(CronExpression("0 9 * * *") != nil)        // a good one still parses
 }
 
+@Test func cronFiresAtLocalWallClockAcrossDaylightSaving() {
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone(identifier: "America/New_York")!
+    // US spring-forward is 2026-03-08 02:00 -> 03:00. A 09:00 daily run still
+    // fires at 09:00 local on that day and the next, not shifted by the hour.
+    let daily9 = CronExpression("0 9 * * *")!
+    #expect(daily9.nextOccurrences(after: at(2026, 3, 7, 12, 0, cal), count: 2, calendar: cal)
+            == [at(2026, 3, 8, 9, 0, cal), at(2026, 3, 9, 9, 0, cal)])
+    // 02:30 doesn't exist on the transition day: skip to the next valid one,
+    // no hang or crash.
+    let at230 = CronExpression("30 2 * * *")!
+    #expect(at230.next(after: at(2026, 3, 8, 0, 0, cal), calendar: cal)
+            == at(2026, 3, 9, 2, 30, cal))
+}
+
 @Test func cronImpossibleExpressionTerminatesWithNil() {
     let cal = utc()
     // February 30th never happens: the search must give up, not spin forever.

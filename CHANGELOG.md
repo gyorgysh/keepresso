@@ -15,7 +15,9 @@ Versions follow [Semantic Versioning](https://semver.org).
   routines (those run on the vendor's servers whether the Mac is awake or not).
   For a run longer than the window, an agent can hold a Keepresso lease to keep
   the Mac awake until it finishes. Turn it on in Preferences ▸ Automation ▸
-  Scheduled AI runs. See `docs/AUTOMATION_SYNC.md`.
+  Scheduled AI runs. See `docs/AUTOMATION_SYNC.md`. Inspired by @quasar2333's
+  power-orchestration work in #3, reworked into an extensible framework that
+  syncs several schedulers.
 - **Keep awake for calls in a specific app.** A new trigger holds the Mac
   awake only while a chosen app is using the microphone, that is, while it is
   on a call (Slack, Discord, Zoom, and the like). A foreground app or an

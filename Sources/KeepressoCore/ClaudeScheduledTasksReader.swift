@@ -59,12 +59,39 @@ public struct ClaudeScheduledTasksReader: LocalAutomationReading {
 
     private struct Manifest: Decodable {
         let scheduledTasks: [Task]
+        private enum CodingKeys: String, CodingKey { case scheduledTasks }
+
+        // Lossy on a malformed entry: a task with a null/absent `id` (or any
+        // shape we can't decode) is skipped, not allowed to fail the whole
+        // array and drop every other task in the manifest with it.
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            var tasks: [Task] = []
+            if var array = try? c.nestedUnkeyedContainer(forKey: .scheduledTasks) {
+                while !array.isAtEnd {
+                    let before = array.currentIndex
+                    if let task = try? array.decode(Task.self) {
+                        tasks.append(task)
+                    } else {
+                        _ = try? array.decode(DiscardedTask.self) // step past the bad entry
+                    }
+                    if array.currentIndex == before { break } // never spin
+                }
+            }
+            scheduledTasks = tasks
+        }
     }
 
     private struct Task: Decodable {
         let id: String
         let cronExpression: String?
         let enabled: Bool?
+    }
+
+    /// Consumes one element of any shape so the lossy manifest decode can skip
+    /// a task it couldn't parse.
+    private struct DiscardedTask: Decodable {
+        init(from decoder: Decoder) throws {}
     }
 }
 

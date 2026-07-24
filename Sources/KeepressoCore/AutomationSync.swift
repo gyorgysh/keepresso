@@ -100,4 +100,15 @@ public enum AutomationSync {
             abs($0.runTime.timeIntervalSince(now)) < abs($1.runTime.timeIntervalSince(now))
         }
     }
+
+    /// The one-shot wake to actually install into the single system slot: the
+    /// earlier of a still-future manual wake and the next automation wake, or
+    /// `nil` if neither applies. A past manual wake is treated as absent (pmset
+    /// can't install it), so once it fires, the automation wake it was masking
+    /// becomes the effective one and the caller re-arms it.
+    public static func effectiveOneShot(manual: Date?, automationWake: Date?, now: Date) -> Date? {
+        let manualFuture = manual.flatMap { $0 > now ? $0 : nil }
+        guard let auto = automationWake, auto > now else { return manualFuture }
+        return manualFuture.map { min($0, auto) } ?? auto
+    }
 }

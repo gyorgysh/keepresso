@@ -63,6 +63,12 @@ private func reader(_ manifests: String...) -> ClaudeScheduledTasksReader {
     #expect(reader(enabled, disabled).automations().first?.enabled == true)
 }
 
+@Test func claudeReaderSkipsAMalformedTaskButKeepsTheRest() {
+    // A null id must not take the whole manifest, and every other task, down.
+    let json = #"{ "scheduledTasks": [ { "id": null, "cronExpression": "0 9 * * *", "enabled": true }, { "id": "good", "cronExpression": "0 9 * * *", "enabled": true } ] }"#
+    #expect(reader(json).automations().map(\.key) == ["good"])
+}
+
 @Test func claudeReaderIgnoresMalformedManifests() {
     let good = #"{ "scheduledTasks": [ { "id": "ok", "cronExpression": "0 9 * * *", "enabled": true } ] }"#
     let all = reader("not json at all", good, "{}").automations()

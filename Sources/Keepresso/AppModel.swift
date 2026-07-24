@@ -73,9 +73,13 @@ final class AppModel {
     private(set) var awakeStats: AwakeStats = .empty
     /// Discovers local AI automations (Claude Desktop, Codex) to wake for.
     let automationSyncController = AutomationSyncController()
-    /// The next automation-sync wake currently armed into the system schedule,
-    /// so a re-arm only touches `pmset` when the wake actually moves.
+    /// The next automation-sync wake, as computed from discovery.
     @ObservationIgnored private var automationNextWake: Date?
+    /// The one-shot last installed into the system schedule (manual or
+    /// automation, whichever is earlier). Re-arming keys off this, not
+    /// ``automationNextWake`` alone, so a manual one-shot firing and unmasking a
+    /// later automation wake still gets that wake installed.
+    @ObservationIgnored private var lastArmedEffectiveOneShot: Date?
     /// Throttles the slow-cadence discovery driven off the one-second ticker.
     @ObservationIgnored private var lastAutomationRefreshAt: Date?
     /// Avoids opening a second hold window for one system wake.
@@ -686,11 +690,13 @@ final class AppModel {
 
     private func armAutomationWakesIfChanged() {
         let config = settings.automationSync
-        let next = config.enabled
+        automationNextWake = config.enabled
             ? AutomationSync.nextWake(automationSyncController.automations, config: config, after: Date())
             : nil
-        guard next != automationNextWake else { return }
-        automationNextWake = next
+        // Re-apply when the effective one-shot moves, not just when the
+        // automation wake does: a manual one-shot firing (and being dropped)
+        // unmasks a later automation wake that must then be installed.
+        guard effectiveWakeConfig().oneShot != lastArmedEffectiveOneShot else { return }
         applyWakeScheduleToSystem()
     }
 
@@ -712,14 +718,18 @@ final class AppModel {
         // reason the manual wake-and-brew path skips when triggers are on). With
         // triggers on, the wake still happened and a scheduled agent's own lease
         // can hold the Mac for the run.
+        // Open a fixed hold window (and say so) only when we actually can:
+        // with triggers on, the gate would release a plain session, so we don't
+        // start one and don't claim a hold we didn't open. A scheduled agent's
+        // own lease covers the run in that case.
         if !triggersEnabled, !session.isActive {
             session.start(mode: .timed(duration: config.holdSeconds), cause: .command)
+            notifier.notify(
+                title: L("Awake for a scheduled run"),
+                body: L("Keeping this Mac awake for \u{201C}%@\u{201D} to run.", match.automationName),
+                sound: false
+            )
         }
-        notifier.notify(
-            title: L("Awake for a scheduled run"),
-            body: L("Keeping this Mac awake for \u{201C}%@\u{201D} to run.", match.automationName),
-            sound: false
-        )
         refreshAndArmAutomationWakes() // the run we woke for is now current; arm the next
         return true
     }
@@ -743,9 +753,8 @@ final class AppModel {
     /// the manual repeating pair is untouched.
     private func effectiveWakeConfig() -> WakeScheduleConfig {
         var config = settings.wakeSchedule ?? WakeScheduleConfig()
-        if let autoWake = automationNextWake, autoWake > Date() {
-            config.oneShot = config.oneShot.map { min($0, autoWake) } ?? autoWake
-        }
+        config.oneShot = AutomationSync.effectiveOneShot(
+            manual: config.oneShot, automationWake: automationNextWake, now: Date())
         return config
     }
 
@@ -761,6 +770,9 @@ final class AppModel {
             persist()
         }
         let config = effectiveWakeConfig()
+        // Record what we're arming so the automation re-arm can tell when the
+        // effective one-shot has actually moved.
+        lastArmedEffectiveOneShot = config.oneShot
         // Leave pmset alone when there is nothing to install and Keepresso
         // never installed anything: the system schedules belong to the user
         // or another tool, not to us.

@@ -59,6 +59,23 @@ private func claude(_ key: String, _ cron: String, enabled: Bool = true) -> Sche
                                      wokeAt: at(2026, 1, 1, 3, 0, cal), calendar: cal) == nil)
 }
 
+@Test func effectiveOneShotPrefersEarlierFutureAndDropsPastManual() {
+    let cal = utc()
+    let now = at(2026, 1, 1, 7, 0, cal)
+    let manual = at(2026, 1, 1, 8, 0, cal)
+    let auto = at(2026, 1, 1, 8, 57, cal)
+    // Both future: the earlier (manual) wins.
+    #expect(AutomationSync.effectiveOneShot(manual: manual, automationWake: auto, now: now) == manual)
+    // The masking case: the manual wake has fired, so the automation wake it was
+    // hiding becomes the effective one (so the caller re-arms it).
+    let after = at(2026, 1, 1, 8, 30, cal)
+    #expect(AutomationSync.effectiveOneShot(manual: manual, automationWake: auto, now: after) == auto)
+    // One side only, and neither.
+    #expect(AutomationSync.effectiveOneShot(manual: nil, automationWake: auto, now: now) == auto)
+    #expect(AutomationSync.effectiveOneShot(manual: manual, automationWake: nil, now: now) == manual)
+    #expect(AutomationSync.effectiveOneShot(manual: nil, automationWake: nil, now: now) == nil)
+}
+
 @Test func syncConfigDecodesForgivingly() throws {
     // An empty object falls back to every default (off, 15 min hold, 3 min lead).
     let config = try JSONDecoder().decode(AutomationSyncConfig.self, from: Data("{}".utf8))
