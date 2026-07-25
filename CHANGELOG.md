@@ -30,6 +30,14 @@ Versions follow [Semantic Versioning](https://semver.org).
   there, the way choosing cloud gaming offers its own setup. Connecting happens
   in place: no password, no permission prompt, and a second click undoes it.
 
+- **Lid-closed mode and the safety nets are offered during setup.** On a laptop,
+  the last step of the welcome window now offers the two things most people came
+  for: keeping the Mac awake with the lid shut, and the battery and heat safety
+  nets that let it sleep anyway if the charge runs low or it stays hot behind a
+  closed lid. Both sit under the administrator helper, so approving that first
+  is what makes the lid switch prompt-free. The thresholds stay in Preferences,
+  where there is room to explain them.
+
 ### Changed
 
 - **Each tool wears its own session mark.** A working session now spins the

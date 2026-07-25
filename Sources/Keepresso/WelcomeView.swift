@@ -42,7 +42,8 @@ struct WelcomeView: View {
 
     private static let useCases: [UseCase] = [
         UseCase(id: "ai-agent", title: "Agentic coding",
-                detail: "Stay awake while Claude, Codex, or Grok is running.", icon: "terminal"),
+                detail: "Stay awake while Claude Code, Cursor, Codex, or another agent is working.",
+                icon: "terminal"),
         UseCase(id: "meetings", title: "Meetings & calls",
                 detail: "Stay awake whenever the camera or microphone is in use.", icon: "video"),
         UseCase(id: "cloud-gaming", title: "Gaming & streaming",
@@ -329,13 +330,88 @@ struct WelcomeView: View {
             ) {
                 helperControl
             }
+            // Laptops only, matching Preferences: a desktop has no lid to keep
+            // working behind, and no battery or trapped heat to guard against.
+            // Both rows sit under the helper row on purpose, since installing
+            // it first is what makes the lid switch prompt-free.
+            if model.machineHasBattery {
+                closedDisplaySetupRow
+                setupRow(
+                    icon: "shield.lefthalf.filled",
+                    title: "Battery and heat safety",
+                    detail: "Let the Mac sleep anyway if the charge runs low, or if it stays hot with the lid shut. Thresholds are in Preferences."
+                ) {
+                    Toggle("", isOn: Binding(
+                        get: { safetyNetsEnabled },
+                        set: { setSafetyNets($0) }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                }
+            }
             Text("Keepresso runs in the menu bar. Click the cup at any time, or open Preferences for everything else.")
                 .font(type.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
         }
+        .animation(.snappy(duration: 0.25), value: model.closedDisplayError)
         .entrance(0, revealed: revealed, animated: !reduceMotion)
+    }
+
+    /// The lid-closed row, offered here because it is what most people came
+    /// for: a MacBook that keeps working with the lid shut and nothing
+    /// plugged in. The same `pmset disablesleep` switch as
+    /// Preferences ▸ General, so it needs administrator rights, silently
+    /// through the helper above and otherwise with a password prompt (which
+    /// the note explains while the dialog is up).
+    ///
+    /// It stays on until it is turned off, which is the honest thing to say
+    /// here rather than offering the "only while brewing" refinement: that
+    /// belongs in Preferences, next to the explanation of what it trades.
+    private var closedDisplaySetupRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            setupRow(
+                icon: "laptopcomputer",
+                title: "Keep awake with the lid closed",
+                detail: "Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences."
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { model.closedDisplayEnabled },
+                    set: { model.setClosedDisplay($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .disabled(model.closedDisplayBusy)
+            }
+            if model.closedDisplayBusy && !model.helperInstalled {
+                AdminAuthNote(purpose: L("keep the Mac awake with the lid closed"))
+            }
+            if let error = model.closedDisplayError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .font(type.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// The two safety nets as one switch: pause on low battery, and the
+    /// thermal net that watches a lid-closed Mac holding the sleep override.
+    /// Paired because they answer the same worry (a session you forget about
+    /// draining or cooking the Mac) and because a single answer is all this
+    /// step should ask for. Each keeps its own thresholds and stages in
+    /// Preferences, untouched here, so someone who tuned them and switched
+    /// them off gets their numbers back when they switch them on again.
+    private var safetyNetsEnabled: Bool {
+        model.batteryAutoPauseEnabled && model.thermalSafety != nil
+    }
+
+    private func setSafetyNets(_ on: Bool) {
+        model.batteryAutoPauseEnabled = on
+        model.thermalSafety = on ? (model.thermalSafety ?? ThermalSafetyConfig()) : nil
     }
 
     /// Pinned under the scroll area, so Get Started is always on screen no
