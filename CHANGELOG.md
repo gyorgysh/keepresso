@@ -3,6 +3,79 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Added
+
+- **Cursor connection.** The AI-agent condition can now connect to Cursor the
+  way it already connects to Claude Code, so a session reports exactly when it
+  is working instead of being guessed at from CPU use. This also covers the
+  agent built into the Cursor app, which runs inside the editor and has no
+  process of its own, so nothing could see it before. Connect it under the AI
+  agent condition in Preferences ▸ Triggers. Keepresso only observes: it adds
+  hooks that cannot allow, deny, or block anything Cursor does, and never
+  touches the steps where Cursor asks you to approve a command.
+
+- **Codex connection.** Codex can be connected the same way, so its sessions
+  report working and waiting exactly. Codex asks you to review new hooks before
+  it runs them, so approve them there once after connecting. Keepresso will not
+  approve them on your behalf: that decision is yours to make.
+
+- **pi is detected.** The AI-agent condition now recognises pi sessions and
+  judges them the way it judges any agent without a deeper connection, from
+  what its process is actually doing.
+
+- **Agent tools are offered during setup.** Choosing "Agentic coding" in the
+  welcome window now offers to connect the coding tools on your Mac right
+  there, the way choosing cloud gaming offers its own setup. Connecting happens
+  in place: no password, no permission prompt, and a second click undoes it.
+
+### Changed
+
+- **Each tool wears its own session mark.** A working session now spins the
+  mark its own tool spins: Claude's sunburst in its terracotta, and Cursor's
+  dot grid, Grok's braille cell, Antigravity's orbiting gap, and Codex's slow
+  breathing dot in the menu's own black or white. They are drawn rather than
+  typed, so they match each console's spinner and look the same on every Mac,
+  where the old glyphs relied on characters no system font actually has and
+  came out as whatever face macOS substituted. Idle sessions all show the same
+  small dot, so a quiet list stays quiet and motion means one thing: that
+  session is working right now. Any tool without a mark of its own wears the
+  plain breathing dot.
+
+- **Connections are checked and kept working.** A connection is reported as
+  working only when every one of its hooks is present, current, and there
+  exactly once, rather than as soon as any trace of one is found. If some go
+  missing, get doubled up, or still point at where Keepresso lived before you
+  moved it, they are quietly put right, so moving the app no longer leaves a
+  connection that looks fine and does nothing. Only connections you already
+  made are maintained: a tool is never connected for you. If a repair cannot
+  be written, the row says so and offers to retry.
+
+- **Only tools you have are offered.** The connect row appears only for agent
+  tools that are actually on this Mac. Going through with it writes that
+  tool's config file, so a Mac that had never seen the tool could end up with
+  a config for it containing nothing but Keepresso's entries. A tool that is
+  already connected still shows its row, so it can always be disconnected.
+
+### Fixed
+
+- **Cursor's command-line agent went undetected.** Cursor installs it under two
+  names, `cursor-agent` and a plain `agent`, and a session started with the
+  short one was never recognised as an agent at all.
+
+- **Connecting could remove hooks you had configured yourself.** If an agent's
+  settings held anything Keepresso could not read (an empty value left by an
+  editor, a shape written by a newer version of the tool), connecting could
+  drop every hook you had set up for that event, or leave a second copy of
+  Keepresso's own hook that fired twice and could not be removed again.
+  Anything unrecognised is now left exactly as it was.
+
+- **Connecting loosened the settings file's permissions.** Writing the hooks
+  reset the file to the default permissions, so one deliberately restricted to
+  your account became readable by anyone on the Mac. Its permissions are now
+  put back as they were.
+
 ## [1.18.0] - 2026-07-24
 
 ### Added
