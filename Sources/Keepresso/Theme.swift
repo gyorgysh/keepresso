@@ -26,6 +26,17 @@ extension Color {
             ? NSColor(srgbRed: 217 / 255, green: 119 / 255, blue: 87 / 255, alpha: 1)
             : NSColor(srgbRed: 193 / 255, green: 95 / 255, blue: 60 / 255, alpha: 1)
     })
+
+    /// For tools whose mark is monochrome (Cursor, Grok, Codex, Antigravity): tint their rows with
+    /// the menu's own ink rather than a hue, near-black on light and
+    /// near-white on dark. Pulled a little off pure black and white so a
+    /// working row still reads as tinted next to ordinary label text. Their
+    /// marks are told apart by shape, not color.
+    static let monochromeAccent = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.isDarkAppearance
+            ? NSColor(srgbRed: 242 / 255, green: 242 / 255, blue: 242 / 255, alpha: 1)
+            : NSColor(srgbRed: 26 / 255, green: 26 / 255, blue: 26 / 255, alpha: 1)
+    })
 }
 
 private extension NSAppearance {

@@ -760,10 +760,14 @@ struct MenuBarContent: View {
     /// "+N more" line, so a wall of terminals can't swamp the menu.
     private static let maxDetailRows = 5
 
-    /// The accent for one detail row: claude rows wear Claude's terracotta,
-    /// every other agent keeps the generic green.
+    /// The accent for one detail row: each tool wears its own brand, and
+    /// agents without one yet keep the generic green.
     private static func detailAccent(_ detail: RuleDetail) -> Color {
-        detail.agent == "claude" ? .claudeAccent : .green
+        switch detail.agent {
+        case "claude": return .claudeAccent
+        case "cursor", "cursor-agent", "grok", "codex", "agy": return .monochromeAccent
+        default: return .green
+        }
     }
 
     /// Indented per-instance rows under a rule: one detected agent session per
@@ -775,7 +779,7 @@ struct MenuBarContent: View {
                 HStack(spacing: 6) {
                     // Gated on visibility: SparkView's periodic timeline would
                     // otherwise keep ticking inside the closed panel.
-                    SparkView(animated: detail.animated && panelVisible)
+                    SparkView(agent: detail.agent, animated: detail.animated && panelVisible)
                         .foregroundStyle(detail.active ? accent : Color.secondary)
                     Text(detail.label)
                         .font(type.caption)
