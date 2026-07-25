@@ -765,7 +765,8 @@ struct MenuBarContent: View {
     private static func detailAccent(_ detail: RuleDetail) -> Color {
         switch detail.agent {
         case "claude": return .claudeAccent
-        case "cursor", "cursor-agent", "grok", "codex", "agy": return .monochromeAccent
+        case "cursor", "cursor-agent": return .cursorAccent
+        case "grok", "codex", "agy": return .monochromeAccent
         default: return .green
         }
     }

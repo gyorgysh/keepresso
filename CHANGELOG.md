@@ -41,15 +41,15 @@ Versions follow [Semantic Versioning](https://semver.org).
 ### Changed
 
 - **Each tool wears its own session mark.** A working session now spins the
-  mark its own tool spins: Claude's sunburst in its terracotta, and Cursor's
-  dot grid, Grok's braille cell, Antigravity's orbiting gap, and Codex's slow
-  breathing dot in the menu's own black or white. They are drawn rather than
-  typed, so they match each console's spinner and look the same on every Mac,
-  where the old glyphs relied on characters no system font actually has and
-  came out as whatever face macOS substituted. Idle sessions all show the same
-  small dot, so a quiet list stays quiet and motion means one thing: that
-  session is working right now. Any tool without a mark of its own wears the
-  plain breathing dot.
+  mark its own tool spins: Claude's sunburst in its terracotta, Cursor's dot
+  grid in its olive, and Grok's braille cell, Antigravity's orbiting gap, and
+  Codex's slow breathing dot in the menu's own black or white. They are drawn
+  rather than typed, so they match each console's spinner and look the same on
+  every Mac, where the old glyphs relied on characters no system font actually
+  has and came out as whatever face macOS substituted. Idle sessions all show
+  the same small dot, so a quiet list stays quiet and motion means one thing:
+  that session is working right now. Any tool without a mark of its own wears
+  the plain breathing dot.
 
 - **Connections are checked and kept working.** A connection is reported as
   working only when every one of its hooks is present, current, and there
