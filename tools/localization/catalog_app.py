@@ -556,6 +556,49 @@ _AGENT_HOOKS_APP = {
 APP.update(_AGENT_HOOKS_APP)
 
 
+# --- Cursor hooks (covers both the cursor-agent CLI and the Cursor app) ---
+_CURSOR_HOOKS_APP = {
+    "Cursor connected: the app's agent and the CLI both report exactly.": {"hu": "Cursor csatlakoztatva: az alkalmazás ágense és a CLI is pontosan jelez.", "es": "Cursor conectado: tanto el agente de la app como la CLI informan con exactitud.", "fr": "Cursor connecté : l’agent de l’application et la CLI signalent tous deux précisément.", "de": "Cursor verbunden: Der App-Agent und die CLI melden beide exakt.", "zh-Hans": "已连接 Cursor：应用内代理与 CLI 均可精确报告状态。"},
+    "Connect Cursor to track its app agent too (adds hooks to its config).": {"hu": "Csatlakoztassa a Cursort az alkalmazás ágensének követéséhez is (hookokat ad a konfigurációjához).", "es": "Conecta Cursor para seguir también su agente de la app (añade hooks a su configuración).", "fr": "Connectez Cursor pour aussi suivre l’agent de l’application (ajoute des hooks à sa config).", "de": "Verbinde Cursor, um auch dessen App-Agent zu erfassen (fügt Hooks zu dessen Konfiguration hinzu).", "zh-Hans": "连接 Cursor 以同时跟踪其应用内代理（将在其配置中添加钩子）。"},
+    "Connect Cursor": {"hu": "Cursor csatlakoztatása", "es": "Conectar Cursor", "fr": "Connecter Cursor", "de": "Cursor verbinden", "zh-Hans": "连接 Cursor"},
+    "Cursor's hooks file couldn't be read, so it was left untouched.": {"hu": "A Cursor hookfájlja nem olvasható, ezért érintetlen maradt.", "es": "No se pudo leer el archivo de hooks de Cursor, así que se dejó intacto.", "fr": "Le fichier de hooks de Cursor n’a pas pu être lu, il a été laissé intact.", "de": "Die Hooks-Datei von Cursor konnte nicht gelesen werden und blieb unangetastet.", "zh-Hans": "无法读取 Cursor 的钩子文件，因此未作改动。"},
+    "Couldn't update Cursor's hooks file.": {"hu": "A Cursor hookfájlját nem sikerült frissíteni.", "es": "No se pudo actualizar el archivo de hooks de Cursor.", "fr": "Impossible de mettre à jour le fichier de hooks de Cursor.", "de": "Die Hooks-Datei von Cursor konnte nicht aktualisiert werden.", "zh-Hans": "无法更新 Cursor 的钩子文件。"},
+}
+APP.update(_CURSOR_HOOKS_APP)
+
+
+# --- Hook health (an install that drifted and can be repaired) ---
+_HOOK_HEALTH_APP = {
+    "Claude Code's hooks need repairing, so sessions may not report correctly.": {"hu": "A Claude Code hookjait meg kell javítani, ezért előfordulhat, hogy a munkamenetek nem jeleznek pontosan.", "es": "Los hooks de Claude Code necesitan reparación, así que es posible que las sesiones no informen correctamente.", "fr": "Les hooks de Claude Code doivent être réparés, il est donc possible que les sessions ne signalent pas correctement.", "de": "Die Hooks von Claude Code müssen repariert werden, daher melden Sitzungen möglicherweise nicht korrekt.", "zh-Hans": "Claude Code 的钩子需要修复，因此会话可能无法正确报告状态。"},
+    "Cursor's hooks need repairing, so sessions may not report correctly.": {"hu": "A Cursor hookjait meg kell javítani, ezért előfordulhat, hogy a munkamenetek nem jeleznek pontosan.", "es": "Los hooks de Cursor necesitan reparación, así que es posible que las sesiones no informen correctamente.", "fr": "Les hooks de Cursor doivent être réparés, il est donc possible que les sessions ne signalent pas correctement.", "de": "Die Hooks von Cursor müssen repariert werden, daher melden Sitzungen möglicherweise nicht korrekt.", "zh-Hans": "Cursor 的钩子需要修复，因此会话可能无法正确报告状态。"},
+    "Repair": {"hu": "Javítás", "es": "Reparar", "fr": "Réparer", "de": "Reparieren", "zh-Hans": "修复"},
+}
+APP.update(_HOOK_HEALTH_APP)
+
+
+# --- Codex hooks (Codex requires the user to approve new hooks) ---
+_CODEX_HOOKS_APP = {
+    "Codex connected: sessions report working and waiting exactly.": {"hu": "Codex csatlakoztatva: a munkamenetek pontosan jelzik a munkát és a várakozást.", "es": "Codex conectado: las sesiones informan con exactitud cuándo trabajan y cuándo esperan.", "fr": "Codex connecté : les sessions signalent précisément le travail et l’attente.", "de": "Codex verbunden: Sitzungen melden Arbeiten und Warten exakt.", "zh-Hans": "已连接 Codex：会话可精确报告工作与等待状态。"},
+    "Codex asks you to review new hooks before it runs them, so approve them there once.": {"hu": "A Codex kéri, hogy az új hookokat futtatás előtt tekintse át, ezért egyszer hagyja jóvá őket a Codexben.", "es": "Codex te pide que revises los hooks nuevos antes de ejecutarlos, así que apruébalos una vez en Codex.", "fr": "Codex vous demande d’examiner les nouveaux hooks avant de les exécuter, donc approuvez-les une fois dans Codex.", "de": "Codex bittet dich, neue Hooks vor der Ausführung zu prüfen, genehmige sie also einmal in Codex.", "zh-Hans": "Codex 会先让你查看新钩子，然后才运行，因此请在 Codex 中批准一次。"},
+    "Connect Codex for exact session tracking (adds hooks to its config).": {"hu": "Csatlakoztassa a Codexet a munkamenetek pontos követéséhez (hookokat ad a konfigurációjához).", "es": "Conecta Codex para un seguimiento exacto de las sesiones (añade hooks a su configuración).", "fr": "Connectez Codex pour un suivi exact des sessions (ajoute des hooks à sa configuration).", "de": "Verbinde Codex für exaktes Sitzungs-Tracking (fügt Hooks zu dessen Konfiguration hinzu).", "zh-Hans": "连接 Codex 以精确跟踪会话（将在其配置中添加钩子）。"},
+    "Connect Codex": {"hu": "Codex csatlakoztatása", "es": "Conectar Codex", "fr": "Connecter Codex", "de": "Codex verbinden", "zh-Hans": "连接 Codex"},
+    "Codex's hooks need repairing, so sessions may not report correctly.": {"hu": "A Codex hookjait meg kell javítani, ezért előfordulhat, hogy a munkamenetek nem jeleznek pontosan.", "es": "Los hooks de Codex necesitan reparación, así que es posible que las sesiones no informen correctamente.", "fr": "Les hooks de Codex doivent être réparés, il est donc possible que les sessions ne signalent pas correctement.", "de": "Die Hooks von Codex müssen repariert werden, daher melden Sitzungen möglicherweise nicht korrekt.", "zh-Hans": "Codex 的钩子需要修复，因此会话可能无法正确报告状态。"},
+    "Codex's hooks file couldn't be read, so it was left untouched.": {"hu": "A Codex hookfájlja nem olvasható, ezért érintetlen maradt.", "es": "No se pudo leer el archivo de hooks de Codex, así que se dejó intacto.", "fr": "Le fichier de hooks de Codex n’a pas pu être lu, il a été laissé intact.", "de": "Die Hooks-Datei von Codex konnte nicht gelesen werden und blieb unangetastet.", "zh-Hans": "无法读取 Codex 的钩子文件，因此未作改动。"},
+    "Couldn't update Codex's hooks file.": {"hu": "A Codex hookfájlját nem sikerült frissíteni.", "es": "No se pudo actualizar el archivo de hooks de Codex.", "fr": "Impossible de mettre à jour le fichier de hooks de Codex.", "de": "Die Hooks-Datei von Codex konnte nicht aktualisiert werden.", "zh-Hans": "无法更新 Codex 的钩子文件。"},
+}
+APP.update(_CODEX_HOOKS_APP)
+
+
+# --- Agentic onboarding step (offers to connect the tools you have) ---
+_AGENT_SETUP_APP = {
+    "Know exactly when an agent is working": {"hu": "Pontosan tudja, mikor dolgozik egy ügynök", "es": "Sabe exactamente cuándo está trabajando un agente", "fr": "Sachez exactement quand un agent travaille", "de": "Genau wissen, wann ein Agent arbeitet", "zh-Hans": "准确知道代理何时在工作"},
+    "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look.": {"hu": "Csatlakoztassa a használt kódolóeszközöket, és a munkameneteik önmaguktól jeleznek, ahelyett hogy a Keepresso aszerint ítélné meg őket, mennyire elfoglaltnak tűnnek.", "es": "Conecta las herramientas de código que usas y sus sesiones informan por sí mismas, en lugar de que Keepresso las juzgue por lo ocupadas que parecen.", "fr": "Connectez les outils de code que vous utilisez et leurs sessions se signalent elles-mêmes, au lieu que Keepresso les juge à leur air occupé.", "de": "Verbinde die Programmiertools, die du nutzt, und ihre Sitzungen melden sich selbst, statt dass Keepresso sie danach beurteilt, wie beschäftigt sie wirken.", "zh-Hans": "连接你使用的编程工具，让它们的会话自行报告状态，而不是让 Keepresso 通过它们看起来有多忙来判断。"},
+    "Connect": {"hu": "Csatlakoztatás", "es": "Conectar", "fr": "Connecter", "de": "Verbinden", "zh-Hans": "连接"},
+    "Couldn't be read": {"hu": "Nem olvasható", "es": "No se pudo leer", "fr": "N’a pas pu être lu", "de": "Konnte nicht gelesen werden", "zh-Hans": "无法读取"},
+}
+APP.update(_AGENT_SETUP_APP)
+
+
 # ---------------------------------------------------------------------------
 # Desktop "disable sleep" naming: the pmset disablesleep switch shown on
 # battery-less Macs (mini, Studio, Pro), where "closed-display mode" and lid

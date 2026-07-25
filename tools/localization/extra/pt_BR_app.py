@@ -430,6 +430,52 @@ APP.update({
     "Couldn't update Claude Code's settings file.": "Não foi possível atualizar o arquivo de configurações do Claude Code.",
 })
 
+# --- Agent hooks (Cursor connection) ---
+APP.update({
+    "Cursor connected: the app's agent and the CLI both report exactly.":
+        "Cursor conectado: o agente do app e a CLI informam com exatidão.",
+    "Connect Cursor to track its app agent too (adds hooks to its config).":
+        "Conecte o Cursor para rastrear também o agente do app dele (adiciona hooks à configuração dele).",
+    "Connect Cursor": "Conectar Cursor",
+    "Cursor's hooks file couldn't be read, so it was left untouched.":
+        "Não foi possível ler o arquivo de hooks do Cursor, então ele foi mantido intacto.",
+    "Couldn't update Cursor's hooks file.": "Não foi possível atualizar o arquivo de hooks do Cursor.",
+})
+
+# --- Agent hooks (Codex connection) ---
+APP.update({
+    "Codex connected: sessions report working and waiting exactly.":
+        "Codex conectado: as sessões informam com exatidão quando trabalham e quando aguardam.",
+    "Codex asks you to review new hooks before it runs them, so approve them there once.":
+        "O Codex pede para você revisar novos hooks antes de executá-los, então aprove-os lá uma vez.",
+    "Connect Codex for exact session tracking (adds hooks to its config).":
+        "Conecte o Codex para rastreamento exato das sessões (adiciona hooks à configuração dele).",
+    "Connect Codex": "Conectar Codex",
+    "Codex's hooks file couldn't be read, so it was left untouched.":
+        "Não foi possível ler o arquivo de hooks do Codex, então ele foi mantido intacto.",
+    "Couldn't update Codex's hooks file.": "Não foi possível atualizar o arquivo de hooks do Codex.",
+})
+
+# --- Agentic onboarding step (offers to connect the tools you have) ---
+APP.update({
+    "Know exactly when an agent is working": "Saiba com exatidão quando um agente está trabalhando",
+    "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look.":
+        "Conecte as ferramentas de programação que você usa: as sessões delas se reportam sozinhas, em vez de o Keepresso julgá-las por quão ocupadas parecem estar.",
+    "Connect": "Conectar",
+    "Couldn't be read": "Não foi possível ler",
+})
+
+# --- Agent hooks (repair) ---
+APP.update({
+    "Claude Code's hooks need repairing, so sessions may not report correctly.":
+        "Os hooks do Claude Code precisam ser reparados, então as sessões podem não ser informadas corretamente.",
+    "Cursor's hooks need repairing, so sessions may not report correctly.":
+        "Os hooks do Cursor precisam ser reparados, então as sessões podem não ser informadas corretamente.",
+    "Codex's hooks need repairing, so sessions may not report correctly.":
+        "Os hooks do Codex precisam ser reparados, então as sessões podem não ser informadas corretamente.",
+    "Repair": "Reparar",
+})
+
 # --- Desktop "disable sleep" naming ---
 _DESKTOP_SLEEP_APP = {
     'Disable system sleep': 'Desativar suspensão do sistema',
