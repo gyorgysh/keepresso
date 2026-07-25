@@ -304,7 +304,7 @@ private func tempHooksDir() -> URL {
 
     let records = AgentHooks.readHookRecords(now: now, in: dir, isAlive: { $0 == 100 })
     let sessions = [AgentSession(pid: 100, agent: "claude", tty: "s003", cpuPercent: 0)]
-    let joined = PSAgentActivityMonitor.applyHookRecords(records, to: sessions, cwdOf: { _ in nil })
+    let joined = PSAgentActivityMonitor.applyHookRecords(records, to: sessions, cwdOf: { _ in nil }).sessions
     #expect(joined[0].hookState == .working)
 
     var state = AgentActivityTrigger.State()
@@ -359,7 +359,7 @@ private func hookRecord(
     ]
     let joined = PSAgentActivityMonitor.applyHookRecords(
         records, to: sessions,
-        cwdOf: { $0 == 300 ? "/proj/two" : "/proj/one" })
+        cwdOf: { $0 == 300 ? "/proj/two" : "/proj/one" }).sessions
     #expect(joined[0].hookState == .working)
     #expect(joined[0].hookDetail == "editing")
     #expect(joined[1].hookState == nil)
@@ -374,7 +374,7 @@ private func hookRecord(
     session.origin = .claudeApp
     let records = [hookRecord("a", state: .working, agentPid: 100)]
     let joined = PSAgentActivityMonitor.applyHookRecords(
-        records, to: [session], cwdOf: { _ in nil })
+        records, to: [session], cwdOf: { _ in nil }).sessions
     #expect(joined[0].hookState == .working)
     #expect(joined[0].origin == .claudeApp)
 }
@@ -388,7 +388,7 @@ private func hookRecord(
     ]
     let records = [hookRecord("a", state: .working, cwd: "/shared")]
     let joined = PSAgentActivityMonitor.applyHookRecords(
-        records, to: sessions, cwdOf: { _ in "/shared" })
+        records, to: sessions, cwdOf: { _ in "/shared" }).sessions
     #expect(joined.allSatisfy { $0.hookState == nil })
 }
 
@@ -399,7 +399,7 @@ private func hookRecord(
         hookRecord("new", state: .working, agentPid: 100, age: 5),
     ]
     let joined = PSAgentActivityMonitor.applyHookRecords(
-        records, to: sessions, cwdOf: { _ in nil })
+        records, to: sessions, cwdOf: { _ in nil }).sessions
     #expect(joined[0].hookState == .working)
 }
 
@@ -518,8 +518,8 @@ private func json(_ data: Data) throws -> [String: Any] {
     let stop = try #require(hooks["Stop"] as? [[String: Any]])
     #expect(stop[0]["matcher"] == nil)
 
-    #expect(AgentHooks.hookInstallState(of: installed) == .installed)
-    #expect(AgentHooks.hookInstallState(of: nil) == .notInstalled)
+    #expect(AgentHooks.hookInstallState(of: installed, cliPath: cliPath) == .installed)
+    #expect(AgentHooks.hookInstallState(of: nil, cliPath: "/Apps/K/keepresso") == .notInstalled)
 }
 
 @Test func installPreservesForeignKeysAndHooksAndIsIdempotent() throws {
@@ -572,7 +572,7 @@ private func json(_ data: Data) throws -> [String: Any] {
     let pre = try #require(hooks["PreToolUse"] as? [[String: Any]])
     #expect(pre.count == 1)
     #expect((pre[0]["hooks"] as? [[String: Any]])?.first?["command"] as? String == "my-linter.sh")
-    #expect(AgentHooks.hookInstallState(of: removed) == .notInstalled)
+    #expect(AgentHooks.hookInstallState(of: removed, cliPath: "/Apps/K/keepresso") == .notInstalled)
 
     // Removing from a from-scratch install leaves an empty object: the
     // `hooks` key itself is pruned.
@@ -641,7 +641,7 @@ private func json(_ data: Data) throws -> [String: Any] {
 
 @Test func unreadableSettingsAreReportedAndNeverEdited() {
     let broken = Data("{not json at all".utf8)
-    #expect(AgentHooks.hookInstallState(of: broken) == .unreadable)
+    #expect(AgentHooks.hookInstallState(of: broken, cliPath: "/Apps/K/keepresso") == .unreadable)
     #expect(throws: AgentHooks.SettingsUnreadableError.self) {
         try AgentHooks.installHooks(into: broken, cliPath: cliPath)
     }
@@ -650,7 +650,7 @@ private func json(_ data: Data) throws -> [String: Any] {
     }
     // A top-level array is valid JSON but not a settings object.
     let array = Data("[1,2,3]".utf8)
-    #expect(AgentHooks.hookInstallState(of: array) == .unreadable)
+    #expect(AgentHooks.hookInstallState(of: array, cliPath: "/Apps/K/keepresso") == .unreadable)
 }
 
 @Test func originLabelsReplaceThePidFallback() {
@@ -665,4 +665,223 @@ private func json(_ data: Data) throws -> [String: Any] {
     #expect(AgentSession(
         pid: 9, agent: "claude", tty: nil, cpuPercent: 0, origin: .ide
     ).label == "claude (IDE)")
+}
+
+// MARK: - Not losing the user's own hooks
+
+@Test func installKeepsForeignEntriesItCannotParse() throws {
+    // A settings file is the user's. An element we don't recognise (a null an
+    // editor left behind, a shape a future Claude Code writes) used to make
+    // the whole event array fail one cast, fall back to empty, and take every
+    // one of their hooks for that event with it.
+    let existing = Data("""
+    {"hooks":{"PreToolUse":[
+        {"matcher":"Bash","hooks":[{"type":"command","command":"my-linter.sh"}]},
+        null,
+        "a bare string"
+    ]}}
+    """.utf8)
+    let installed = try AgentHooks.installHooks(into: existing, cliPath: "/Apps/K/keepresso")
+    let root = try #require(try JSONSerialization.jsonObject(with: installed) as? [String: Any])
+    let hooks = try #require(root["hooks"] as? [String: Any])
+    let pre = try #require(hooks["PreToolUse"] as? [Any])
+    // Their group, both unreadable elements, and ours: nothing dropped.
+    #expect(pre.count == 4)
+    let commands = pre.compactMap { ($0 as? [String: Any])?["hooks"] as? [Any] }
+        .flatMap { $0 }
+        .compactMap { ($0 as? [String: Any])?["command"] as? String }
+    #expect(commands.contains("my-linter.sh"))
+    #expect(pre.contains { $0 is NSNull })
+    #expect(pre.contains { ($0 as? String) == "a bare string" })
+}
+
+@Test func reinstallNeverLeavesTwoOfOurHooksOnOneEvent() throws {
+    // The duplicate that mattered: an unreadable sibling inside a group used
+    // to stop our own entry being stripped, so each re-install appended
+    // another copy. The hook then fired once per copy, and remove could not
+    // find it either.
+    let first = try AgentHooks.installHooks(into: nil, cliPath: "/Apps/K/keepresso")
+    // Slip an unreadable sibling in beside our entry.
+    var root = try #require(try JSONSerialization.jsonObject(with: first) as? [String: Any])
+    var hooks = try #require(root["hooks"] as? [String: Any])
+    var stop = try #require(hooks["Stop"] as? [Any])
+    var group = try #require(stop[0] as? [String: Any])
+    var inner = try #require(group["hooks"] as? [Any])
+    inner.append(NSNull())
+    group["hooks"] = inner
+    stop[0] = group
+    hooks["Stop"] = stop
+    root["hooks"] = hooks
+    let tampered = try JSONSerialization.data(withJSONObject: root)
+
+    func ourCommandCount(_ data: Data) throws -> Int {
+        let root = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let hooks = try #require(root["hooks"] as? [String: Any])
+        return (hooks["Stop"] as? [Any] ?? []).flatMap { AgentHooks.keepressoCommands(in: $0) }.count
+    }
+    #expect(try ourCommandCount(tampered) == 1)
+    let again = try AgentHooks.installHooks(into: tampered, cliPath: "/Apps/K/keepresso")
+    #expect(try ourCommandCount(again) == 1, "a re-install must replace our entry, never add a second")
+    // And it must still be removable, with the user's stray element intact.
+    let removed = try AgentHooks.removeHooks(from: again)
+    #expect(try ourCommandCount(removed) == 0)
+    #expect(AgentHooks.hookInstallState(of: removed, cliPath: "/Apps/K/keepresso") == .notInstalled)
+}
+
+// MARK: - Install health
+
+@Test func aHealthyInstallIsOnlyHealthyWhenEveryEventIsCurrent() throws {
+    let installed = try AgentHooks.installHooks(into: nil, cliPath: cliPath)
+    let report = AgentHooks.inspect(installed, cliPath: cliPath)
+    #expect(report.isHealthy)
+    #expect(!report.isAbsent)
+    #expect(report.healthy == Set(AgentHooks.installedEvents))
+    #expect(AgentHooks.hookInstallState(of: installed, cliPath: cliPath) == .installed)
+}
+
+@Test func aMovedAppIsReportedStaleRatherThanConnected() throws {
+    // The quiet failure this exists for: the app moves, the baked absolute
+    // path stops resolving, every hook silently no-ops, and the row used to
+    // keep saying "connected" forever.
+    let installed = try AgentHooks.installHooks(
+        into: nil, cliPath: "/Volumes/Old/Keepresso.app/Contents/Helpers/keepresso")
+    let report = AgentHooks.inspect(installed, cliPath: cliPath)
+    #expect(report.stale == Set(AgentHooks.installedEvents))
+    #expect(report.healthy.isEmpty)
+    #expect(!report.isHealthy)
+    #expect(AgentHooks.hookInstallState(of: installed, cliPath: cliPath) != .installed)
+    // Re-installing is the repair, and it fully heals.
+    let repaired = try AgentHooks.installHooks(into: installed, cliPath: cliPath)
+    #expect(AgentHooks.inspect(repaired, cliPath: cliPath).isHealthy)
+}
+
+@Test func aPartialInstallIsNotReportedAsConnected() throws {
+    // A settings sync, a hand edit, or a version that grew its event list can
+    // leave some events behind. One surviving entry used to read as fully
+    // connected.
+    let installed = try AgentHooks.installHooks(into: nil, cliPath: cliPath)
+    var root = try #require(try JSONSerialization.jsonObject(with: installed) as? [String: Any])
+    var hooks = try #require(root["hooks"] as? [String: Any])
+    let kept = "Stop"
+    for event in AgentHooks.installedEvents where event != kept { hooks.removeValue(forKey: event) }
+    root["hooks"] = hooks
+    let partial = try JSONSerialization.data(withJSONObject: root)
+
+    let report = AgentHooks.inspect(partial, cliPath: cliPath)
+    #expect(report.healthy == [kept])
+    #expect(report.missing == Set(AgentHooks.installedEvents).subtracting([kept]))
+    #expect(!report.isHealthy)
+    #expect(!report.isAbsent)
+    guard case .needsRepair = AgentHooks.hookInstallState(of: partial, cliPath: cliPath) else {
+        Issue.record("a partial install must ask to be repaired, not claim to be connected")
+        return
+    }
+}
+
+@Test func anEntryUnderARetiredEventIsReportedOrphaned() throws {
+    // An older version installed events this build no longer uses. They are
+    // still in the file and still firing, and a re-install only rewrites the
+    // events it knows, so nothing else would ever notice them.
+    var root: [String: Any] = ["hooks": [
+        "SomeRetiredEvent": [
+            ["hooks": [["type": "command",
+                        "command": "old-path/keepresso agent-hook SomeRetiredEvent; : # \(AgentHooks.hookMarker)"]]],
+        ],
+    ]]
+    let withOrphan = try JSONSerialization.data(withJSONObject: root)
+    let report = AgentHooks.inspect(withOrphan, cliPath: cliPath)
+    #expect(report.orphaned == ["SomeRetiredEvent"])
+    #expect(!report.isAbsent)
+    #expect(!report.isHealthy)
+    // Removing still gets rid of it: remove sweeps every event, not just ours.
+    let removed = try AgentHooks.removeHooks(from: withOrphan)
+    #expect(AgentHooks.inspect(removed, cliPath: cliPath).isAbsent)
+    root = [:]
+}
+
+@Test func anEmptyOrForeignFileIsAbsentRatherThanBroken() throws {
+    #expect(AgentHooks.inspect(nil, cliPath: cliPath).isAbsent)
+    #expect(AgentHooks.inspect(Data("{}".utf8), cliPath: cliPath).isAbsent)
+    // Someone else's hooks are not ours, and must not read as a broken install.
+    let foreign = Data(#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"theirs"}]}]}}"#.utf8)
+    let report = AgentHooks.inspect(foreign, cliPath: cliPath)
+    #expect(report.isAbsent)
+    #expect(AgentHooks.hookInstallState(of: foreign, cliPath: cliPath) == .notInstalled)
+}
+
+@Test func repairingClearsEverythingItReportsIncludingRetiredEvents() throws {
+    // The Repair button just re-installs, so re-installing has to be able to
+    // clear every kind of drift the report can raise. An entry left under an
+    // event this build no longer installs is still ours and still firing, and
+    // if a re-install cannot remove it the row stays "needs repair" forever
+    // and the button appears to do nothing.
+    let installed = try AgentHooks.installHooks(into: nil, cliPath: cliPath)
+    var root = try #require(try JSONSerialization.jsonObject(with: installed) as? [String: Any])
+    var hooks = try #require(root["hooks"] as? [String: Any])
+    hooks["SomeRetiredEvent"] = [
+        ["hooks": [["type": "command",
+                    "command": "old/keepresso agent-hook SomeRetiredEvent; : # \(AgentHooks.hookMarker)"]]],
+    ]
+    root["hooks"] = hooks
+    let drifted = try JSONSerialization.data(withJSONObject: root)
+    #expect(AgentHooks.inspect(drifted, cliPath: cliPath).orphaned == ["SomeRetiredEvent"])
+
+    let repaired = try AgentHooks.installHooks(into: drifted, cliPath: cliPath)
+    let after = AgentHooks.inspect(repaired, cliPath: cliPath)
+    #expect(after.orphaned.isEmpty, "repair must drop our entries under events we no longer install")
+    #expect(after.isHealthy, "after repairing, the report must be clean")
+}
+
+@Test func oneRepairPassFixesEveryKindOfDriftAtOnce() throws {
+    // Auto-repair tries once per tool per run, so a single re-install has to
+    // converge on a healthy file no matter how many things are wrong. This
+    // builds a file with all four kinds of drift present together.
+    let installed = try AgentHooks.installHooks(into: nil, cliPath: cliPath)
+    var root = try #require(try JSONSerialization.jsonObject(with: installed) as? [String: Any])
+    var hooks = try #require(root["hooks"] as? [String: Any])
+
+    // 1. missing: drop an event entirely.
+    hooks.removeValue(forKey: "SessionEnd")
+    // 2. stale: rewrite one event's command to an old app location.
+    hooks["Stop"] = [["hooks": [["type": "command",
+        "command": "/Volumes/Old/keepresso agent-hook Stop; : # \(AgentHooks.hookMarker)"]]]]
+    // 3. duplicated: two of ours on one event.
+    let dupe: [String: Any] = ["matcher": "*", "hooks": [["type": "command",
+        "command": AgentHooks.hookCommand(event: "PreToolUse", cliPath: cliPath)]]]
+    var pre = try #require(hooks["PreToolUse"] as? [Any])
+    pre.append(dupe)
+    hooks["PreToolUse"] = pre
+    // 4. orphaned: ours under an event this build no longer installs.
+    hooks["SomeRetiredEvent"] = [["hooks": [["type": "command",
+        "command": "old/keepresso agent-hook SomeRetiredEvent; : # \(AgentHooks.hookMarker)"]]]]
+    // And a foreign hook that must survive all of it.
+    hooks["PostToolUse"] = [
+        ["hooks": [["type": "command", "command": "their-linter.sh"]]],
+    ]
+    root["hooks"] = hooks
+    let drifted = try JSONSerialization.data(withJSONObject: root)
+
+    let before = AgentHooks.inspect(drifted, cliPath: cliPath)
+    #expect(before.missing.contains("SessionEnd"))
+    #expect(before.stale == ["Stop"])
+    #expect(before.duplicated == ["PreToolUse"])
+    #expect(before.orphaned == ["SomeRetiredEvent"])
+
+    // One pass, exactly what auto-repair does.
+    let repaired = try AgentHooks.installHooks(into: drifted, cliPath: cliPath)
+    #expect(AgentHooks.inspect(repaired, cliPath: cliPath).isHealthy,
+            "one repair pass must be enough, because only one is attempted")
+    #expect(AgentHooks.hookInstallState(of: repaired, cliPath: cliPath) == .installed)
+
+    // The user's own hook is still there, untouched.
+    let out = try #require(try JSONSerialization.jsonObject(with: repaired) as? [String: Any])
+    let outHooks = try #require(out["hooks"] as? [String: Any])
+    let post = try #require(outHooks["PostToolUse"] as? [Any])
+    #expect(post.contains {
+        (($0 as? [String: Any])?["hooks"] as? [Any])?.contains {
+            ($0 as? [String: Any])?["command"] as? String == "their-linter.sh"
+        } ?? false
+    })
+    // And repairing an already-healthy file changes nothing.
+    #expect(try AgentHooks.installHooks(into: repaired, cliPath: cliPath) == repaired)
 }

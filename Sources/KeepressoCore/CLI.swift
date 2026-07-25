@@ -21,6 +21,11 @@ public enum CLIRequest: Equatable, Sendable {
     /// Hidden from the help text: installed hook commands are its only
     /// intended caller.
     case agentHook(event: String)
+    /// Record a Cursor hook event delivered on stdin. Hidden for the same
+    /// reason as ``agentHook(event:)``.
+    case cursorHook(event: String)
+    /// Record a Codex hook event delivered on stdin. Hidden likewise.
+    case codexHook(event: String)
     /// Manage automation leases (bounded keep-awake grants for scripts and
     /// agents), executed by ``LeaseClient``.
     case lease(LeaseCommand)
@@ -148,6 +153,16 @@ public enum CLIRequest: Equatable, Sendable {
                 throw CLIUsageError("agent-hook takes exactly one event name")
             }
             return .agentHook(event: arguments[1])
+        case "cursor-hook":
+            guard arguments.count == 2 else {
+                throw CLIUsageError("cursor-hook takes exactly one event name")
+            }
+            return .cursorHook(event: arguments[1])
+        case "codex-hook":
+            guard arguments.count == 2 else {
+                throw CLIUsageError("codex-hook takes exactly one event name")
+            }
+            return .codexHook(event: arguments[1])
         case "lease":
             return .lease(try parseLease(Array(arguments.dropFirst())))
         case "wake":

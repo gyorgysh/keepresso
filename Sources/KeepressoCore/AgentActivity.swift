@@ -93,14 +93,35 @@ public protocol AgentActivityMonitoring: AnyObject {
 public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// The agent CLIs detected out of the box, matched against the root
     /// command's basename (never as a substring, so `grep claude` or a file
-    /// name mentioning an agent can't count as a session). CLI binaries only:
-    /// a bare "cursor" or "antigravity" would match the whole IDE app, whose
-    /// process tree burns CPU constantly, so their terminal agents are listed
-    /// by their actual command names instead (cursor-agent, agy).
+    /// name mentioning an agent can't count as a session), with the resolved
+    /// executable path as a second chance (see ``resolvedAgentName(for:agents:pathOf:)``).
+    /// CLI binaries only: a bare "cursor" or "antigravity" would match the
+    /// whole IDE app, whose process tree burns CPU constantly, so their
+    /// terminal agents are listed by their actual command names instead
+    /// (cursor-agent, agy).
     public static let agentCommands = [
         "claude", "codex", "gemini", "grok", "agy", "aider", "goose",
         "cursor-agent", "opencode", "amp", "copilot", "droid", "auggie", "qwen",
+        "pi",
     ]
+
+    /// The names that may also be matched against a *component* of a resolved
+    /// executable path, rather than only against a command's basename.
+    ///
+    /// Path matching is what finds a tool the command line doesn't name: a
+    /// versioned Claude Code binary (`.../claude/versions/2.1.219`), or Cursor
+    /// launched through its bare `agent` alias
+    /// (`.../cursor-agent/versions/<v>/node`). It is also much looser, because
+    /// any directory anywhere in the path can satisfy it, so the short names
+    /// are held back from it: a user whose home is `/Users/pi` would otherwise
+    /// have every process they run matched as an agent, and `amp` and `agy`
+    /// are only a little less likely to appear as some unrelated folder.
+    /// Those three are still detected by their command's basename, which is
+    /// exact; they just don't get the fuzzier second chance.
+    static let pathMatchMinimumLength = 4
+    public static let pathMatchableAgents = agentCommands.filter {
+        $0.count >= pathMatchMinimumLength
+    }
 
     /// Interpreter/runtime launchers whose first non-flag argument is the
     /// script that names the real tool (`node /opt/homebrew/bin/claude`).
@@ -202,8 +223,9 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
                     sessions[index].origin = self.classifyOrigin(session.pid)
                 }
                 // Stamp hook evidence: exact state edges beat both heuristics.
-                sessions = Self.applyHookRecords(
+                let join = Self.applyHookRecords(
                     self.hookRecords(scanTime), to: sessions, cwdOf: { cwds[$0] })
+                sessions = join.sessions
                 // A not-working verdict older than a fresh transcript write
                 // is stale information, not an edge: the main turn's Stop
                 // hook fires while a background subagent works on (its
@@ -226,6 +248,10 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
                         sessions[index].hookDetail = nil
                     }
                 }
+                // Sessions that exist only as hook records (an IDE's built-in
+                // agent) are appended last: they have no process, so none of
+                // the cwd, evidence, or origin decoration above applies.
+                sessions.append(contentsOf: join.unclaimed.compactMap(Self.hookOnlySession(from:)))
                 self.withLock {
                     self.cached = AgentSnapshot(sessions: sessions)
                     self.lastFetch = self.now()
@@ -245,8 +271,9 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         _ records: [AgentHooks.HookRecord],
         to sessions: [AgentSession],
         cwdOf: (Int32) -> String?
-    ) -> [AgentSession] {
-        guard !records.isEmpty, !sessions.isEmpty else { return sessions }
+    ) -> HookJoin {
+        guard !records.isEmpty else { return HookJoin(sessions: sessions, unclaimed: []) }
+        guard !sessions.isEmpty else { return HookJoin(sessions: sessions, unclaimed: records) }
         var result = sessions
         var claimed: Set<Int> = []
         var unmatchedByPid: [AgentHooks.HookRecord] = []
@@ -258,16 +285,73 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
                 unmatchedByPid.append(record)
             }
         }
+        var unclaimed: [AgentHooks.HookRecord] = []
         for record in unmatchedByPid {
-            guard let cwd = record.cwd else { continue }
+            guard let cwd = record.cwd else {
+                unclaimed.append(record)
+                continue
+            }
             let candidates = result.indices.filter {
                 !claimed.contains($0) && cwdOf(result[$0].pid) == cwd
             }
-            guard candidates.count == 1, let index = candidates.first else { continue }
+            guard candidates.count == 1, let index = candidates.first else {
+                unclaimed.append(record)
+                continue
+            }
             claimed.insert(index)
             stamp(&result[index], with: record)
         }
-        return result
+        return HookJoin(sessions: result, unclaimed: unclaimed)
+    }
+
+    /// The result of joining hook records onto `ps`-detected sessions.
+    struct HookJoin: Equatable {
+        var sessions: [AgentSession]
+        /// Records that matched no detected process. Most are transient (a
+        /// session caught between the scan and the record), but a record
+        /// carrying an owning app is a session that has no process to find:
+        /// see ``hookOnlySession(from:)``.
+        var unclaimed: [AgentHooks.HookRecord]
+    }
+
+    /// A session reconstructed from a hook record alone, for agents that run
+    /// inside their editor rather than as a command. The Cursor IDE is the
+    /// case that forces this: its agent lives in an Electron renderer shared
+    /// with the whole editor, so there is no process to find, no subtree whose
+    /// CPU means anything, and no transcript we know how to read. The hook
+    /// record is the entire signal.
+    ///
+    /// Only a record naming a live owning app qualifies (``AgentHooks/readHookRecords(now:in:isAlive:isHostAlive:)``
+    /// has already verified that pid), so a record left unclaimed for the
+    /// ordinary reason, a CLI session racing the scan, never invents a row.
+    static func hookOnlySession(from record: AgentHooks.HookRecord) -> AgentSession? {
+        guard record.ownerPid != nil else { return nil }
+        var session = AgentSession(
+            pid: syntheticPid(forSessionId: record.sessionId),
+            agent: record.agent ?? "agent",
+            tty: nil,
+            // No process, so no CPU: the hook state decides this session
+            // outright, and the heuristics it would otherwise fall back to
+            // read as idle, which is the right answer once hooks go quiet.
+            cpuPercent: 0,
+            hookState: record.state,
+            hookDetail: record.detail,
+            origin: record.origin
+        )
+        session.hookUpdatedAt = record.updatedAt
+        return session
+    }
+
+    /// A stable, always-negative stand-in pid for a session that has no
+    /// process, so it can key the trigger's per-session smoothing without ever
+    /// colliding with a real pid. FNV-1a rather than `hashValue`, which is
+    /// seeded per process and would re-key every session on relaunch.
+    static func syntheticPid(forSessionId id: String) -> Int32 {
+        var hash: UInt32 = 2_166_136_261
+        for byte in id.utf8 {
+            hash = (hash ^ UInt32(byte)) &* 16_777_619
+        }
+        return -Int32(hash % 2_000_000_000) - 1
     }
 
     private static func stamp(_ session: inout AgentSession, with record: AgentHooks.HookRecord) {
@@ -417,7 +501,11 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// not as its own row), and sum `pcpu` over each root's subtree (tool
     /// calls like builds and tests run as children and burn CPU even while
     /// the agent process itself waits).
-    static func sessions(from samples: [ProcessSample], agents: [String] = agentCommands) -> [AgentSession] {
+    static func sessions(
+        from samples: [ProcessSample],
+        agents: [String] = agentCommands,
+        pathOf: (Int32) -> String? = AgentHooks.defaultPathOf
+    ) -> [AgentSession] {
         var byPid: [Int32: ProcessSample] = [:]
         var children: [Int32: [Int32]] = [:]
         for sample in samples {
@@ -427,7 +515,8 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
 
         var matched: [Int32: String] = [:]
         for sample in samples {
-            if let agent = agentName(for: sample.command, agents: agents) {
+            if let agent = agentName(for: sample.command, agents: agents)
+                ?? resolvedAgentName(for: sample, agents: agents, pathOf: pathOf) {
                 matched[sample.pid] = agent
             }
         }
@@ -494,6 +583,27 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             return agents.first { $0 == name }
         }
         return nil
+    }
+
+    /// Second-chance match for a launcher whose command line names nothing.
+    /// Cursor's CLI installs two symlinks, `cursor-agent` and a bare `agent`,
+    /// and a session started through the short one runs as
+    /// `~/.local/bin/agent --use-system-ca .../index.js`: the basename is the
+    /// generic "agent", which is far too common a word to list as an agent
+    /// command. The kernel's executable path resolves the symlink
+    /// (`.../cursor-agent/versions/<v>/node`), so its path *components* name
+    /// the tool, exactly as ``AgentHooks/agentMatch(comm:path:agents:)``
+    /// already matches versioned binaries on the hook side.
+    ///
+    /// The `ps` line is a prefilter, never the verdict. Without it every scan
+    /// would spend a `proc_pidpath` syscall on each of a few hundred
+    /// processes; with it, a `grep cursor-agent …` still fails the
+    /// authoritative path check, because its executable is `/usr/bin/grep`.
+    static func resolvedAgentName(
+        for sample: ProcessSample, agents: [String], pathOf: (Int32) -> String?
+    ) -> String? {
+        guard agents.contains(where: { sample.command.contains($0) }) else { return nil }
+        return AgentHooks.agentMatch(comm: nil, path: pathOf(sample.pid), agents: agents)
     }
 
     private static func basename(_ token: Substring) -> String {

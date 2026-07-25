@@ -142,6 +142,13 @@ public enum AgentHooks {
         /// The agent root process (found by the ancestor walk), the exact
         /// join key to the monitor's sessions; `cwd` is the fallback.
         public var agentPid: Int32?
+        /// The app or IDE hosting a session that has no agent process of its
+        /// own, so the monitor can surface it and still tell when it is gone.
+        /// See ``findAppHost(startingAt:depthLimit:parentOf:commandOf:)``.
+        public var ownerPid: Int32?
+        /// Which CLI the session belongs to ("claude", "cursor"), for naming
+        /// a hook-only session the `ps` scan never sees.
+        public var agent: String?
         public var updatedAt: Date
 
         public init(
@@ -151,6 +158,8 @@ public enum AgentHooks {
             cwd: String? = nil,
             origin: HookSessionOrigin? = nil,
             agentPid: Int32? = nil,
+            ownerPid: Int32? = nil,
+            agent: String? = nil,
             updatedAt: Date
         ) {
             self.sessionId = sessionId
@@ -159,6 +168,8 @@ public enum AgentHooks {
             self.cwd = cwd
             self.origin = origin
             self.agentPid = agentPid
+            self.ownerPid = ownerPid
+            self.agent = agent
             self.updatedAt = updatedAt
         }
     }
@@ -270,8 +281,12 @@ public enum AgentHooks {
             return agent
         }
         guard let path else { return nil }
+        // Only the names cleared for it are matched against a path component;
+        // see ``PSAgentActivityMonitor/pathMatchableAgents`` for why the short
+        // ones are held back.
+        let byPath = agents.filter(PSAgentActivityMonitor.pathMatchableAgents.contains)
         for component in path.split(separator: "/") {
-            if let agent = agents.first(where: { $0 == component }) {
+            if let agent = byPath.first(where: { $0 == component }) {
                 return agent
             }
         }
@@ -292,9 +307,57 @@ public enum AgentHooks {
         if terminalApps.contains(where: { lower.hasPrefix($0) }) { return .terminal }
         // Electron comms truncate to 16 chars: "Claude Helper (R", etc.
         if comm.hasPrefix("Claude") { return .claudeApp }
+        // "Cursor" exactly is the Electron main process; the helpers truncate
+        // to "Cursor Helper (R", "Cursor Helper: s", and so on. Matching the
+        // bare prefix instead would also swallow the system's unrelated
+        // CursorUIViewService.
         if comm.hasPrefix("Code Helper") || comm.hasPrefix("Code - ")
-            || comm.hasPrefix("Cursor Helper") || comm.hasPrefix("Electron") { return .ide }
+            || comm.hasPrefix("Cursor Helper") || comm == "Cursor"
+            || comm.hasPrefix("Electron") { return .ide }
         return nil
+    }
+
+    /// The app or IDE process hosting a hook that has no agent process above
+    /// it at all. The Cursor IDE runs its agent inside Electron, so nothing
+    /// in the process tree names the tool and
+    /// ``findAgentAncestor(startingAt:agents:depthLimit:parentOf:commandOf:pathOf:)``
+    /// comes back empty; this host is then the session's only anchor, both
+    /// for naming it and for telling when it is gone.
+    ///
+    /// Shells are skipped deliberately. Hooks are spawned through `sh -c`,
+    /// and that shell exits the moment the hook returns, so anchoring a
+    /// session's liveness to it would throw the record away immediately.
+    /// Only a long-lived app or IDE qualifies.
+    public static func findAppHost(
+        startingAt pid: Int32,
+        depthLimit: Int = 20,
+        parentOf: (Int32) -> Int32? = defaultParentOf,
+        commandOf: (Int32) -> String? = defaultCommandOf
+    ) -> HostMatch? {
+        var visited: Set<Int32> = []
+        var current = pid
+        var depth = 0
+        while current > 1, depth < depthLimit, visited.insert(current).inserted {
+            if let comm = commandOf(current), let origin = origin(forComm: comm),
+               origin != .terminal {
+                return HostMatch(hostPid: current, origin: origin)
+            }
+            guard let parent = parentOf(current) else { return nil }
+            current = parent
+            depth += 1
+        }
+        return nil
+    }
+
+    /// The app or IDE found above a hook process by ``findAppHost(startingAt:depthLimit:parentOf:commandOf:)``.
+    public struct HostMatch: Equatable, Sendable {
+        public var hostPid: Int32
+        public var origin: HookSessionOrigin
+
+        public init(hostPid: Int32, origin: HookSessionOrigin) {
+            self.hostPid = hostPid
+            self.origin = origin
+        }
     }
 
     /// Real parent lookup via `proc_pidinfo(PROC_PIDT_SHORTBSDINFO)`.
@@ -365,6 +428,24 @@ public enum AgentHooks {
         try? FileManager.default.removeItem(at: directory)
     }
 
+    /// Removes only the records `predicate` claims. Claude Code and Cursor
+    /// share this folder, so uninstalling one tool's hooks must leave the
+    /// other's live sessions alone. An undecodable record is swept too: it can
+    /// never be matched to an owner, and leaving it would strand it forever.
+    public static func purgeRecords(
+        in directory: URL = directoryURL(), where predicate: (HookRecord) -> Bool
+    ) {
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: directory.path) else { return }
+        for name in names where name.hasSuffix(".json") {
+            let url = directory.appendingPathComponent(name)
+            let record = (try? Data(contentsOf: url)).flatMap {
+                try? decoder.decode(HookRecord.self, from: $0)
+            }
+            if record.map(predicate) ?? true { try? manager.removeItem(at: url) }
+        }
+    }
+
     /// Applies one hook invocation end to end: decode the stdin payload,
     /// reduce the event, resolve the agent ancestor, write or delete the
     /// state file. Never throws, never prints; the caller exits 0 regardless.
@@ -376,7 +457,8 @@ public enum AgentHooks {
         in directory: URL = directoryURL(),
         parentOf: (Int32) -> Int32? = defaultParentOf,
         commandOf: (Int32) -> String? = defaultCommandOf,
-        pathOf: (Int32) -> String? = defaultPathOf
+        pathOf: (Int32) -> String? = defaultPathOf,
+        defaultAgent: String? = nil
     ) {
         let payload = (try? decoder.decode(HookPayload.self, from: payloadData)) ?? HookPayload()
         guard let sessionId = payload.sessionId, !sessionId.isEmpty else { return }
@@ -394,6 +476,7 @@ public enum AgentHooks {
                     cwd: payload.cwd,
                     origin: match?.origin,
                     agentPid: match?.agentPid,
+                    agent: match?.agentCommand ?? defaultAgent,
                     updatedAt: now
                 ),
                 in: directory
@@ -425,7 +508,8 @@ public enum AgentHooks {
     public static func readHookRecords(
         now: Date,
         in directory: URL = directoryURL(),
-        isAlive: (Int32) -> Bool = defaultIsAgentAlive
+        isAlive: (Int32) -> Bool = defaultIsAgentAlive,
+        isHostAlive: (Int32) -> Bool = defaultIsAlive
     ) -> [HookRecord] {
         let manager = FileManager.default
         guard let names = try? manager.contentsOfDirectory(atPath: directory.path) else { return [] }
@@ -434,24 +518,30 @@ public enum AgentHooks {
             let url = directory.appendingPathComponent(name)
             guard let data = try? Data(contentsOf: url),
                   let record = try? decoder.decode(HookRecord.self, from: data) else { continue }
+            // What proves this session still exists: the agent process for a
+            // CLI session, the hosting app for a hook-only one (which has no
+            // agent process to check), `nil` when there is nothing to verify.
+            // The host is probed for bare existence rather than for still
+            // being an agent, because it is an editor, not a CLI.
+            let liveness = record.agentPid.map(isAlive) ?? record.ownerPid.map(isHostAlive)
             if now.timeIntervalSince(record.updatedAt) < staleAfter {
                 // Fresh, but a record carrying a pid must still have a live one:
                 // a SIGKILL'd agent leaves a sub-staleAfter "working" record, and
                 // a pid reused by another detected session would otherwise be
                 // stamped working from it. A record with no pid (nothing to
                 // verify) is trusted as before.
-                if record.agentPid.map(isAlive) ?? true {
+                if liveness ?? true {
                     records.append(record)
                 }
-            } else if record.agentPid.map(isAlive) == true,
+            } else if liveness == true,
                       record.state == .working
                           || (record.state == .waiting && record.detail == "waiting-approval") {
-                // Trust the edge for as long as the agent process is alive:
-                // Stop, Notification, SessionEnd, or the pid dying is what
-                // ends a working turn or a sitting approval prompt, never
-                // the record's age.
+                // Trust the edge for as long as the agent or its host is
+                // alive: Stop, Notification, SessionEnd, or the pid dying is
+                // what ends a working turn or a sitting approval prompt,
+                // never the record's age.
                 records.append(record)
-            } else if record.agentPid.map({ !isAlive($0) }) ?? true {
+            } else if liveness != true {
                 try? manager.removeItem(at: url)
             }
         }
@@ -508,7 +598,7 @@ public enum AgentHooks {
     /// the app is deleted can't be hijacked by an unrelated `keepresso` on
     /// PATH. The trailing `:` pins exit 0: a missing CLI must never disturb
     /// the session.
-    static func hookCommand(event: String, cliPath: String) -> String {
+    public static func hookCommand(event: String, cliPath: String) -> String {
         "c=\(shellSingleQuoted(cliPath)); [ -x \"$c\" ] || "
             + "c=/Applications/Keepresso.app/Contents/Helpers/keepresso; "
             + "\"$c\" agent-hook \(event); : # \(hookMarker)"
@@ -525,10 +615,86 @@ public enum AgentHooks {
 
     /// Where a `keepresso agent-hook` install stands in a settings file.
     public enum HookInstallState: Equatable, Sendable {
+        /// Every event we install carries exactly one of our entries, and it
+        /// runs the command this build would write.
         case installed
         case notInstalled
+        /// Ours are in the file but not in a state that works: see the report
+        /// for which events and why. Re-installing repairs all of it.
+        case needsRepair(HookInstallReport)
         /// The file exists but isn't JSON we can safely edit.
         case unreadable
+    }
+
+    /// What an install actually looks like on disk, event by event, rather
+    /// than the single yes/no the menu used to show.
+    ///
+    /// A hook install is not one thing that is either there or not. It drifts:
+    /// the app moves and the baked path stops resolving, a settings sync drops
+    /// some events, a version adds an event the user's file has never had, an
+    /// older install leaves an entry under an event we no longer use. Each of
+    /// those leaves a file that still "has Keepresso hooks in it" while doing
+    /// the wrong thing, or nothing at all, and the row would happily report
+    /// connected the whole time.
+    public struct HookInstallReport: Equatable, Sendable {
+        /// Exactly one of ours, running the command we would write now.
+        public var healthy: Set<String> = []
+        /// More than one of ours: the hook fires once per copy.
+        public var duplicated: Set<String> = []
+        /// Ours, but running some other command: a moved app, or an entry an
+        /// older version wrote.
+        public var stale: Set<String> = []
+        /// An event we install that carries none of ours.
+        public var missing: Set<String> = []
+        /// Ours under an event this build no longer installs, left behind by
+        /// an older version and still firing.
+        public var orphaned: Set<String> = []
+
+        public init() {}
+
+        /// Nothing of ours anywhere: not installed, rather than broken.
+        public var isAbsent: Bool {
+            healthy.isEmpty && duplicated.isEmpty && stale.isEmpty && orphaned.isEmpty
+        }
+
+        /// Every event accounted for and current.
+        public var isHealthy: Bool {
+            duplicated.isEmpty && stale.isEmpty && missing.isEmpty && orphaned.isEmpty
+        }
+    }
+
+    /// Reads a settings file and reports the state of our install event by
+    /// event. Pure: the expected command is derived from `cliPath`, so the
+    /// caller decides what "current" means.
+    public static func inspect(_ data: Data?, cliPath: String) -> HookInstallReport {
+        var report = HookInstallReport()
+        guard let data, !data.isEmpty,
+              let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let hooks = root["hooks"] as? [String: Any] else {
+            report.missing = Set(installedEvents)
+            return report
+        }
+        for (event, value) in hooks {
+            guard let groups = value as? [Any] else { continue }
+            let ours = groups.flatMap { keepressoCommands(in: $0) }
+            guard !ours.isEmpty else { continue }
+            guard installedEvents.contains(event) else {
+                report.orphaned.insert(event)
+                continue
+            }
+            if ours.count > 1 {
+                report.duplicated.insert(event)
+            } else if ours[0] != hookCommand(event: event, cliPath: cliPath) {
+                report.stale.insert(event)
+            } else {
+                report.healthy.insert(event)
+            }
+        }
+        report.missing = Set(installedEvents)
+            .subtracting(report.healthy)
+            .subtracting(report.duplicated)
+            .subtracting(report.stale)
+        return report
     }
 
     /// Thrown when settings.json can't be edited without risking damage.
@@ -560,8 +726,26 @@ public enum AgentHooks {
     public static func installHooks(into data: Data?, cliPath: String) throws -> Data {
         var root = try parseRoot(data)
         var hooks = root["hooks"] as? [String: Any] ?? [:]
+        // Sweep our entries out of every event first, not only the ones about
+        // to be rewritten. An entry left under an event an older version
+        // installed is still ours and still fires, and Repair is just a
+        // re-install, so a re-install has to be able to clear it.
+        for (event, value) in hooks {
+            guard let groups = value as? [Any] else { continue }
+            // Only events that actually hold one of ours are touched. Counting
+            // our commands is the exact test: an array's length can stay the
+            // same while our entry is stripped out of a group beside a sibling
+            // we left alone.
+            guard groups.contains(where: { !keepressoCommands(in: $0).isEmpty }) else { continue }
+            let kept = stripKeepressoEntries(groups)
+            if kept.isEmpty {
+                hooks.removeValue(forKey: event)
+            } else {
+                hooks[event] = kept
+            }
+        }
         for event in installedEvents {
-            var groups = (hooks[event] as? [[String: Any]]).map(stripKeepressoEntries) ?? []
+            var groups = (hooks[event] as? [Any]) ?? []
             var entry: [String: Any] = [
                 "hooks": [
                     [
@@ -587,7 +771,7 @@ public enum AgentHooks {
         var root = try parseRoot(data)
         if var hooks = root["hooks"] as? [String: Any] {
             for (event, value) in hooks {
-                guard let groups = value as? [[String: Any]] else { continue }
+                guard let groups = value as? [Any] else { continue }
                 let kept = stripKeepressoEntries(groups)
                 if kept.isEmpty {
                     hooks.removeValue(forKey: event)
@@ -604,27 +788,38 @@ public enum AgentHooks {
         return try serialize(root)
     }
 
-    public static func hookInstallState(of data: Data?) -> HookInstallState {
+    /// The install's state, judged against the command this build would write.
+    /// A file with our entries in it is only ``HookInstallState/installed``
+    /// when every event we install is present, current, and there exactly
+    /// once; anything else is repairable drift rather than a green tick.
+    public static func hookInstallState(of data: Data?, cliPath: String) -> HookInstallState {
         guard let data, !data.isEmpty else { return .notInstalled }
         guard let object = try? JSONSerialization.jsonObject(with: data),
-              let root = object as? [String: Any] else { return .unreadable }
-        guard let hooks = root["hooks"] as? [String: Any] else { return .notInstalled }
-        for value in hooks.values {
-            guard let groups = value as? [[String: Any]] else { continue }
-            if groups.contains(where: { !keepressoCommands(in: $0).isEmpty }) {
-                return .installed
-            }
-        }
-        return .notInstalled
+              object is [String: Any] else { return .unreadable }
+        let report = inspect(data, cliPath: cliPath)
+        if report.isAbsent { return .notInstalled }
+        return report.isHealthy ? .installed : .needsRepair(report)
     }
 
     /// Drops our own commands from each matcher group (and groups that end
     /// up empty), leaving foreign hooks in shared groups alone.
-    private static func stripKeepressoEntries(_ groups: [[String: Any]]) -> [[String: Any]] {
-        groups.compactMap { group in
-            guard let inner = group["hooks"] as? [[String: Any]] else { return group }
+    ///
+    /// Everything is walked as `[Any]`, never cast wholesale to
+    /// `[[String: Any]]`. A settings file is the user's, and a single element
+    /// we don't recognise (a `null` left by an editor, a shape a future Claude
+    /// Code writes) must not cost them the rest of the array: casting the
+    /// whole array and falling back to `[]` used to discard every one of their
+    /// hooks for that event, and casting a group's inner array used to leave
+    /// our own entry un-stripped, so the next install appended a second copy
+    /// that fired twice and could never be removed. Anything unrecognised is
+    /// carried through untouched.
+    static func stripKeepressoEntries(_ groups: [Any]) -> [Any] {
+        groups.compactMap { element -> Any? in
+            guard let group = element as? [String: Any] else { return element }
+            guard let inner = group["hooks"] as? [Any] else { return group }
             let foreign = inner.filter { entry in
-                !((entry["command"] as? String)?.contains(hookMarker) ?? false)
+                guard let entry = entry as? [String: Any] else { return true }
+                return !((entry["command"] as? String)?.contains(hookMarker) ?? false)
             }
             guard !foreign.isEmpty else { return nil }
             var kept = group
@@ -633,9 +828,14 @@ public enum AgentHooks {
         }
     }
 
-    private static func keepressoCommands(in group: [String: Any]) -> [String] {
-        ((group["hooks"] as? [[String: Any]]) ?? []).compactMap { entry in
-            (entry["command"] as? String).flatMap { $0.contains(hookMarker) ? $0 : nil }
+    /// Our own commands inside one matcher group, walked element by element
+    /// so an unrecognised sibling can neither hide our entry nor be lost.
+    static func keepressoCommands(in element: Any) -> [String] {
+        guard let group = element as? [String: Any],
+              let inner = group["hooks"] as? [Any] else { return [] }
+        return inner.compactMap { entry in
+            guard let entry = entry as? [String: Any] else { return nil }
+            return (entry["command"] as? String).flatMap { $0.contains(hookMarker) ? $0 : nil }
         }
     }
 

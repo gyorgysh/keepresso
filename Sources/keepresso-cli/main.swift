@@ -261,6 +261,23 @@ func runAgentHook(event: String) -> Never {
     exit(0)
 }
 
+/// The Cursor variant. The installed hook command already printed `{}` before
+/// invoking us and sends our output to /dev/null, so this writes nothing: the
+/// response must be on stdout even when this binary is missing entirely.
+/// The Codex variant. Codex fails open, so a silent no-op is safe here and
+/// nothing needs printing.
+func runCodexHook(event: String) -> Never {
+    let payload = FileHandle.standardInput.readDataToEndOfFile()
+    CodexHooks.handle(event: event, payloadData: payload, parentPid: getppid())
+    exit(0)
+}
+
+func runCursorHook(event: String) -> Never {
+    let payload = FileHandle.standardInput.readDataToEndOfFile()
+    CursorHooks.handle(event: event, payloadData: payload, parentPid: getppid())
+    exit(0)
+}
+
 // MARK: - Entry
 
 let request: CLIRequest
@@ -283,6 +300,10 @@ case .hold(let hold):
     runHold(hold)
 case .agentHook(let event):
     runAgentHook(event: event)
+case .cursorHook(let event):
+    runCursorHook(event: event)
+case .codexHook(let event):
+    runCodexHook(event: event)
 case .lease(let command):
     runLease(command)
 case .wake(let command):

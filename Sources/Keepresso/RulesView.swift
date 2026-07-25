@@ -83,6 +83,8 @@ struct RulesView: View {
                 }
                 if model.rules.contains(where: isAgentRule) {
                     claudeCodeRows
+                    cursorRows
+                    codexRows
                 }
             }
 
@@ -303,11 +305,30 @@ struct RulesView: View {
                     Button("Remove") { model.removeClaudeHooks() }
                 }
             case .notInstalled:
+                // Only offered when Claude Code is actually on this Mac.
+                // Connecting writes its settings file, so offering it to
+                // someone who doesn't use it would leave config behind for a
+                // tool they never installed.
+                if model.claudeCodePresent {
+                    HStack(alignment: .top, spacing: 6) {
+                        Text("Connect Claude Code for exact session tracking (adds hooks to its settings).")
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Button("Connect Claude Code") { model.installClaudeHooks() }
+                    }
+                }
+            case .needsRepair:
+                // The hooks are in the file but not in a working state: some
+                // events missing, doubled up, or still pointing at where the
+                // app used to live. Re-installing rewrites all of them.
                 HStack(alignment: .top, spacing: 6) {
-                    Text("Connect Claude Code for exact session tracking (adds hooks to its settings).")
+                    Image(systemName: "wrench.and.screwdriver")
+                        .foregroundStyle(.orange)
+                        .accessibilityHidden(true)
+                    Text("Claude Code's hooks need repairing, so sessions may not report correctly.")
                         .foregroundStyle(.secondary)
                     Spacer(minLength: 8)
-                    Button("Connect Claude Code") { model.installClaudeHooks() }
+                    Button("Repair") { model.installClaudeHooks() }
                 }
             case .unreadable:
                 Label(
@@ -323,6 +344,119 @@ struct RulesView: View {
         .font(.caption)
         .padding(.leading, 22)
         .onAppear { model.refreshClaudeHooksStatus() }
+    }
+
+    /// The same three-state row for Cursor. Worth its own connection even
+    /// though the CLI is detected without it: the agent inside the Cursor app
+    /// runs in the editor's own process, so nothing shows it working until
+    /// these hooks are installed.
+    @ViewBuilder
+    private var cursorRows: some View {
+        Group {
+            switch model.cursorHooks {
+            case .installed:
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                        .accessibilityHidden(true)
+                    Text("Cursor connected: the app's agent and the CLI both report exactly.")
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Button("Remove") { model.removeCursorHooks() }
+                }
+            case .notInstalled:
+                // See the Claude Code row: only offered when Cursor is here.
+                if model.cursorPresent {
+                    HStack(alignment: .top, spacing: 6) {
+                        Text("Connect Cursor to track its app agent too (adds hooks to its config).")
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Button("Connect Cursor") { model.installCursorHooks() }
+                    }
+                }
+            case .needsRepair:
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "wrench.and.screwdriver")
+                        .foregroundStyle(.orange)
+                        .accessibilityHidden(true)
+                    Text("Cursor's hooks need repairing, so sessions may not report correctly.")
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Button("Repair") { model.installCursorHooks() }
+                }
+            case .unreadable:
+                Label(
+                    "Cursor's hooks file couldn't be read, so it was left untouched.",
+                    systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
+            if let error = model.cursorHooksError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
+        }
+        .font(.caption)
+        .padding(.leading, 22)
+        .onAppear { model.refreshCursorHooksStatus() }
+    }
+
+    /// The same three-state row for Codex, with one extra line the other two
+    /// don't need: Codex refuses to run a hook until the user has reviewed it,
+    /// and says nothing when it skips one, so a freshly written install is
+    /// inert until they approve it. Keepresso could write that approval itself
+    /// but deliberately doesn't, because that decision is theirs to make.
+    @ViewBuilder
+    private var codexRows: some View {
+        Group {
+            switch model.codexHooks {
+            case .installed:
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundStyle(.green)
+                            .accessibilityHidden(true)
+                        Text("Codex connected: sessions report working and waiting exactly.")
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Button("Remove") { model.removeCodexHooks() }
+                    }
+                    Text("Codex asks you to review new hooks before it runs them, so approve them there once.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            case .needsRepair:
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "wrench.and.screwdriver")
+                        .foregroundStyle(.orange)
+                        .accessibilityHidden(true)
+                    Text("Codex's hooks need repairing, so sessions may not report correctly.")
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Button("Repair") { model.installCodexHooks() }
+                }
+            case .notInstalled:
+                if model.codexPresent {
+                    HStack(alignment: .top, spacing: 6) {
+                        Text("Connect Codex for exact session tracking (adds hooks to its config).")
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Button("Connect Codex") { model.installCodexHooks() }
+                    }
+                }
+            case .unreadable:
+                Label(
+                    "Codex's hooks file couldn't be read, so it was left untouched.",
+                    systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
+            if let error = model.codexHooksError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
+        }
+        .font(.caption)
+        .padding(.leading, 22)
+        .onAppear { model.refreshCodexHooksStatus() }
     }
 
     /// In-place editor for an agent rule's idle grace and waiting policy.

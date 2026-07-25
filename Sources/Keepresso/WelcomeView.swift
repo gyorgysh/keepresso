@@ -191,12 +191,17 @@ struct WelcomeView: View {
             // setup rows show or they'd be stale on reopen (e.g. login item or
             // notifications changed in Preferences since it was last open).
             launchAtLogin = LoginItem.isEnabled
+            // Same reason: the agentic callout's connect rows would otherwise
+            // show whatever was true the last time the window was open, and
+            // these tools get connected from Preferences too.
+            model.refreshAgentHookStatuses()
             Task { notificationStatus = await model.notificationAuthorizationStatus() }
             withAnimation { revealed = true }
         }
         .onAppear {
             // Status reads only; showing the window never prompts for anything.
             model.helper.refresh()
+            model.refreshAgentHookStatuses()
             revealed = true
             refreshScreenHeight()
         }
@@ -280,6 +285,10 @@ struct WelcomeView: View {
             }
             if selectedUseCase == "cloud-gaming" {
                 gamingJitterCallout
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            if selectedUseCase == "ai-agent", !model.agentSetupTools.isEmpty {
+                agentHooksCallout
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
@@ -505,6 +514,65 @@ struct WelcomeView: View {
         }
         .padding(8)
         .glassCard(cornerRadius: 8, tint: Color.keepressoBrew.opacity(0.14))
+    }
+
+    /// Offered when the agentic use case is picked: connect the coding tools on
+    /// this Mac, so a session's own reporting decides whether it is working
+    /// instead of Keepresso reading CPU use and guessing.
+    ///
+    /// Connected inline rather than handed off the way gaming is, because there
+    /// is nothing to prompt for: it edits one config file per tool, wants no
+    /// password and no permission, and a second click undoes it. Only tools
+    /// actually on this Mac appear (see ``AgentTool/setupTools(present:connected:)``),
+    /// and when none are, the whole callout is skipped rather than shown empty.
+    private var agentHooksCallout: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Image(systemName: "app.connected.to.app.below.fill")
+                    .font(type.title3)
+                    .foregroundStyle(Color.keepressoBrew)
+                    .frame(width: 26 * type.scale)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Know exactly when an agent is working")
+                        .font(type.callout.weight(.medium))
+                    Text("Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look.")
+                        .font(type.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+            }
+            ForEach(model.agentSetupTools, id: \.self) { tool in
+                HStack(spacing: 8) {
+                    Text(verbatim: tool.displayName)
+                        .font(type.caption)
+                    Spacer(minLength: 8)
+                    agentToolControl(tool)
+                }
+            }
+        }
+        .padding(8)
+        .glassCard(cornerRadius: 8, tint: Color.keepressoBrew.opacity(0.14))
+    }
+
+    /// One tool's state in the callout, the same three-state shape the
+    /// Preferences rows use, trimmed to what fits a setup card.
+    @ViewBuilder
+    private func agentToolControl(_ tool: AgentTool) -> some View {
+        switch model.hookState(of: tool) {
+        case .installed:
+            Label("Installed", systemImage: "checkmark.seal.fill")
+                .font(type.caption)
+                .foregroundStyle(.green)
+        case .needsRepair:
+            Button("Repair") { model.connectAgentTool(tool) }
+        case .notInstalled:
+            Button("Connect") { model.connectAgentTool(tool) }
+        case .unreadable:
+            Label("Couldn't be read", systemImage: "exclamationmark.triangle")
+                .font(type.caption)
+                .foregroundStyle(.orange)
+        }
     }
 
     /// Act on a picked use case: the manual opt-out turns trigger gating off (so

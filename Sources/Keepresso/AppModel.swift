@@ -1852,10 +1852,18 @@ final class AppModel {
     /// The last hook install/remove failure, shown under the status row.
     private(set) var claudeHooksError: String?
 
+    /// Whether Claude Code is on this Mac at all. A connect row for a tool the
+    /// user doesn't have is noise, and acting on it would leave a settings
+    /// file behind for something they never installed.
+    private(set) var claudeCodePresent = false
+
     func refreshClaudeHooksStatus() {
+        claudeCodePresent = AgentTool.claudeCode.isPresent()
         do {
             claudeHooks = AgentHooks.hookInstallState(
-                of: try AgentHooks.readSettings(at: AgentHooks.claudeSettingsURL()))
+                of: try AgentHooks.readSettings(at: AgentHooks.claudeSettingsURL()),
+                cliPath: Self.bundledCLIPath)
+            autoRepairIfNeeded(.claudeCode)
         } catch {
             // An existing file we can't read must report as unreadable, not
             // "not installed": the latter invites the install click, and an
@@ -1880,7 +1888,185 @@ final class AppModel {
     /// would hold the trigger for as long as its agent runs.
     func removeClaudeHooks() {
         if mutateClaudeSettings({ try AgentHooks.removeHooks(from: $0) }) {
-            AgentHooks.purgeRecords()
+            // Only Claude Code's records: Cursor shares this folder, and its
+            // hooks are still installed and still writing.
+            AgentHooks.purgeRecords { !CursorHooks.ownsRecord($0) && !CodexHooks.ownsRecord($0) }
+        }
+    }
+
+    // MARK: - Cursor hooks
+
+    /// Where the Cursor hook install stands. Cursor covers two kinds of
+    /// session with one config: the `cursor-agent` CLI, and the agent built
+    /// into the Cursor app, which runs inside the editor and has no process
+    /// for the scan to find, so hooks are the only way to see it at all.
+    private(set) var cursorHooks: AgentHooks.HookInstallState = .notInstalled
+
+    private(set) var cursorHooksError: String?
+
+    /// Whether Cursor is on this Mac at all. See ``claudeCodePresent``.
+    private(set) var cursorPresent = false
+
+    func refreshCursorHooksStatus() {
+        cursorPresent = AgentTool.cursor.isPresent()
+        do {
+            cursorHooks = CursorHooks.hookInstallState(
+                of: try AgentHooks.readSettings(at: CursorHooks.hooksURL()),
+                cliPath: Self.bundledCLIPath)
+            autoRepairIfNeeded(.cursor)
+        } catch {
+            cursorHooks = .unreadable
+        }
+    }
+
+    func installCursorHooks() {
+        mutateCursorHooks { existing in
+            try CursorHooks.installHooks(into: existing, cliPath: Self.bundledCLIPath)
+        }
+    }
+
+    func removeCursorHooks() {
+        if mutateCursorHooks({ try CursorHooks.removeHooks(from: $0) }) {
+            AgentHooks.purgeRecords(where: CursorHooks.ownsRecord)
+        }
+    }
+
+    // MARK: - Agent tools, addressed uniformly
+
+    /// The tools the agentic setup step should list, and their live state.
+    /// The per-tool members below stay the API the Preferences rows use; this
+    /// is the view over all of them that onboarding walks.
+    var agentSetupTools: [AgentTool] {
+        AgentTool.setupTools(present: isAgentToolPresent, connected: { hookState(of: $0) != .notInstalled })
+    }
+
+    func isAgentToolPresent(_ tool: AgentTool) -> Bool {
+        switch tool {
+        case .claudeCode: return claudeCodePresent
+        case .cursor: return cursorPresent
+        case .codex: return codexPresent
+        }
+    }
+
+    func hookState(of tool: AgentTool) -> AgentHooks.HookInstallState {
+        switch tool {
+        case .claudeCode: return claudeHooks
+        case .cursor: return cursorHooks
+        case .codex: return codexHooks
+        }
+    }
+
+    func connectAgentTool(_ tool: AgentTool) {
+        switch tool {
+        case .claudeCode: installClaudeHooks()
+        case .cursor: installCursorHooks()
+        case .codex: installCodexHooks()
+        }
+    }
+
+    /// Re-read every tool's install state. Cheap: three small file reads.
+    func refreshAgentHookStatuses() {
+        refreshClaudeHooksStatus()
+        refreshCursorHooksStatus()
+        refreshCodexHooksStatus()
+    }
+
+    /// Tools already repaired once this run.
+    private var repairedThisRun: Set<AgentTool> = []
+
+    /// Quietly put a connection that has drifted back in order.
+    ///
+    /// This only ever runs for a tool the user already connected. A missing
+    /// install is never created behind their back: that still takes an
+    /// explicit Connect, because writing a tool's config is not something to
+    /// decide for someone. What this fixes is our own mess, and only ours: a
+    /// path that moved when the app moved, a duplicate entry, one left under
+    /// an event a later version retired, and the events a newer version
+    /// added. Left to a button, a connection someone opted into would sit
+    /// silently broken until they happened to open Preferences and look.
+    ///
+    /// Attempted once per tool per run, so a repair that cannot stick (a
+    /// read-only file, a config another program keeps rewriting) is tried
+    /// once rather than on every refresh. An unreadable file is never touched
+    /// at all.
+    private func autoRepairIfNeeded(_ tool: AgentTool) {
+        guard case .needsRepair = hookState(of: tool) else { return }
+        // Inserted before repairing: connecting refreshes status again, which
+        // lands back here, and this is what stops it recurring.
+        guard repairedThisRun.insert(tool).inserted else { return }
+        connectAgentTool(tool)
+    }
+
+    // MARK: - Codex hooks
+
+    /// Where the Codex hook install stands. Codex will not run a newly
+    /// installed hook until the user reviews it, so "installed" here means the
+    /// entries are written, not that they are firing yet.
+    private(set) var codexHooks: AgentHooks.HookInstallState = .notInstalled
+    private(set) var codexHooksError: String?
+    private(set) var codexPresent = false
+
+    func refreshCodexHooksStatus() {
+        codexPresent = AgentTool.codex.isPresent()
+        do {
+            codexHooks = CodexHooks.hookInstallState(
+                of: try AgentHooks.readSettings(at: CodexHooks.hooksURL()),
+                cliPath: Self.bundledCLIPath)
+            autoRepairIfNeeded(.codex)
+        } catch {
+            codexHooks = .unreadable
+        }
+    }
+
+    func installCodexHooks() {
+        mutateCodexHooks { existing in
+            try CodexHooks.installHooks(into: existing, cliPath: Self.bundledCLIPath)
+        }
+    }
+
+    func removeCodexHooks() {
+        if mutateCodexHooks({ try CodexHooks.removeHooks(from: $0) }) {
+            AgentHooks.purgeRecords(where: CodexHooks.ownsRecord)
+        }
+    }
+
+    @discardableResult
+    private func mutateCodexHooks(_ transform: (Data?) throws -> Data) -> Bool {
+        let url = CodexHooks.hooksURL()
+        defer { refreshCodexHooksStatus() }
+        do {
+            let updated = try transform(try AgentHooks.readSettings(at: url))
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Self.writePreservingPermissions(updated, to: url.resolvingSymlinksInPath())
+            codexHooksError = nil
+            return true
+        } catch is AgentHooks.SettingsUnreadableError {
+            codexHooksError = nil
+            return false
+        } catch {
+            codexHooksError = L("Couldn't update Codex's hooks file.")
+            return false
+        }
+    }
+
+    @discardableResult
+    private func mutateCursorHooks(_ transform: (Data?) throws -> Data) -> Bool {
+        let url = CursorHooks.hooksURL()
+        defer { refreshCursorHooksStatus() }
+        do {
+            let updated = try transform(try AgentHooks.readSettings(at: url))
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Self.writePreservingPermissions(updated, to: url.resolvingSymlinksInPath())
+            cursorHooksError = nil
+            return true
+        } catch is AgentHooks.SettingsUnreadableError {
+            cursorHooksError = nil
+            return false
+        } catch {
+            cursorHooksError = L("Couldn't update Cursor's hooks file.")
+            return false
         }
     }
 
@@ -1889,6 +2075,23 @@ final class AppModel {
     /// PATH, and hook shells may run with launchd's minimal one).
     private static var bundledCLIPath: String {
         Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/keepresso").path
+    }
+
+    /// Writes `data` over `url` atomically, then puts the file's old POSIX
+    /// permissions back.
+    ///
+    /// An atomic write swaps in a brand-new inode, which takes the umask's
+    /// permissions rather than the file's. Someone who had deliberately
+    /// tightened their settings file to owner-only would find it world
+    /// readable again after connecting, which is our doing and not theirs.
+    /// A settings file can hold API keys, so this is worth the extra stat.
+    private static func writePreservingPermissions(_ data: Data, to url: URL) throws {
+        let manager = FileManager.default
+        let previous = (try? manager.attributesOfItem(atPath: url.path))?[.posixPermissions] as? NSNumber
+        try data.write(to: url, options: .atomic)
+        if let previous {
+            try? manager.setAttributes([.posixPermissions: previous], ofItemAtPath: url.path)
+        }
     }
 
     /// Rewrites `~/.claude/settings.json` through `transform` and reports
@@ -1907,7 +2110,7 @@ final class AppModel {
                 at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             // Resolve a symlinked settings.json (dotfiles setups) so the
             // atomic write replaces the real file, not the link.
-            try updated.write(to: url.resolvingSymlinksInPath(), options: .atomic)
+            try Self.writePreservingPermissions(updated, to: url.resolvingSymlinksInPath())
             claudeHooksError = nil
             return true
         } catch is AgentHooks.SettingsUnreadableError {

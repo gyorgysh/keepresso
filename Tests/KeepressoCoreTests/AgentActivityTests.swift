@@ -136,6 +136,128 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     #expect(abs(sessions[0].cpuPercent - 10.0) < 0.001)
 }
 
+@Test func bareAgentLauncherMatchesThroughItsResolvedPath() {
+    typealias Sample = PSAgentActivityMonitor.ProcessSample
+    // Cursor's CLI installs a `cursor-agent` symlink and a bare `agent` one.
+    // A session started through the short name has "agent" as its basename,
+    // which names no tool; only the resolved executable path does.
+    let samples: [Sample] = [
+        Sample(pid: 100, ppid: 1, pcpu: 1.0, tty: "s000",
+               command: "/Users/x/.local/bin/agent --use-system-ca /Users/x/.local/share/cursor-agent/versions/2026.07.23/index.js"),
+        Sample(pid: 101, ppid: 100, pcpu: 7.0, tty: "s000",
+               command: "/Users/x/.local/share/cursor-agent/versions/2026.07.23/node /Users/x/.local/share/cursor-agent/versions/2026.07.23/index.js worker-server"),
+        // Merely mentioning the tool is not enough: the executable decides.
+        Sample(pid: 200, ppid: 1, pcpu: 3.0, tty: "s001",
+               command: "grep -r cursor-agent /Users/x/.local/share"),
+    ]
+    let paths: [Int32: String] = [
+        100: "/Users/x/.local/share/cursor-agent/versions/2026.07.23/node",
+        101: "/Users/x/.local/share/cursor-agent/versions/2026.07.23/node",
+        200: "/usr/bin/grep",
+    ]
+    let sessions = PSAgentActivityMonitor.sessions(from: samples, pathOf: { paths[$0] })
+    #expect(sessions.count == 1)
+    #expect(sessions[0].pid == 100)
+    #expect(sessions[0].agent == "cursor-agent")
+    // The worker process folds into the root session's subtree.
+    #expect(abs(sessions[0].cpuPercent - 8.0) < 0.001)
+}
+
+@Test func npmInstalledAgentIsMatchedThroughItsRuntimeWrapper() {
+    typealias Sample = PSAgentActivityMonitor.ProcessSample
+    // pi installs as an npm bin: a symlink to a `#!/usr/bin/env node` script,
+    // so the kernel runs node. It then rewrites its own argv on the first line
+    // of its entry point (`process.title = APP_NAME`), so one pi session shows
+    // up as two different command lines over its life, and both were captured
+    // from real pi processes:
+    //
+    //   for a moment at startup:  node <prefix>/bin/pi
+    //   for the rest of its life: pi
+    //
+    // The executable resolves to node either way, so the path fallback finds
+    // nothing and the name has to come off the command line both times.
+    let samples: [Sample] = [
+        Sample(pid: 100, ppid: 1, pcpu: 3.0, tty: "s011",
+               command: "node /Users/gyorgy/.nvm/versions/node/v24.16.0/bin/pi"),
+        Sample(pid: 200, ppid: 1, pcpu: 4.0, tty: "s012", command: "pi "),
+    ]
+    let sessions = PSAgentActivityMonitor.sessions(
+        from: samples,
+        pathOf: { _ in "/Users/gyorgy/.nvm/versions/node/v24.16.0/bin/node" })
+    #expect(sessions.count == 2)
+    #expect(sessions.allSatisfy { $0.agent == "pi" })
+}
+
+@Test func shortAgentNamesNeverMatchAPathComponent() {
+    // A two or three letter name is far too common a folder name to trust in
+    // a path. The worst case is a user account called "pi": every executable
+    // under /Users/pi would otherwise resolve to the pi agent.
+    let agents = PSAgentActivityMonitor.agentCommands
+    #expect(AgentHooks.agentMatch(
+        comm: nil, path: "/Users/pi/.local/bin/some-unrelated-tool", agents: agents) == nil)
+    #expect(AgentHooks.agentMatch(
+        comm: nil, path: "/opt/amp/bin/helper", agents: agents) == nil)
+    #expect(AgentHooks.agentMatch(
+        comm: nil, path: "/opt/agy/bin/helper", agents: agents) == nil)
+    // The names long enough to be distinctive keep the path fallback, which
+    // is what finds a versioned or aliased install.
+    #expect(AgentHooks.agentMatch(
+        comm: nil, path: "/Users/x/.local/share/claude/versions/2.1.219", agents: agents) == "claude")
+    #expect(AgentHooks.agentMatch(
+        comm: nil, path: "/Users/x/.local/share/cursor-agent/versions/2026.07.23/node",
+        agents: agents) == "cursor-agent")
+    // A short name is still matched exactly, by the process's own comm.
+    #expect(AgentHooks.agentMatch(comm: "pi", path: nil, agents: agents) == "pi")
+    #expect(AgentHooks.agentMatch(comm: "agy", path: nil, agents: agents) == "agy")
+}
+
+@Test func resolvedPathLookupIsSkippedForUnrelatedCommands() {
+    typealias Sample = PSAgentActivityMonitor.ProcessSample
+    // The prefilter must keep the syscall off the hot path: a command line
+    // naming no agent never reaches the path lookup at all.
+    var probed: [Int32] = []
+    let samples: [Sample] = [
+        Sample(pid: 300, ppid: 1, pcpu: 1.0, tty: nil, command: "/usr/libexec/thing"),
+        Sample(pid: 301, ppid: 1, pcpu: 1.0, tty: nil, command: "/bin/zsh -c swift build"),
+    ]
+    _ = PSAgentActivityMonitor.sessions(from: samples, pathOf: { probed.append($0); return nil })
+    #expect(probed.isEmpty)
+}
+
+@Test func monitorSurfacesAnIDESessionThatHasNoProcess() async throws {
+    // The Cursor app runs its agent inside the editor, so the `ps` scan finds
+    // nothing at all: the hook record is the whole session. Every construction
+    // in this file injects `hookRecords` for the same reason this test exists,
+    // that the monitor's default reads the real hooks folder and would
+    // otherwise let a live session on the developer's own Mac decide the
+    // result.
+    let now = Date(timeIntervalSince1970: 100_000)
+    let monitor = PSAgentActivityMonitor(
+        ttl: 3,
+        now: { now },
+        // A terminal claude session, and no Cursor process anywhere.
+        fetch: { "  100     1  0.1 ttys003  claude" },
+        evidence: { _, _ in nil },
+        hookRecords: { _ in
+            [AgentHooks.HookRecord(
+                sessionId: "conv-1", state: .working, detail: "editing",
+                origin: .ide, ownerPid: 900, agent: "cursor", updatedAt: now)]
+        },
+        classifyOrigin: { _ in .terminal }
+    )
+    _ = monitor.current
+    try await Task.sleep(for: .milliseconds(200))
+    let sessions = monitor.current.sessions
+    #expect(sessions.count == 2)
+    let ide = try #require(sessions.first { $0.agent == "cursor" })
+    #expect(ide.origin == .ide)
+    #expect(ide.hookState == .working)
+    #expect(ide.label == "cursor (IDE)")
+    // No process, so nothing for the CPU heuristic to read; the hook decides.
+    #expect(ide.cpuPercent == 0)
+    #expect(ide.pid < 0)
+}
+
 // MARK: - Transcript evidence
 
 @Test func transcriptDirectoryNamesMatchEachAgentsEncoding() {
@@ -162,7 +284,8 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
         evidence: { agent, _ in
             // claude's transcript was written 5s ago; aider has none.
             agent == "claude" ? Date(timeIntervalSince1970: 100_000 - 5) : nil
-        }
+        },
+        hookRecords: { _ in [] }
     )
     _ = monitor.current // kick the refresh
     try await Task.sleep(for: .milliseconds(200))
@@ -385,7 +508,7 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     var now = Date(timeIntervalSince1970: 0)
     let monitor = PSAgentActivityMonitor(ttl: 3, now: { now }, fetch: {
         "  100     1  50.0 ttys003  claude"
-    })
+    }, hookRecords: { _ in [] })
 
     // First read: nothing cached yet, kicks off a refresh and returns empty.
     #expect(monitor.current.sessions.isEmpty)
@@ -420,7 +543,8 @@ private final class PSOutputStub: @unchecked Sendable {
     // latch still resets, so the next tick past the TTL retries.
     var now = Date(timeIntervalSince1970: 0)
     let ps = PSOutputStub("  100     1  50.0 ttys003  claude")
-    let monitor = PSAgentActivityMonitor(ttl: 3, now: { now }, fetch: ps.fetch)
+    let monitor = PSAgentActivityMonitor(
+        ttl: 3, now: { now }, fetch: ps.fetch, hookRecords: { _ in [] })
 
     _ = monitor.current
     try await Task.sleep(for: .milliseconds(200))
@@ -524,6 +648,7 @@ private final class PSOutputStub: @unchecked Sendable {
         ttl: 3,
         now: { Date(timeIntervalSince1970: 0) },
         fetch: { "  100     1  0.1 ??       claude\n  200     1  0.1 ttys003  claude" },
+        hookRecords: { _ in [] },
         classifyOrigin: { pid in pid == 100 ? .claudeApp : .terminal }
     )
     _ = monitor.current
