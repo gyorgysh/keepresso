@@ -402,9 +402,10 @@ struct WelcomeView: View {
     /// thermal net that watches a lid-closed Mac holding the sleep override.
     /// Paired because they answer the same worry (a session you forget about
     /// draining or cooking the Mac) and because a single answer is all this
-    /// step should ask for. Each keeps its own thresholds and stages in
-    /// Preferences, untouched here, so someone who tuned them and switched
-    /// them off gets their numbers back when they switch them on again.
+    /// step should ask for. It reads on only when both are on, so a Mac with
+    /// one of them already set up in Preferences shows it off. Switching off
+    /// clears each net's stored thresholds exactly as the individual switches
+    /// in Preferences do, so switching back on starts from the defaults.
     private var safetyNetsEnabled: Bool {
         model.batteryAutoPauseEnabled && model.thermalSafety != nil
     }

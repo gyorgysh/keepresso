@@ -261,9 +261,6 @@ func runAgentHook(event: String) -> Never {
     exit(0)
 }
 
-/// The Cursor variant. The installed hook command already printed `{}` before
-/// invoking us and sends our output to /dev/null, so this writes nothing: the
-/// response must be on stdout even when this binary is missing entirely.
 /// The Codex variant. Codex fails open, so a silent no-op is safe here and
 /// nothing needs printing.
 func runCodexHook(event: String) -> Never {
@@ -272,6 +269,9 @@ func runCodexHook(event: String) -> Never {
     exit(0)
 }
 
+/// The Cursor variant. The installed hook command already printed `{}` before
+/// invoking us and sends our output to /dev/null, so this writes nothing: the
+/// response must be on stdout even when this binary is missing entirely.
 func runCursorHook(event: String) -> Never {
     let payload = FileHandle.standardInput.readDataToEndOfFile()
     CursorHooks.handle(event: event, payloadData: payload, parentPid: getppid())
