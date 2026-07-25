@@ -26,6 +26,7 @@
 "Battery" = "バッテリー";
 "Welcome" = "ようこそ";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "蓋を閉じて外部ディスプレイがない状態でも Mac を動作させ続けます。これは管理者権限が必要なシステム設定を切り替えます。管理者ヘルパーがインストールされていれば静かに実行されます（設定 ▸ 一般）。そうでない場合、macOS がパスワードを求めます。";
+"Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences." = "蓋を閉じて外部ディスプレイがない状態でも動作し続けます。オフにするまで有効なままか、設定でセッションに結び付けます。";
 "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "スリープ防止セッションの開始時にクラムシェルモードをオンにし、終了時または Keepresso の終了時にオフにします。";
 "Grace period" = "猶予期間";
 "Section" = "セクション";
@@ -158,6 +159,7 @@
 "Pause AWDL now" = "AWDL を今すぐ一時停止";
 "Pause Triggers" = "トリガーを一時停止";
 "Pause on low battery" = "バッテリー低下時に一時停止";
+"Battery and heat safety" = "バッテリーと熱の安全";
 "Play a sound" = "サウンドを再生";
 "Playing a game" = "ゲームプレイ中";
 "Power & Display" = "電源とディスプレイ";
@@ -220,7 +222,7 @@
 "AWDL is off right now" = "AWDL は現在オフです";
 "AWDL state unknown" = "AWDL の状態は不明です";
 "Agentic coding" = "エージェント型コーディング";
-"Stay awake while Claude, Codex, or Grok is running." = "Claude、Codex、または Grok の実行中はスリープしません。";
+"Stay awake while Claude Code, Cursor, Codex, or another agent is working." = "Claude Code、Cursor、Codex、または他のエージェントの作業中はスリープしません。";
 "Gaming & streaming" = "ゲームとストリーミング";
 "Stay awake while a game or cloud-gaming app is in front." = "ゲームまたはクラウドゲーミング App が最前面のときはスリープしません。";
 "Meetings & calls" = "ミーティングと通話";
@@ -267,6 +269,7 @@
 "Why each session started or stopped, newest first. Kept in memory; clears on relaunch." = "各セッションが開始または停止した理由を、新しい順に表示します。メモリに保持され、再起動時に消去されます。";
 "Every app's live power assertions, not just Keepresso's, the same data pmset -g assertions prints." = "Keepresso だけでなく、すべての App のライブ電源アサーションを表示します。pmset -g assertions が出力するのと同じデータです。";
 "Lets the Mac sleep once battery charge drops below this level, even mid-session, so it doesn't run flat." = "バッテリー残量がこのレベルを下回ると、セッション中でも Mac をスリープさせ、電池切れを防ぎます。";
+"Let the Mac sleep anyway if the charge runs low, or if it stays hot with the lid shut. Thresholds are in Preferences." = "バッテリー残量が少なくなったとき、または蓋を閉じたまま高温が続くときは、それでも Mac をスリープさせます。しきい値は設定にあります。";
 "Shows the remaining time next to the menu-bar icon during a timed session." = "タイマーセッション中、メニューバーアイコンの横に残り時間を表示します。";
 "Reopen the first-run welcome, with quick one-click setup for how you use your Mac." = "初回起動時のようこそ画面を再表示します。Mac の使い方に応じたワンクリックの簡単セットアップ付きです。";
 "If that time already passed today, it means tomorrow." = "その時刻が今日すでに過ぎている場合は、翌日を意味します。";

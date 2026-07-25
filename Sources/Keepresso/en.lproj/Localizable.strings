@@ -26,6 +26,7 @@
 "Battery" = "Battery";
 "Welcome" = "Welcome";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.";
+"Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences." = "Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences.";
 "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.";
 "Grace period" = "Grace period";
 "Section" = "Section";
@@ -158,6 +159,7 @@
 "Pause AWDL now" = "Pause AWDL now";
 "Pause Triggers" = "Pause Triggers";
 "Pause on low battery" = "Pause on low battery";
+"Battery and heat safety" = "Battery and heat safety";
 "Play a sound" = "Play a sound";
 "Playing a game" = "Playing a game";
 "Power & Display" = "Power & Display";
@@ -220,7 +222,7 @@
 "AWDL is off right now" = "AWDL is off right now";
 "AWDL state unknown" = "AWDL state unknown";
 "Agentic coding" = "Agentic coding";
-"Stay awake while Claude, Codex, or Grok is running." = "Stay awake while Claude, Codex, or Grok is running.";
+"Stay awake while Claude Code, Cursor, Codex, or another agent is working." = "Stay awake while Claude Code, Cursor, Codex, or another agent is working.";
 "Gaming & streaming" = "Gaming & streaming";
 "Stay awake while a game or cloud-gaming app is in front." = "Stay awake while a game or cloud-gaming app is in front.";
 "Meetings & calls" = "Meetings & calls";
@@ -267,6 +269,7 @@
 "Why each session started or stopped, newest first. Kept in memory; clears on relaunch." = "Why each session started or stopped, newest first. Kept in memory; clears on relaunch.";
 "Every app's live power assertions, not just Keepresso's, the same data pmset -g assertions prints." = "Every app's live power assertions, not just Keepresso's, the same data pmset -g assertions prints.";
 "Lets the Mac sleep once battery charge drops below this level, even mid-session, so it doesn't run flat." = "Lets the Mac sleep once battery charge drops below this level, even mid-session, so it doesn't run flat.";
+"Let the Mac sleep anyway if the charge runs low, or if it stays hot with the lid shut. Thresholds are in Preferences." = "Let the Mac sleep anyway if the charge runs low, or if it stays hot with the lid shut. Thresholds are in Preferences.";
 "Shows the remaining time next to the menu-bar icon during a timed session." = "Shows the remaining time next to the menu-bar icon during a timed session.";
 "Reopen the first-run welcome, with quick one-click setup for how you use your Mac." = "Reopen the first-run welcome, with quick one-click setup for how you use your Mac.";
 "If that time already passed today, it means tomorrow." = "If that time already passed today, it means tomorrow.";

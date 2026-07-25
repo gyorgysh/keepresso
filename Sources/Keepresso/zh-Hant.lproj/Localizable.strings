@@ -26,6 +26,7 @@
 "Battery" = "電池";
 "Welcome" = "歡迎";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "即使闔蓋且沒有外接螢幕，也能讓 Mac 持續運作。這會切換一項需要系統管理員權限的系統設定：已安裝系統管理員輔助程式時會靜默執行（偏好設定 ▸ 一般），否則 macOS 會要求輸入密碼。";
+"Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences." = "即使闔蓋且沒有外接螢幕，也能保持運作。會持續生效，直到您將其關閉，或在偏好設定中將其與工作階段綁定。";
 "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "在保持喚醒工作階段開始時開啟闔蓋模式，並於工作階段結束或 Keepresso 結束時關閉。";
 "Grace period" = "寬限期";
 "Section" = "區段";
@@ -158,6 +159,7 @@
 "Pause AWDL now" = "立即暫停 AWDL";
 "Pause Triggers" = "暫停觸發條件";
 "Pause on low battery" = "電量低時暫停";
+"Battery and heat safety" = "電量與過熱安全";
 "Play a sound" = "播放聲音";
 "Playing a game" = "正在玩遊戲";
 "Power & Display" = "電源與螢幕";
@@ -220,7 +222,7 @@
 "AWDL is off right now" = "AWDL 目前已關閉";
 "AWDL state unknown" = "AWDL 狀態不明";
 "Agentic coding" = "代理式編碼";
-"Stay awake while Claude, Codex, or Grok is running." = "在 Claude、Codex 或 Grok 執行時保持喚醒。";
+"Stay awake while Claude Code, Cursor, Codex, or another agent is working." = "在 Claude Code、Cursor、Codex 或其他代理工作時保持喚醒。";
 "Gaming & streaming" = "遊戲與串流";
 "Stay awake while a game or cloud-gaming app is in front." = "在遊戲或雲端遊戲 App 位於最前時保持喚醒。";
 "Meetings & calls" = "會議與通話";
@@ -267,6 +269,7 @@
 "Why each session started or stopped, newest first. Kept in memory; clears on relaunch." = "說明每個工作階段開始或停止的原因，最新的在最前面。僅保存在記憶體中，重新啟動後即清除。";
 "Every app's live power assertions, not just Keepresso's, the same data pmset -g assertions prints." = "所有 App 目前的電源聲明，不只是 Keepresso 的，與 pmset -g assertions 顯示的資料相同。";
 "Lets the Mac sleep once battery charge drops below this level, even mid-session, so it doesn't run flat." = "當電量降至此程度以下時，即使工作階段正在進行也讓 Mac 進入睡眠，以免電力完全耗盡。";
+"Let the Mac sleep anyway if the charge runs low, or if it stays hot with the lid shut. Thresholds are in Preferences." = "如果電量過低，或闔蓋時持續過熱，仍會讓 Mac 進入睡眠。閾值可在偏好設定中調整。";
 "Shows the remaining time next to the menu-bar icon during a timed session." = "在定時工作階段期間，於選單列圖示旁顯示剩餘時間。";
 "Reopen the first-run welcome, with quick one-click setup for how you use your Mac." = "重新開啟首次執行時的歡迎畫面，並依您使用 Mac 的方式提供一鍵快速設定。";
 "If that time already passed today, it means tomorrow." = "若該時間今天已經過去，則代表明天。";

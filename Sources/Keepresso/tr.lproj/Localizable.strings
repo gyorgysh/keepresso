@@ -26,6 +26,7 @@
 "Battery" = "Pil";
 "Welcome" = "Hoş geldiniz";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Kapak kapalıyken ve harici ekran yokken Mac'in çalışmaya devam etmesini sağlar. Bu, yönetici hakları gerektiren bir sistem ayarını değiştirir: yönetici yardımcısı yüklüyken sessizce (Tercihler ▸ Genel), aksi halde macOS parolanızı ister.";
+"Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences." = "Kapak kapalıyken ve harici ekran yokken çalışmaya devam eder. Siz kapatana kadar açık kalır, ya da Tercihler'de oturuma bağlayın.";
 "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "Bir uyanık tutma oturumu başladığında kapalı ekran modunu açar, oturum sona erdiğinde veya Keepresso'dan çıkıldığında kapatır.";
 "Grace period" = "Ek süre";
 "Section" = "Bölüm";
@@ -158,6 +159,7 @@
 "Pause AWDL now" = "AWDL'yi şimdi duraklat";
 "Pause Triggers" = "Tetikleyicileri Duraklat";
 "Pause on low battery" = "Pil azaldığında duraklat";
+"Battery and heat safety" = "Pil ve aşırı ısınma güvenliği";
 "Play a sound" = "Bir ses çal";
 "Playing a game" = "Oyun oynanıyor";
 "Power & Display" = "Güç ve Ekran";
@@ -220,7 +222,7 @@
 "AWDL is off right now" = "AWDL şu anda kapalı";
 "AWDL state unknown" = "AWDL durumu bilinmiyor";
 "Agentic coding" = "Ajan tabanlı kodlama";
-"Stay awake while Claude, Codex, or Grok is running." = "Claude, Codex veya Grok çalışırken uyanık kalın.";
+"Stay awake while Claude Code, Cursor, Codex, or another agent is working." = "Claude Code, Cursor, Codex veya başka bir ajan çalışırken uyanık kalın.";
 "Gaming & streaming" = "Oyun ve yayın";
 "Stay awake while a game or cloud-gaming app is in front." = "Bir oyun veya bulut oyun uygulaması öndeyken uyanık kalın.";
 "Meetings & calls" = "Toplantılar ve aramalar";
@@ -267,6 +269,7 @@
 "Why each session started or stopped, newest first. Kept in memory; clears on relaunch." = "Her oturumun neden başladığı veya durduğu, en yeniden en eskiye doğru. Bellekte tutulur; yeniden başlatıldığında temizlenir.";
 "Every app's live power assertions, not just Keepresso's, the same data pmset -g assertions prints." = "Yalnızca Keepresso'nun değil, her uygulamanın canlı güç iddiaları; pmset -g assertions komutunun yazdırdığı verilerle aynıdır.";
 "Lets the Mac sleep once battery charge drops below this level, even mid-session, so it doesn't run flat." = "Pil şarjı bu seviyenin altına düştüğünde, oturum ortasında bile Mac'in uyumasına izin vererek tamamen bitmesini önler.";
+"Let the Mac sleep anyway if the charge runs low, or if it stays hot with the lid shut. Thresholds are in Preferences." = "Şarj azalırsa ya da kapak kapalıyken sıcak kalırsa Mac'in yine de uyumasına izin verir. Eşikler Tercihler'dedir.";
 "Shows the remaining time next to the menu-bar icon during a timed session." = "Zamanlanmış bir oturum sırasında menü çubuğu simgesinin yanında kalan süreyi gösterir.";
 "Reopen the first-run welcome, with quick one-click setup for how you use your Mac." = "Mac'inizi nasıl kullandığınıza yönelik hızlı tek tıklamalı kurulumla ilk çalıştırma hoş geldiniz ekranını yeniden açın.";
 "If that time already passed today, it means tomorrow." = "Bu saat bugün zaten geçtiyse, yarını ifade eder.";

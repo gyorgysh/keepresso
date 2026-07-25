@@ -26,6 +26,7 @@
 "Battery" = "Batería";
 "Welcome" = "Bienvenida";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Mantiene el Mac funcionando con la tapa cerrada y sin pantalla externa. Esto modifica un ajuste del sistema que requiere permisos de administrador: silencioso con el asistente de administrador instalado (Ajustes ▸ General), de lo contrario macOS pide tu contraseña.";
+"Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences." = "Mantén el Mac funcionando con la tapa cerrada y sin pantalla externa. Sigue activado hasta que lo desactives, o vincúlalo a la sesión en Ajustes.";
 "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "Activa el modo con pantalla cerrada cuando comienza una sesión y lo desactiva cuando termina o Keepresso se cierra.";
 "Grace period" = "Periodo de gracia";
 "Section" = "Sección";
@@ -158,6 +159,7 @@
 "Pause AWDL now" = "Pausar AWDL ahora";
 "Pause Triggers" = "Pausar disparadores";
 "Pause on low battery" = "Pausar con batería baja";
+"Battery and heat safety" = "Seguridad de batería y temperatura";
 "Play a sound" = "Reproducir un sonido";
 "Playing a game" = "Jugando";
 "Power & Display" = "Energía y pantalla";
@@ -220,7 +222,7 @@
 "AWDL is off right now" = "AWDL está desactivado ahora mismo";
 "AWDL state unknown" = "Estado de AWDL desconocido";
 "Agentic coding" = "Programación con agentes";
-"Stay awake while Claude, Codex, or Grok is running." = "Permanece despierto mientras se ejecuta Claude, Codex o Grok.";
+"Stay awake while Claude Code, Cursor, Codex, or another agent is working." = "Permanece despierto mientras Claude Code, Cursor, Codex u otro agente esté trabajando.";
 "Gaming & streaming" = "Juegos y streaming";
 "Stay awake while a game or cloud-gaming app is in front." = "Permanece despierto mientras un juego o app de juego en la nube está en primer plano.";
 "Meetings & calls" = "Reuniones y llamadas";
@@ -267,6 +269,7 @@
 "Why each session started or stopped, newest first. Kept in memory; clears on relaunch." = "Por qué se inició o detuvo cada sesión, las más recientes primero. Se guarda en memoria; se borra al reiniciar.";
 "Every app's live power assertions, not just Keepresso's, the same data pmset -g assertions prints." = "Las aserciones de energía activas de todas las apps, no solo las de Keepresso, los mismos datos que imprime pmset -g assertions.";
 "Lets the Mac sleep once battery charge drops below this level, even mid-session, so it doesn't run flat." = "Deja que el Mac se suspenda cuando la batería baja de este nivel, incluso a mitad de sesión, para que no se agote.";
+"Let the Mac sleep anyway if the charge runs low, or if it stays hot with the lid shut. Thresholds are in Preferences." = "Deja que el Mac se suspenda de todas formas si la batería se queda baja, o si sigue caliente con la tapa cerrada. Los umbrales están en Ajustes.";
 "Shows the remaining time next to the menu-bar icon during a timed session." = "Muestra el tiempo restante junto al icono de la barra de menús durante una sesión temporizada.";
 "Reopen the first-run welcome, with quick one-click setup for how you use your Mac." = "Vuelve a abrir la bienvenida de la primera ejecución, con configuración rápida de un clic según cómo usas tu Mac.";
 "If that time already passed today, it means tomorrow." = "Si esa hora ya pasó hoy, se refiere a mañana.";

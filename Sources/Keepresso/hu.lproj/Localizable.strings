@@ -26,6 +26,7 @@
 "Battery" = "Akkumulátor";
 "Welcome" = "Üdvözlés";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "A Macet csukott fedéllel és külső kijelző nélkül is működésben tartja. Ez egy rendszergazdai jogokat igénylő rendszerbeállítást állít át: telepített rendszergazdai segéddel csendes (Beállítások ▸ Általános), egyébként a macOS bekéri a jelszavát.";
+"Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences." = "Csukott fedéllel és külső kijelző nélkül is működésben tartja. Addig marad bekapcsolva, amíg ki nem kapcsolja, vagy a Beállításokban a munkamenethez köti.";
 "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "Bekapcsolja a csukott fedél módot, amikor egy ébrentartási munkamenet elindul, és kikapcsolja, amikor véget ér, vagy a Keepresso kilép.";
 "Grace period" = "Türelmi idő";
 "Section" = "Szakasz";
@@ -158,6 +159,7 @@
 "Pause AWDL now" = "AWDL szüneteltetése most";
 "Pause Triggers" = "Triggerek szüneteltetése";
 "Pause on low battery" = "Szüneteltetés alacsony töltöttségnél";
+"Battery and heat safety" = "Akkumulátor- és hőbiztonság";
 "Play a sound" = "Hang lejátszása";
 "Playing a game" = "Játék folyamatban";
 "Power & Display" = "Tápellátás és kijelző";
@@ -220,7 +222,7 @@
 "AWDL is off right now" = "Az AWDL jelenleg ki van kapcsolva";
 "AWDL state unknown" = "Az AWDL állapota ismeretlen";
 "Agentic coding" = "Ügynöki kódolás";
-"Stay awake while Claude, Codex, or Grok is running." = "Maradjon ébren, amíg a Claude, a Codex vagy a Grok fut.";
+"Stay awake while Claude Code, Cursor, Codex, or another agent is working." = "Maradjon ébren, amíg a Claude Code, a Cursor, a Codex vagy egy másik ügynök dolgozik.";
 "Gaming & streaming" = "Játék és streamelés";
 "Stay awake while a game or cloud-gaming app is in front." = "Maradjon ébren, amíg egy játék vagy felhőalapú játékalkalmazás van előtérben.";
 "Meetings & calls" = "Értekezletek és hívások";
@@ -267,6 +269,7 @@
 "Why each session started or stopped, newest first. Kept in memory; clears on relaunch." = "Miért indult vagy állt le az egyes munkamenetek, a legújabbal az élen. A memóriában tárolva; újraindításkor törlődik.";
 "Every app's live power assertions, not just Keepresso's, the same data pmset -g assertions prints." = "Minden alkalmazás élő energiaigénylése, nem csak a Keepressóé, ugyanaz az adat, amit a pmset -g assertions kiír.";
 "Lets the Mac sleep once battery charge drops below this level, even mid-session, so it doesn't run flat." = "Hagyja elaludni a Macet, ha az akkumulátor töltöttsége e szint alá esik, akár munkamenet közben is, hogy ne merüljön le teljesen.";
+"Let the Mac sleep anyway if the charge runs low, or if it stays hot with the lid shut. Thresholds are in Preferences." = "Hagyja elaludni a Macet, ha a töltöttség alacsony lesz, vagy ha csukott fedéllel forró marad. A küszöbértékek a Beállításokban találhatók.";
 "Shows the remaining time next to the menu-bar icon during a timed session." = "Megjeleníti a hátralévő időt a menüsori ikon mellett időzített munkamenet közben.";
 "Reopen the first-run welcome, with quick one-click setup for how you use your Mac." = "Nyissa meg újra az első indításkori üdvözlőt, egy kattintásos gyors beállítással a Mac használati módjához.";
 "If that time already passed today, it means tomorrow." = "Ha ma már elmúlt az az időpont, az holnapot jelent.";

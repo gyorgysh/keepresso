@@ -25,6 +25,7 @@ APP = {
     "Battery": "Batteria",
     "Welcome": "Benvenuto",
     "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.": "Mantiene il Mac in funzione con il coperchio chiuso e senza display esterno. Questo cambia un'impostazione di sistema che richiede i privilegi di amministratore: in silenzio con l'assistente amministratore installato (Impostazioni ▸ Generali), altrimenti macOS chiede la password.",
+    "Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences.": "Continua a funzionare con il coperchio chiuso e senza display esterno. Resta attivo finché non lo disattivi, oppure collegalo alla sessione nelle Impostazioni.",
     "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.": "Attiva la modalità a schermo chiuso quando inizia una sessione di veglia e la disattiva quando termina o Keepresso viene chiuso.",
     "Grace period": "Periodo di tolleranza",
     "Section": "Sezione",
@@ -160,6 +161,7 @@ APP = {
     "Pause AWDL now": "Sospendi AWDL ora",
     "Pause Triggers": "Sospendi attivatori",
     "Pause on low battery": "Sospendi con batteria scarica",
+    "Battery and heat safety": "Sicurezza per batteria e calore",
     "Play a sound": "Riproduci un suono",
     "Playing a game": "Gioco in corso",
     "Power & Display": "Alimentazione e display",
@@ -230,8 +232,8 @@ APP = {
     "AWDL is off right now": "AWDL è disattivato in questo momento",
     "AWDL state unknown": "Stato di AWDL sconosciuto",
     "Agentic coding": "Programmazione con agenti",
-    "Stay awake while Claude, Codex, or Grok is running.":
-        "Resta sveglio mentre Claude, Codex o Grok è in esecuzione.",
+    "Stay awake while Claude Code, Cursor, Codex, or another agent is working.":
+        "Resta sveglio mentre Claude Code, Cursor, Codex o un altro agente sta lavorando.",
     "Gaming & streaming": "Gaming e streaming",
     "Stay awake while a game or cloud-gaming app is in front.":
         "Resta sveglio mentre un gioco o un’app di cloud gaming è in primo piano.",
@@ -660,6 +662,8 @@ APP.update({
     "Appearance": "Aspetto",
     "If the Mac runs hot with the lid closed, the session pauses so it can sleep and cool down.":
         "Se il Mac si scalda con il coperchio chiuso, la sessione va in pausa così può andare in stop e raffreddarsi.",
+    "Let the Mac sleep anyway if the charge runs low, or if it stays hot with the lid shut. Thresholds are in Preferences.":
+        "Lascia comunque che il Mac si addormenti se la carica scende, o se resta caldo con il coperchio chiuso. Le soglie sono nelle Impostazioni.",
     "The menu-bar dropdown's glass, from frosty to clear Liquid Glass.":
         "Il vetro del menu a comparsa nella barra dei menu, da sfumato a Liquid Glass trasparente.",
     # 1.16.0
