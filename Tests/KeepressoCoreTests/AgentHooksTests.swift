@@ -403,6 +403,26 @@ private func hookRecord(
     #expect(joined[0].hookState == .working)
 }
 
+@Test func ownerPidRecordsDoNotCwdJoinOntoProcessSessions() throws {
+    // Cursor / Antigravity IDE hooks set ownerPid + cwd and no agentPid. An
+    // idle IDE chat must not stamp a CLI session that shares the cwd.
+    let sessions = [
+        AgentSession(pid: 100, agent: "claude", tty: "s003", cpuPercent: 40),
+    ]
+    let ideIdle = AgentHooks.HookRecord(
+        sessionId: "conv-ide", state: .idle, cwd: "/Users/x/proj",
+        origin: .ide, ownerPid: 900, agent: "cursor",
+        updatedAt: Date())
+    let join = PSAgentActivityMonitor.applyHookRecords(
+        [ideIdle], to: sessions, cwdOf: { _ in "/Users/x/proj" })
+    #expect(join.sessions[0].hookState == nil)
+    #expect(join.sessions[0].cpuPercent == 40)
+    #expect(join.unclaimed.count == 1)
+    #expect(join.unclaimed[0].sessionId == "conv-ide")
+    let hookOnly = try #require(PSAgentActivityMonitor.hookOnlySession(from: join.unclaimed[0]))
+    #expect(hookOnly.hookState == .idle)
+}
+
 // MARK: - Verdict precedence in the trigger step
 
 @Test func hookStateDecidesOutright() {

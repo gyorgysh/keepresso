@@ -75,13 +75,24 @@ private func request(
 private final class World {
     var now = base
     var written: [AutomationWakeRequest] = []
+    var pending: AutomationWakeRequest?
+    var claimed: [String] = []
     var statusScript: [StatusSnapshot?] = [nil]
     var nudged = 0
 
     func client() -> WakeClient {
         WakeClient(
             now: { self.now },
-            writeRequest: { self.written.append($0) },
+            writeRequest: {
+                self.written.append($0)
+                self.pending = $0
+            },
+            claimRequest: { id in
+                self.claimed.append(id)
+                guard self.pending?.requestId == id else { return false }
+                self.pending = nil
+                return true
+            },
             readStatus: {
                 self.statusScript.count > 1
                     ? self.statusScript.removeFirst()
@@ -141,6 +152,28 @@ private func ack(_ outcome: String) -> StatusSnapshot {
         oneShot: base.addingTimeInterval(3_600), repeatDays: nil, repeatTime: nil)
     #expect(outcome.exitCode == 2)
     #expect(world.now >= base.addingTimeInterval(LeaseClient.ackTimeout))
+    // Timeout claims only this request id so the app cannot apply it later.
+    #expect(world.claimed == [reqId])
+    #expect(world.pending == nil)
+}
+
+@Test func wakeRequestClaimIsIdempotentAndIdMatched() {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keepresso-wake-claim-\(UUID().uuidString)")
+        .appendingPathComponent("wake.json")
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+    let request = AutomationWakeRequest(
+        requestId: reqId, oneShot: base.addingTimeInterval(3_600),
+        requestedAt: base
+    )
+    AutomationWakeRequestFile.write(request, to: url)
+    #expect(AutomationWakeRequestFile.claim(requestId: "other-id", at: url) == false)
+    #expect(AutomationWakeRequestFile.read(from: url) == request)
+    #expect(AutomationWakeRequestFile.claim(requestId: reqId, at: url))
+    #expect(AutomationWakeRequestFile.read(from: url) == nil)
+    // A late claim after the client timed out finds nothing.
+    #expect(AutomationWakeRequestFile.claim(requestId: reqId, at: url) == false)
 }
 
 @Test func wakeApplyRejectsInvalidRequestsWithoutARoundTrip() {

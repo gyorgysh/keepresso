@@ -278,8 +278,9 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
                     }
                 }
                 // Stamp hook evidence: exact state edges beat both heuristics.
+                let hookRecords = self.hookRecords(scanTime)
                 let join = Self.applyHookRecords(
-                    self.hookRecords(scanTime), to: sessions, cwdOf: { cwds[$0] })
+                    hookRecords, to: sessions, cwdOf: { cwds[$0] })
                 sessions = join.sessions
                 // A not-working verdict older than a fresh transcript write
                 // is stale information, not an edge: the main turn's Stop
@@ -303,6 +304,13 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
                         sessions[index].hookDetail = nil
                     }
                 }
+                // When IDE hooks cover a host (Cursor / Antigravity ownerPid
+                // rows), drop the parallel evidence-only process session for
+                // that host. Otherwise a Stop that idles the hook-only chat
+                // would still leave the language_server / editor host
+                // "working" off conversation-DB freshness alone.
+                sessions = Self.suppressingHookCoveredEvidenceHosts(
+                    sessions, hookRecords: hookRecords)
                 // Sessions that exist only as hook records (an IDE's built-in
                 // agent) are appended last: they have no process, so none of
                 // the cwd, evidence, or origin decoration above applies.
@@ -322,6 +330,12 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// directory as the fallback, and only when that fallback is unambiguous
     /// (exactly one unclaimed session in that directory). Newest records win
     /// contested sessions. Pure, so tests script both sides.
+    ///
+    /// Records that already name an owning app (`ownerPid`, Cursor /
+    /// Antigravity IDE chats) never cwd-join onto a process session: they are
+    /// conversation-scoped rows that must become hook-only sessions, and
+    /// stamping them onto a CLI host would let an idle IDE chat idle a live
+    /// terminal agent that happens to share a cwd.
     static func applyHookRecords(
         _ records: [AgentHooks.HookRecord],
         to sessions: [AgentSession],
@@ -342,6 +356,13 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         }
         var unclaimed: [AgentHooks.HookRecord] = []
         for record in unmatchedByPid {
+            // IDE / host-anchored records are conversation rows, not process
+            // joins: keep them unclaimed so ``hookOnlySession(from:)`` builds
+            // the session. Never cwd-join them onto a CLI or evidence host.
+            if record.ownerPid != nil {
+                unclaimed.append(record)
+                continue
+            }
             guard let cwd = record.cwd else {
                 unclaimed.append(record)
                 continue
@@ -357,6 +378,19 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             stamp(&result[index], with: record)
         }
         return HookJoin(sessions: result, unclaimed: unclaimed)
+    }
+
+    /// Drop evidence-only host process sessions whose pid is named as
+    /// `ownerPid` by a live IDE hook record. Hooks then own the working
+    /// signal for that editor; conversation-DB freshness on the host cannot
+    /// keep the trigger on after Stop.
+    static func suppressingHookCoveredEvidenceHosts(
+        _ sessions: [AgentSession],
+        hookRecords: [AgentHooks.HookRecord]
+    ) -> [AgentSession] {
+        let hosts = Set(hookRecords.compactMap(\.ownerPid))
+        guard !hosts.isEmpty else { return sessions }
+        return sessions.filter { !($0.evidenceOnly && hosts.contains($0.pid)) }
     }
 
     /// The result of joining hook records onto `ps`-detected sessions.

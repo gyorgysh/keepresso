@@ -5,7 +5,11 @@ import Foundation
 /// In-memory power-assertion backend that records the last applied set.
 private final class FakeAssertions: PowerAsserting {
     private(set) var held: Set<PowerAssertionKind> = []
-    func apply(_ kinds: Set<PowerAssertionKind>, reason: String) { held = kinds }
+    /// When set, those kinds are requested but never held (create failure).
+    var refuse: Set<PowerAssertionKind> = []
+    func apply(_ kinds: Set<PowerAssertionKind>, reason: String) {
+        held = kinds.subtracting(refuse)
+    }
 }
 
 /// A controllable clock shared with the controller under test.
@@ -193,6 +197,24 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
     let (controller, fake, _) = makeController()
     controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
     #expect(fake.held == [.system, .display])
+}
+
+@MainActor
+@Test func assertionCreateFailureSurfacesOnTheController() {
+    let fake = FakeAssertions()
+    fake.refuse = [.system]
+    let clock = Clock()
+    let controller = SessionController(assertions: fake, now: { clock.now })
+    controller.start()
+    #expect(controller.isActive)
+    #expect(fake.held.isEmpty)
+    #expect(controller.lastAssertionError != nil)
+
+    // A later successful apply clears the error.
+    fake.refuse = []
+    controller.reconcile()
+    #expect(fake.held == [.system])
+    #expect(controller.lastAssertionError == nil)
 }
 
 @MainActor

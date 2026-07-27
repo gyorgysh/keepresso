@@ -108,8 +108,10 @@ final class SessionTicker {
     /// Seconds since the last HID (keyboard/mouse/trackpad) event, via IOKit's
     /// `IOHIDSystem` idle-time property. Reads the single `HIDIdleTime` key
     /// rather than copying the whole property dictionary (which carries a large
-    /// nested `HIDParameters` set), since this runs once a second.
-    static func systemIdleSeconds() -> TimeInterval {
+    /// nested `HIDParameters` set), since this runs once a second. Returns
+    /// `nil` when the reading fails so keep-active still pokes and
+    /// dim/yield hold their state, matching a missing idle reading.
+    static func systemIdleSeconds() -> TimeInterval? {
         var iterator: io_iterator_t = 0
         defer { if iterator != 0 { IOObjectRelease(iterator) } }
 
@@ -117,16 +119,16 @@ final class SessionTicker {
             kIOMainPortDefault,
             IOServiceMatching("IOHIDSystem"),
             &iterator
-        ) == KERN_SUCCESS else { return 0 }
+        ) == KERN_SUCCESS else { return nil }
 
         let entry = IOIteratorNext(iterator)
-        guard entry != 0 else { return 0 }
+        guard entry != 0 else { return nil }
         defer { IOObjectRelease(entry) }
 
         guard let value = IORegistryEntryCreateCFProperty(
             entry, "HIDIdleTime" as CFString, kCFAllocatorDefault, 0
         )?.takeRetainedValue(), let nanoseconds = value as? UInt64
-        else { return 0 }
+        else { return nil }
 
         return TimeInterval(nanoseconds) / 1_000_000_000
     }

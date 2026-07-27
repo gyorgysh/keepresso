@@ -163,8 +163,16 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 
     runner.failNext = true
     #expect(!engine.setSleepHold(client: 1, holding: true))
-    // The pmset write failed, so there is nothing to restore at next launch.
+    // The pmset write failed and the holder was rolled back, so there is
+    // nothing to restore at next launch and a retry is a real engage.
     #expect(state.markers().isEmpty)
+    #expect(engine.isIdle)
+
+    // A second attempt must try the write again, not return a false success
+    // from `before == after` with a leftover holder.
+    #expect(engine.setSleepHold(client: 1, holding: true))
+    #expect(runner.commands == [sleepOn, sleepOn])
+    #expect(state.markers() == [.sleepDisabled])
 }
 
 @Test func sleepHoldRestoresThePriorDisableSleepValue() {
@@ -219,6 +227,64 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     engine.restoreAtLaunch()
     #expect(runner.commands.last == sleepOn)
     #expect(state.markers().isEmpty)
+}
+
+@Test func reengageAfterFailedSleepRestorePreservesThePriorDebt() {
+    // After a failed release, disablesleep is still 1. Re-engaging must not
+    // snapshot that sticky 1 as the new "prior", or the eventual restore
+    // would leave sleep disabled forever.
+    var liveDisabled = false
+    let runner = FakeRunner()
+    let state = FakeRestoreState()
+    let engine = HelperEngine(
+        runner: runner, state: state,
+        sleepDisabledReader: { liveDisabled }
+    )
+
+    #expect(engine.setSleepHold(client: 1, holding: true))
+    #expect(state.value(for: .sleepDisabled) == "0")
+    liveDisabled = true // system now has the hold's 1
+
+    runner.failNext = true
+    #expect(!engine.setSleepHold(client: 1, holding: false))
+    #expect(state.value(for: .sleepDisabled) == "0")
+
+    // Re-engage while the sticky 1 is still live: prior debt stays "0".
+    #expect(engine.setSleepHold(client: 1, holding: true))
+    #expect(state.value(for: .sleepDisabled) == "0")
+
+    #expect(engine.setSleepHold(client: 1, holding: false))
+    #expect(runner.commands.last == sleepOff)
+    #expect(state.markers().isEmpty)
+}
+
+@Test func failedAWDLReleaseKeepsTheMarker() {
+    let runner = FakeRunner()
+    let state = FakeRestoreState()
+    let engine = HelperEngine(runner: runner, state: state)
+
+    #expect(engine.setAWDLHold(client: 1, holding: true))
+    #expect(state.markers() == [.awdlDown])
+    runner.failNext = true
+    #expect(!engine.setAWDLHold(client: 1, holding: false))
+    #expect(state.markers() == [.awdlDown])
+}
+
+@Test func restoreAtLaunchKeepsMarkersWhenRestoreFails() {
+    let runner = FakeRunner()
+    let fans = FakeFanControl()
+    fans.restoreSucceeds = false
+    let state = FakeRestoreState(values: [
+        .sleepDisabled: "0", .awdlDown: "", .fanForced: "",
+    ])
+    let engine = HelperEngine(runner: runner, state: state, fans: fans)
+
+    runner.failNext = true
+    engine.restoreAtLaunch()
+    // Sleep restore failed first; AWDL then succeeds; fan restore refused.
+    #expect(state.markers().contains(.sleepDisabled))
+    #expect(!state.markers().contains(.awdlDown))
+    #expect(state.markers().contains(.fanForced))
 }
 
 @Test func restoreAtLaunchRestoresTheRecordedValue() {

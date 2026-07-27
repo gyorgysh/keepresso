@@ -1709,11 +1709,12 @@ final class AppModel {
     @ObservationIgnored private var lastWakeRequestOutcome: String?
 
     /// Process a pending automation wake request, if any. Runs on the
-    /// `sync-leases` doorbell; the request file is consumed either way so a
-    /// rejected request can never fire arbitrarily later.
+    /// `sync-leases` doorbell. The request is claimed (deleted) before any
+    /// side effect so a client that timed out and claimed the same id cannot
+    /// still be applied, and a replaced request is left for the next pass.
     private func processAutomationWakeRequest() {
         guard let request = AutomationWakeRequestFile.read() else { return }
-        AutomationWakeRequestFile.delete()
+        guard AutomationWakeRequestFile.claim(requestId: request.requestId) else { return }
         let outcome: AutomationWakeOutcome
         if !settings.automationWakeControlEnabled {
             outcome = .disabled

@@ -236,21 +236,22 @@ public final class HelperEngine: @unchecked Sendable {
 
     /// Settle debts from a previous daemon life (crash, kill, reboot
     /// mid-hold): a leftover marker means the system was never restored, so
-    /// restore it now and clear the marker. Called once at daemon launch,
-    /// before the listener accepts anyone.
+    /// restore it now and clear the marker only when the restore actually
+    /// landed. A failed restore keeps the marker so the next launch retries.
+    /// Called once at daemon launch, before the listener accepts anyone.
     public func restoreAtLaunch() {
         let leftovers = state.markers()
         if leftovers.contains(.sleepDisabled) {
-            runner.run("/usr/bin/pmset", ["-a", "disablesleep", recordedSleepRestoreValue()])
-            state.set(.sleepDisabled, present: false)
+            let ok = runner.run(
+                "/usr/bin/pmset", ["-a", "disablesleep", recordedSleepRestoreValue()])
+            if ok { state.set(.sleepDisabled, present: false) }
         }
         if leftovers.contains(.awdlDown) {
-            runner.run("/sbin/ifconfig", ["awdl0", "up"])
-            state.set(.awdlDown, present: false)
+            let ok = runner.run("/sbin/ifconfig", ["awdl0", "up"])
+            if ok { state.set(.awdlDown, present: false) }
         }
         if leftovers.contains(.fanForced) {
-            _ = fans.restoreAuto()
-            state.set(.fanForced, present: false)
+            if fans.restoreAuto() { state.set(.fanForced, present: false) }
         }
         if leftovers.contains(.wakeClearPending) {
             _ = clearWakeSchedules()
@@ -343,18 +344,14 @@ public final class HelperEngine: @unchecked Sendable {
     public func setSleepHold(client: Int, holding: Bool) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        return applySleepUnion {
-            if holding { sleepHolders.insert(client) } else { sleepHolders.remove(client) }
-        }
+        return applySleepUnion(client: client, holding: holding)
     }
 
     /// Take or release `client`'s hold on `awdl0 down`.
     public func setAWDLHold(client: Int, holding: Bool) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        return applyAWDLUnion {
-            if holding { awdlHolders.insert(client) } else { awdlHolders.remove(client) }
-        }
+        return applyAWDLUnion(client: client, holding: holding)
     }
 
     /// Take or release `client`'s forced-fan hold at `percent`. With several
@@ -397,8 +394,8 @@ public final class HelperEngine: @unchecked Sendable {
     public func clientDisconnected(_ client: Int) {
         lock.lock()
         defer { lock.unlock() }
-        _ = applySleepUnion { sleepHolders.remove(client) }
-        _ = applyAWDLUnion { awdlHolders.remove(client) }
+        _ = applySleepUnion(client: client, holding: false)
+        _ = applyAWDLUnion(client: client, holding: false)
         _ = applyFanUnion { fanHolders.removeValue(forKey: client) }
         _ = applyPriorityUnion { priorityHolders.removeValue(forKey: client) }
     }
@@ -490,19 +487,35 @@ public final class HelperEngine: @unchecked Sendable {
 
     // MARK: - Union edges (call with the lock held)
 
-    private func applySleepUnion(_ mutate: () -> Void) -> Bool {
+    private func applySleepUnion(client: Int, holding: Bool) -> Bool {
         let before = !sleepHolders.isEmpty
-        mutate()
+        if holding { sleepHolders.insert(client) } else { sleepHolders.remove(client) }
         let after = !sleepHolders.isEmpty
         guard before != after else { return true }
         if after {
-            // Snapshot the prior value before forcing 1, so the release edge
-            // restores what was really there (the user's own persistent
-            // toggle, another tool's setting) instead of assuming 0. A failed
-            // read records "0", which matches the pre-value behavior.
-            let prior = sleepDisabledReader() ?? false
+            // Preserve an existing restore debt's recorded prior: after a
+            // failed release the live `disablesleep` is still 1, and
+            // snapshotting that as the new prior would make the next restore
+            // leave it sticky. Only read the system when no debt is on file.
+            let existingDebt = state.value(for: .sleepDisabled)
+            let prior = existingDebt ?? ((sleepDisabledReader() ?? false) ? "1" : "0")
+            // Debt-by-attempt like fans: record before the write so a crash
+            // between the write and a later marker update still settles.
+            // Refuse to engage if the marker cannot be persisted, so we never
+            // change the system without a recoverable debt.
+            state.set(.sleepDisabled, value: prior)
+            guard state.value(for: .sleepDisabled) != nil else {
+                sleepHolders.remove(client)
+                return false
+            }
             let ok = runner.run("/usr/bin/pmset", ["-a", "disablesleep", "1"])
-            state.set(.sleepDisabled, value: ok ? (prior ? "1" : "0") : nil)
+            if !ok {
+                // Roll the holder back so a later re-assert is not a no-op
+                // success (`before == after`). Drop a debt we just created;
+                // keep one that already existed from a failed prior release.
+                sleepHolders.remove(client)
+                if existingDebt == nil { state.set(.sleepDisabled, value: nil) }
+            }
             return ok
         }
         let ok = runner.run("/usr/bin/pmset", ["-a", "disablesleep", recordedSleepRestoreValue()])
@@ -519,13 +532,28 @@ public final class HelperEngine: @unchecked Sendable {
         state.value(for: .sleepDisabled) == "1" ? "1" : "0"
     }
 
-    private func applyAWDLUnion(_ mutate: () -> Void) -> Bool {
+    private func applyAWDLUnion(client: Int, holding: Bool) -> Bool {
         let before = !awdlHolders.isEmpty
-        mutate()
+        if holding { awdlHolders.insert(client) } else { awdlHolders.remove(client) }
         let after = !awdlHolders.isEmpty
         guard before != after else { return true }
-        let ok = runner.run("/sbin/ifconfig", ["awdl0", after ? "down" : "up"])
-        state.set(.awdlDown, present: after && ok)
+        if after {
+            // Debt-by-attempt: mark before the write. `awdlTick` retries a
+            // failed down while the holder stays; still verify the marker
+            // landed so a crash mid-hold is recoverable.
+            state.set(.awdlDown, present: true)
+            guard state.markers().contains(.awdlDown) else {
+                awdlHolders.remove(client)
+                return false
+            }
+            let ok = runner.run("/sbin/ifconfig", ["awdl0", "down"])
+            // Keep the holder on failure so the tick can re-assert; the
+            // marker already records the debt.
+            return ok
+        }
+        let ok = runner.run("/sbin/ifconfig", ["awdl0", "up"])
+        // Debt-by-success on release: a failed up keeps the marker.
+        if ok { state.set(.awdlDown, present: false) }
         return ok
     }
 

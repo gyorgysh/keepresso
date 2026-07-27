@@ -194,7 +194,11 @@ public struct LeaseClient {
             fresh.ttlSeconds = min(
                 AutomationLease.clampedTTL(ttlSeconds), fresh.maxLifetimeSeconds)
         }
-        store.write(fresh)
+        // Compare-and-swap: refuse to write if a concurrent revoke, release,
+        // or expiry replaced the live record underneath this heartbeat.
+        guard store.compareAndSwap(expected: record, new: fresh) else {
+            return failure(3, "lease is no longer live")
+        }
 
         let snapshot = readStatus()
         let appRunning = snapshot.map { isPidAlive($0.pid) } ?? false

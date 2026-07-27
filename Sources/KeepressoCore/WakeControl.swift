@@ -142,6 +142,19 @@ public enum AutomationWakeRequestFile {
     public static func delete(at url: URL = defaultURL()) {
         try? FileManager.default.removeItem(at: url)
     }
+
+    /// Delete the pending request only when it is still `requestId`. Used by
+    /// the client on ack timeout so a late app read of a replaced or already
+    /// claimed file cannot be wiped, and by the app to claim a request
+    /// before applying it (apply only if the claim succeeds).
+    @discardableResult
+    public static func claim(requestId: String, at url: URL = defaultURL()) -> Bool {
+        guard let current = read(from: url), current.requestId == requestId else {
+            return false
+        }
+        delete(at: url)
+        return true
+    }
 }
 
 // MARK: - Client
@@ -153,6 +166,7 @@ public enum AutomationWakeRequestFile {
 public struct WakeClient {
     public var now: () -> Date
     public var writeRequest: (AutomationWakeRequest) -> Void
+    public var claimRequest: (String) -> Bool
     public var readStatus: () -> StatusSnapshot?
     public var nudgeApp: () -> Bool
     public var sleep: (TimeInterval) -> Void
@@ -163,6 +177,7 @@ public struct WakeClient {
     public init(
         now: @escaping () -> Date = Date.init,
         writeRequest: @escaping (AutomationWakeRequest) -> Void = { AutomationWakeRequestFile.write($0) },
+        claimRequest: @escaping (String) -> Bool = { AutomationWakeRequestFile.claim(requestId: $0) },
         readStatus: @escaping () -> StatusSnapshot? = { StatusFile.read() },
         nudgeApp: @escaping () -> Bool,
         sleep: @escaping (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) },
@@ -172,6 +187,7 @@ public struct WakeClient {
     ) {
         self.now = now
         self.writeRequest = writeRequest
+        self.claimRequest = claimRequest
         self.readStatus = readStatus
         self.nudgeApp = nudgeApp
         self.sleep = sleep
@@ -206,9 +222,9 @@ public struct WakeClient {
     }
 
     /// Set (or, with an all-nil request, clear) the schedule and wait for the
-    /// app's verdict. The request file is deleted by the app when processed,
-    /// and deleted here on timeout so an unprocessed request cannot fire
-    /// arbitrarily later.
+    /// app's verdict. On timeout the client claims (deletes) only its own
+    /// request id so a late app apply of a still-pending matching file is
+    /// refused, and a newer replacement request is left alone.
     public func apply(
         oneShot: Date?,
         repeatDays: String?,
@@ -229,7 +245,7 @@ public struct WakeClient {
         }
         writeRequest(request)
         guard nudgeApp() else {
-            AutomationWakeRequestFile.delete()
+            _ = claimRequest(request.requestId)
             return failure(2, "could not reach the Keepresso app. Is it installed?")
         }
         let deadline = instant.addingTimeInterval(LeaseClient.ackTimeout)
@@ -243,7 +259,7 @@ public struct WakeClient {
             guard now() < deadline else { break }
             sleep(LeaseClient.ackInterval)
         }
-        AutomationWakeRequestFile.delete()
+        _ = claimRequest(request.requestId)
         return failure(2, "the Keepresso app did not acknowledge the wake request. Update the app if it predates automation wake control.")
     }
 

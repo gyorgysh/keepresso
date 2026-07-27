@@ -211,6 +211,39 @@ private func object(_ data: Data) -> [String: Any] {
     #expect(byId[pidB]?.hookState == .idle)
 }
 
+@Test func ideHooksSuppressTheEvidenceOnlyHostAfterStop() {
+    // language_server evidence-only row + idle hook-only chat: after Stop the
+    // host must not keep the trigger on via conversation DB freshness.
+    let host = AgentSession(
+        pid: 5, agent: "antigravity", tty: nil, cpuPercent: 0,
+        hasFreshEvidence: true, origin: .ide, evidenceOnly: true)
+    let idleHook = AgentHooks.HookRecord(
+        sessionId: "chat-1", state: .idle, cwd: "/Users/x/site",
+        origin: .ide, ownerPid: 5, agent: "antigravity", updatedAt: Date())
+    let remaining = PSAgentActivityMonitor.suppressingHookCoveredEvidenceHosts(
+        [host], hookRecords: [idleHook])
+    #expect(remaining.isEmpty)
+
+    // Without IDE hooks the evidence-only host still stands (hooks not installed).
+    #expect(PSAgentActivityMonitor.suppressingHookCoveredEvidenceHosts(
+        [host], hookRecords: []) == [host])
+
+    // A Stop'd chat with hooks: trigger reads only the idle hook-only row.
+    let join = PSAgentActivityMonitor.applyHookRecords(
+        [idleHook], to: [host], cwdOf: { _ in "/Users/x/site" })
+    var sessions = PSAgentActivityMonitor.suppressingHookCoveredEvidenceHosts(
+        join.sessions, hookRecords: [idleHook])
+    sessions.append(contentsOf: join.unclaimed.compactMap(PSAgentActivityMonitor.hookOnlySession(from:)))
+    #expect(sessions.count == 1)
+    #expect(sessions[0].hookState == .idle)
+    #expect(sessions[0].evidenceOnly == false)
+    var state = AgentActivityTrigger.State()
+    state = AgentActivityTrigger.step(
+        state, sample: sessions[0].cpuPercent, freshEvidence: false,
+        hookState: sessions[0].hookState, evidenceOnly: sessions[0].evidenceOnly)
+    #expect(!state.isWorking)
+}
+
 // MARK: - hooks.json install and remove
 
 @Test func installWritesOneGroupPerObservedEvent() {

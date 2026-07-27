@@ -45,6 +45,8 @@ public enum PowerAssertionKind: String, CaseIterable, Sendable {
 /// owning ``SessionController``.
 public final class IOKitPowerAssertionManager: PowerAsserting {
     private var ids: [PowerAssertionKind: IOPMAssertionID] = [:]
+    /// Kinds that the last ``apply(_:reason:)`` wanted but could not create.
+    public private(set) var lastCreateFailures: Set<PowerAssertionKind> = []
 
     public init() {}
 
@@ -57,13 +59,18 @@ public final class IOKitPowerAssertionManager: PowerAsserting {
         for kind in ids.keys where !kinds.contains(kind) {
             release(kind)
         }
+        var failures: Set<PowerAssertionKind> = []
         // Create assertions newly wanted.
         for kind in kinds where ids[kind] == nil {
-            create(kind, reason: reason.isEmpty ? "Keepresso is brewing" : reason)
+            if !create(kind, reason: reason.isEmpty ? "Keepresso is brewing" : reason) {
+                failures.insert(kind)
+            }
         }
+        lastCreateFailures = failures
     }
 
-    private func create(_ kind: PowerAssertionKind, reason: String) {
+    @discardableResult
+    private func create(_ kind: PowerAssertionKind, reason: String) -> Bool {
         var id: IOPMAssertionID = IOPMAssertionID(0)
         let result = IOPMAssertionCreateWithName(
             kind.ioKitAssertionType as CFString,
@@ -73,7 +80,9 @@ public final class IOKitPowerAssertionManager: PowerAsserting {
         )
         if result == kIOReturnSuccess {
             ids[kind] = id
+            return true
         }
+        return false
     }
 
     private func release(_ kind: PowerAssertionKind) {

@@ -174,6 +174,20 @@ public protocol LeaseRecordStoring: AnyObject {
     func loadAll() -> [AutomationLeaseRecord]
     func write(_ record: AutomationLeaseRecord)
     func delete(id: String)
+    /// Write `new` only when the stored record for that id still equals
+    /// `expected`. Returns false when the record is gone or changed, so a
+    /// heartbeat cannot resurrect a concurrent revoke or expiry.
+    func compareAndSwap(expected: AutomationLeaseRecord, new: AutomationLeaseRecord) -> Bool
+}
+
+public extension LeaseRecordStoring {
+    func compareAndSwap(expected: AutomationLeaseRecord, new: AutomationLeaseRecord) -> Bool {
+        guard let current = loadAll().first(where: { $0.id == expected.id }),
+              current == expected
+        else { return false }
+        write(new)
+        return true
+    }
 }
 
 /// Real store: one JSON file per lease under Application Support, next to

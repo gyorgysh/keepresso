@@ -217,6 +217,13 @@ public final class SessionController {
     /// The thermal twin of ``batteryRefusedStarts``.
     public private(set) var thermalRefusedStarts = 0
 
+    /// Set when ``reconcile(now:systemIdleSeconds:battery:thermal:)`` wanted
+    /// power assertions that the backend did not hold afterwards (an
+    /// `IOPMAssertionCreateWithName` failure). Cleared once the held set
+    /// matches. Public so the UI can tell "session active" from "actually
+    /// preventing sleep".
+    public private(set) var lastAssertionError: String?
+
     /// Refused start attempts across both safety pauses, for the menu's
     /// "that didn't work, and here's why" shake.
     public var refusedStarts: Int { batteryRefusedStarts + thermalRefusedStarts }
@@ -673,10 +680,19 @@ public final class SessionController {
             return
         }
 
+        let desired = desiredAssertions(systemIdleSeconds: systemIdleSeconds)
         assertions.apply(
-            desiredAssertions(systemIdleSeconds: systemIdleSeconds),
+            desired,
             reason: "Keepresso is brewing"
         )
+        // Surface create failures: a session can be "active" in state while
+        // IOPMAssertionCreateWithName quietly refused, which would otherwise
+        // look like a keep-awake that does nothing.
+        if desired.isSubset(of: assertions.held) {
+            lastAssertionError = nil
+        } else {
+            lastAssertionError = L("Couldn't create a power assertion. The Mac may still sleep.")
+        }
 
         maybeRemind(at: instant)
         maybeNotifyEndingSoon(at: instant)

@@ -206,31 +206,94 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func setSleepHold(_ holding: Bool) -> Bool {
-        lock.lock()
-        wantsSleepHold = holding
-        lock.unlock()
-        return call { proxy, done in proxy.setSleepHold(holding, reply: done) }
+        if holding {
+            lock.lock()
+            wantsSleepHold = true
+            lock.unlock()
+            let ok = call { proxy, done in proxy.setSleepHold(true, reply: done) }
+            if !ok {
+                lock.lock()
+                wantsSleepHold = false
+                lock.unlock()
+            }
+            return ok
+        }
+        let ok = call { proxy, done in proxy.setSleepHold(false, reply: done) }
+        // Clear the want only once release is confirmed. On failure keep it
+        // so the connection stays open for a retry (and an interruption
+        // re-assert keeps the hold until that release lands).
+        if ok {
+            lock.lock()
+            wantsSleepHold = false
+            lock.unlock()
+        }
+        return ok
     }
 
     public func setAWDLHold(_ holding: Bool) -> Bool {
-        lock.lock()
-        wantsAWDLHold = holding
-        lock.unlock()
-        return call { proxy, done in proxy.setAWDLHold(holding, reply: done) }
+        if holding {
+            lock.lock()
+            wantsAWDLHold = true
+            lock.unlock()
+            let ok = call { proxy, done in proxy.setAWDLHold(true, reply: done) }
+            if !ok {
+                lock.lock()
+                wantsAWDLHold = false
+                lock.unlock()
+            }
+            return ok
+        }
+        let ok = call { proxy, done in proxy.setAWDLHold(false, reply: done) }
+        if ok {
+            lock.lock()
+            wantsAWDLHold = false
+            lock.unlock()
+        }
+        return ok
     }
 
     public func setFanHold(_ holding: Bool, percent: Int) -> Bool {
-        lock.lock()
-        wantsFanHold = holding ? percent : nil
-        lock.unlock()
-        return call { proxy, done in proxy.setFanHold(holding, percent: percent, reply: done) }
+        if holding {
+            lock.lock()
+            wantsFanHold = percent
+            lock.unlock()
+            let ok = call { proxy, done in proxy.setFanHold(true, percent: percent, reply: done) }
+            if !ok {
+                lock.lock()
+                wantsFanHold = nil
+                lock.unlock()
+            }
+            return ok
+        }
+        let ok = call { proxy, done in proxy.setFanHold(false, percent: percent, reply: done) }
+        if ok {
+            lock.lock()
+            wantsFanHold = nil
+            lock.unlock()
+        }
+        return ok
     }
 
     public func setPriorityHold(_ holding: Bool, pid: Int) -> Bool {
-        lock.lock()
-        wantsPriorityHold = holding ? pid : nil
-        lock.unlock()
-        return call { proxy, done in proxy.setPriorityHold(holding, pid: pid, reply: done) }
+        if holding {
+            lock.lock()
+            wantsPriorityHold = pid
+            lock.unlock()
+            let ok = call { proxy, done in proxy.setPriorityHold(true, pid: pid, reply: done) }
+            if !ok {
+                lock.lock()
+                wantsPriorityHold = nil
+                lock.unlock()
+            }
+            return ok
+        }
+        let ok = call { proxy, done in proxy.setPriorityHold(false, pid: pid, reply: done) }
+        if ok {
+            lock.lock()
+            wantsPriorityHold = nil
+            lock.unlock()
+        }
+        return ok
     }
 
     public func fanHoldDropped() -> Bool? {

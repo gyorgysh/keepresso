@@ -271,6 +271,54 @@ private func snapshot(
     #expect(world.store.records[idA]?.updatedAt == world.now)
 }
 
+@Test func heartbeatDoesNotOverwriteAConcurrentRevoke() {
+    // Simulate the race: heartbeat loads a live record, then a revoke lands
+    // before the write. Compare-and-swap must refuse and leave the revoke.
+    let world = World()
+    let live = AutomationLeaseRecord(
+        id: idA, owner: "o", tool: "t", task: "x",
+        createdAt: base, updatedAt: base, ttlSeconds: 300, maxLifetimeSeconds: 3_600
+    )
+    world.store.records[idA] = live
+    world.statusScript = [snapshot()]
+    world.now = base.addingTimeInterval(100)
+
+    // A store that mutates underneath the first compareAndSwap attempt.
+    final class RacingStore: LeaseRecordStoring {
+        let inner: MemoryStore
+        var flipped = false
+        init(_ inner: MemoryStore) { self.inner = inner }
+        func loadAll() -> [AutomationLeaseRecord] { inner.loadAll() }
+        func write(_ record: AutomationLeaseRecord) { inner.write(record) }
+        func delete(id: String) { inner.delete(id: id) }
+        func compareAndSwap(expected: AutomationLeaseRecord, new: AutomationLeaseRecord) -> Bool {
+            if !flipped {
+                flipped = true
+                var revoked = expected
+                revoked.state = .revoked
+                revoked.endedAt = expected.updatedAt
+                revoked.endReason = "stopped-by-user"
+                inner.write(revoked)
+            }
+            return inner.compareAndSwap(expected: expected, new: new)
+        }
+    }
+    let racing = RacingStore(world.store)
+    let client = LeaseClient(
+        store: racing,
+        now: { world.now },
+        readStatus: { snapshot() },
+        nudgeApp: { true },
+        sleep: { _ in },
+        isPidAlive: { $0 == 77 },
+        defaultOwner: "tester"
+    )
+    let outcome = client.heartbeat(id: idA, ttlSeconds: nil)
+    #expect(outcome.exitCode == 3)
+    #expect(world.store.records[idA]?.state == .revoked)
+    #expect(world.store.records[idA]?.updatedAt == base)
+}
+
 // MARK: - Release and list
 
 @Test func releaseIsIdempotent() {
