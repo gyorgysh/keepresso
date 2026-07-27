@@ -2424,6 +2424,10 @@ final class AppModel {
     /// engage/release and its re-read would enforce against a stale value (and
     /// without the helper, spend this run's one password prompt on a no-op).
     @ObservationIgnored private var closedDisplayRefreshPending = false
+    /// Generation of the in-flight re-read. A second call bumps this so the
+    /// older task can finish without clearing the latch or enforcing on a
+    /// value a newer refresh is about to replace.
+    @ObservationIgnored private var closedDisplayRefreshGeneration = 0
     /// Ticks since the last unattended re-read of the system setting.
     @ObservationIgnored private var closedDisplayPollTicks = 0
 
@@ -2440,10 +2444,15 @@ final class AppModel {
         after delay: Duration? = nil,
         allowPrompt: Bool = false
     ) {
+        closedDisplayRefreshGeneration += 1
+        let generation = closedDisplayRefreshGeneration
         closedDisplayRefreshPending = true
         Task {
             if let delay { try? await Task.sleep(for: delay) }
+            // Superseded while sleeping: leave the latch for the newer task.
+            guard generation == closedDisplayRefreshGeneration else { return }
             await closedDisplay.refresh()
+            guard generation == closedDisplayRefreshGeneration else { return }
             closedDisplayRefreshPending = false
             // A confirmed-off setting means an earlier clear took: arm again, so
             // a hold taken later in this idle stretch is still caught.

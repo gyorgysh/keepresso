@@ -141,12 +141,13 @@ public enum AntigravityHooks {
     /// event, resolve the owning process, write or delete the record. Never
     /// throws and never prints; the caller emits `{}` and exits 0 regardless.
     ///
-    /// Resolution prefers the editor's `language_server`, because the `ps` scan
-    /// already surfaces that process as the session (see
-    /// ``PSAgentActivityMonitor/antigravityHostMarker``). Finding it here means
-    /// the record joins that row on `agentPid`, exactly, rather than falling
-    /// back to matching working directories. A CLI session has a real `agy`
-    /// process above the hook instead, and joins the ordinary way.
+    /// Resolution has the same two shapes as ``CursorHooks/handle``: a CLI
+    /// session joins on `agentPid`, and an IDE session anchors to the editor's
+    /// `language_server` as `ownerPid` so each conversation is its own
+    /// hook-only row. Writing the host into `agentPid` instead would collapse
+    /// every open conversation onto the one process the `ps` scan already
+    /// sees, and `applyHookRecords`' newest-wins rule would let a Stop in
+    /// chat B idle the Mac while chat A was still working.
     public static func handle(
         event: String,
         payloadData: Data,
@@ -177,9 +178,8 @@ public enum AntigravityHooks {
                     detail: detail,
                     cwd: payload.directory,
                     origin: cli?.origin ?? (host == nil ? nil : .ide),
-                    // Either resolution yields a real process the monitor also
-                    // sees, so both join on the pid.
-                    agentPid: cli?.agentPid ?? host,
+                    agentPid: cli?.agentPid,
+                    ownerPid: host,
                     agent: cli?.agentCommand ?? "antigravity",
                     updatedAt: now
                 ),

@@ -137,16 +137,78 @@ private func object(_ data: Data) -> [String: Any] {
     AgentHooks.write(
         AgentHooks.HookRecord(
             sessionId: "ed6b90f5", state: .working, detail: nil, cwd: "/Users/x/site",
-            origin: .ide, agentPid: 71776, agent: "antigravity",
+            origin: .ide, ownerPid: 71776, agent: "antigravity",
             updatedAt: now.addingTimeInterval(-AgentHooks.staleAfter - 60)),
         in: directory)
     // A tool call can run far longer than the staleness window with no event in
     // between, so an old working record is still the truth while its host runs.
-    let live = AgentHooks.readHookRecords(now: now, in: directory, isAlive: { $0 == 71776 })
+    let live = AgentHooks.readHookRecords(
+        now: now, in: directory, isAlive: { _ in false }, isHostAlive: { $0 == 71776 })
     #expect(live.count == 1)
     #expect(live.first?.state == .working)
     // With the editor gone, the same record is neither trusted nor kept.
-    #expect(AgentHooks.readHookRecords(now: now, in: directory, isAlive: { _ in false }).isEmpty)
+    #expect(AgentHooks.readHookRecords(
+        now: now, in: directory, isAlive: { _ in false }, isHostAlive: { _ in false }).isEmpty)
+}
+
+@Test func handleAnchorsAnIDESessionToItsEditorHost() {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("ag-handle-\(UUID().uuidString)", isDirectory: true)
+    try! FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    // hook shell (7) -> language_server (5) -> the app (3). No `agy` in the
+    // tree, so this is an in-editor turn.
+    let parents: [Int32: Int32] = [7: 5, 5: 3, 3: 1]
+    let paths: [Int32: String] = [
+        7: "/bin/zsh",
+        5: "/Applications/Antigravity.app/Contents/Resources/bin/language_server",
+        3: "/Applications/Antigravity.app/Contents/MacOS/Antigravity",
+    ]
+    AntigravityHooks.handle(
+        event: "PreInvocation",
+        payloadData: Data(#"{"conversationId":"ed6b90f5","workspacePaths":["/Users/x/site"]}"#.utf8),
+        parentPid: 7, in: directory,
+        parentOf: { parents[$0] }, commandOf: { _ in nil }, pathOf: { paths[$0] })
+    let records = AgentHooks.readHookRecords(
+        now: Date(), in: directory, isAlive: { _ in true }, isHostAlive: { _ in true })
+    #expect(records.count == 1)
+    #expect(records[0].state == .working)
+    // Owner, not agent: the language_server is shared across conversations, so
+    // joining on it would let one chat's Stop idle another still-working chat.
+    #expect(records[0].agentPid == nil)
+    #expect(records[0].ownerPid == 5)
+    #expect(records[0].agent == "antigravity")
+    #expect(records[0].origin == .ide)
+    #expect(records[0].cwd == "/Users/x/site")
+}
+
+@Test func twoIDEConversationsStayIndependentSessions() {
+    // The failure this guards: both chats write records for the same host, the
+    // newer Stop would stamp the shared pid idle, and the Mac would sleep while
+    // the older chat was still mid-tool. Owner-anchored records each become
+    // their own hook-only row instead.
+    let now = Date()
+    let records = [
+        AgentHooks.HookRecord(
+            sessionId: "chat-a", state: .working, detail: "running-command",
+            cwd: "/Users/x/site", origin: .ide, ownerPid: 5, agent: "antigravity",
+            updatedAt: now.addingTimeInterval(-10)),
+        AgentHooks.HookRecord(
+            sessionId: "chat-b", state: .idle, detail: nil,
+            cwd: "/Users/x/site", origin: .ide, ownerPid: 5, agent: "antigravity",
+            updatedAt: now),
+    ]
+    // No process to join: both fall through as hook-only sessions.
+    let join = PSAgentActivityMonitor.applyHookRecords(records, to: [], cwdOf: { _ in nil })
+    let sessions = join.unclaimed.compactMap(PSAgentActivityMonitor.hookOnlySession(from:))
+    #expect(sessions.count == 2)
+    let byId = Dictionary(uniqueKeysWithValues: sessions.map {
+        ($0.pid, $0)
+    })
+    let pidA = PSAgentActivityMonitor.syntheticPid(forSessionId: "chat-a")
+    let pidB = PSAgentActivityMonitor.syntheticPid(forSessionId: "chat-b")
+    #expect(byId[pidA]?.hookState == .working)
+    #expect(byId[pidB]?.hookState == .idle)
 }
 
 // MARK: - hooks.json install and remove

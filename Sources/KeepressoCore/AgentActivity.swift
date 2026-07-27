@@ -370,11 +370,12 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     }
 
     /// A session reconstructed from a hook record alone, for agents that run
-    /// inside their editor rather than as a command. The Cursor IDE is the
-    /// case that forces this: its agent lives in an Electron renderer shared
-    /// with the whole editor, so there is no process to find, no subtree whose
-    /// CPU means anything, and no transcript we know how to read. The hook
-    /// record is the entire signal.
+    /// inside their editor rather than as a command. Cursor's IDE agent and
+    /// Antigravity's in-editor agent are the cases that force this: both live
+    /// inside a process shared across conversations, so there is no per-chat
+    /// process to find and no subtree whose CPU means anything. The hook
+    /// record is the entire signal, keyed by conversation so two chats never
+    /// collapse onto one row.
     ///
     /// Only a record naming a live owning app qualifies (``AgentHooks/readHookRecords(now:in:isAlive:isHostAlive:)``
     /// has already verified that pid), so a record left unclaimed for the
