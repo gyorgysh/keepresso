@@ -110,6 +110,7 @@
 "Import Settings…" = "설정 가져오기…";
 "External display connected" = "외부 디스플레이 연결됨";
 "Fix…" = "해결…";
+"Follows the session while “Only while brewing” is on." = "“깨어 있게 유지 세션 중에만”이 켜져 있는 동안 세션을 따라갑니다.";
 "GNU GPL v3.0" = "GNU GPL v3.0";
 "Gaming & Streaming" = "게임 및 스트리밍";
 "Gaming & Streaming…" = "게임 및 스트리밍…";
@@ -143,6 +144,8 @@
 "No days selected means every day." = "선택한 요일이 없으면 매일을 의미합니다.";
 "No paired devices" = "페어링된 기기 없음";
 "No session activity yet." = "아직 세션 활동이 없습니다.";
+"No session is running, so closed-display mode should be off. Enter your administrator password to switch it off." = "실행 중인 세션이 없으므로 디스플레이 닫힘 모드는 꺼져 있어야 합니다. 끄려면 관리자 암호를 입력하십시오.";
+"No session is running, so the sleep override should be off. Enter your administrator password to switch it off." = "실행 중인 세션이 없으므로 잠자기 비활성화는 꺼져 있어야 합니다. 끄려면 관리자 암호를 입력하십시오.";
 "No volumes mounted" = "마운트된 볼륨 없음";
 "Not available on this macOS version." = "이 macOS 버전에서는 사용할 수 없습니다.";
 "Nothing is holding the Mac awake right now." = "지금은 Mac을 깨어 있게 유지하는 항목이 없습니다.";

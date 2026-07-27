@@ -225,6 +225,59 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     #expect(!launcher.flagPresent)
 }
 
+// MARK: - Authority over a hold the automation didn't take
+
+@Test func idleClearsAHoldTheAutomationDidntTake() {
+    // The setting is on with no automation hold and no session: "only while
+    // brewing" owns it, so idle must mean off.
+    #expect(ClosedDisplayAuthority.shouldClearForeignHold(
+        onlyWhileBrewing: true, brewing: false, automationHolding: false,
+        settingIsOn: true, canApply: true
+    ))
+}
+
+@Test func nothingIsClearedWhileTheAutomationOwnsTheHold() {
+    // Mid-session the automation's own hold is released the normal way.
+    #expect(!ClosedDisplayAuthority.shouldClearForeignHold(
+        onlyWhileBrewing: true, brewing: true, automationHolding: true,
+        settingIsOn: true, canApply: true
+    ))
+    // Idle with our own hold still up: the release is what drops it.
+    #expect(!ClosedDisplayAuthority.shouldClearForeignHold(
+        onlyWhileBrewing: true, brewing: false, automationHolding: true,
+        settingIsOn: true, canApply: true
+    ))
+}
+
+@Test func aForeignHoldSurvivesUntilTheSessionEnds() {
+    // During a session a foreign hold is doing the same job; clearing it there
+    // would drop clamshell protection mid-brew. The next idle tick gets it.
+    #expect(!ClosedDisplayAuthority.shouldClearForeignHold(
+        onlyWhileBrewing: true, brewing: true, automationHolding: false,
+        settingIsOn: true, canApply: true
+    ))
+}
+
+@Test func nothingIsClearedWithTheFeatureOffOrTheSettingAlreadyOff() {
+    #expect(!ClosedDisplayAuthority.shouldClearForeignHold(
+        onlyWhileBrewing: false, brewing: false, automationHolding: false,
+        settingIsOn: true, canApply: true
+    ))
+    #expect(!ClosedDisplayAuthority.shouldClearForeignHold(
+        onlyWhileBrewing: true, brewing: false, automationHolding: false,
+        settingIsOn: false, canApply: true
+    ))
+}
+
+@Test func noWayToWriteMeansNoClear() {
+    // The host has already spent its one password prompt for this app run and
+    // has no helper daemon to write silently: nothing to do until it can.
+    #expect(!ClosedDisplayAuthority.shouldClearForeignHold(
+        onlyWhileBrewing: true, brewing: false, automationHolding: false,
+        settingIsOn: true, canApply: false
+    ))
+}
+
 // MARK: - Settings
 
 @Test func closedDisplayOnlyWhileBrewingDefaultsOffAndRoundTrips() throws {

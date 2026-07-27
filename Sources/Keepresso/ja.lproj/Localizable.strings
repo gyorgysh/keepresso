@@ -110,6 +110,7 @@
 "Import Settings…" = "設定を読み込む…";
 "External display connected" = "外部ディスプレイ接続中";
 "Fix…" = "修正…";
+"Follows the session while “Only while brewing” is on." = "「抽出中のみ」がオンの間はセッションに追従します。";
 "GNU GPL v3.0" = "GNU GPL v3.0";
 "Gaming & Streaming" = "ゲームとストリーミング";
 "Gaming & Streaming…" = "ゲームとストリーミング…";
@@ -143,6 +144,8 @@
 "No days selected means every day." = "日を選択しない場合は毎日を意味します。";
 "No paired devices" = "ペアリング済みデバイスなし";
 "No session activity yet." = "まだセッションのアクティビティはありません。";
+"No session is running, so closed-display mode should be off. Enter your administrator password to switch it off." = "セッションが実行されていないため、クラムシェルモードはオフになっているはずです。オフにするには、管理者パスワードを入力してください。";
+"No session is running, so the sleep override should be off. Enter your administrator password to switch it off." = "セッションが実行されていないため、スリープの無効化はオフになっているはずです。オフにするには、管理者パスワードを入力してください。";
 "No volumes mounted" = "マウント済みボリュームなし";
 "Not available on this macOS version." = "この macOS バージョンでは使用できません。";
 "Nothing is holding the Mac awake right now." = "現在、Mac のスリープを妨げているものはありません。";

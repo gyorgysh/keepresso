@@ -132,6 +132,34 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
     }
 }
 
+/// Decides when the "only while brewing" automation has to clear a
+/// closed-display hold it doesn't own.
+///
+/// While the feature is on it is authoritative: the sleep setting follows the
+/// session, whatever anyone else did to it. A hold taken outside the
+/// automation (the manual toggle, `pmset` by hand, another tool) would
+/// otherwise sit there forever, because a release only ever gives back what
+/// the automation itself took. Idle-only on purpose: during a session a
+/// foreign hold is doing the same job the automation wants done, and clearing
+/// it there could drop the Mac's clamshell protection mid-brew. The next idle
+/// tick clears it instead.
+///
+/// `canApply` is the host's answer to "is there a way to write the setting
+/// right now": silent through the helper daemon, or a password prompt the host
+/// is willing to show (announced, and at most once per app run).
+public enum ClosedDisplayAuthority {
+    public static func shouldClearForeignHold(
+        onlyWhileBrewing: Bool,
+        brewing: Bool,
+        automationHolding: Bool,
+        settingIsOn: Bool,
+        canApply: Bool
+    ) -> Bool {
+        guard onlyWhileBrewing, settingIsOn, canApply else { return false }
+        return !brewing && !automationHolding
+    }
+}
+
 /// Drives closed-display mode's "only while brewing" automation: the global
 /// `disablesleep` setting follows the keep-awake session, on when it starts
 /// and off when it ends, instead of staying on until manually turned off.

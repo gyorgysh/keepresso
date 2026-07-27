@@ -110,6 +110,7 @@
 "Import Settings…" = "Ayarları İçe Aktar…";
 "External display connected" = "Harici ekran bağlı";
 "Fix…" = "Düzelt…";
+"Follows the session while “Only while brewing” is on." = "“Yalnızca demlenirken” açıkken oturumu izler.";
 "GNU GPL v3.0" = "GNU GPL v3.0";
 "Gaming & Streaming" = "Oyun ve Yayın";
 "Gaming & Streaming…" = "Oyun ve Yayın…";
@@ -143,6 +144,8 @@
 "No days selected means every day." = "Hiçbir gün seçilmemesi her gün anlamına gelir.";
 "No paired devices" = "Eşleştirilmiş cihaz yok";
 "No session activity yet." = "Henüz oturum etkinliği yok.";
+"No session is running, so closed-display mode should be off. Enter your administrator password to switch it off." = "Çalışan oturum yok, bu yüzden kapalı ekran modu kapalı olmalı. Kapatmak üzere yönetici parolanızı girin.";
+"No session is running, so the sleep override should be off. Enter your administrator password to switch it off." = "Çalışan oturum yok, bu yüzden uyku devre dışı bırakma kapalı olmalı. Kapatmak üzere yönetici parolanızı girin.";
 "No volumes mounted" = "Bağlanmış birim yok";
 "Not available on this macOS version." = "Bu macOS sürümünde kullanılamaz.";
 "Nothing is holding the Mac awake right now." = "Şu anda Mac'i uyanık tutan hiçbir şey yok.";

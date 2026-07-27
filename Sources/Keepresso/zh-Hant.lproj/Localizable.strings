@@ -110,6 +110,7 @@
 "Import Settings…" = "匯入設定…";
 "External display connected" = "已連接外接螢幕";
 "Fix…" = "修正…";
+"Follows the session while “Only while brewing” is on." = "「僅在保持喚醒工作階段期間」開啟時，會跟隨工作階段。";
 "GNU GPL v3.0" = "GNU GPL v3.0";
 "Gaming & Streaming" = "遊戲與串流";
 "Gaming & Streaming…" = "遊戲與串流…";
@@ -143,6 +144,8 @@
 "No days selected means every day." = "未選取任何日期即代表每天。";
 "No paired devices" = "沒有已配對的裝置";
 "No session activity yet." = "目前尚無工作階段活動。";
+"No session is running, so closed-display mode should be off. Enter your administrator password to switch it off." = "目前沒有工作階段在執行，因此闔蓋模式應為關閉狀態。請輸入系統管理員密碼以將其關閉。";
+"No session is running, so the sleep override should be off. Enter your administrator password to switch it off." = "目前沒有工作階段在執行，因此睡眠停用開關應為關閉狀態。請輸入系統管理員密碼以將其關閉。";
 "No volumes mounted" = "沒有已裝載的磁碟區";
 "Not available on this macOS version." = "此 macOS 版本不支援此功能。";
 "Nothing is holding the Mac awake right now." = "目前沒有任何項目讓 Mac 保持喚醒。";

@@ -110,6 +110,7 @@
 "Import Settings…" = "Import Settings…";
 "External display connected" = "External display connected";
 "Fix…" = "Fix…";
+"Follows the session while “Only while brewing” is on." = "Follows the session while “Only while brewing” is on.";
 "GNU GPL v3.0" = "GNU GPL v3.0";
 "Gaming & Streaming" = "Gaming & Streaming";
 "Gaming & Streaming…" = "Gaming & Streaming…";
@@ -143,6 +144,8 @@
 "No days selected means every day." = "No days selected means every day.";
 "No paired devices" = "No paired devices";
 "No session activity yet." = "No session activity yet.";
+"No session is running, so closed-display mode should be off. Enter your administrator password to switch it off." = "No session is running, so closed-display mode should be off. Enter your administrator password to switch it off.";
+"No session is running, so the sleep override should be off. Enter your administrator password to switch it off." = "No session is running, so the sleep override should be off. Enter your administrator password to switch it off.";
 "No volumes mounted" = "No volumes mounted";
 "Not available on this macOS version." = "Not available on this macOS version.";
 "Nothing is holding the Mac awake right now." = "Nothing is holding the Mac awake right now.";

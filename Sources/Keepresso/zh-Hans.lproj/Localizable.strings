@@ -110,6 +110,7 @@
 "Import Settings…" = "导入设置…";
 "External display connected" = "已连接外接显示器";
 "Fix…" = "修复…";
+"Follows the session while “Only while brewing” is on." = "在“仅在保持唤醒会话期间”开启时跟随会话。";
 "GNU GPL v3.0" = "GNU GPL v3.0";
 "Gaming & Streaming" = "游戏与串流";
 "Gaming & Streaming…" = "游戏与串流…";
@@ -143,6 +144,8 @@
 "No days selected means every day." = "未选择任何日期即表示每天。";
 "No paired devices" = "没有已配对的设备";
 "No session activity yet." = "尚无会话活动。";
+"No session is running, so closed-display mode should be off. Enter your administrator password to switch it off." = "当前没有会话在运行，因此合盖模式应处于关闭状态。输入你的管理员密码以将其关闭。";
+"No session is running, so the sleep override should be off. Enter your administrator password to switch it off." = "当前没有会话在运行，因此禁用睡眠应处于关闭状态。输入你的管理员密码以将其关闭。";
 "No volumes mounted" = "没有已装载的宗卷";
 "Not available on this macOS version." = "在此 macOS 版本上不可用。";
 "Nothing is holding the Mac awake right now." = "目前没有任何因素让 Mac 保持唤醒。";

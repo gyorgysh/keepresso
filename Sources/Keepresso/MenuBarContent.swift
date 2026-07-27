@@ -32,6 +32,8 @@ struct MenuBarContent: View {
     /// Whether the panel is actually on screen. The closed panel keeps this
     /// view alive on current macOS, so periodic work gates on this.
     @State private var panelVisible = true
+    /// Bumped when the lid-closed row is clicked while the automation owns it.
+    @State private var lidRowShakes = 0
     @State private var showCustomDuration = false
     @State private var showUntilTime = false
 
@@ -235,12 +237,25 @@ struct MenuBarContent: View {
             set: { model.setClosedDisplay($0) }
         ), info: model.machineHasBattery
             ? L("Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.")
-            : L("Stops the Mac from sleeping at all, even with no session running. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password."))
+            : L("Stops the Mac from sleeping at all, even with no session running. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password."),
+                  // While "Only while brewing" is on, the automation owns this
+                  // setting: the switch reports what it did instead of offering
+                  // a manual override the next tick would undo anyway. Clicking
+                  // it shakes the line below, which names what is driving it.
+                  switchLocked: model.closedDisplayOnlyWhileBrewing,
+                  onLockedTap: { lidRowShakes += 1 })
         .disabled(model.closedDisplayBusy)
         if model.closedDisplayBusy {
             AdminAuthNote(purpose: model.machineHasBattery
                 ? L("keep the Mac awake with the lid closed")
                 : L("disable system sleep"))
+        }
+        if model.closedDisplayOnlyWhileBrewing {
+            Text("Follows the session while \u{201C}Only while brewing\u{201D} is on.")
+                .font(type.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .shakes(on: lidRowShakes)
         }
         if model.closedDisplayEnabled {
             Text(model.machineHasBattery

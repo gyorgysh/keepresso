@@ -243,6 +243,8 @@ private struct GeneralTab: View {
     @Bindable var model: AppModel
     @Environment(\.openWindow) private var openWindow
     @State private var launchAtLogin = LoginItem.isEnabled
+    /// Bumped when the lid-closed row is clicked while the automation owns it.
+    @State private var lidRowShakes = 0
     /// The result of the last export/import, shown inline under the buttons.
     @State private var transferNote: TransferNote?
 
@@ -630,11 +632,30 @@ private struct GeneralTab: View {
                 get: { model.closedDisplayEnabled },
                 set: { model.setClosedDisplay($0) }
             ))
-            .disabled(model.closedDisplayBusy)
+            // "Only while brewing" is authoritative: while it's on this row
+            // reports the automation's state instead of offering a manual
+            // override the next tick would undo. Clicking it shakes the line
+            // below, which names what is driving it. The section header's info
+            // button stays live, so the explanation is still one click away.
+            .disabled(model.closedDisplayBusy || model.closedDisplayOnlyWhileBrewing)
+            .overlay {
+                if model.closedDisplayOnlyWhileBrewing {
+                    Rectangle()
+                        .fill(.clear)
+                        .contentShape(Rectangle())
+                        .onTapGesture { lidRowShakes += 1 }
+                }
+            }
             if model.closedDisplayBusy && !model.helperInstalled {
                 AdminAuthNote(purpose: model.machineHasBattery
                     ? L("keep the Mac awake with the lid closed")
                     : L("disable system sleep"))
+            }
+            if model.closedDisplayOnlyWhileBrewing {
+                Text("Follows the session while \u{201C}Only while brewing\u{201D} is on.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .shakes(on: lidRowShakes)
             }
             if let error = model.closedDisplayError {
                 Label(error, systemImage: "exclamationmark.triangle")

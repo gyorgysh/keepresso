@@ -145,6 +145,10 @@ APP = {
     "No days selected means every day.": "Nessun giorno selezionato equivale a tutti i giorni.",
     "No paired devices": "Nessun dispositivo abbinato",
     "No session activity yet.": "Ancora nessuna attività di sessione.",
+    "No session is running, so closed-display mode should be off. Enter your administrator password to switch it off.":
+        "Nessuna sessione è in esecuzione, quindi la modalità a schermo chiuso dovrebbe essere disattivata. Inserisci la password di amministratore per disattivarla.",
+    "No session is running, so the sleep override should be off. Enter your administrator password to switch it off.":
+        "Nessuna sessione è in esecuzione, quindi il blocco della sospensione dovrebbe essere disattivato. Inserisci la password di amministratore per disattivarlo.",
     "No volumes mounted": "Nessun volume montato",
     "Not available on this macOS version.": "Non disponibile in questa versione di macOS.",
     "Nothing is holding the Mac awake right now.": "Al momento nulla tiene sveglio il Mac.",
@@ -605,6 +609,7 @@ APP.update({
     "Fan boost ended": "Aumento ventole terminato",
     "Fans boosted to %d%% to cool the Mac": "Ventole aumentate al %d%% per raffreddare il Mac",
     "Fans not boosted": "Ventole non aumentate",
+    "Follows the session while “Only while brewing” is on.": "Segue la sessione mentre “Solo durante l’infusione” è attivo.",
     "Helper installed. Closed-display mode, fan boost, and AWDL pausing work without password prompts.":
         "Assistente installato. La modalità a schermo chiuso, l’aumento delle ventole e la pausa di AWDL funzionano senza richieste di password.",
     "Hottest sensor during the test: %@.": "Sensore più caldo durante il test: %@.",

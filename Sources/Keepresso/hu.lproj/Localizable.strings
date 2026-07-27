@@ -110,6 +110,7 @@
 "Import Settings…" = "Beállítások importálása…";
 "External display connected" = "Külső kijelző csatlakoztatva";
 "Fix…" = "Javítás…";
+"Follows the session while “Only while brewing” is on." = "Követi a munkamenetet, amíg a „Csak főzés közben” be van kapcsolva.";
 "GNU GPL v3.0" = "GNU GPL v3.0";
 "Gaming & Streaming" = "Játék és streamelés";
 "Gaming & Streaming…" = "Játék és streamelés…";
@@ -143,6 +144,8 @@
 "No days selected means every day." = "Ha nincs nap kijelölve, az minden napot jelent.";
 "No paired devices" = "Nincsenek párosított eszközök";
 "No session activity yet." = "Még nincs munkamenet-tevékenység.";
+"No session is running, so closed-display mode should be off. Enter your administrator password to switch it off." = "Nincs futó munkamenet, így a csukott fedél módnak kikapcsolva kellene lennie. Adja meg a rendszergazdai jelszavát a kikapcsolásához.";
+"No session is running, so the sleep override should be off. Enter your administrator password to switch it off." = "Nincs futó munkamenet, így az alvásfelülbírálásnak kikapcsolva kellene lennie. Adja meg a rendszergazdai jelszavát a kikapcsolásához.";
 "No volumes mounted" = "Nincs csatolt kötet";
 "Not available on this macOS version." = "Ezen a macOS-verzión nem érhető el.";
 "Nothing is holding the Mac awake right now." = "Jelenleg semmi sem tartja ébren a Macet.";

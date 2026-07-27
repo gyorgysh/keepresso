@@ -3,6 +3,17 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [1.19.1] - 2026-07-27
+
+### Changed
+
+- **"Only while brewing" now has the final say.** With it on, closed-display
+  mode turns itself on and off with the session, even if you had switched it on
+  by hand and forgotten. Before, a manual override was left alone, so the Mac
+  could stay awake with nothing running and a MacBook could run itself flat.
+  While the option is on, the switch shows what the automation is doing and
+  says so underneath, and clicking it shakes that line instead of doing nothing.
+
 ## [1.19.0] - 2026-07-25
 
 ### Added

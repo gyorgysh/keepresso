@@ -141,6 +141,8 @@ APP = {
     "No days selected means every day.": "Если дни не выбраны, это означает каждый день.",
     "No paired devices": "Нет сопряжённых устройств",
     "No session activity yet.": "Активности сеансов пока нет.",
+    "No session is running, so closed-display mode should be off. Enter your administrator password to switch it off.": "Сеанс не запущен, поэтому режим закрытой крышки должен быть выключен. Введите пароль администратора, чтобы выключить его.",
+    "No session is running, so the sleep override should be off. Enter your administrator password to switch it off.": "Сеанс не запущен, поэтому отключение сна должно быть выключено. Введите пароль администратора, чтобы выключить его.",
     "No volumes mounted": "Нет подключённых томов",
     "Not available on this macOS version.": "Недоступно в этой версии macOS.",
     "Nothing is holding the Mac awake right now.": "Сейчас ничто не мешает Mac засыпать.",
@@ -517,6 +519,7 @@ APP.update({
     "Fan boost ended": "Разгон вентиляторов завершён",
     "Fans boosted to %d%% to cool the Mac": "Вентиляторы разогнаны до %d%%, чтобы охладить Mac",
     "Fans not boosted": "Вентиляторы не разогнаны",
+    "Follows the session while “Only while brewing” is on.": "Следует за сеансом, пока включено «Только во время заваривания».",
     "Helper installed. Closed-display mode, fan boost, and AWDL pausing work without password prompts.": "Помощник установлен. Режим закрытой крышки, разгон вентиляторов и приостановка AWDL работают без запросов пароля.",
     "Hottest sensor during the test: %@.": "Самый горячий датчик во время теста: %@.",
     "How see-through the menu-bar dropdown is. Frosty (0%) backs its glass with blur and a wash of the window color, so text stays crisp on any wallpaper. Sliding toward 100% thins that backing away until the panel is the system's bare Liquid Glass, letting the desktop shine through, with some contrast cost on busy or very dark wallpapers. Changes apply instantly, only to the dropdown (windows like this one keep their standard look), and the system's Reduce Transparency accessibility setting always wins.":

@@ -80,8 +80,8 @@ targets:
       properties:
         CFBundleName: Keepresso
         CFBundleDisplayName: Keepresso
-        CFBundleShortVersionString: "1.19.0"
-        CFBundleVersion: "30"
+        CFBundleShortVersionString: "1.19.1"
+        CFBundleVersion: "31"
         LSUIElement: true            # menu-bar agent: no Dock icon
         LSMinimumSystemVersion: "14.0"
         # The shipped localizations (Localizable.strings under *.lproj); keep
@@ -119,8 +119,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: sh.gyorgy.keepresso
-        MARKETING_VERSION: "1.19.0"
-        CURRENT_PROJECT_VERSION: "30"
+        MARKETING_VERSION: "1.19.1"
+        CURRENT_PROJECT_VERSION: "31"
         SWIFT_VERSION: "5.9"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Bridges the Objective-C virtual-display wrapper (private CG API) to Swift.
@@ -230,8 +230,8 @@ targets:
       properties:
         CFBundleName: KeepressoWidget
         CFBundleDisplayName: Keepresso
-        CFBundleShortVersionString: "1.19.0"
-        CFBundleVersion: "30"
+        CFBundleShortVersionString: "1.19.1"
+        CFBundleVersion: "31"
         # Same six localizations as the app; keep in sync with
         # tools/localization/gen_strings.py.
         CFBundleLocalizations: [en, de, es, fr, it, hu, pt-BR, tr, ru, ja, ko, pl, uk, zh-Hans, zh-Hant]
@@ -255,8 +255,8 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         # Keep in lockstep with the app target's versions on every release
         # bump (the release scripts read the app's, the first in this file).
-        MARKETING_VERSION: "1.19.0"
-        CURRENT_PROJECT_VERSION: "30"
+        MARKETING_VERSION: "1.19.1"
+        CURRENT_PROJECT_VERSION: "31"
         SWIFT_VERSION: "5.9"
         ENABLE_HARDENED_RUNTIME: true
         CODE_SIGN_STYLE: Automatic

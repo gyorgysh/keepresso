@@ -110,6 +110,7 @@
 "Import Settings…" = "Importuj ustawienia…";
 "External display connected" = "Podłączono zewnętrzny wyświetlacz";
 "Fix…" = "Napraw…";
+"Follows the session while “Only while brewing” is on." = "Podąża za sesją, gdy „Tylko podczas parzenia” jest włączone.";
 "GNU GPL v3.0" = "GNU GPL v3.0";
 "Gaming & Streaming" = "Gry i streaming";
 "Gaming & Streaming…" = "Gry i streaming…";
@@ -143,6 +144,8 @@
 "No days selected means every day." = "Brak zaznaczonych dni oznacza każdy dzień.";
 "No paired devices" = "Brak sparowanych urządzeń";
 "No session activity yet." = "Nie ma jeszcze żadnej aktywności sesji.";
+"No session is running, so closed-display mode should be off. Enter your administrator password to switch it off." = "Żadna sesja nie jest uruchomiona, więc tryb zamkniętej pokrywy powinien być wyłączony. Podaj hasło administratora, aby go wyłączyć.";
+"No session is running, so the sleep override should be off. Enter your administrator password to switch it off." = "Żadna sesja nie jest uruchomiona, więc blokada uśpienia powinna być wyłączona. Podaj hasło administratora, aby ją wyłączyć.";
 "No volumes mounted" = "Brak zamontowanych wolumenów";
 "Not available on this macOS version." = "Niedostępne w tej wersji macOS.";
 "Nothing is holding the Mac awake right now." = "Obecnie nic nie utrzymuje Maca w stanie czuwania.";

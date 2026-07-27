@@ -105,18 +105,81 @@ func sectionFooter(_ text: LocalizedStringKey) -> some View {
 /// Sized small to match the switches in the grouped Preferences forms, so
 /// every switch in the app renders at one size. An optional `info` text adds
 /// an ``InfoButton`` after the label.
-func switchRow(_ title: LocalizedStringKey, isOn: Binding<Bool>, info: String? = nil) -> some View {
-    Toggle(isOn: isOn) {
-        HStack(spacing: 4) {
-            Text(title)
-            if let info {
-                InfoButton(text: info)
-            }
+/// `switchLocked` freezes only the switch, for a setting something else is
+/// driving. The label and its ``InfoButton`` stay live (the explanation is
+/// exactly what a user reaches for then), and a click on the dead switch calls
+/// `onLockedTap` instead of being swallowed.
+func switchRow(
+    _ title: LocalizedStringKey,
+    isOn: Binding<Bool>,
+    info: String? = nil,
+    switchLocked: Bool = false,
+    onLockedTap: (() -> Void)? = nil
+) -> some View {
+    let label = HStack(spacing: 4) {
+        Text(title)
+        if let info {
+            InfoButton(text: info)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+
+    return Group {
+        if switchLocked {
+            HStack(spacing: 8) {
+                label
+                Toggle("", isOn: isOn)
+                    .labelsHidden()
+                    .disabled(true)
+                    // A disabled control takes no clicks, so catch them above it.
+                    .overlay {
+                        Rectangle()
+                            .fill(.clear)
+                            .contentShape(Rectangle())
+                            .onTapGesture { onLockedTap?() }
+                    }
+            }
+        } else {
+            Toggle(isOn: isOn) { label }
+        }
     }
     .toggleStyle(.switch)
     .controlSize(.small)
+}
+
+/// A short sideways shake, driven by a counter: each bump animates one shake.
+private struct ShakeEffect: GeometryEffect {
+    var animatableData: CGFloat
+
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        // Three passes either side of centre, landing back on centre as the
+        // value reaches the next whole number.
+        ProjectionTransform(CGAffineTransform(
+            translationX: 5 * sin(animatableData * .pi * 6), y: 0
+        ))
+    }
+}
+
+/// Wraps ``ShakeEffect`` so the motion can be skipped under Reduce Motion,
+/// which needs an environment read and so can't live in a plain modifier.
+private struct Shake: ViewModifier {
+    let count: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(ShakeEffect(animatableData: reduceMotion ? 0 : CGFloat(count)))
+            .animation(reduceMotion ? nil : .linear(duration: 0.3), value: count)
+    }
+}
+
+extension View {
+    /// Shake this view whenever `count` changes. Point it at the line that
+    /// explains why a control is inert, so a click on that control draws the
+    /// eye to the answer instead of doing nothing.
+    func shakes(on count: Int) -> some View {
+        modifier(Shake(count: count))
+    }
 }
 
 /// A plain, full-width menu row: no border, a subtle hover/press highlight, and

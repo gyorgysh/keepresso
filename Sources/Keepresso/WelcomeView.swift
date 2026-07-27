@@ -26,6 +26,8 @@ struct WelcomeView: View {
     /// Drives the one-time entrance: sections fade up in a quick stagger the
     /// first time the window draws. Skipped entirely under Reduce Motion.
     @State private var revealed = false
+    /// Bumped when the lid-closed switch is clicked while the automation owns it.
+    @State private var lidRowShakes = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// A way someone uses their Mac, mapped to a built-in preset that sets up the
@@ -384,7 +386,25 @@ struct WelcomeView: View {
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)
-                .disabled(model.closedDisplayBusy)
+                // Re-running setup with "only while brewing" already on: the
+                // automation owns the setting, so the row only reports it, and
+                // a click on the dead switch shakes the line that says why.
+                .disabled(model.closedDisplayBusy || model.closedDisplayOnlyWhileBrewing)
+                .overlay {
+                    if model.closedDisplayOnlyWhileBrewing {
+                        Rectangle()
+                            .fill(.clear)
+                            .contentShape(Rectangle())
+                            .onTapGesture { lidRowShakes += 1 }
+                    }
+                }
+            }
+            if model.closedDisplayOnlyWhileBrewing {
+                Text("Follows the session while \u{201C}Only while brewing\u{201D} is on.")
+                    .font(type.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .shakes(on: lidRowShakes)
             }
             if model.closedDisplayBusy && !model.helperInstalled {
                 AdminAuthNote(purpose: L("keep the Mac awake with the lid closed"))

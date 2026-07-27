@@ -2305,6 +2305,7 @@ final class AppModel {
             // this window; with the helper installed no engage ever prompts,
             // so there is nothing to pre-authorize (and priming through the
             // daemon would flip the real setting on and off for nothing).
+            clearedForeignClosedDisplay = false
             if newValue && !closedDisplayAuto.isAuthorized && !helperInstalled {
                 // A fallback engage may later need a password mid-session; be
                 // able to say so even behind other windows.
@@ -2315,8 +2316,13 @@ final class AppModel {
                     await closedDisplayAuto.prime()
                     NSApp.activate(ignoringOtherApps: true)
                     window?.makeKeyAndOrderFront(nil)
+                    // The user is right here answering prompts, so this is the
+                    // one moment a fallback clear may ask for the password.
+                    enforceClosedDisplayAuthority(allowPrompt: true)
                 }
-            } else if !newValue {
+            } else if newValue {
+                enforceClosedDisplayAuthority()
+            } else {
                 // Turning it off mid-session: release the hold (autoTick won't,
                 // it early-returns once the feature's off), then re-read the
                 // system setting once the helper has had a cycle to apply it.
@@ -2338,6 +2344,50 @@ final class AppModel {
     @ObservationIgnored private var wasBrewingForClosedDisplay = false
     @ObservationIgnored private var wasClosedDisplayHolding = false
     @ObservationIgnored private var sawClosedDisplayAutoError = false
+    /// Whether a foreign hold was already cleared for this idle stretch, so a
+    /// write that doesn't take (a failing helper) isn't retried every second.
+    @ObservationIgnored private var clearedForeignClosedDisplay = false
+    /// Whether the password prompt for such a clear was already shown this app
+    /// run, so a cancelled one isn't re-offered every second.
+    @ObservationIgnored private var askedToClearClosedDisplay = false
+
+    /// Enforce "Only while brewing"'s authority: with the feature on, idle
+    /// means the sleep setting is off, even when the hold was taken outside
+    /// the automation (see ``ClosedDisplayAuthority``).
+    ///
+    /// Silent through the helper daemon. Without it the write needs a
+    /// password, and leaving the hold in place is the worse outcome (a laptop
+    /// with the lid shut and no session can run itself flat), so the prompt is
+    /// offered anyway: announced by a notification first, and at most once per
+    /// app run. `allowPrompt` marks the paths where the user is already at the
+    /// keyboard answering dialogs, which need no notification.
+    private func enforceClosedDisplayAuthority(allowPrompt: Bool = false) {
+        guard !closedDisplay.isBusy, !clearedForeignClosedDisplay else { return }
+        let needsPassword = !helperInstalled
+        guard ClosedDisplayAuthority.shouldClearForeignHold(
+            onlyWhileBrewing: settings.closedDisplayOnlyWhileBrewing,
+            brewing: session.isActive,
+            automationHolding: closedDisplayAuto.isHolding,
+            settingIsOn: closedDisplay.isEnabled == true,
+            canApply: !needsPassword || allowPrompt || !askedToClearClosedDisplay
+        ) else { return }
+        if needsPassword {
+            askedToClearClosedDisplay = true
+            if !allowPrompt {
+                // Never a password dialog out of nowhere: say what it is for
+                // first (the dialog itself names "osascript", not Keepresso).
+                notifier.notify(
+                    title: L("Keepresso needs your password"),
+                    body: machineHasBattery
+                        ? L("No session is running, so closed-display mode should be off. Enter your administrator password to switch it off.")
+                        : L("No session is running, so the sleep override should be off. Enter your administrator password to switch it off."),
+                    sound: true
+                )
+            }
+        }
+        clearedForeignClosedDisplay = true
+        setClosedDisplay(false, userInitiated: false)
+    }
 
     /// Once-a-second pulse for closed-display mode's "only while brewing"
     /// automation. The guard keeps the per-tick task from spawning while the
@@ -2361,6 +2411,9 @@ final class AppModel {
             )
         }
         wasBrewingForClosedDisplay = brewing
+        // A session hands the setting back to the automation: let the next idle
+        // stretch clear a foreign hold again (the release may restore one).
+        if brewing { clearedForeignClosedDisplay = false }
         // With the helper installed an engage should never fail; when one
         // does, suspect a stale daemon registration and check it (edge-only,
         // and the check dedupes and repairs at most once per run).
@@ -2379,7 +2432,13 @@ final class AppModel {
             Task {
                 try? await Task.sleep(for: .seconds(3))
                 await closedDisplay.refresh()
+                // The release restores whatever the setting was before the
+                // engage, so a hold set outside the automation comes back here.
+                // With the feature on, idle wins: clear it.
+                enforceClosedDisplayAuthority()
             }
+        } else {
+            enforceClosedDisplayAuthority()
         }
     }
 

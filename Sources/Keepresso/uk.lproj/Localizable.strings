@@ -110,6 +110,7 @@
 "Import Settings…" = "Імпортувати налаштування…";
 "External display connected" = "Підключено зовнішній дисплей";
 "Fix…" = "Виправити…";
+"Follows the session while “Only while brewing” is on." = "Стежить за сеансом, поки увімкнено «Лише під час заварювання».";
 "GNU GPL v3.0" = "GNU GPL v3.0";
 "Gaming & Streaming" = "Ігри та стримінг";
 "Gaming & Streaming…" = "Ігри та стримінг…";
@@ -143,6 +144,8 @@
 "No days selected means every day." = "Якщо дні не вибрано, це означає щодня.";
 "No paired devices" = "Немає спарованих пристроїв";
 "No session activity yet." = "Активності сеансу поки немає.";
+"No session is running, so closed-display mode should be off. Enter your administrator password to switch it off." = "Жоден сеанс не виконується, тож режим закритої кришки має бути вимкнено. Введіть пароль адміністратора, щоб вимкнути його.";
+"No session is running, so the sleep override should be off. Enter your administrator password to switch it off." = "Жоден сеанс не виконується, тож блокування сну має бути вимкнено. Введіть пароль адміністратора, щоб вимкнути його.";
 "No volumes mounted" = "Немає підключених томів";
 "Not available on this macOS version." = "Недоступно в цій версії macOS.";
 "Nothing is holding the Mac awake right now." = "Зараз ніщо не заважає Mac заснути.";
