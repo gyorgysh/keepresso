@@ -158,12 +158,16 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     ///
     /// Antigravity writes its conversation database around each agent step, not
     /// continuously: measured over a working session, writes landed a median 5s
-    /// apart but fell as far as 38s apart mid-turn. The default 15s window would
-    /// flap the row between working and idle while the agent was plainly busy,
-    /// so this one is set well clear of the worst observed gap.
+    /// apart, with occasional gaps into the tens of seconds.
+    ///
+    /// Deliberately not widened past the worst gap. A window is only there to
+    /// keep a row from blinking between steps; bridging a genuine pause is the
+    /// rule's grace period, which is longer, user-visible and user-adjustable.
+    /// Padding here would silently add itself to that grace, so a finished
+    /// agent would hold the Mac awake for the sum of the two.
     static let evidenceWindowOverrides: [String: TimeInterval] = [
-        "antigravity": 60,
-        "agy": 60,
+        "antigravity": 20,
+        "agy": 20,
     ]
 
     /// The freshness window for `agent`'s on-disk evidence.

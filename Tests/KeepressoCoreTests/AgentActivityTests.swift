@@ -134,11 +134,12 @@ private let antigravityHostCommand =
     #expect(!state.isWorking)
 }
 
-@Test func burstyAgentsGetAWiderEvidenceWindow() {
-    // Measured on a working Antigravity session: writes a median 5s apart, worst
-    // gap 38s. The default window would call that idle mid-turn.
-    #expect(PSAgentActivityMonitor.evidenceWindow(for: "antigravity") == 60)
-    #expect(PSAgentActivityMonitor.evidenceWindow(for: "agy") == 60)
+@Test func burstyAgentsGetTheirOwnEvidenceWindow() {
+    // Measured on a working Antigravity session: writes a median 5s apart. Wide
+    // enough not to blink between steps, and no wider: bridging a real pause is
+    // the rule's grace, and padding here would add itself to that grace.
+    #expect(PSAgentActivityMonitor.evidenceWindow(for: "antigravity") == 20)
+    #expect(PSAgentActivityMonitor.evidenceWindow(for: "agy") == 20)
     #expect(PSAgentActivityMonitor.evidenceWindow(for: "claude")
         == PSAgentActivityMonitor.evidenceFreshWindow)
 }
