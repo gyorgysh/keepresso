@@ -781,7 +781,7 @@ struct MenuBarContent: View {
         switch detail.agent {
         case "claude": return .claudeAccent
         case "cursor", "cursor-agent": return .cursorAccent
-        case "grok", "codex", "agy": return .monochromeAccent
+        case "grok", "codex", "agy", "antigravity": return .monochromeAccent
         default: return .green
         }
     }

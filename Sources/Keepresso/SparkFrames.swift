@@ -31,7 +31,7 @@ struct SparkView: View {
         case "claude": return .claudeSunburst
         case "cursor", "cursor-agent": return .cursorDots
         case "grok": return .grokDots
-        case "agy": return .antigravityDots
+        case "agy", "antigravity": return .antigravityDots
         // Codex's own mark, and the fallback for every other tool. Keepresso
         // detects far more agents than have a mark drawn here, and a breathing
         // dot suits an unknown one: it says "working" without borrowing some

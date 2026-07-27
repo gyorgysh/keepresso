@@ -26,6 +26,16 @@ public struct AgentSession: Equatable, Hashable, Sendable {
     public var hookUpdatedAt: Date?
     /// Where the session runs, classified by the hook's ancestor walk.
     public var origin: AgentHooks.HookSessionOrigin?
+    /// Whether only on-disk evidence may call this session working, with the
+    /// CPU heuristic skipped entirely.
+    ///
+    /// For an agent embedded in a running editor, whose host process is up
+    /// whether or not anything is being asked of it, CPU is not weak evidence
+    /// but misleading evidence: measured on Antigravity's `language_server`, it
+    /// read 0.0 through a working stretch (the agent was waiting on a command
+    /// that burned nothing) and blipped to 0.9 while idle. A learned baseline
+    /// can't rescue a signal that moves the wrong way.
+    public var evidenceOnly: Bool
 
     public init(
         pid: Int32,
@@ -35,8 +45,10 @@ public struct AgentSession: Equatable, Hashable, Sendable {
         hasFreshEvidence: Bool = false,
         hookState: AgentHooks.HookSessionState? = nil,
         hookDetail: String? = nil,
-        origin: AgentHooks.HookSessionOrigin? = nil
+        origin: AgentHooks.HookSessionOrigin? = nil,
+        evidenceOnly: Bool = false
     ) {
+        self.evidenceOnly = evidenceOnly
         self.pid = pid
         self.agent = agent
         self.tty = tty
@@ -141,6 +153,35 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// generation and tool turns, so a short window keeps the idle flip snappy.
     public static let evidenceFreshWindow: TimeInterval = 15
 
+    /// Agents whose session store is written in bursts rather than streamed,
+    /// with the window each one needs.
+    ///
+    /// Antigravity writes its conversation database around each agent step, not
+    /// continuously: measured over a working session, writes landed a median 5s
+    /// apart but fell as far as 38s apart mid-turn. The default 15s window would
+    /// flap the row between working and idle while the agent was plainly busy,
+    /// so this one is set well clear of the worst observed gap.
+    static let evidenceWindowOverrides: [String: TimeInterval] = [
+        "antigravity": 60,
+        "agy": 60,
+    ]
+
+    /// The freshness window for `agent`'s on-disk evidence.
+    static func evidenceWindow(for agent: String) -> TimeInterval {
+        evidenceWindowOverrides[agent] ?? evidenceFreshWindow
+    }
+
+    /// The marker in the command line of the process that hosts Antigravity's
+    /// in-editor agent (`Antigravity.app/Contents/Resources/bin/language_server
+    /// --override_ide_name antigravity …`).
+    ///
+    /// The bare binary name is useless here: a language server is a generic
+    /// thing many editors ship, and matching it would root a session at any of
+    /// them. The IDE-name flag is what makes the process Antigravity's, and it
+    /// is the app's own argument, not something derived from a path that
+    /// changes when the app moves.
+    static let antigravityHostMarker = "--override_ide_name antigravity"
+
     private let ttl: TimeInterval
     private let now: () -> Date
     /// Produces the raw `ps` output (`nil` on failure). Injectable so the
@@ -204,7 +245,6 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
                 // transcript was written within the freshness window is
                 // working, no matter what its CPU says.
                 let scanTime = self.now()
-                let cutoff = scanTime.addingTimeInterval(-Self.evidenceFreshWindow)
                 var cwds: [Int32: String] = [:]
                 var evidenceDates: [Int32: Date] = [:]
                 for index in sessions.indices {
@@ -213,6 +253,11 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
                     if let cwd { cwds[session.pid] = cwd }
                     if let written = self.evidence(session.agent, cwd) {
                         evidenceDates[session.pid] = written
+                        // Per agent: one that writes its store in bursts needs
+                        // a wider window than one that streams (see
+                        // ``evidenceWindowOverrides``).
+                        let cutoff = scanTime.addingTimeInterval(
+                            -Self.evidenceWindow(for: session.agent))
                         sessions[index].hasFreshEvidence = written >= cutoff
                     }
                     // Name sessions by their host (Claude app, IDE) up front;
@@ -220,7 +265,13 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
                     // is classified, not just terminal-less ones: an app can
                     // hold a pty for its embedded CLI, and the label promises
                     // to name such sessions by their host.
-                    sessions[index].origin = self.classifyOrigin(session.pid)
+                    // Only when the walk actually classifies something: an
+                    // editor host already knows it is one, and a nil verdict
+                    // must not erase that (for every other session the field
+                    // starts nil, so this is the same assignment as before).
+                    if let classified = self.classifyOrigin(session.pid) {
+                        sessions[index].origin = classified
+                    }
                 }
                 // Stamp hook evidence: exact state edges beat both heuristics.
                 let join = Self.applyHookRecords(
@@ -405,6 +456,18 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             return [today, today.addingTimeInterval(-86_400)]
                 .compactMap { newestModification(in: "\(home)/.codex/sessions/\(day.string(from: $0))") }
                 .max()
+        case "antigravity", "agy":
+            // Antigravity keeps one SQLite database per conversation, the app
+            // under `antigravity/` and its CLI under `antigravity-cli/`. Not
+            // cwd-keyed, so the directory stands in for every session, like the
+            // codex case above.
+            //
+            // The whole directory, never a named file: SQLite checkpoints the
+            // `-wal` and deletes it, so the freshest write moves between
+            // `<id>.db`, `<id>.db-wal` and `<id>.db-shm` over a session, and a
+            // watcher pinned to one of them goes blind at the checkpoint.
+            let root = agent == "agy" ? "antigravity-cli" : "antigravity"
+            return newestModification(in: "\(home)/.gemini/\(root)/conversations")
         default:
             return nil
         }
@@ -514,10 +577,16 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         }
 
         var matched: [Int32: String] = [:]
+        // Hosts of an editor-embedded agent: matched like any other root, but
+        // remembered so the CPU heuristic is skipped for them below.
+        var evidenceOnly: Set<Int32> = []
         for sample in samples {
             if let agent = agentName(for: sample.command, agents: agents)
                 ?? resolvedAgentName(for: sample, agents: agents, pathOf: pathOf) {
                 matched[sample.pid] = agent
+            } else if sample.command.contains(antigravityHostMarker) {
+                matched[sample.pid] = "antigravity"
+                evidenceOnly.insert(sample.pid)
             }
         }
 
@@ -551,7 +620,14 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             .sorted()
             .compactMap { pid in
                 guard let sample = byPid[pid], let agent = matched[pid] else { return nil }
-                return AgentSession(pid: pid, agent: agent, tty: sample.tty, cpuPercent: subtreeCPU(of: pid))
+                return AgentSession(
+                    pid: pid, agent: agent, tty: sample.tty,
+                    // An editor host's subtree CPU is doubly meaningless: it
+                    // sweeps in whatever the agent left running (a dev server
+                    // started for a preview outlives the turn by hours).
+                    cpuPercent: evidenceOnly.contains(pid) ? 0 : subtreeCPU(of: pid),
+                    origin: evidenceOnly.contains(pid) ? .ide : nil,
+                    evidenceOnly: evidenceOnly.contains(pid))
             }
     }
 
@@ -751,7 +827,8 @@ public final class AgentActivityTrigger: Trigger {
                 freshEvidence: session.hasFreshEvidence,
                 hookState: session.hookState,
                 hookDetail: session.hookDetail,
-                countWaitingAsWorking: countWaitingAsWorking
+                countWaitingAsWorking: countWaitingAsWorking,
+                evidenceOnly: session.evidenceOnly
             )
             next[session.pid] = stepped
             return SessionState(session: session, isWorking: stepped.isWorking)
@@ -780,7 +857,8 @@ public final class AgentActivityTrigger: Trigger {
         freshEvidence: Bool = false,
         hookState: AgentHooks.HookSessionState? = nil,
         hookDetail: String? = nil,
-        countWaitingAsWorking: Bool = false
+        countWaitingAsWorking: Bool = false,
+        evidenceOnly: Bool = false
     ) -> State {
         var next = state
         let clamped = max(sample, 0)
@@ -812,6 +890,10 @@ public final class AgentActivityTrigger: Trigger {
             let waitingCounts = hookDetail == "waiting-approval" || countWaitingAsWorking
             next.isWorking = hookState == .working
                 || (hookState == .waiting && waitingCounts)
+        } else if evidenceOnly {
+            // No CPU branch at all: for an editor host it would fire on the
+            // editor rather than on its agent (see ``AgentSession/evidenceOnly``).
+            next.isWorking = freshEvidence
         } else {
             let delta = state.isWorking ? Self.offDeltaPercent : Self.onDeltaPercent
             next.isWorking = freshEvidence

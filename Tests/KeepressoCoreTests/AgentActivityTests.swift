@@ -82,6 +82,67 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     #expect(sessions[1].agent == "codex")
 }
 
+// MARK: - Antigravity's in-editor agent
+
+/// The real `ps` line for the process hosting Antigravity's in-editor agent,
+/// trimmed of the flags that don't matter here.
+private let antigravityHostCommand =
+    "/Applications/Antigravity.app/Contents/Resources/bin/language_server --standalone"
+    + " --override_ide_name antigravity --subclient_type hub --override_ide_version 2.3.1"
+
+@Test func antigravityEditorHostIsASessionThatIgnoresCPU() {
+    typealias Sample = PSAgentActivityMonitor.ProcessSample
+    let samples: [Sample] = [
+        Sample(pid: 71776, ppid: 71363, pcpu: 0.0, tty: nil, command: antigravityHostCommand),
+        // A dev server the agent started for a preview. It outlives the turn by
+        // hours, so it must not be summed into anything that reads as work.
+        Sample(pid: 62669, ppid: 71776, pcpu: 30.0, tty: nil,
+               command: "/opt/homebrew/.../Python -m http.server 8080 -d /tmp/site"),
+    ]
+    let sessions = PSAgentActivityMonitor.sessions(from: samples)
+    #expect(sessions.count == 1)
+    #expect(sessions[0].agent == "antigravity")
+    #expect(sessions[0].evidenceOnly)
+    #expect(sessions[0].origin == .ide)
+    #expect(sessions[0].cpuPercent == 0)
+    #expect(sessions[0].label == "antigravity (IDE)")
+}
+
+@Test func aPlainLanguageServerIsNotAnAgent() {
+    typealias Sample = PSAgentActivityMonitor.ProcessSample
+    // Every editor ships one; only the IDE-name flag makes it Antigravity's.
+    let samples: [Sample] = [
+        Sample(pid: 10, ppid: 1, pcpu: 5.0, tty: nil,
+               command: "/Applications/Other.app/Contents/Resources/bin/language_server --standalone"),
+    ]
+    #expect(PSAgentActivityMonitor.sessions(from: samples).isEmpty)
+}
+
+@Test func anEditorHostWorksOnEvidenceAloneNoMatterTheCPU() {
+    typealias Trigger = AgentActivityTrigger
+    // Busy-looking CPU with no fresh write is the editor, not its agent.
+    var state = Trigger.State()
+    for _ in 0..<20 {
+        state = Trigger.step(state, sample: 90, freshEvidence: false, evidenceOnly: true)
+    }
+    #expect(!state.isWorking)
+    // A fresh write with no CPU at all is the agent waiting on a command that
+    // burns nothing, which is exactly the overnight case.
+    state = Trigger.step(state, sample: 0, freshEvidence: true, evidenceOnly: true)
+    #expect(state.isWorking)
+    state = Trigger.step(state, sample: 0, freshEvidence: false, evidenceOnly: true)
+    #expect(!state.isWorking)
+}
+
+@Test func burstyAgentsGetAWiderEvidenceWindow() {
+    // Measured on a working Antigravity session: writes a median 5s apart, worst
+    // gap 38s. The default window would call that idle mid-turn.
+    #expect(PSAgentActivityMonitor.evidenceWindow(for: "antigravity") == 60)
+    #expect(PSAgentActivityMonitor.evidenceWindow(for: "agy") == 60)
+    #expect(PSAgentActivityMonitor.evidenceWindow(for: "claude")
+        == PSAgentActivityMonitor.evidenceFreshWindow)
+}
+
 @Test func sessionsSurviveAPpidCycleFromRacedPSOutput() {
     typealias Sample = PSAgentActivityMonitor.ProcessSample
     // A pid reused mid-scan can appear as its own ancestor; both walks must
