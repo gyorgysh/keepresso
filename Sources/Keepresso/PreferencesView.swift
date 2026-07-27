@@ -817,6 +817,14 @@ private struct TriggersTab: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+        // Every hook row refreshes its own tool's state on appear, but a row
+        // whose tool is undetected and unconnected renders nothing at all, and
+        // a Group hands its modifiers to children it doesn't have: no content,
+        // no onAppear, so the state that would have produced content is never
+        // read. That left the rows visible only after the setup window had
+        // happened to refresh them. Reading here, from a view that always
+        // exists, is what makes the rows appear on their own.
+        .onAppear { model.refreshAgentHookStatuses() }
         .animation(.snappy(duration: 0.25), value: model.triggersEnabled)
         .animation(.snappy(duration: 0.25), value: model.triggersPaused)
     }
