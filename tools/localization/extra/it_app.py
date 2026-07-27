@@ -530,6 +530,18 @@ APP.update({
     "Couldn't update Cursor's hooks file.": "Impossibile aggiornare il file degli hook di Cursor.",
 })
 
+# --- Agent hooks (Antigravity connection) ---
+APP.update({
+    "Antigravity connected: the app's agent and the CLI both report exactly.":
+        "Antigravity connesso: sia l'agente dell'app sia la CLI segnalano con esattezza.",
+    "Connect Antigravity to track its editor agent too (adds hooks to its config).":
+        "Collega Antigravity per monitorare anche il suo agente nell'editor (aggiunge hook alla sua configurazione).",
+    "Connect Antigravity": "Collega Antigravity",
+    "Antigravity's hooks file couldn't be read, so it was left untouched.":
+        "Impossibile leggere il file degli hook di Antigravity, quindi è rimasto intatto.",
+    "Couldn't update Antigravity's hooks file.": "Impossibile aggiornare il file degli hook di Antigravity.",
+})
+
 # --- Agent hooks (Codex connection) ---
 APP.update({
     "Codex connected: sessions report working and waiting exactly.":
@@ -559,6 +571,8 @@ APP.update({
         "Gli hook di Claude Code devono essere riparati, quindi le sessioni potrebbero non essere segnalate correttamente.",
     "Cursor's hooks need repairing, so sessions may not report correctly.":
         "Gli hook di Cursor devono essere riparati, quindi le sessioni potrebbero non essere segnalate correttamente.",
+    "Antigravity's hooks need repairing, so sessions may not report correctly.":
+        "Gli hook di Antigravity devono essere riparati, quindi le sessioni potrebbero non essere segnalate correttamente.",
     "Codex's hooks need repairing, so sessions may not report correctly.":
         "Gli hook di Codex devono essere riparati, quindi le sessioni potrebbero non essere segnalate correttamente.",
     "Repair": "Ripara",

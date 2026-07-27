@@ -433,6 +433,12 @@
 "Connect Cursor" = "Cursor'ı bağla";
 "Cursor's hooks file couldn't be read, so it was left untouched." = "Cursor'ın kanca dosyası okunamadı, bu yüzden dokunulmadı.";
 "Couldn't update Cursor's hooks file." = "Cursor'ın kanca dosyası güncellenemedi.";
+"Antigravity connected: the app's agent and the CLI both report exactly." = "Antigravity bağlandı: hem uygulamanın aracısı hem de CLI tam olarak bildirir.";
+"Connect Antigravity to track its editor agent too (adds hooks to its config)." = "Düzenleyici aracısını da izlemek için Antigravity'yi bağlayın (yapılandırmasına kancalar ekler).";
+"Connect Antigravity" = "Antigravity'yi bağla";
+"Antigravity's hooks need repairing, so sessions may not report correctly." = "Antigravity'nin kancalarının onarılması gerekiyor, bu yüzden oturumlar doğru bildirilmeyebilir.";
+"Antigravity's hooks file couldn't be read, so it was left untouched." = "Antigravity'nin kanca dosyası okunamadı, bu yüzden dokunulmadı.";
+"Couldn't update Antigravity's hooks file." = "Antigravity'nin kanca dosyası güncellenemedi.";
 "Claude Code's hooks need repairing, so sessions may not report correctly." = "Claude Code'un kancalarının onarılması gerekiyor, bu yüzden oturumlar doğru bildirilmeyebilir.";
 "Cursor's hooks need repairing, so sessions may not report correctly." = "Cursor'ın kancalarının onarılması gerekiyor, bu yüzden oturumlar doğru bildirilmeyebilir.";
 "Repair" = "Onar";

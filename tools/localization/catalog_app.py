@@ -573,6 +573,18 @@ _CURSOR_HOOKS_APP = {
 APP.update(_CURSOR_HOOKS_APP)
 
 
+# --- Antigravity hooks (covers both the app's editor agent and its CLI) ---
+_ANTIGRAVITY_HOOKS_APP = {
+    "Antigravity connected: the app's agent and the CLI both report exactly.": {"hu": "Antigravity csatlakoztatva: az alkalmazás ágense és a CLI is pontosan jelez.", "es": "Antigravity conectado: tanto el agente de la app como la CLI informan con exactitud.", "fr": "Antigravity connecté : l’agent de l’application et la CLI signalent tous deux précisément.", "de": "Antigravity verbunden: Der App-Agent und die CLI melden beide exakt.", "zh-Hans": "已连接 Antigravity：应用内代理与 CLI 均可精确报告状态。"},
+    "Connect Antigravity to track its editor agent too (adds hooks to its config).": {"hu": "Csatlakoztassa az Antigravityt a szerkesztő ágensének követéséhez is (hookokat ad a konfigurációjához).", "es": "Conecta Antigravity para seguir también su agente del editor (añade hooks a su configuración).", "fr": "Connectez Antigravity pour aussi suivre l’agent de l’éditeur (ajoute des hooks à sa config).", "de": "Verbinde Antigravity, um auch dessen Editor-Agent zu erfassen (fügt Hooks zu dessen Konfiguration hinzu).", "zh-Hans": "连接 Antigravity 以同时跟踪其编辑器代理（将在其配置中添加钩子）。"},
+    "Connect Antigravity": {"hu": "Antigravity csatlakoztatása", "es": "Conectar Antigravity", "fr": "Connecter Antigravity", "de": "Antigravity verbinden", "zh-Hans": "连接 Antigravity"},
+    "Antigravity's hooks need repairing, so sessions may not report correctly.": {"hu": "Az Antigravity hookjait meg kell javítani, ezért előfordulhat, hogy a munkamenetek nem jeleznek pontosan.", "es": "Los hooks de Antigravity necesitan reparación, así que es posible que las sesiones no informen correctamente.", "fr": "Les hooks d’Antigravity doivent être réparés, il est donc possible que les sessions ne signalent pas correctement.", "de": "Die Hooks von Antigravity müssen repariert werden, daher melden Sitzungen möglicherweise nicht korrekt.", "zh-Hans": "Antigravity 的钩子需要修复，因此会话可能无法正确报告状态。"},
+    "Antigravity's hooks file couldn't be read, so it was left untouched.": {"hu": "Az Antigravity hookfájlja nem olvasható, ezért érintetlen maradt.", "es": "No se pudo leer el archivo de hooks de Antigravity, así que se dejó intacto.", "fr": "Le fichier de hooks d’Antigravity n’a pas pu être lu, il a été laissé intact.", "de": "Die Hooks-Datei von Antigravity konnte nicht gelesen werden und blieb unangetastet.", "zh-Hans": "无法读取 Antigravity 的钩子文件，因此未作改动。"},
+    "Couldn't update Antigravity's hooks file.": {"hu": "Az Antigravity hookfájlját nem sikerült frissíteni.", "es": "No se pudo actualizar el archivo de hooks de Antigravity.", "fr": "Impossible de mettre à jour le fichier de hooks d’Antigravity.", "de": "Die Hooks-Datei von Antigravity konnte nicht aktualisiert werden.", "zh-Hans": "无法更新 Antigravity 的钩子文件。"},
+}
+APP.update(_ANTIGRAVITY_HOOKS_APP)
+
+
 # --- Hook health (an install that drifted and can be repaired) ---
 _HOOK_HEALTH_APP = {
     "Claude Code's hooks need repairing, so sessions may not report correctly.": {"hu": "A Claude Code hookjait meg kell javítani, ezért előfordulhat, hogy a munkamenetek nem jeleznek pontosan.", "es": "Los hooks de Claude Code necesitan reparación, así que es posible que las sesiones no informen correctamente.", "fr": "Les hooks de Claude Code doivent être réparés, il est donc possible que les sessions ne signalent pas correctement.", "de": "Die Hooks von Claude Code müssen repariert werden, daher melden Sitzungen möglicherweise nicht korrekt.", "zh-Hans": "Claude Code 的钩子需要修复，因此会话可能无法正确报告状态。"},

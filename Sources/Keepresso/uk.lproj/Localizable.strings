@@ -433,6 +433,12 @@
 "Connect Cursor" = "Підключити Cursor";
 "Cursor's hooks file couldn't be read, so it was left untouched." = "Не вдалося прочитати файл хуків Cursor, тому його не змінено.";
 "Couldn't update Cursor's hooks file." = "Не вдалося оновити файл хуків Cursor.";
+"Antigravity connected: the app's agent and the CLI both report exactly." = "Antigravity підключено: агент застосунку та CLI обидва повідомляють точно.";
+"Connect Antigravity to track its editor agent too (adds hooks to its config)." = "Підключіть Antigravity, щоб також відстежувати його агента редактора (додає хуки до його конфігурації).";
+"Connect Antigravity" = "Підключити Antigravity";
+"Antigravity's hooks need repairing, so sessions may not report correctly." = "Хуки Antigravity потребують виправлення, тому сеанси можуть повідомляти неточно.";
+"Antigravity's hooks file couldn't be read, so it was left untouched." = "Не вдалося прочитати файл хуків Antigravity, тому його не змінено.";
+"Couldn't update Antigravity's hooks file." = "Не вдалося оновити файл хуків Antigravity.";
 "Claude Code's hooks need repairing, so sessions may not report correctly." = "Хуки Claude Code потребують виправлення, тому сеанси можуть повідомляти неточно.";
 "Cursor's hooks need repairing, so sessions may not report correctly." = "Хуки Cursor потребують виправлення, тому сеанси можуть повідомляти неточно.";
 "Repair" = "Виправити";

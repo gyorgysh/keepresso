@@ -85,6 +85,7 @@ struct RulesView: View {
                     claudeCodeRows
                     cursorRows
                     codexRows
+                    antigravityRows
                 }
             }
 
@@ -457,6 +458,61 @@ struct RulesView: View {
         .font(.caption)
         .padding(.leading, 22)
         .onAppear { model.refreshCodexHooksStatus() }
+    }
+
+    /// The same three-state row for Antigravity. Like Cursor it covers a CLI
+    /// and an in-editor agent with one config, and like Cursor the editor's
+    /// agent is the reason to bother: it lives inside the editor's own
+    /// language server, whose CPU and child processes say nothing reliable
+    /// about whether it is working.
+    @ViewBuilder
+    private var antigravityRows: some View {
+        Group {
+            switch model.antigravityHooks {
+            case .installed:
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                        .accessibilityHidden(true)
+                    Text("Antigravity connected: the app's agent and the CLI both report exactly.")
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Button("Remove") { model.removeAntigravityHooks() }
+                }
+            case .notInstalled:
+                // See the Claude Code row: only offered when Antigravity is here.
+                if model.antigravityPresent {
+                    HStack(alignment: .top, spacing: 6) {
+                        Text("Connect Antigravity to track its editor agent too (adds hooks to its config).")
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Button("Connect Antigravity") { model.installAntigravityHooks() }
+                    }
+                }
+            case .needsRepair:
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "wrench.and.screwdriver")
+                        .foregroundStyle(.orange)
+                        .accessibilityHidden(true)
+                    Text("Antigravity's hooks need repairing, so sessions may not report correctly.")
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Button("Repair") { model.installAntigravityHooks() }
+                }
+            case .unreadable:
+                Label(
+                    "Antigravity's hooks file couldn't be read, so it was left untouched.",
+                    systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
+            if let error = model.antigravityHooksError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
+        }
+        .font(.caption)
+        .padding(.leading, 22)
+        .onAppear { model.refreshAntigravityHooksStatus() }
     }
 
     /// In-place editor for an agent rule's idle grace and waiting policy.

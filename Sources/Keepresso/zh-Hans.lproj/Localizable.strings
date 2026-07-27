@@ -433,6 +433,12 @@
 "Connect Cursor" = "连接 Cursor";
 "Cursor's hooks file couldn't be read, so it was left untouched." = "无法读取 Cursor 的钩子文件，因此未作改动。";
 "Couldn't update Cursor's hooks file." = "无法更新 Cursor 的钩子文件。";
+"Antigravity connected: the app's agent and the CLI both report exactly." = "已连接 Antigravity：应用内代理与 CLI 均可精确报告状态。";
+"Connect Antigravity to track its editor agent too (adds hooks to its config)." = "连接 Antigravity 以同时跟踪其编辑器代理（将在其配置中添加钩子）。";
+"Connect Antigravity" = "连接 Antigravity";
+"Antigravity's hooks need repairing, so sessions may not report correctly." = "Antigravity 的钩子需要修复，因此会话可能无法正确报告状态。";
+"Antigravity's hooks file couldn't be read, so it was left untouched." = "无法读取 Antigravity 的钩子文件，因此未作改动。";
+"Couldn't update Antigravity's hooks file." = "无法更新 Antigravity 的钩子文件。";
 "Claude Code's hooks need repairing, so sessions may not report correctly." = "Claude Code 的钩子需要修复，因此会话可能无法正确报告状态。";
 "Cursor's hooks need repairing, so sessions may not report correctly." = "Cursor 的钩子需要修复，因此会话可能无法正确报告状态。";
 "Repair" = "修复";

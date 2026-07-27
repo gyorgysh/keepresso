@@ -1890,7 +1890,10 @@ final class AppModel {
         if mutateClaudeSettings({ try AgentHooks.removeHooks(from: $0) }) {
             // Only Claude Code's records: Cursor shares this folder, and its
             // hooks are still installed and still writing.
-            AgentHooks.purgeRecords { !CursorHooks.ownsRecord($0) && !CodexHooks.ownsRecord($0) }
+            AgentHooks.purgeRecords {
+                !CursorHooks.ownsRecord($0) && !CodexHooks.ownsRecord($0)
+                    && !AntigravityHooks.ownsRecord($0)
+            }
         }
     }
 
@@ -1931,6 +1934,64 @@ final class AppModel {
         }
     }
 
+    // MARK: - Antigravity hooks
+
+    /// Where the Antigravity hook install stands. Like Cursor, one config
+    /// covers two kinds of session: the `agy` CLI, and the agent inside the
+    /// Antigravity app. The app's agent is the reason this matters most, its
+    /// host process is up whether or not anything is being asked of it, so
+    /// hooks are the only exact signal there is.
+    private(set) var antigravityHooks: AgentHooks.HookInstallState = .notInstalled
+
+    private(set) var antigravityHooksError: String?
+
+    /// Whether Antigravity is on this Mac at all. See ``claudeCodePresent``.
+    private(set) var antigravityPresent = false
+
+    func refreshAntigravityHooksStatus() {
+        antigravityPresent = AgentTool.antigravity.isPresent()
+        do {
+            antigravityHooks = AntigravityHooks.hookInstallState(
+                of: try AgentHooks.readSettings(at: AntigravityHooks.hooksURL()),
+                cliPath: Self.bundledCLIPath)
+            autoRepairIfNeeded(.antigravity)
+        } catch {
+            antigravityHooks = .unreadable
+        }
+    }
+
+    func installAntigravityHooks() {
+        mutateAntigravityHooks { existing in
+            try AntigravityHooks.installHooks(into: existing, cliPath: Self.bundledCLIPath)
+        }
+    }
+
+    func removeAntigravityHooks() {
+        if mutateAntigravityHooks({ try AntigravityHooks.removeHooks(from: $0) }) {
+            AgentHooks.purgeRecords(where: AntigravityHooks.ownsRecord)
+        }
+    }
+
+    @discardableResult
+    private func mutateAntigravityHooks(_ transform: (Data?) throws -> Data) -> Bool {
+        let url = AntigravityHooks.hooksURL()
+        defer { refreshAntigravityHooksStatus() }
+        do {
+            let updated = try transform(try AgentHooks.readSettings(at: url))
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Self.writePreservingPermissions(updated, to: url.resolvingSymlinksInPath())
+            antigravityHooksError = nil
+            return true
+        } catch is AgentHooks.SettingsUnreadableError {
+            antigravityHooksError = nil
+            return false
+        } catch {
+            antigravityHooksError = L("Couldn't update Antigravity's hooks file.")
+            return false
+        }
+    }
+
     // MARK: - Agent tools, addressed uniformly
 
     /// The tools the agentic setup step should list, and their live state.
@@ -1945,6 +2006,7 @@ final class AppModel {
         case .claudeCode: return claudeCodePresent
         case .cursor: return cursorPresent
         case .codex: return codexPresent
+        case .antigravity: return antigravityPresent
         }
     }
 
@@ -1953,6 +2015,7 @@ final class AppModel {
         case .claudeCode: return claudeHooks
         case .cursor: return cursorHooks
         case .codex: return codexHooks
+        case .antigravity: return antigravityHooks
         }
     }
 
@@ -1961,14 +2024,16 @@ final class AppModel {
         case .claudeCode: installClaudeHooks()
         case .cursor: installCursorHooks()
         case .codex: installCodexHooks()
+        case .antigravity: installAntigravityHooks()
         }
     }
 
-    /// Re-read every tool's install state. Cheap: three small file reads.
+    /// Re-read every tool's install state. Cheap: four small file reads.
     func refreshAgentHookStatuses() {
         refreshClaudeHooksStatus()
         refreshCursorHooksStatus()
         refreshCodexHooksStatus()
+        refreshAntigravityHooksStatus()
     }
 
     /// Tools already repaired once this run.

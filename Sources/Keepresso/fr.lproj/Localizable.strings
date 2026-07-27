@@ -433,6 +433,12 @@
 "Connect Cursor" = "Connecter Cursor";
 "Cursor's hooks file couldn't be read, so it was left untouched." = "Le fichier de hooks de Cursor n’a pas pu être lu, il a été laissé intact.";
 "Couldn't update Cursor's hooks file." = "Impossible de mettre à jour le fichier de hooks de Cursor.";
+"Antigravity connected: the app's agent and the CLI both report exactly." = "Antigravity connecté : l’agent de l’application et la CLI signalent tous deux précisément.";
+"Connect Antigravity to track its editor agent too (adds hooks to its config)." = "Connectez Antigravity pour aussi suivre l’agent de l’éditeur (ajoute des hooks à sa config).";
+"Connect Antigravity" = "Connecter Antigravity";
+"Antigravity's hooks need repairing, so sessions may not report correctly." = "Les hooks d’Antigravity doivent être réparés, il est donc possible que les sessions ne signalent pas correctement.";
+"Antigravity's hooks file couldn't be read, so it was left untouched." = "Le fichier de hooks d’Antigravity n’a pas pu être lu, il a été laissé intact.";
+"Couldn't update Antigravity's hooks file." = "Impossible de mettre à jour le fichier de hooks d’Antigravity.";
 "Claude Code's hooks need repairing, so sessions may not report correctly." = "Les hooks de Claude Code doivent être réparés, il est donc possible que les sessions ne signalent pas correctement.";
 "Cursor's hooks need repairing, so sessions may not report correctly." = "Les hooks de Cursor doivent être réparés, il est donc possible que les sessions ne signalent pas correctement.";
 "Repair" = "Réparer";

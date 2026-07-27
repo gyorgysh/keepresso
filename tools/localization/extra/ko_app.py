@@ -450,6 +450,15 @@ APP.update({
     "Couldn't update Cursor's hooks file.": "Cursor 후크 파일을 업데이트할 수 없습니다.",
 })
 
+# --- Agent hooks (Antigravity connection) ---
+APP.update({
+    "Antigravity connected: the app's agent and the CLI both report exactly.": "Antigravity 연결됨: 앱 에이전트와 CLI 모두 정확하게 보고합니다.",
+    "Connect Antigravity to track its editor agent too (adds hooks to its config).": "에디터 에이전트도 추적하려면 Antigravity를 연결하세요(구성에 후크를 추가합니다).",
+    "Connect Antigravity": "Antigravity 연결",
+    "Antigravity's hooks file couldn't be read, so it was left untouched.": "Antigravity 후크 파일을 읽을 수 없어 그대로 두었습니다.",
+    "Couldn't update Antigravity's hooks file.": "Antigravity 후크 파일을 업데이트할 수 없습니다.",
+})
+
 # --- Agent hooks (Codex connection) ---
 APP.update({
     "Codex connected: sessions report working and waiting exactly.": "Codex 연결됨: 세션이 작업과 대기를 정확하게 보고합니다.",
@@ -472,6 +481,7 @@ APP.update({
 APP.update({
     "Claude Code's hooks need repairing, so sessions may not report correctly.": "Claude Code 후크에 복구가 필요해 세션이 정확하게 보고되지 않을 수 있습니다.",
     "Cursor's hooks need repairing, so sessions may not report correctly.": "Cursor 후크에 복구가 필요해 세션이 정확하게 보고되지 않을 수 있습니다.",
+    "Antigravity's hooks need repairing, so sessions may not report correctly.": "Antigravity 후크에 복구가 필요해 세션이 정확하게 보고되지 않을 수 있습니다.",
     "Codex's hooks need repairing, so sessions may not report correctly.": "Codex 후크에 복구가 필요해 세션이 정확하게 보고되지 않을 수 있습니다.",
     "Repair": "복구",
 })

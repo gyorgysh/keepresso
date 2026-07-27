@@ -278,6 +278,12 @@ func runCursorHook(event: String) -> Never {
     exit(0)
 }
 
+func runAntigravityHook(event: String) -> Never {
+    let payload = FileHandle.standardInput.readDataToEndOfFile()
+    AntigravityHooks.handle(event: event, payloadData: payload, parentPid: getppid())
+    exit(0)
+}
+
 // MARK: - Entry
 
 let request: CLIRequest
@@ -302,6 +308,8 @@ case .agentHook(let event):
     runAgentHook(event: event)
 case .cursorHook(let event):
     runCursorHook(event: event)
+case .antigravityHook(let event):
+    runAntigravityHook(event: event)
 case .codexHook(let event):
     runCodexHook(event: event)
 case .lease(let command):

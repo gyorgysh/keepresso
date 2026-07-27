@@ -12,6 +12,7 @@ public enum AgentTool: CaseIterable, Sendable {
     case claudeCode
     case cursor
     case codex
+    case antigravity
 
     /// Paths that each, on their own, prove the tool is here. Any one is
     /// enough, because these tools arrive in several shapes: a config folder
@@ -45,6 +46,16 @@ public enum AgentTool: CaseIterable, Sendable {
                 "/usr/local/bin/cursor-agent",
                 "/Applications/Cursor.app",
             ]
+        case .antigravity:
+            return [
+                // The app's own store and the CLI's, never a bare `.gemini`:
+                // the Gemini CLI keeps its own config in there and proves
+                // nothing about Antigravity.
+                "\(home)/.gemini/antigravity",
+                "\(home)/.gemini/antigravity-cli",
+                "\(home)/.local/bin/agy",
+                "/Applications/Antigravity.app",
+            ]
         case .codex:
             return [
                 "\(home)/.codex",
@@ -62,6 +73,7 @@ public enum AgentTool: CaseIterable, Sendable {
         case .claudeCode: return "Claude Code"
         case .cursor: return "Cursor"
         case .codex: return "Codex"
+        case .antigravity: return "Antigravity"
         }
     }
 

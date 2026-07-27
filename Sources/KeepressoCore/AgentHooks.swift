@@ -560,8 +560,16 @@ public enum AgentHooks {
     /// forever, and could even stamp a different agent session as working.
     public static func defaultIsAgentAlive(_ pid: Int32) -> Bool {
         guard defaultIsAlive(pid) else { return false }
+        let path = defaultPathOf(pid)
+        // An editor that hosts its agent in-process counts too. Its binary is
+        // no agent command and never will be, so without this every record
+        // Antigravity's hooks write would be read back as belonging to a dead
+        // agent and thrown away. The path is as specific as a command name
+        // (that bundle, that binary), so it carries the same guarantee against
+        // a reused pid.
+        if let path, AntigravityHooks.isEditorHostPath(path) { return true }
         return agentMatch(
-            comm: defaultCommandOf(pid), path: defaultPathOf(pid),
+            comm: defaultCommandOf(pid), path: path,
             agents: PSAgentActivityMonitor.agentCommands) != nil
     }
 

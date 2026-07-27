@@ -433,6 +433,12 @@
 "Connect Cursor" = "Cursor csatlakoztatása";
 "Cursor's hooks file couldn't be read, so it was left untouched." = "A Cursor hookfájlja nem olvasható, ezért érintetlen maradt.";
 "Couldn't update Cursor's hooks file." = "A Cursor hookfájlját nem sikerült frissíteni.";
+"Antigravity connected: the app's agent and the CLI both report exactly." = "Antigravity csatlakoztatva: az alkalmazás ágense és a CLI is pontosan jelez.";
+"Connect Antigravity to track its editor agent too (adds hooks to its config)." = "Csatlakoztassa az Antigravityt a szerkesztő ágensének követéséhez is (hookokat ad a konfigurációjához).";
+"Connect Antigravity" = "Antigravity csatlakoztatása";
+"Antigravity's hooks need repairing, so sessions may not report correctly." = "Az Antigravity hookjait meg kell javítani, ezért előfordulhat, hogy a munkamenetek nem jeleznek pontosan.";
+"Antigravity's hooks file couldn't be read, so it was left untouched." = "Az Antigravity hookfájlja nem olvasható, ezért érintetlen maradt.";
+"Couldn't update Antigravity's hooks file." = "Az Antigravity hookfájlját nem sikerült frissíteni.";
 "Claude Code's hooks need repairing, so sessions may not report correctly." = "A Claude Code hookjait meg kell javítani, ezért előfordulhat, hogy a munkamenetek nem jeleznek pontosan.";
 "Cursor's hooks need repairing, so sessions may not report correctly." = "A Cursor hookjait meg kell javítani, ezért előfordulhat, hogy a munkamenetek nem jeleznek pontosan.";
 "Repair" = "Javítás";

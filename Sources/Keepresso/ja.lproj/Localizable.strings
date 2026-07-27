@@ -433,6 +433,12 @@
 "Connect Cursor" = "Cursor を接続";
 "Cursor's hooks file couldn't be read, so it was left untouched." = "Cursor のフックファイルを読み取れなかったため、変更していません。";
 "Couldn't update Cursor's hooks file." = "Cursor のフックファイルを更新できませんでした。";
+"Antigravity connected: the app's agent and the CLI both report exactly." = "Antigravity 接続済み: アプリ内エージェントと CLI の両方が正確に報告します。";
+"Connect Antigravity to track its editor agent too (adds hooks to its config)." = "Antigravity を接続すると、エディタ内エージェントも追跡できます（設定にフックを追加します）。";
+"Connect Antigravity" = "Antigravity を接続";
+"Antigravity's hooks need repairing, so sessions may not report correctly." = "Antigravity のフックに修復が必要なため、セッションが正しく報告されないことがあります。";
+"Antigravity's hooks file couldn't be read, so it was left untouched." = "Antigravity のフックファイルを読み取れなかったため、変更していません。";
+"Couldn't update Antigravity's hooks file." = "Antigravity のフックファイルを更新できませんでした。";
 "Claude Code's hooks need repairing, so sessions may not report correctly." = "Claude Code のフックに修復が必要なため、セッションが正しく報告されないことがあります。";
 "Cursor's hooks need repairing, so sessions may not report correctly." = "Cursor のフックに修復が必要なため、セッションが正しく報告されないことがあります。";
 "Repair" = "修復";

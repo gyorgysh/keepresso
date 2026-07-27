@@ -447,6 +447,18 @@ APP.update({
     "Couldn't update Cursor's hooks file.": "Не удалось обновить файл хуков Cursor.",
 })
 
+# --- Agent hooks (Antigravity connection) ---
+APP.update({
+    "Antigravity connected: the app's agent and the CLI both report exactly.":
+        "Antigravity подключён: и агент редактора, и CLI сообщают точно.",
+    "Connect Antigravity to track its editor agent too (adds hooks to its config).":
+        "Подключите Antigravity, чтобы отслеживать также его агент в редакторе (добавляет хуки в его конфигурацию).",
+    "Connect Antigravity": "Подключить Antigravity",
+    "Antigravity's hooks file couldn't be read, so it was left untouched.":
+        "Не удалось прочитать файл хуков Antigravity, поэтому он не был изменён.",
+    "Couldn't update Antigravity's hooks file.": "Не удалось обновить файл хуков Antigravity.",
+})
+
 # --- Agent hooks (Codex connection) ---
 APP.update({
     "Codex connected: sessions report working and waiting exactly.":
@@ -476,6 +488,8 @@ APP.update({
         "Хуки Claude Code нуждаются в восстановлении, поэтому сеансы могут сообщаться неточно.",
     "Cursor's hooks need repairing, so sessions may not report correctly.":
         "Хуки Cursor нуждаются в восстановлении, поэтому сеансы могут сообщаться неточно.",
+    "Antigravity's hooks need repairing, so sessions may not report correctly.":
+        "Хуки Antigravity нуждаются в восстановлении, поэтому сеансы могут сообщаться неточно.",
     "Codex's hooks need repairing, so sessions may not report correctly.":
         "Хуки Codex нуждаются в восстановлении, поэтому сеансы могут сообщаться неточно.",
     "Repair": "Восстановить",
