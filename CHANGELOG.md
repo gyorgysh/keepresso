@@ -12,9 +12,10 @@ Versions follow [Semantic Versioning](https://semver.org).
   so work you start inside the editor keeps the Mac awake. Connect Antigravity
   under the AI agent condition in Preferences ▸ Triggers and its sessions report
   exactly when they start and finish, the way Claude Code, Cursor and Codex
-  already do. Keepresso only observes: it adds hooks that cannot allow, deny, or
-  block anything Antigravity does, and never touches the step where a tool call
-  is approved.
+  already do. Each connected chat is tracked on its own (several conversations
+  share one editor process). Keepresso only observes: it adds hooks that cannot
+  allow, deny, or block anything Antigravity does, and never touches the step
+  where a tool call is approved.
 
 ### Fixed
 
@@ -28,6 +29,25 @@ Versions follow [Semantic Versioning](https://semver.org).
 - **The agent connection rows appear on their own.** Claude Code, Cursor and
   Codex could only be connected from Preferences after the welcome window had
   been opened at least once; otherwise their rows were simply missing.
+
+- **Lid-closed and helper holds recover cleanly after a failure.** A failed
+  restore after a crash or reboot is retried on the next helper launch instead
+  of being given up on. A failed release no longer records the still-held
+  setting as the value to restore to (which could leave sleep disabled forever),
+  and a hold the app meant to drop is kept wanting until the release actually
+  lands so a reconnect can finish the job.
+
+- **Automation leases and wake requests no longer race themselves.** A
+  heartbeat cannot bring back a lease that was released or expired underneath
+  it. A wake request is claimed by id before it is applied, so a timed-out
+  client cannot still fire later, and cannot wipe a newer request that replaced
+  it.
+
+- **A keep-awake that never took hold is noticed.** If the system refuses the
+  power assertion, the session no longer looks successfully held while the Mac
+  can still sleep. A failed idle-time reading is treated as unknown rather than
+  "just used", so keep-active, dimming and screen-saver yield do not act on a
+  fake zero.
 
 ## [1.19.1] - 2026-07-27
 
