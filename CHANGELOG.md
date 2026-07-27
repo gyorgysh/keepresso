@@ -29,6 +29,12 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- **Closed menu and Preferences no longer burn CPU.** MenuBarExtra and
+  Preferences kept their SwiftUI trees alive while ordered out, so steam
+  timelines and Observation kept running and memory climbed. Heavy content is
+  torn down when hidden and remounted on open, so reopen is not a blank frame.
+  Preferences may still use a bit more memory after the first open.
+
 - **No more password prompt after a session ends.** With "Only while brewing"
   on and no administrator helper installed, closed-display mode could ask for
   your password once a session finished, to switch off something that was

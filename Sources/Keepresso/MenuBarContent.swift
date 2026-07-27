@@ -30,7 +30,9 @@ struct MenuBarContent: View {
     private var type: ScaledType { ScaledType() }
 
     /// Whether the panel is actually on screen. The closed panel keeps this
-    /// view alive on current macOS, so periodic work gates on this.
+    /// view alive on current macOS, so the heavy body unmounts while false
+    /// (stops Observation-graph growth and TimelineView CPU) and remounts
+    /// when the menu opens again.
     @State private var panelVisible = true
     /// Bumped when the lid-closed row is clicked while the automation owns it.
     @State private var lidRowShakes = 0
@@ -70,6 +72,36 @@ struct MenuBarContent: View {
     }
 
     var body: some View {
+        // Tear the heavy body down while ordered out. A closed MenuBarExtra
+        // panel keeps this shell alive; leaving the full tree mounted would
+        // keep observing SessionController / MenuPanelSnapshot every reconcile
+        // and grow the Observation graph without bound (and leave steam/spark
+        // TimelineViews ticking). The visibility probe stays mounted outside
+        // the `if` so reopen can remount the body.
+        Group {
+            if panelVisible {
+                panelBody
+            } else {
+                Color.clear
+                    .frame(width: 280 * type.scale, height: 1)
+            }
+        }
+        .keepsPanelKey()
+        // Hands the panel window to the bridge, so a right-click on the icon
+        // closes this panel before its context menu opens.
+        .background(PanelWindowRegistrar { bridge.panelWindow = $0 })
+        .background(WindowVisibilityReader(isVisible: $panelVisible))
+        .onChange(of: panelVisible) { _, visible in
+            model.menuPanelVisible = visible
+            guard visible else { return }
+            model.pulseMenuPanelIfVisible()
+            model.refreshClosedDisplay()
+        }
+    }
+
+    /// The interactive panel. Only mounted while ``panelVisible`` is true.
+    @ViewBuilder
+    private var panelBody: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
 
@@ -196,26 +228,14 @@ struct MenuBarContent: View {
         .animation(.snappy(duration: 0.25), value: model.helperAttention)
         .animation(.snappy(duration: 0.25), value: model.menuPanelExpanded)
         .glassPanelBackground()
-        .keepsPanelKey()
-        // Hands the panel window to the bridge, so a right-click on the icon
-        // closes this panel before its context menu opens.
-        .background(PanelWindowRegistrar { bridge.panelWindow = $0 })
         .tint(.keepressoBrew)
         // Cascades to every text that sets no font of its own (toggles,
         // buttons, menu rows), so the whole panel scales together.
         .font(type.body)
         .onAppear {
+            // Remount path (every open after the first): sync the ticker gate
+            // and refresh display-only state. Initial open also hits this.
             model.menuPanelVisible = true
-            model.pulseMenuPanelIfVisible()
-            model.refreshClosedDisplay()
-        }
-        // The closed panel keeps this content alive (see WindowVisibilityReader),
-        // so the tick would keep re-rendering the whole panel every second with
-        // nobody looking. Skip it while hidden and refresh on reopen instead.
-        .background(WindowVisibilityReader(isVisible: $panelVisible))
-        .onChange(of: panelVisible) { _, visible in
-            model.menuPanelVisible = visible
-            guard visible else { return }
             model.pulseMenuPanelIfVisible()
             model.refreshClosedDisplay()
         }

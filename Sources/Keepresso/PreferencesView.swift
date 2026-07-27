@@ -9,6 +9,14 @@ import KeepressoCore
 struct PreferencesView: View {
     @Bindable var model: AppModel
     @State private var section: Section = .general
+    /// Closed Preferences windows stay alive on current macOS; unmount the
+    /// tabs while off screen so they stop observing AppModel every tick.
+    /// Starts false so a retained ordered-out scene does not mount Forms
+    /// until a real visibility probe (same pattern as WelcomeView).
+    @State private var windowVisible = false
+    /// Bumped on each hide so the next open does not reuse SwiftUI identity
+    /// for the previous tab tree (drops any leftover view storage).
+    @State private var mountGeneration = 0
 
     /// The Preferences sections. A plain top segmented control rather than a
     /// `TabView`, which macOS 26 renders as an obtrusive sidebar.
@@ -36,36 +44,51 @@ struct PreferencesView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("Section", selection: $section) {
-                ForEach(Section.allCases) { section in
-                    Label(LocalizedStringKey(section.rawValue), systemImage: section.symbol).tag(section)
+        Group {
+            if windowVisible {
+                VStack(spacing: 0) {
+                    Picker("Section", selection: $section) {
+                        ForEach(Section.allCases) { section in
+                            Label(LocalizedStringKey(section.rawValue), systemImage: section.symbol).tag(section)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 12)
+
+                    Divider()
+
+                    content
+                        // topLeading, not top: a tab whose content hugs its width
+                        // (Triggers with the switch off) must still sit left like
+                        // every Form tab, not float centered.
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        // A fast crossfade between sections; no sliding.
+                        .animation(.easeOut(duration: 0.15), value: section)
                 }
+                .id(mountGeneration)
+                // The helper can be approved (or revoked) over in System Settings at
+                // any time; re-read on every open so the section tells the truth.
+                .onAppear { model.helper.refresh() }
+            } else {
+                Color.clear
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 12)
-
-            Divider()
-
-            content
-                // topLeading, not top: a tab whose content hugs its width
-                // (Triggers with the switch off) must still sit left like
-                // every Form tab, not float centered.
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                // A fast crossfade between sections; no sliding.
-                .animation(.easeOut(duration: 0.15), value: section)
         }
         // 580 fits seven labeled segments; 520 was enough for six.
         .frame(width: 580, height: 560)
         .tint(.keepressoBrew)
         .glassWindowBackground()
         .centersAndFrontsWindow()
-        // The helper can be approved (or revoked) over in System Settings at
-        // any time; re-read on every open so the section tells the truth.
-        .onAppear { model.helper.refresh() }
+        .background(WindowVisibilityReader(isVisible: $windowVisible))
+        .onChange(of: windowVisible) { _, visible in
+            if visible {
+                model.helper.refresh()
+            } else {
+                mountGeneration &+= 1
+            }
+        }
     }
 
     @ViewBuilder
@@ -89,10 +112,9 @@ struct PreferencesView: View {
 private struct ActivityTab: View {
     @Bindable var model: AppModel
 
-    /// Live assertions, refreshed while the pane is visible.
+    /// Live assertions, refreshed while the pane is mounted. Cleared on
+    /// disappear so a closed Preferences window does not keep the snapshot.
     @State private var assertions: [PowerAssertionInfo] = []
-    @State private var windowVisible = true
-    private let tick = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {
         Form {
@@ -175,17 +197,10 @@ private struct ActivityTab: View {
             assertions = model.currentAssertions()
             model.refreshAwakeStats()
         }
-        // The closed window keeps this content alive (see WindowVisibilityReader),
-        // so the poll would keep enumerating assertions unseen. Pause it while
-        // hidden and refresh on reopen.
-        .background(WindowVisibilityReader(isVisible: $windowVisible))
-        .onChange(of: windowVisible) { _, visible in
-            guard visible else { return }
-            assertions = model.currentAssertions()
-            model.refreshAwakeStats()
-        }
-        .onReceive(tick) { _ in
-            guard windowVisible else { return }
+        .onDisappear { assertions = [] }
+        // Parent Preferences unmounts this tab while the window is hidden; the
+        // receive only exists while mounted, so the poll dies with the tab.
+        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
             assertions = model.currentAssertions()
         }
     }
@@ -1326,6 +1341,14 @@ private struct AutomationTab: View {
         }
         .onDisappear {
             model.hooksEditing = false
+            copiedResetTask?.cancel()
+            copiedResetTask = nil
+            runInstructionsResetTask?.cancel()
+            runInstructionsResetTask = nil
+            copiedConfirmation = nil
+            runInstructionsCopied = false
+            draft = nil
+            editingID = nil
         }
     }
 

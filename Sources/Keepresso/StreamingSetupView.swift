@@ -10,55 +10,55 @@ import KeepressoCore
 struct StreamingSetupView: View {
     @Bindable var model: AppModel
 
-    /// Keeps the AWDL on/off readout honest while the window is open: the
-    /// helper flips the interface up to a few seconds after a toggle.
-    private let awdlTick = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
-    /// A lighter 1s pulse (no shell-out) so the auto-gaming grace countdown
-    /// ticks down smoothly.
-    private let statusTick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     @State private var statusPulse = 0
     /// Whether the window is actually on screen. The closed window keeps this
-    /// view alive on current macOS, so both ticks gate on this.
-    @State private var windowVisible = true
+    /// shell alive on current macOS; the body unmounts while false. Starts
+    /// false so a retained ordered-out scene does not subscribe timers until
+    /// a visibility probe.
+    @State private var windowVisible = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
+        Group {
+            if windowVisible {
+                VStack(alignment: .leading, spacing: 0) {
+                    header
 
-            Divider()
+                    Divider()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    jitterCard
-                    gameComfortCard
-                    watchdogCard
-                    ForEach(model.streaming.checks) { check in
-                        CheckRow(check: check)
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) {
+                            jitterCard
+                            gameComfortCard
+                            watchdogCard
+                            ForEach(model.streaming.checks) { check in
+                                CheckRow(check: check)
+                            }
+                        }
+                        .padding(16)
                     }
+                    .scrollContentBackground(.hidden)
                 }
-                .padding(16)
+                .onAppear { model.refreshStreaming() }
+                // Subscribe only while mounted so the timers die with the body.
+                .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
+                    model.refreshAWDLState()
+                }
+                .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
+                    statusPulse &+= 1
+                }
+            } else {
+                Color.clear
             }
-            .scrollContentBackground(.hidden)
         }
         .frame(width: 460, height: 560)
         .tint(.keepressoBrew)
         .glassWindowBackground()
         .centersAndFrontsWindow()
-        .onAppear { model.refreshStreaming() }
-        // The closed window keeps this content alive (see WindowVisibilityReader),
-        // so the AWDL poll would keep spawning ifconfig unseen. Pause both ticks
-        // while hidden and refresh on reopen.
+        // The closed window keeps this shell alive (see WindowVisibilityReader);
+        // the body unmounts while hidden so ticks and Observation churn stop.
         .background(WindowVisibilityReader(isVisible: $windowVisible))
         .onChange(of: windowVisible) { _, visible in
             if visible { model.refreshStreaming() }
-        }
-        .onReceive(awdlTick) { _ in
-            guard windowVisible else { return }
-            model.refreshAWDLState()
-        }
-        .onReceive(statusTick) { _ in
-            guard windowVisible else { return }
-            statusPulse &+= 1
         }
     }
 

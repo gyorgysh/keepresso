@@ -11,30 +11,44 @@ import KeepressoCore
 /// guides rather than changing anything.
 struct SetupView: View {
     @Bindable var model: AppModel
+    /// Closed Setup windows stay alive on current macOS; unmount the checklist
+    /// while off screen so it stops observing AppModel. Starts false so a
+    /// retained ordered-out scene does not mount until a visibility probe.
+    @State private var windowVisible = false
 
     private var checks: [ReadinessCheck] { model.readiness.checks }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
+        Group {
+            if windowVisible {
+                VStack(alignment: .leading, spacing: 0) {
+                    header
 
-            Divider()
+                    Divider()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    ForEach(checks) { check in
-                        CheckRow(check: check)
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) {
+                            ForEach(checks) { check in
+                                CheckRow(check: check)
+                            }
+                        }
+                        .padding(16)
                     }
+                    .scrollContentBackground(.hidden)
                 }
-                .padding(16)
+                .onAppear { model.refreshReadiness() }
+            } else {
+                Color.clear
             }
-            .scrollContentBackground(.hidden)
         }
         .frame(width: 460, height: 520)
         .tint(.keepressoBrew)
         .glassWindowBackground()
         .centersAndFrontsWindow()
-        .onAppear { model.refreshReadiness() }
+        .background(WindowVisibilityReader(isVisible: $windowVisible))
+        .onChange(of: windowVisible) { _, visible in
+            if visible { model.refreshReadiness() }
+        }
     }
 
     private var header: some View {

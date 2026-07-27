@@ -74,8 +74,10 @@ struct WelcomeView: View {
     }
     @State private var step: Step = .welcome
     /// Whether the window is actually on screen. The closed window keeps this
-    /// view (and `step`) alive, so watching visibility lets us restart the tour
-    /// at step one on each reopen instead of landing on the last step shown.
+    /// shell alive, so the heavy tour unmounts while false (stops Observation
+    /// and TimelineView churn) and remounts on reopen. Starts false so the
+    /// first paint waits for a real visibility probe rather than flashing the
+    /// last-remembered step.
     @State private var windowVisible = false
 
     /// Whether the hero cup is brewing: a live session, or a use case just
@@ -119,66 +121,88 @@ struct WelcomeView: View {
     private var reachedBottom: Bool { scrollOffset <= viewportHeight - contentHeight + 2 }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // The cup is a fixed header across every step, so the brand stays
-            // put and picking a use case still "pours" it (the payoff for the
-            // choice) no matter which step you're on.
-            BrewingCupView(isActive: cupBrewing, scale: 2.0 * type.scale)
-                .padding(.top, 22)
-                .padding(.bottom, 4)
-            ScrollView {
-                stepContent
-                    .padding(.horizontal, 24)
-                    .padding(.top, 10)
-                    .padding(.bottom, 12)
-                    .id(step)
+        Group {
+            if windowVisible {
+                VStack(spacing: 0) {
+                    // The cup is a fixed header across every step, so the brand stays
+                    // put and picking a use case still "pours" it (the payoff for the
+                    // choice) no matter which step you're on.
+                    BrewingCupView(isActive: cupBrewing, scale: 2.0 * type.scale)
+                        .padding(.top, 22)
+                        .padding(.bottom, 4)
+                    ScrollView {
+                        stepContent
+                            .padding(.horizontal, 24)
+                            .padding(.top, 10)
+                            .padding(.bottom, 12)
+                            .id(step)
+                            .background(GeometryReader { proxy in
+                                Color.clear.preference(
+                                    key: ChecklistFrameKey.self,
+                                    value: proxy.frame(in: .named(Self.scrollSpace))
+                                )
+                            })
+                    }
+                    .coordinateSpace(name: Self.scrollSpace)
+                    // fixedSize makes the scroll area ask for its content's full
+                    // height and the capped frame clamps it, so the window hugs the
+                    // checklist whenever it fits under the cap and scrolls when it
+                    // doesn't. (Verified empirically: without fixedSize the window
+                    // ignores the content and opens at a default height.)
+                    .frame(maxHeight: scrollCap)
+                    .fixedSize(horizontal: false, vertical: true)
                     .background(GeometryReader { proxy in
                         Color.clear.preference(
-                            key: ChecklistFrameKey.self,
-                            value: proxy.frame(in: .named(Self.scrollSpace))
+                            key: ViewportHeightKey.self,
+                            value: proxy.size.height
                         )
                     })
-            }
-            .coordinateSpace(name: Self.scrollSpace)
-            // fixedSize makes the scroll area ask for its content's full
-            // height and the capped frame clamps it, so the window hugs the
-            // checklist whenever it fits under the cap and scrolls when it
-            // doesn't. (Verified empirically: without fixedSize the window
-            // ignores the content and opens at a default height.)
-            .frame(maxHeight: scrollCap)
-            .fixedSize(horizontal: false, vertical: true)
-            .background(GeometryReader { proxy in
-                Color.clear.preference(
-                    key: ViewportHeightKey.self,
-                    value: proxy.size.height
-                )
-            })
-            // The cue that more of the checklist sits below the fold: a fade
-            // and a chevron, gone once the user reaches the end (and never
-            // shown when everything fits).
-            .overlay(alignment: .bottom) {
-                if needsScroll && !reachedBottom {
-                    moreBelowCue
-                        .transition(.opacity)
-                }
-            }
-            .animation(.easeInOut(duration: 0.2), value: reachedBottom)
-            .onPreferenceChange(ChecklistFrameKey.self) { frame in
-                contentHeight = frame.height
-                scrollOffset = frame.minY
-            }
-            .onPreferenceChange(ViewportHeightKey.self) { viewportHeight = $0 }
+                    // The cue that more of the checklist sits below the fold: a fade
+                    // and a chevron, gone once the user reaches the end (and never
+                    // shown when everything fits).
+                    .overlay(alignment: .bottom) {
+                        if needsScroll && !reachedBottom {
+                            moreBelowCue
+                                .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.2), value: reachedBottom)
+                    .onPreferenceChange(ChecklistFrameKey.self) { frame in
+                        contentHeight = frame.height
+                        scrollOffset = frame.minY
+                    }
+                    .onPreferenceChange(ViewportHeightKey.self) { viewportHeight = $0 }
 
-            footer
-                .padding(.horizontal, 24)
-                .padding(.top, 12)
-                .padding(.bottom, 20)
+                    footer
+                        .padding(.horizontal, 24)
+                        .padding(.top, 12)
+                        .padding(.bottom, 20)
+                }
+                // Cascades to every text that sets no font of its own (toggles,
+                // buttons, links), so the whole window scales together.
+                .font(type.body)
+                .onAppear {
+                    // Status reads only; showing the window never prompts for anything.
+                    model.helper.refresh()
+                    model.refreshAgentHookStatuses()
+                    revealed = true
+                    refreshScreenHeight()
+                }
+                // Resolution or display changes while the app runs must re-cap the
+                // window, or it can end up taller than the new screen.
+                .onReceive(NotificationCenter.default.publisher(
+                    for: NSApplication.didChangeScreenParametersNotification
+                )) { _ in
+                    refreshScreenHeight()
+                }
+                .task { notificationStatus = await model.notificationAuthorizationStatus() }
+            } else {
+                Color.clear
+                    .frame(width: 400 * type.scale)
+            }
         }
         .frame(width: 400 * type.scale)
         .tint(.keepressoBrew)
-        // Cascades to every text that sets no font of its own (toggles,
-        // buttons, links), so the whole window scales together.
-        .font(type.body)
         .glassWindowBackground()
         .centersAndFrontsWindow()
         .background(WindowVisibilityReader(isVisible: $windowVisible))
@@ -190,32 +214,13 @@ struct WelcomeView: View {
             step = .welcome
             revealed = false
             refreshScreenHeight()
-            // The closed window keeps this view alive, so re-read the state the
-            // setup rows show or they'd be stale on reopen (e.g. login item or
-            // notifications changed in Preferences since it was last open).
+            // Re-read setup rows and connect status; they can change while the
+            // window was torn down (e.g. login item or notifications in Preferences).
             launchAtLogin = LoginItem.isEnabled
-            // Same reason: the agentic callout's connect rows would otherwise
-            // show whatever was true the last time the window was open, and
-            // these tools get connected from Preferences too.
             model.refreshAgentHookStatuses()
             Task { notificationStatus = await model.notificationAuthorizationStatus() }
             withAnimation { revealed = true }
         }
-        .onAppear {
-            // Status reads only; showing the window never prompts for anything.
-            model.helper.refresh()
-            model.refreshAgentHookStatuses()
-            revealed = true
-            refreshScreenHeight()
-        }
-        // Resolution or display changes while the app runs must re-cap the
-        // window, or it can end up taller than the new screen.
-        .onReceive(NotificationCenter.default.publisher(
-            for: NSApplication.didChangeScreenParametersNotification
-        )) { _ in
-            refreshScreenHeight()
-        }
-        .task { notificationStatus = await model.notificationAuthorizationStatus() }
     }
 
     private func refreshScreenHeight() {

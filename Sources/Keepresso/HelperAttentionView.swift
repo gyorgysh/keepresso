@@ -10,6 +10,10 @@ import AppKit
 struct HelperAttentionView: View {
     @Bindable var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    /// Closed attention windows stay alive on current macOS; unmount the body
+    /// while off screen so helper Observation churn stops. Starts false so a
+    /// retained ordered-out scene does not mount (or steam) until visible.
+    @State private var windowVisible = false
 
     /// What the window is showing right now, derived from the live helper
     /// state so approval progress observed by the manager's poll moves the
@@ -32,25 +36,39 @@ struct HelperAttentionView: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
-            BrewingCupView(isActive: true, scale: 2.4)
-                .padding(.top, 4)
+        Group {
+            if windowVisible {
+                VStack(spacing: 16) {
+                    BrewingCupView(isActive: true, scale: 2.4)
+                        .padding(.top, 4)
 
-            VStack(spacing: 6) {
-                Text(title)
-                    .font(.title3.bold())
-                Text(message)
-                    .font(.callout)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    VStack(spacing: 6) {
+                        Text(title)
+                            .font(.title3.bold())
+                        Text(message)
+                            .font(.callout)
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    statusRow
+
+                    actions
+                }
+                .padding(24)
+                .animation(.smooth(duration: 0.3), value: stageKey)
+                // The manager polls while the user is over in System Settings; the
+                // moment the approval lands, confirm the daemon really answers, which
+                // flips this window to All set by itself.
+                .onChange(of: model.helper.status) { _, status in
+                    if status == .enabled { model.verifyHelper() }
+                }
+            } else {
+                Color.clear
+                    .frame(width: 380)
             }
-
-            statusRow
-
-            actions
         }
-        .padding(24)
         .frame(width: 380)
         .tint(.keepressoBrew)
         .glassWindowBackground()
@@ -59,13 +77,7 @@ struct HelperAttentionView: View {
         // Floating is deliberate here, unlike the other windows: an attention
         // dialog that landed behind something would defeat its purpose.
         .background(WindowPlacement(floating: true))
-        .animation(.smooth(duration: 0.3), value: stageKey)
-        // The manager polls while the user is over in System Settings; the
-        // moment the approval lands, confirm the daemon really answers, which
-        // flips this window to All set by itself.
-        .onChange(of: model.helper.status) { _, status in
-            if status == .enabled { model.verifyHelper() }
-        }
+        .background(WindowVisibilityReader(isVisible: $windowVisible))
     }
 
     /// `Stage` isn't Equatable-friendly for `animation(value:)` with derived

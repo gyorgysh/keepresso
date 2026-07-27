@@ -18,7 +18,8 @@ import SwiftUI
 /// Lives in the menu panel, which keeps its content alive while closed on
 /// current macOS, so the timeline would keep ticking unseen. The call site
 /// passes `animated: false` while the panel is off screen (see
-/// `WindowVisibilityReader`), which drops the timeline entirely.
+/// `WindowVisibilityReader`), and the panel body itself unmounts while
+/// closed, which drops the timeline entirely.
 struct SparkView: View {
     /// The agent this row belongs to, or `nil`. Anything without a mark of its
     /// own falls back to the breathing dot.

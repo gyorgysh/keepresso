@@ -116,16 +116,15 @@ struct FanBoostSlider: View {
 
 /// A checklist of this machine's temperature sensors with a live °C column,
 /// bound to the selected sensor ids of the thermal safety config. Readings
-/// refresh once a second while visible (through the backend's TTL cache, so
-/// the guard's own tick shares the same probe).
+/// refresh once a second while mounted (through the backend's TTL cache, so
+/// the guard's own tick shares the same probe). Preferences unmounts the
+/// General tab while the window is hidden, which tears this picker down.
 struct ThermalSensorPicker: View {
     let model: AppModel
     @Binding var selectedIDs: [String]
 
     @State private var sensors: [ThermalSensor] = []
     @State private var readings: [String: Double] = [:]
-    @State private var windowVisible = true
-    private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -172,15 +171,13 @@ struct ThermalSensorPicker: View {
             sensors = model.thermalGuard.discoverSensors()
             refresh()
         }
-        // The closed window keeps this content alive (see WindowVisibilityReader),
-        // so the sensor poll would keep reading the SMC unseen. Pause it while
-        // hidden and refresh on reopen.
-        .background(WindowVisibilityReader(isVisible: $windowVisible))
-        .onChange(of: windowVisible) { _, visible in
-            if visible { refresh() }
+        // Preferences unmounts the General tab while hidden; clear readings and
+        // drop the poll with the view so SMC is not read off screen.
+        .onDisappear {
+            sensors = []
+            readings = [:]
         }
-        .onReceive(tick) { _ in
-            guard windowVisible else { return }
+        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
             refresh()
         }
     }

@@ -32,9 +32,9 @@ struct BrewingCupView: View {
     @State private var steaming = false
     /// Whether the host window is actually on screen. `MenuBarExtra(.window)`
     /// keeps this view alive after its panel closes on current macOS, so the
-    /// steam `TimelineView(.animation)` would otherwise drive the display link
-    /// (and a full window relayout) at 30 fps forever while the menu is shut.
-    /// Reported by ``WindowVisibilityReader``; the steam only ticks while true.
+    /// steam `TimelineView` would otherwise keep firing (and a full window
+    /// relayout) forever while the menu is shut. Reported by
+    /// ``WindowVisibilityReader``; the steam only ticks while true.
     @State private var windowVisible = true
 
     /// One full rise-and-dissolve cycle per wisp, staggered thirds apart.
@@ -78,7 +78,11 @@ struct BrewingCupView: View {
     @ViewBuilder
     private var steam: some View {
         if steaming && windowVisible && !reduceMotion {
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            // `.periodic`, not `.animation`: the animation schedule hooks the
+            // display link and still evaluates at vsync even with a
+            // minimumInterval hint. Periodic is timer-backed at 30 Hz and
+            // drops entirely when this branch unmounts (window off screen).
+            TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { context in
                 let now = context.date.timeIntervalSinceReferenceDate
                 wisps { delay in Self.wispState(at: now, delay: delay) }
             }
