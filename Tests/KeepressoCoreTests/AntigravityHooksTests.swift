@@ -128,7 +128,9 @@ private func object(_ data: Data) -> [String: Any] {
     #expect(AntigravityHooks.isEditorHostPath(host))
 }
 
-@Test func aWorkingRecordFromALiveEditorHostOutlivesItsStaleness() {
+@Test func aStaleWorkingRecordFromAnEditorHostAgesOut() {
+    // Antigravity IDE is ownerPid-only, same as Cursor: past staleAfter the
+    // record must not stay trusted just because the editor host still runs.
     let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent("ag-live-\(UUID().uuidString)", isDirectory: true)
     try! FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -140,15 +142,30 @@ private func object(_ data: Data) -> [String: Any] {
             origin: .ide, ownerPid: 71776, agent: "antigravity",
             updatedAt: now.addingTimeInterval(-AgentHooks.staleAfter - 60)),
         in: directory)
-    // A tool call can run far longer than the staleness window with no event in
-    // between, so an old working record is still the truth while its host runs.
+    #expect(AgentHooks.readHookRecords(
+        now: now, in: directory, isAlive: { _ in false }, isHostAlive: { $0 == 71776 }).isEmpty)
+    #expect(!FileManager.default.fileExists(
+        atPath: directory.appendingPathComponent("ed6b90f5.json").path))
+}
+
+@Test func aCLIAgyWorkingRecordOutlivesStalenessWhileAgentLives() {
+    // CLI `agy` sessions carry agentPid; long silent turns must keep trusting
+    // working while that process is alive (IDE ownerPid-only does not).
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("ag-cli-\(UUID().uuidString)", isDirectory: true)
+    try! FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let now = Date()
+    AgentHooks.write(
+        AgentHooks.HookRecord(
+            sessionId: "cli-turn", state: .working, cwd: "/Users/x/site",
+            origin: .terminal, agentPid: 4242, agent: "agy",
+            updatedAt: now.addingTimeInterval(-AgentHooks.staleAfter - 60)),
+        in: directory)
     let live = AgentHooks.readHookRecords(
-        now: now, in: directory, isAlive: { _ in false }, isHostAlive: { $0 == 71776 })
+        now: now, in: directory, isAlive: { $0 == 4242 }, isHostAlive: { _ in false })
     #expect(live.count == 1)
     #expect(live.first?.state == .working)
-    // With the editor gone, the same record is neither trusted nor kept.
-    #expect(AgentHooks.readHookRecords(
-        now: now, in: directory, isAlive: { _ in false }, isHostAlive: { _ in false }).isEmpty)
 }
 
 @Test func handleAnchorsAnIDESessionToItsEditorHost() {

@@ -505,6 +505,29 @@ private let antigravityHostCommand =
     #expect(rows.map(\.active) == [true, false])
 }
 
+@Test func detailRowsPutWorkingSessionsFirst() {
+    // Monitor order is idle, idle, working: the menu truncates to a few rows,
+    // so working must surface ahead of idle rather than stay buried under
+    // "+N more".
+    let monitor = FakeAgentActivity([
+        session(pid: 1, agent: "claude", tty: "s001", cpu: 0),
+        session(pid: 2, agent: "codex", tty: "s002", cpu: 0),
+        session(pid: 3, agent: "cursor", tty: nil, cpu: 80),
+        session(pid: 4, agent: "gemini", tty: "s004", cpu: 0),
+    ])
+    let trigger = AgentActivityTrigger(monitor: monitor)
+    for _ in 0..<5 { trigger.tick() }
+    #expect(trigger.sessionStates.map(\.isWorking) == [false, false, true, false])
+    let rows = trigger.detailRows
+    #expect(rows.map(\.active) == [true, false, false, false])
+    #expect(rows.map(\.label) == [
+        "cursor (pid 3)",
+        "claude (s001)",
+        "codex (s002)",
+        "gemini (s004)",
+    ])
+}
+
 // MARK: - Rule, factory, and gate plumbing
 
 @Test func agentRuleLabelIncludesGraceSuffix() {

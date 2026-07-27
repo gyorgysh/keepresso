@@ -944,16 +944,20 @@ public final class AgentActivityTrigger: Trigger {
 }
 
 extension AgentActivityTrigger: TriggerDetailProviding {
+    /// Working sessions first so a truncated menu still shows the ones that
+    /// matter; within each group the monitor's order is kept (stable sort).
     public var detailRows: [RuleDetail] {
-        sessionStates.map {
-            RuleDetail(
-                label: Self.rowLabel(for: $0), active: $0.isWorking,
-                animated: $0.isWorking, agent: $0.session.agent)
-        }
+        sessionStates
+            .sorted { $0.isWorking && !$1.isWorking }
+            .map {
+                RuleDetail(
+                    label: Self.rowLabel(for: $0), active: $0.isWorking,
+                    animated: $0.isWorking, agent: $0.session.agent)
+            }
     }
 
-    /// "claude (s003) - running command": the session label plus, when hooks
-    /// report one, what it is doing (or waiting on) right now.
+    /// "claude (s003) - run": the session label plus, when hooks report one,
+    /// a short activity token that fits the brewing menu without truncating.
     static func rowLabel(for state: SessionState) -> String {
         let detail: String?
         if state.session.hookState == .waiting {
@@ -967,21 +971,21 @@ extension AgentActivityTrigger: TriggerDetailProviding {
         return "\(state.session.label) - \(detail)"
     }
 
-    /// Localizes a semantic detail token written by the hook CLI. Tokens stay
-    /// language-neutral on disk so every UI language renders its own text.
+    /// Localizes a semantic detail token written by the hook CLI. On-disk
+    /// tokens stay stable; menu copy is intentionally short so rows fit.
     static func detailText(forToken token: String) -> String? {
         switch token {
-        case "running-command": return L("running command")
-        case "editing": return L("editing")
-        case "reading": return L("reading")
-        case "searching": return L("searching")
-        case "subagent": return L("running subagent")
-        case "browsing": return L("browsing")
-        case "waiting-approval": return L("waiting for approval")
-        case "waiting": return L("waiting")
+        case "running-command": return L("run")
+        case "editing": return L("write")
+        case "reading": return L("read")
+        case "searching": return L("search")
+        case "subagent": return L("subagent")
+        case "browsing": return L("browse")
+        case "waiting-approval": return L("permission")
+        case "waiting": return L("wait")
         default:
             guard token.hasPrefix("tool:") else { return nil }
-            return L("using %@", String(token.dropFirst("tool:".count)))
+            return L("tool")
         }
     }
 }

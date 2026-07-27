@@ -214,16 +214,17 @@ CORE = {
 
 
 # --- Agent hooks (Claude Code connection) ---
+# Short menu tokens: brewing rows truncate on long phrases, so keep these brief.
 _AGENT_HOOKS = {
-    "running command": {"hu": "parancsot futtat", "es": "ejecutando un comando", "fr": "exécute une commande", "de": "führt Befehl aus", "zh-Hans": "正在运行命令"},
-    "editing": {"hu": "szerkeszt", "es": "editando", "fr": "édite", "de": "bearbeitet", "zh-Hans": "正在编辑"},
-    "reading": {"hu": "olvas", "es": "leyendo", "fr": "lit", "de": "liest", "zh-Hans": "正在读取"},
-    "searching": {"hu": "keres", "es": "buscando", "fr": "recherche", "de": "sucht", "zh-Hans": "正在搜索"},
-    "running subagent": {"hu": "alügynököt futtat", "es": "ejecutando un subagente", "fr": "exécute un sous-agent", "de": "führt Subagenten aus", "zh-Hans": "正在运行子代理"},
-    "browsing": {"hu": "böngészik", "es": "navegando", "fr": "navigue sur le web", "de": "durchsucht das Web", "zh-Hans": "正在浏览网页"},
-    "using %@": {"hu": "%@ használata", "es": "usando %@", "fr": "utilise %@", "de": "verwendet %@", "zh-Hans": "正在使用 %@"},
-    "waiting for approval": {"hu": "jóváhagyásra vár", "es": "esperando aprobación", "fr": "attend une approbation", "de": "wartet auf Freigabe", "zh-Hans": "等待批准"},
-    "waiting": {"hu": "várakozik", "es": "esperando", "fr": "en attente", "de": "wartet", "zh-Hans": "等待中"},
+    "run": {"hu": "futtat", "es": "ejecuta", "fr": "exécute", "de": "Befehl", "zh-Hans": "运行"},
+    "write": {"hu": "ír", "es": "escribe", "fr": "écrit", "de": "schreibt", "zh-Hans": "写入"},
+    "read": {"hu": "olvas", "es": "lee", "fr": "lit", "de": "liest", "zh-Hans": "读取"},
+    "search": {"hu": "keres", "es": "busca", "fr": "cherche", "de": "sucht", "zh-Hans": "搜索"},
+    "subagent": {"hu": "alügynök", "es": "subagente", "fr": "sous-agent", "de": "Subagent", "zh-Hans": "子代理"},
+    "browse": {"hu": "böngész", "es": "navega", "fr": "navigue", "de": "Web", "zh-Hans": "浏览"},
+    "tool": {"hu": "eszköz", "es": "herramienta", "fr": "outil", "de": "Tool", "zh-Hans": "工具"},
+    "permission": {"hu": "engedély", "es": "permiso", "fr": "permission", "de": "Freigabe", "zh-Hans": "权限"},
+    "wait": {"hu": "vár", "es": "espera", "fr": "attend", "de": "wartet", "zh-Hans": "等待"},
     "terminal": {"hu": "terminál", "es": "terminal", "fr": "terminal", "de": "Terminal", "zh-Hans": "终端"},
     "Claude app": {"hu": "Claude app", "es": "app Claude", "fr": "app Claude", "de": "Claude-App", "zh-Hans": "Claude 应用"},
     "IDE": {"hu": "IDE", "es": "IDE", "fr": "IDE", "de": "IDE", "zh-Hans": "IDE"},

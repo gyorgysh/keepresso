@@ -206,7 +206,10 @@ private func temporaryDirectory() -> URL {
 
 // MARK: - Liveness of hook-only sessions
 
-@Test func hookOnlyWorkingRecordSurvivesALongTurnButNotAClosedEditor() throws {
+@Test func hookOnlyWorkingRecordAgesOutEvenWhileEditorLives() throws {
+    // Cursor IDE conversations are separate files under one long-lived Helper
+    // ownerPid. Forever-while-alive trust is reserved for CLI agentPid
+    // sessions; past staleAfter, ownerPid-only working must not hold.
     let dir = temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
     let start = Date()
@@ -215,19 +218,50 @@ private func temporaryDirectory() -> URL {
             sessionId: "conv-4", state: .working, ownerPid: 70, agent: "cursor",
             updatedAt: start),
         in: dir)
-    // Well past staleAfter: a long model turn emits no hook events at all, so
-    // age alone must not end it while the editor is still open.
-    let later = start.addingTimeInterval(AgentHooks.staleAfter + 60)
+    // Still fresh: trusted while the host is alive.
     var records = AgentHooks.readHookRecords(
-        now: later, in: dir, isAlive: { _ in false }, isHostAlive: { $0 == 70 })
+        now: start.addingTimeInterval(30), in: dir,
+        isAlive: { _ in false }, isHostAlive: { $0 == 70 })
     #expect(records.count == 1)
     #expect(records[0].state == .working)
 
-    // Editor gone: the record is swept, or it would hold the Mac awake with
-    // no session behind it.
+    // Past staleAfter with the Helper still up: drop and delete, or a missed
+    // Stop would leave phantom "cursor (IDE) · working" rows forever.
+    let later = start.addingTimeInterval(AgentHooks.staleAfter + 60)
     records = AgentHooks.readHookRecords(
-        now: later, in: dir, isAlive: { _ in false }, isHostAlive: { _ in false })
+        now: later, in: dir, isAlive: { _ in false }, isHostAlive: { $0 == 70 })
     #expect(records.isEmpty)
+    #expect(!FileManager.default.fileExists(
+        atPath: dir.appendingPathComponent("conv-4.json").path))
+}
+
+@Test func manyStaleOwnerPidWorkingRecordsDoNotHold() throws {
+    // Live machine: ~9 stuck working files under one Cursor Helper. All past
+    // staleAfter must leave the returned set so they cannot keep the Mac awake.
+    let dir = temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let now = Date()
+    let host: Int32 = 70
+    for i in 1...9 {
+        AgentHooks.write(
+            AgentHooks.HookRecord(
+                sessionId: "conv-\(i)", state: .working, origin: .ide,
+                ownerPid: host, agent: "cursor",
+                updatedAt: now.addingTimeInterval(-AgentHooks.staleAfter - Double(i))),
+            in: dir)
+    }
+    // One fresh ownerPid record still counts; the nine stale ones do not.
+    AgentHooks.write(
+        AgentHooks.HookRecord(
+            sessionId: "conv-fresh", state: .working, origin: .ide,
+            ownerPid: host, agent: "cursor", updatedAt: now),
+        in: dir)
+
+    let records = AgentHooks.readHookRecords(
+        now: now, in: dir, isAlive: { _ in false }, isHostAlive: { $0 == host })
+    #expect(records.map(\.sessionId) == ["conv-fresh"])
+    let remaining = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+    #expect(remaining == ["conv-fresh.json"])
 }
 
 // MARK: - Sessions with no process

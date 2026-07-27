@@ -49,6 +49,21 @@ Versions follow [Semantic Versioning](https://semver.org).
   "just used", so keep-active, dimming and screen-saver yield do not act on a
   fake zero.
 
+- **Stale Cursor and IDE chats age out.** Hook-only conversations that live
+  under the editor Helper (no agent process of their own) used to stay
+  "working" for as long as that Helper was up, so a missed Stop left phantom
+  rows in the list and held the Mac awake. Past the usual stale window those
+  records are dropped; CLI sessions with a live agent process still keep the
+  long-turn trust they need.
+
+- **Working agent sessions show first.** The brewing menu truncates the agent
+  list, so idle rows above could hide the ones that are actually holding the
+  Mac awake. Working sessions now sort to the top.
+
+- **Agent status labels are shorter.** Detail tokens are short enough to fit
+  beside the session name (run, write, read, search, browse, permission, wait,
+  tool, subagent) instead of truncating mid-phrase.
+
 ## [1.19.1] - 2026-07-27
 
 ### Changed

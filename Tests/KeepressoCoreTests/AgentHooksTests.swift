@@ -312,6 +312,36 @@ private func tempHooksDir() -> URL {
     #expect(state.isWorking)
 }
 
+@Test func staleOwnerPidWorkingDoesNotHoldWhileStaleAgentPidDoes() {
+    // IDE hook-only (ownerPid) ages out; CLI (agentPid) keeps long-turn trust.
+    let dir = tempHooksDir()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let now = Date()
+    AgentHooks.write(
+        AgentHooks.HookRecord(
+            sessionId: "ide-stuck", state: .working, origin: .ide,
+            ownerPid: 900, agent: "cursor",
+            updatedAt: now.addingTimeInterval(-AgentHooks.staleAfter - 30)),
+        in: dir)
+    AgentHooks.write(
+        AgentHooks.HookRecord(
+            sessionId: "cli-quiet", state: .working, origin: .terminal,
+            agentPid: 100, agent: "claude",
+            updatedAt: now.addingTimeInterval(-AgentHooks.staleAfter - 30)),
+        in: dir)
+    AgentHooks.write(
+        AgentHooks.HookRecord(
+            sessionId: "ide-fresh", state: .working, origin: .ide,
+            ownerPid: 900, agent: "cursor", updatedAt: now),
+        in: dir)
+
+    let records = AgentHooks.readHookRecords(
+        now: now, in: dir, isAlive: { $0 == 100 }, isHostAlive: { $0 == 900 })
+    #expect(Set(records.map(\.sessionId)) == ["cli-quiet", "ide-fresh"])
+    #expect(!FileManager.default.fileExists(
+        atPath: dir.appendingPathComponent("ide-stuck.json").path))
+}
+
 @Test func purgeRecordsRemovesEverythingAndWritesRecover() {
     let dir = tempHooksDir()
     defer { try? FileManager.default.removeItem(at: dir) }
@@ -483,14 +513,28 @@ private func hookRecord(
             pid: 1, agent: "claude", tty: "s003", cpuPercent: 5,
             hookState: .working, hookDetail: "running-command"),
         isWorking: true)
-    #expect(AgentActivityTrigger.rowLabel(for: working) == "claude (s003) - running command")
+    #expect(AgentActivityTrigger.rowLabel(for: working) == "claude (s003) - run")
 
     let waiting = AgentActivityTrigger.SessionState(
         session: AgentSession(
             pid: 1, agent: "claude", tty: "s003", cpuPercent: 0,
             hookState: .waiting, hookDetail: "waiting-approval"),
         isWorking: false)
-    #expect(AgentActivityTrigger.rowLabel(for: waiting) == "claude (s003) - waiting for approval")
+    #expect(AgentActivityTrigger.rowLabel(for: waiting) == "claude (s003) - permission")
+
+    let reading = AgentActivityTrigger.SessionState(
+        session: AgentSession(
+            pid: 1, agent: "claude", tty: "s003", cpuPercent: 5,
+            hookState: .working, hookDetail: "reading"),
+        isWorking: true)
+    #expect(AgentActivityTrigger.rowLabel(for: reading) == "claude (s003) - read")
+
+    let tool = AgentActivityTrigger.SessionState(
+        session: AgentSession(
+            pid: 1, agent: "claude", tty: "s003", cpuPercent: 5,
+            hookState: .working, hookDetail: "tool:SomeMCPTool"),
+        isWorking: true)
+    #expect(AgentActivityTrigger.rowLabel(for: tool) == "claude (s003) - tool")
 
     // No hook data: the plain label, exactly as before.
     let plain = AgentActivityTrigger.SessionState(

@@ -27,21 +27,11 @@ extension Color {
             : NSColor(srgbRed: 193 / 255, green: 95 / 255, blue: 60 / 255, alpha: 1)
     })
 
-    /// Cursor's olive, used to tint cursor session rows: #B6BD73 in dark mode
-    /// (the cursor-agent console spinner), the deeper #767E30 in light. Same
-    /// treatment as ``claudeAccent``, since the brand value alone sits too
-    /// pale on a light menu to read as a tint.
-    static let cursorAccent = Color(nsColor: NSColor(name: nil) { appearance in
-        appearance.isDarkAppearance
-            ? NSColor(srgbRed: 182 / 255, green: 189 / 255, blue: 115 / 255, alpha: 1)
-            : NSColor(srgbRed: 118 / 255, green: 126 / 255, blue: 48 / 255, alpha: 1)
-    })
-
-    /// For tools whose mark is monochrome (Grok, Codex, Antigravity): tint
-    /// their rows with the menu's own ink rather than a hue, near-black on
-    /// light and near-white on dark. Pulled a little off pure black and white
-    /// so a working row still reads as tinted next to ordinary label text. Their
-    /// marks are told apart by shape, not color.
+    /// For tools whose mark is monochrome (Grok, Codex, Cursor, Antigravity):
+    /// tint their rows with the menu's own ink rather than a hue, near-black
+    /// on light and near-white on dark. Pulled a little off pure black and
+    /// white so a working row still reads as tinted next to ordinary label
+    /// text. Their marks are told apart by shape, not color.
     static let monochromeAccent = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.isDarkAppearance
             ? NSColor(srgbRed: 242 / 255, green: 242 / 255, blue: 242 / 255, alpha: 1)

@@ -491,20 +491,25 @@ public enum AgentHooks {
     /// A record older than this is no longer trusted as live state: the
     /// session silently falls back to transcript + CPU evidence. Age only
     /// governs records whose silence means nothing (`idle`, a plain
-    /// `waiting` nudge) and records whose agent can't be liveness-checked;
-    /// `working` and `waiting-approval` records with a live agent never
-    /// expire by age (see ``readHookRecords(now:in:isAlive:)``).
+    /// `waiting` nudge), hook-only IDE records (ownerPid, no agentPid), and
+    /// records whose agent can't be liveness-checked; `working` and
+    /// `waiting-approval` records with a live `agentPid` never expire by age
+    /// (see ``readHookRecords(now:in:isAlive:)``).
     public static let staleAfter: TimeInterval = 120
 
     /// All usable records in the hooks folder. Hook state is edge-triggered,
-    /// so a stale `working` or `waiting-approval` record with a live agent
-    /// stays authoritative: a long model turn emits no events for minutes
-    /// (zero CPU, no transcript writes) and an approval prompt emits none
-    /// however long it sits. Stale `idle`/`waiting` records with a live
-    /// agent are skipped but kept, letting the transcript + CPU fallbacks
-    /// decide. Stale records whose agent is gone, including a pid reused by
-    /// some non-agent process, are deleted during the scan (SessionEnd never
-    /// fired, e.g. a killed terminal).
+    /// so a stale `working` or `waiting-approval` record with a live
+    /// `agentPid` stays authoritative: a long CLI model turn emits no events
+    /// for minutes (zero CPU, no transcript writes) and an approval prompt
+    /// emits none however long it sits. Hook-only IDE records (ownerPid,
+    /// no agentPid) do not get that forever-while-alive trust: one long-lived
+    /// editor Helper can own many conversation files, and a missed Stop would
+    /// otherwise hold the Mac awake forever. Past ``staleAfter`` those are
+    /// dropped and deleted. Stale `idle`/`waiting` records with a live
+    /// agentPid are skipped but kept, letting the transcript + CPU fallbacks
+    /// decide. Stale records whose agent or host is gone, including a pid
+    /// reused by some non-agent process, are deleted during the scan
+    /// (SessionEnd never fired, e.g. a killed terminal).
     public static func readHookRecords(
         now: Date,
         in directory: URL = directoryURL(),
@@ -533,15 +538,20 @@ public enum AgentHooks {
                 if liveness ?? true {
                     records.append(record)
                 }
-            } else if liveness == true,
+            } else if record.agentPid != nil,
+                      liveness == true,
                       record.state == .working
                           || (record.state == .waiting && record.detail == "waiting-approval") {
-                // Trust the edge for as long as the agent or its host is
-                // alive: Stop, Notification, SessionEnd, or the pid dying is
-                // what ends a working turn or a sitting approval prompt,
-                // never the record's age.
+                // CLI only: trust the edge for as long as the agent process
+                // is alive. Stop, Notification, SessionEnd, or the pid dying
+                // ends a working turn or a sitting approval prompt, never
+                // the record's age. ownerPid alone is not enough: IDE hosts
+                // outlive individual conversations.
                 records.append(record)
-            } else if liveness != true {
+            } else if liveness != true || record.agentPid == nil {
+                // Dead agent/host, or a hook-only IDE record past staleAfter:
+                // drop the file so a missed Stop cannot hold forever under a
+                // long-lived Cursor/Antigravity Helper.
                 try? manager.removeItem(at: url)
             }
         }

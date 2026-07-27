@@ -250,7 +250,9 @@ struct Sunburst: Shape {
 // MARK: - Dot grids
 
 /// Cursor's mark: a three by three grid with a band of dots sweeping around
-/// it. Eight steps read off the `cursor-agent` console spinner.
+/// it. Eight steps read off the `cursor-agent` console spinner. Colour comes
+/// from the row accent (``monochromeAccent``), not a brand olive, so the
+/// dots share ink with Codex and Antigravity and are told apart by shape.
 enum CursorDots {
     static let grid = DotMatrix.Grid(columns: 3, rows: 3)
 
