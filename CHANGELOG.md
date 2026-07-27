@@ -3,6 +3,32 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Added
+
+- **Antigravity is detected, and can be connected.** The AI-agent condition now
+  recognises Antigravity's built-in agent, not just its `agy` command-line tool,
+  so work you start inside the editor keeps the Mac awake. Connect Antigravity
+  under the AI agent condition in Preferences ▸ Triggers and its sessions report
+  exactly when they start and finish, the way Claude Code, Cursor and Codex
+  already do. Keepresso only observes: it adds hooks that cannot allow, deny, or
+  block anything Antigravity does, and never touches the step where a tool call
+  is approved.
+
+### Fixed
+
+- **No more password prompt after a session ends.** With "Only while brewing"
+  on and no administrator helper installed, closed-display mode could ask for
+  your password once a session finished, to switch off something that was
+  already off. It now decides from a fresh reading of the setting rather than a
+  remembered one, and notices the setting being changed by another tool instead
+  of waiting until you open the menu.
+
+- **The agent connection rows appear on their own.** Claude Code, Cursor and
+  Codex could only be connected from Preferences after the welcome window had
+  been opened at least once; otherwise their rows were simply missing.
+
 ## [1.19.1] - 2026-07-27
 
 ### Changed
