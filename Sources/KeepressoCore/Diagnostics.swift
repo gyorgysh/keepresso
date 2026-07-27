@@ -205,3 +205,21 @@ public final class IOPMAssertionLister: AssertionListing {
         return String(cString: buffer)
     }
 }
+
+/// TTL wrapper around an ``AssertionListing`` for display-only menu reads.
+/// The Activity pane keeps calling the inner lister directly when it wants
+/// a fresh sweep; the menu's "held by…" line can reuse a few-second cache.
+public final class CachingAssertionLister: AssertionListing {
+    private let inner: AssertionListing
+    private let cache: TTLCache<[PowerAssertionInfo]>
+
+    public init(inner: AssertionListing, ttl: TimeInterval = 3, now: @escaping () -> Date = Date.init) {
+        self.inner = inner
+        self.cache = TTLCache(ttl: ttl, now: now) { inner.current() }
+    }
+
+    public func current() -> [PowerAssertionInfo] { cache.current }
+
+    /// Bypass the TTL for a one-shot fresh read (Activity pane).
+    public func currentUncached() -> [PowerAssertionInfo] { inner.current() }
+}

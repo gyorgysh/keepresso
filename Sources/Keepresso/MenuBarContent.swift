@@ -20,15 +20,15 @@ struct MenuBarContent: View {
     /// The controller the views read live state from.
     private var session: SessionController { model.session }
 
+    /// Live panel values pulsed from the session ticker while open.
+    private var panel: MenuPanelSnapshot { model.menuPanel }
+
     /// Text styles and metrics at the readability scale (grows on very dense
     /// screens; exactly 1 everywhere else). Recomputed each render, and the
-    /// body re-renders every second, so display changes are picked up live.
+    /// body re-renders every second while open, so display changes are picked
+    /// up live.
     private var type: ScaledType { ScaledType() }
 
-    /// Drives the live duration label and re-evaluates trigger state each second.
-    private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    @State private var displayedElapsed: TimeInterval = 0
-    @State private var liveRefresh = 0
     /// Whether the panel is actually on screen. The closed panel keeps this
     /// view alive on current macOS, so periodic work gates on this.
     @State private var panelVisible = true
@@ -204,21 +204,20 @@ struct MenuBarContent: View {
         // Cascades to every text that sets no font of its own (toggles,
         // buttons, menu rows), so the whole panel scales together.
         .font(type.body)
-        .onAppear { model.refreshClosedDisplay() }
+        .onAppear {
+            model.menuPanelVisible = true
+            model.pulseMenuPanelIfVisible()
+            model.refreshClosedDisplay()
+        }
         // The closed panel keeps this content alive (see WindowVisibilityReader),
         // so the tick would keep re-rendering the whole panel every second with
         // nobody looking. Skip it while hidden and refresh on reopen instead.
         .background(WindowVisibilityReader(isVisible: $panelVisible))
         .onChange(of: panelVisible) { _, visible in
+            model.menuPanelVisible = visible
             guard visible else { return }
-            displayedElapsed = session.elapsed
-            liveRefresh &+= 1
+            model.pulseMenuPanelIfVisible()
             model.refreshClosedDisplay()
-        }
-        .onReceive(tick) { _ in
-            guard panelVisible else { return }
-            displayedElapsed = session.elapsed
-            liveRefresh &+= 1
         }
     }
 
@@ -572,22 +571,22 @@ struct MenuBarContent: View {
         if let remaining = session.remaining {
             return L("Stops in %@", MenuBarLabel.format(remaining))
         }
-        return L("Awake for %@", MenuBarLabel.format(displayedElapsed))
+            return L("Awake for %@", MenuBarLabel.format(panel.elapsed))
     }
 
     /// A compact line naming another process that's holding the Mac awake, so an
-    /// idle Keepresso still explains a Mac that won't sleep. Refreshes on the 1s
-    /// tick (the whole body re-renders then).
+    /// idle Keepresso still explains a Mac that won't sleep. Refreshes on the
+    /// session ticker pulse while the panel is open (assertion list is TTL-cached).
     @ViewBuilder
     private var heldByLine: some View {
-        let _ = liveRefresh // re-read the live assertion list each tick
-        if let assertion = model.topExternalAssertion(), let effect = assertion.effect {
+        let _ = panel.tick
+        if let held = panel.heldBy {
             HStack(spacing: 6) {
                 Image(systemName: "bolt.horizontal.circle")
                     .foregroundStyle(.secondary)
                     .font(type.caption)
                     .accessibilityHidden(true)
-                Text("\(assertion.processName): \(effect.lowercased())")
+                Text("\(held.processName): \(held.effect.lowercased())")
                     .font(type.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -611,7 +610,7 @@ struct MenuBarContent: View {
     /// block rather than scattered footnotes.
     @ViewBuilder
     private var statusStack: some View {
-        let _ = liveRefresh
+        let _ = panel.tick
         if hasStatusLines {
             VStack(alignment: .leading, spacing: 6) {
                 leaseStatusLine
@@ -632,7 +631,7 @@ struct MenuBarContent: View {
     /// tick.
     @ViewBuilder
     private var leaseStatusLine: some View {
-        let _ = liveRefresh
+        let _ = panel.tick
         let leases = session.liveLeases
         if !leases.isEmpty {
             // During a safety pause nothing is actually held awake: the
@@ -709,7 +708,7 @@ struct MenuBarContent: View {
     /// the watchdog isn't running. Refreshes on the 1s tick.
     @ViewBuilder
     private var awdlStatusLine: some View {
-        let _ = liveRefresh
+        let _ = panel.tick
         // Only surface an active pause in the menu; the "watching" state would
         // just be persistent noise here (it lives in the Streaming window).
         if model.awdlStatus.isPausing, let status = AWDLStatusStyle(model.awdlStatus) {
@@ -732,7 +731,7 @@ struct MenuBarContent: View {
 
     @ViewBuilder
     private var triggerSummary: some View {
-        let _ = liveRefresh // re-read live trigger state each tick
+        let _ = panel.tick // re-read live trigger state each tick
         if let states = model.ruleStates(), !states.isEmpty {
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(Array(states.enumerated()), id: \.offset) { _, state in

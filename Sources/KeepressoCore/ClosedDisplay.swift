@@ -58,17 +58,25 @@ public final class ClosedDisplayController {
     /// with no external display), so the sleep command fires once per
     /// transition into that state.
     private var wantedPanelAsleep = false
+    /// When ``isEnabled`` was last read from the system. Menu opens reuse a
+    /// fresh-enough cache instead of shelling `pmset -g` every time.
+    private var lastRefreshedAt: Date?
+    private let now: () -> Date
+    /// How long a successful read may be trusted for menu-driven refreshes.
+    public static let refreshFreshness: TimeInterval = 20
 
     public init(
         control: SleepSettingControlling = PMSetSleepControl(),
         lid: LidStateReading = IORegistryLidState(),
         externalDisplay: DisplayMonitoring = CoreGraphicsDisplayMonitor(),
-        displaySleeper: DisplaySleepCommanding = PMSetDisplaySleeper()
+        displaySleeper: DisplaySleepCommanding = PMSetDisplaySleeper(),
+        now: @escaping () -> Date = Date.init
     ) {
         self.control = control
         self.lid = lid
         self.externalDisplay = externalDisplay
         self.displaySleeper = displaySleeper
+        self.now = now
     }
 
     /// Force the display to sleep the instant the lid is closed with no
@@ -102,16 +110,28 @@ public final class ClosedDisplayController {
     /// spins the main run loop, and with a virtual display active a re-entrant
     /// display-driver callback can crash (EXC_BAD_ACCESS). So the read hops to a
     /// detached task and the result lands back on the main actor.
-    public func refresh() async {
+    ///
+    /// When `force` is false and a recent successful read is still fresh, this
+    /// is a no-op so menu open does not pay for another `pmset -g`. Launch,
+    /// post-toggle, and only-while-brewing enforcement pass `force: true` (or
+    /// hit a nil cache) so correctness stays intact.
+    public func refresh(force: Bool = false) async {
         // Defer to an in-flight ``set(_:)``: it writes the authoritative state
         // after its prompt. A refresh landing its (pre-write) read last would
         // otherwise briefly show the stale toggle. Checked on both sides of the
         // await, since a write can start mid-read.
         guard !isBusy else { return }
+        if !force,
+           isEnabled != nil,
+           let lastRefreshedAt,
+           now().timeIntervalSince(lastRefreshedAt) < Self.refreshFreshness {
+            return
+        }
         let control = self.control
         let value = await Task.detached { control.isSleepDisabled() }.value
         guard !isBusy else { return }
         isEnabled = value
+        lastRefreshedAt = now()
     }
 
     /// Request the new state. Shows the administrator prompt off the main actor
@@ -134,6 +154,7 @@ public final class ClosedDisplayController {
         }
         // Re-read off the main thread too (same reason as ``refresh()``).
         isEnabled = await Task.detached { control.isSleepDisabled() }.value
+        lastRefreshedAt = now()
         return result
     }
 }

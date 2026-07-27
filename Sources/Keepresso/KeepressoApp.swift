@@ -158,6 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.model.thermalAvailabilityTick()
             self?.model.fireAgentIdleHookIfNeeded()
             self?.model.automationSyncTick()
+            self?.model.pulseMenuPanelIfVisible()
         }
     )
     /// Listens for the Control Center toggle's Darwin doorbell.
@@ -205,10 +206,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItemBridge.install()
         // Give the Shortcuts intents their way to the live model.
         IntentContext.model = model
+        // Activity history / awake stats: after the menu bar chrome is up, not
+        // on AppModel.init's critical path.
+        model.hydrateDecisionLog()
         // Read the closed-display (pmset disablesleep) state now: it persists
         // across reboots, and the ticker's lid handling stays inert until the
         // controller knows the mode is on, not just once a menu opens.
-        model.refreshClosedDisplay()
+        model.refreshClosedDisplay(force: true)
         // Any AWDL watchdog flag surviving from a previous process is stale
         // (the loop it kept alive has already exited via its pid check).
         Task { await model.awdl.cleanupAtLaunch() }

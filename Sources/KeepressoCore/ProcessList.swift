@@ -12,13 +12,17 @@ public protocol ProcessListing: AnyObject {
     var current: [String] { get }
 }
 
-/// Real backend over `ps`. Lists each process's full, untruncated command line
-/// (`ps -axww -o command=`). Spawning `ps` is not free, and the trigger engine
-/// plus the menu can read ``current`` several times a second, so results are
-/// cached for ``ttl`` seconds: repeated reads reuse one snapshot instead of
-/// forking `ps` each time. A process starting or stopping doesn't need
-/// sub-second reaction for a keep-awake decision, so a few seconds of staleness
-/// is fine. The clock is injectable so the cache can be unit-tested.
+/// Real backend over `ps`. Lists each process's full, untruncated command line.
+/// Spawning `ps` is not free, and the trigger engine plus the menu can read
+/// ``current`` several times a second, so results are cached for ``ttl``
+/// seconds: repeated reads reuse one snapshot instead of forking `ps` each
+/// time. A process starting or stopping doesn't need sub-second reaction for a
+/// keep-awake decision, so a few seconds of staleness is fine. The clock is
+/// injectable so the cache can be unit-tested.
+///
+/// When constructed through ``TriggerFactory``, the fetch is a
+/// ``SharedPSSnapshot`` so agent detection shares the same `ps` run. The
+/// standalone default still forks a command-only listing of its own.
 ///
 /// ``current`` is read synchronously from the menu's `body` on the main
 /// thread, so it must never block on `Process.waitUntilExit()` itself (see the

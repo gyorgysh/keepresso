@@ -37,6 +37,30 @@ private final class FakeSleepControl: SleepSettingControlling, @unchecked Sendab
 }
 
 @MainActor
+@Test func refreshSkipsPmsetWhenCacheIsFresh() async {
+    let fake = FakeSleepControl(initial: false)
+    var clock = Date(timeIntervalSinceReferenceDate: 0)
+    let controller = ClosedDisplayController(control: fake, now: { clock })
+    await controller.refresh(force: true)
+    #expect(controller.isEnabled == false)
+
+    // Flip the underlying setting; a non-forced refresh within the freshness
+    // window must keep serving the cached value.
+    _ = fake.setSleepDisabled(true)
+    await controller.refresh()
+    #expect(controller.isEnabled == false)
+
+    clock = clock.addingTimeInterval(ClosedDisplayController.refreshFreshness + 1)
+    await controller.refresh()
+    #expect(controller.isEnabled == true)
+
+    // Force always re-reads.
+    _ = fake.setSleepDisabled(false)
+    await controller.refresh(force: true)
+    #expect(controller.isEnabled == false)
+}
+
+@MainActor
 @Test func enablingAppliesAndClearsError() async {
     let fake = FakeSleepControl(initial: false, result: .applied)
     let controller = ClosedDisplayController(control: fake)

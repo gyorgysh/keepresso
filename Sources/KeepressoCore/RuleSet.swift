@@ -302,13 +302,16 @@ public struct TriggerFactory {
     private let controllers: ControllerMonitoring
     private let steam: SteamDownloadMonitoring
     private let now: () -> Date
+    /// Real agent backend when the factory owns one, so evidence work can be
+    /// gated off when no agent rule is live. Nil when tests inject a fake.
+    private let agentMonitor: PSAgentActivityMonitor?
 
     public init(
         powerSource: PowerSourceMonitoring = IOKitPowerSourceMonitor(),
         displays: DisplayMonitoring = CoreGraphicsDisplayMonitor(),
         network: NetworkMonitoring = CoreWLANNetworkMonitor(),
         workspace: WorkspaceMonitoring = NSWorkspaceMonitor(),
-        processes: ProcessListing = PSProcessLister(),
+        processes: ProcessListing? = nil,
         volumes: VolumeMonitoring = FileManagerVolumeMonitor(),
         cpu: CPULoadReading = HostCPULoadReader(),
         media: MediaActivityMonitoring = CoreMediaActivityMonitor(),
@@ -318,16 +321,31 @@ public struct TriggerFactory {
         gaming: GamingMonitoring = WorkspaceGamingMonitor(),
         throughput: NetworkThroughputReading = GetifaddrsThroughputReader(),
         downloads: DownloadFolderScanning = FileManagerDownloadScanner(),
-        agents: AgentActivityMonitoring = PSAgentActivityMonitor(),
+        agents: AgentActivityMonitoring? = nil,
         controllers: ControllerMonitoring = GCControllerMonitor(),
         steam: SteamDownloadMonitoring = FileSteamDownloadMonitor(),
         now: @escaping () -> Date = Date.init
     ) {
+        // One shared `ps` snapshot for process matching and agent detection
+        // unless the caller injects its own backends (tests).
+        let sharedPS = SharedPSSnapshot(now: now)
+        let resolvedProcesses = processes ?? PSProcessLister(
+            now: now, fetch: sharedPS.fetchCommandListing)
+        let resolvedAgents: AgentActivityMonitoring
+        let resolvedMonitor: PSAgentActivityMonitor?
+        if let agents {
+            resolvedAgents = agents
+            resolvedMonitor = agents as? PSAgentActivityMonitor
+        } else {
+            let monitor = PSAgentActivityMonitor(now: now, fetch: sharedPS.fetchRaw)
+            resolvedAgents = monitor
+            resolvedMonitor = monitor
+        }
         self.powerSource = powerSource
         self.displays = displays
         self.network = network
         self.workspace = workspace
-        self.processes = processes
+        self.processes = resolvedProcesses
         self.volumes = volumes
         self.cpu = cpu
         self.media = media
@@ -337,10 +355,17 @@ public struct TriggerFactory {
         self.gaming = gaming
         self.throughput = throughput
         self.downloads = downloads
-        self.agents = agents
+        self.agents = resolvedAgents
+        self.agentMonitor = resolvedMonitor
         self.controllers = controllers
         self.steam = steam
         self.now = now
+    }
+
+    /// Skip transcript / hook / cwd decoration in the agent monitor when no
+    /// agent rule is in the live engine. No-op when a test injected a fake.
+    public func setAgentEvidenceEnabled(_ enabled: Bool) {
+        agentMonitor?.evidenceEnabled = enabled
     }
 
     /// Build the live trigger for one rule.

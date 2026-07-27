@@ -205,11 +205,16 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     private var cached: AgentSnapshot = .empty
     private var lastFetch: Date?
     private var isRefreshing = false
+    /// When false, a refresh only parses `ps` into sessions and skips
+    /// transcript walks, hook-record reads, cwd lookups, and origin
+    /// classification. The trigger factory turns this off when no agent rule
+    /// is live; tests leave it on.
+    public var evidenceEnabled: Bool = true
 
     public init(
         ttl: TimeInterval = 3,
         now: @escaping () -> Date = Date.init,
-        fetch: @escaping @Sendable () -> String? = PSAgentActivityMonitor.runPS,
+        fetch: @escaping @Sendable () -> String? = SharedPSSnapshot.runPS,
         evidence: @escaping @Sendable (_ agent: String, _ cwd: String?) -> Date? = PSAgentActivityMonitor.transcriptActivity,
         hookRecords: @escaping @Sendable (_ now: Date) -> [AgentHooks.HookRecord] = { AgentHooks.readHookRecords(now: $0) },
         classifyOrigin: @escaping @Sendable (_ pid: Int32) -> AgentHooks.HookSessionOrigin? = { AgentHooks.classifyOrigin(abovePid: $0) }
@@ -245,76 +250,10 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
                     return
                 }
                 var sessions = Self.sessions(from: Self.parse(raw))
-                // Decorate with transcript evidence: a session whose
-                // transcript was written within the freshness window is
-                // working, no matter what its CPU says.
-                let scanTime = self.now()
-                var cwds: [Int32: String] = [:]
-                var evidenceDates: [Int32: Date] = [:]
-                for index in sessions.indices {
-                    let session = sessions[index]
-                    let cwd = Self.processCwd(session.pid)
-                    if let cwd { cwds[session.pid] = cwd }
-                    if let written = self.evidence(session.agent, cwd) {
-                        evidenceDates[session.pid] = written
-                        // Per agent: one that writes its store in bursts needs
-                        // a wider window than one that streams (see
-                        // ``evidenceWindowOverrides``).
-                        let cutoff = scanTime.addingTimeInterval(
-                            -Self.evidenceWindow(for: session.agent))
-                        sessions[index].hasFreshEvidence = written >= cutoff
-                    }
-                    // Name sessions by their host (Claude app, IDE) up front;
-                    // a joined hook record can still refine it. Every session
-                    // is classified, not just terminal-less ones: an app can
-                    // hold a pty for its embedded CLI, and the label promises
-                    // to name such sessions by their host.
-                    // Only when the walk actually classifies something: an
-                    // editor host already knows it is one, and a nil verdict
-                    // must not erase that (for every other session the field
-                    // starts nil, so this is the same assignment as before).
-                    if let classified = self.classifyOrigin(session.pid) {
-                        sessions[index].origin = classified
-                    }
+                let collectEvidence = self.withLock { self.evidenceEnabled }
+                if collectEvidence {
+                    sessions = self.decorateWithEvidence(sessions)
                 }
-                // Stamp hook evidence: exact state edges beat both heuristics.
-                let hookRecords = self.hookRecords(scanTime)
-                let join = Self.applyHookRecords(
-                    hookRecords, to: sessions, cwdOf: { cwds[$0] })
-                sessions = join.sessions
-                // A not-working verdict older than a fresh transcript write
-                // is stale information, not an edge: the main turn's Stop
-                // hook fires while a background subagent works on (its
-                // transcript keeps streaming, but it emits no hook event
-                // until its next tool call), and a minute later the idle
-                // nudge fires a Notification that writes a plain `waiting`
-                // record for the same still-working session. Drop both and
-                // let the evidence decide. `waiting-approval` stays: it
-                // already reads as working, and the approval edge is exact.
-                for index in sessions.indices {
-                    let state = sessions[index].hookState
-                    let overridable = state == .idle
-                        || (state == .waiting && sessions[index].hookDetail != "waiting-approval")
-                    if overridable,
-                       sessions[index].hasFreshEvidence,
-                       let stamped = sessions[index].hookUpdatedAt,
-                       let written = evidenceDates[sessions[index].pid],
-                       written > stamped {
-                        sessions[index].hookState = nil
-                        sessions[index].hookDetail = nil
-                    }
-                }
-                // When IDE hooks cover a host (Cursor / Antigravity ownerPid
-                // rows), drop the parallel evidence-only process session for
-                // that host. Otherwise a Stop that idles the hook-only chat
-                // would still leave the language_server / editor host
-                // "working" off conversation-DB freshness alone.
-                sessions = Self.suppressingHookCoveredEvidenceHosts(
-                    sessions, hookRecords: hookRecords)
-                // Sessions that exist only as hook records (an IDE's built-in
-                // agent) are appended last: they have no process, so none of
-                // the cwd, evidence, or origin decoration above applies.
-                sessions.append(contentsOf: join.unclaimed.compactMap(Self.hookOnlySession(from:)))
                 self.withLock {
                     self.cached = AgentSnapshot(sessions: sessions)
                     self.lastFetch = self.now()
@@ -323,6 +262,81 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             }
         }
         return snapshot
+    }
+
+    /// Transcript / hook / cwd / origin decoration that runs only while an
+    /// agent rule is live. Kept as one method so the gated path stays a
+    /// single boolean branch above.
+    private func decorateWithEvidence(_ sessions: [AgentSession]) -> [AgentSession] {
+        var sessions = sessions
+        let scanTime = now()
+        var cwds: [Int32: String] = [:]
+        var evidenceDates: [Int32: Date] = [:]
+        for index in sessions.indices {
+            let session = sessions[index]
+            let cwd = Self.processCwd(session.pid)
+            if let cwd { cwds[session.pid] = cwd }
+            if let written = evidence(session.agent, cwd) {
+                evidenceDates[session.pid] = written
+                // Per agent: one that writes its store in bursts needs
+                // a wider window than one that streams (see
+                // ``evidenceWindowOverrides``).
+                let cutoff = scanTime.addingTimeInterval(
+                    -Self.evidenceWindow(for: session.agent))
+                sessions[index].hasFreshEvidence = written >= cutoff
+            }
+            // Name sessions by their host (Claude app, IDE) up front;
+            // a joined hook record can still refine it. Every session
+            // is classified, not just terminal-less ones: an app can
+            // hold a pty for its embedded CLI, and the label promises
+            // to name such sessions by their host.
+            // Only when the walk actually classifies something: an
+            // editor host already knows it is one, and a nil verdict
+            // must not erase that (for every other session the field
+            // starts nil, so this is the same assignment as before).
+            if let classified = classifyOrigin(session.pid) {
+                sessions[index].origin = classified
+            }
+        }
+        // Stamp hook evidence: exact state edges beat both heuristics.
+        let hookRecords = hookRecords(scanTime)
+        let join = Self.applyHookRecords(
+            hookRecords, to: sessions, cwdOf: { cwds[$0] })
+        sessions = join.sessions
+        // A not-working verdict older than a fresh transcript write
+        // is stale information, not an edge: the main turn's Stop
+        // hook fires while a background subagent works on (its
+        // transcript keeps streaming, but it emits no hook event
+        // until its next tool call), and a minute later the idle
+        // nudge fires a Notification that writes a plain `waiting`
+        // record for the same still-working session. Drop both and
+        // let the evidence decide. `waiting-approval` stays: it
+        // already reads as working, and the approval edge is exact.
+        for index in sessions.indices {
+            let state = sessions[index].hookState
+            let overridable = state == .idle
+                || (state == .waiting && sessions[index].hookDetail != "waiting-approval")
+            if overridable,
+               sessions[index].hasFreshEvidence,
+               let stamped = sessions[index].hookUpdatedAt,
+               let written = evidenceDates[sessions[index].pid],
+               written > stamped {
+                sessions[index].hookState = nil
+                sessions[index].hookDetail = nil
+            }
+        }
+        // When IDE hooks cover a host (Cursor / Antigravity ownerPid
+        // rows), drop the parallel evidence-only process session for
+        // that host. Otherwise a Stop that idles the hook-only chat
+        // would still leave the language_server / editor host
+        // "working" off conversation-DB freshness alone.
+        sessions = Self.suppressingHookCoveredEvidenceHosts(
+            sessions, hookRecords: hookRecords)
+        // Sessions that exist only as hook records (an IDE's built-in
+        // agent) are appended last: they have no process, so none of
+        // the cwd, evidence, or origin decoration above applies.
+        sessions.append(contentsOf: join.unclaimed.compactMap(Self.hookOnlySession(from:)))
+        return sessions
     }
 
     /// Joins hook records onto detected sessions: by the record's agent pid
@@ -725,29 +739,11 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         String(token.split(separator: "/").last ?? token)
     }
 
-    /// The real fetch: spawn `ps` and return its raw output. The default for
-    /// ``init(ttl:now:fetch:)``'s `fetch`.
+    /// The real fetch: spawn `ps` and return its raw output. Prefer
+    /// ``SharedPSSnapshot/runPS`` when sharing with process matching; this
+    /// alias keeps existing call sites and tests compiling.
     @Sendable public static func runPS() -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        // -a all users, -x include processes without a controlling terminal,
-        // -ww no column-width truncation; pid/ppid for the process tree, pcpu
-        // for the working verdict, tty for the session label, command last so
-        // its embedded spaces can't shift the other columns.
-        process.arguments = ["-axww", "-o", "pid=,ppid=,pcpu=,tty=,command="]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        do {
-            try process.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else { return nil }
-            let output = String(decoding: data, as: UTF8.self)
-            return output.isEmpty ? nil : output
-        } catch {
-            return nil
-        }
+        SharedPSSnapshot.runPS()
     }
 }
 

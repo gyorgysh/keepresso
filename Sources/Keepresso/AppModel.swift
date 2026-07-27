@@ -175,12 +175,11 @@ final class AppModel {
         let logPersister = DecisionLogPersister()
         self.logPersister = logPersister
         self.wakeReader = PMSetWakeScheduleReader()
-        // Rehydrate Activity from disk before any new events land: one read
-        // feeds both the in-memory log and the stats mirror.
-        let history = logPersister.loadAll()
-        self.statsHistory = history
-        self.session.log.load(Array(history.suffix(DecisionLogPersister.loadLimit)))
-        self.awakeStats = AwakeStatsAggregator.summarize(events: history)
+        // Decision-log history loads asynchronously after the menu bar is up
+        // (see ``hydrateDecisionLog()``). Launch stays on the helper / wake /
+        // closed-display path; Activity and awake stats populate a beat later.
+        self.statsHistory = []
+        self.awakeStats = .empty
         // Raw config here (self isn't fully initialized yet for the
         // availability derivation); the first thermalAvailabilityTick one
         // second later nils an unavailable boost stage out.
@@ -195,12 +194,14 @@ final class AppModel {
         self.controllerPoker.enabled = loaded.controllerPokeWhileGaming
         self.gamePriority.autoWithGaming = loaded.gamePriorityBoost
         // Decision log → outbound hooks + disk. After every stored property
-        // is initialized so weak self is legal.
+        // is initialized so weak self is legal. Stats mirroring waits until
+        // hydrate seeds the history so a mid-hydrate event is not double-counted.
         self.session.log.onRecord = { [weak hooks, weak logPersister, weak self] event in
             hooks?.handle(sessionEvent: event)
             let persisted = PersistedSessionEvent(event, batteryPercent: event.batteryPercent)
             logPersister?.append(persisted)
-            self?.recordForStats(persisted)
+            guard let self, self.decisionLogHydrated else { return }
+            self.recordForStats(persisted)
         }
         // With one of the auto features on and no helper installed, this run
         // can hit a password prompt in the background (e.g. a trigger-started
@@ -231,22 +232,65 @@ final class AppModel {
 
     // MARK: - Awake explainer
 
-    /// Reads the system-wide power assertion list for the Activity pane.
-    @ObservationIgnored private let assertionLister: AssertionListing = IOPMAssertionLister()
+    /// Shared IOKit lister: Activity reads uncached, the menu "held by…" line
+    /// rides a few-second TTL so a 1 Hz panel tick is cheap.
+    @ObservationIgnored private let menuAssertionCache = CachingAssertionLister(
+        inner: IOPMAssertionLister(), ttl: 3)
 
     /// Every power assertion currently held by any process (why the Mac is
-    /// awake right now, whoever's doing it). Read on demand by the UI.
+    /// awake right now, whoever's doing it). Fresh on demand for Activity.
     func currentAssertions() -> [PowerAssertionInfo] {
-        assertionLister.current()
+        menuAssertionCache.currentUncached()
     }
 
     /// The most relevant power assertion held by some *other* process, for the
     /// dropdown's "who else is keeping the Mac awake" line. `nil` when only
     /// Keepresso (or nothing) is holding one. Lets the menu explain a Mac that
-    /// won't sleep even while Keepresso is idle.
+    /// won't sleep even while Keepresso is idle. Display-only and TTL-cached.
     func topExternalAssertion() -> PowerAssertionInfo? {
         let myPID = ProcessInfo.processInfo.processIdentifier
-        return currentAssertions().first { $0.effect != nil && $0.pid != myPID }
+        return menuAssertionCache.current().first { $0.effect != nil && $0.pid != myPID }
+    }
+
+    // MARK: - Menu panel snapshot
+
+    /// Live values the open menu panel needs each second (elapsed, tick token
+    /// for countdowns). Updated from the session ticker while the panel is
+    /// visible so the panel does not need its own `Timer.publish`.
+    let menuPanel = MenuPanelSnapshot()
+
+    /// Whether the menu bar dropdown is on screen. The closed panel stays
+    /// alive on current macOS; the ticker skips snapshot pulses while false.
+    @ObservationIgnored var menuPanelVisible = false
+
+    /// Once-a-second pulse for the open menu panel. Cheap: elapsed is a date
+    /// delta, and the external-assertion line rides the TTL cache above.
+    func pulseMenuPanelIfVisible() {
+        guard menuPanelVisible else { return }
+        menuPanel.pulse(elapsed: session.elapsed, external: topExternalAssertion())
+    }
+
+    // MARK: - Decision log hydrate
+
+    /// Set once ``hydrateDecisionLog()`` finishes seeding history/stats.
+    @ObservationIgnored private var decisionLogHydrated = false
+
+    /// Load persisted Activity history and awake stats off the launch critical
+    /// path. Safe to call once the menu bar chrome is up; helper verify, wake
+    /// apply, and closed-display refresh stay elsewhere on the early path.
+    func hydrateDecisionLog() {
+        Task(priority: .utility) { @MainActor in
+            // Let the run loop present the menu bar before a large JSONL decode.
+            await Task.yield()
+            guard !self.decisionLogHydrated else { return }
+            let history = self.logPersister.loadAll()
+            // MainActor + sync loadAll: onRecord cannot interleave mid-read, so
+            // any event recorded since launch is already on disk and in history.
+            self.session.log.load(Array(history.suffix(DecisionLogPersister.loadLimit)))
+            self.statsHistory = history
+            self.awakeStats = AwakeStatsAggregator.summarize(events: history)
+            self.decisionLogHydrated = true
+        }
     }
 
     // MARK: - Manual activation
@@ -1763,6 +1807,9 @@ final class AppModel {
         // acknowledgments in status.json) forward to now.
         if command == .syncLeases {
             processAutomationWakeRequest()
+            // Out-of-process lease writes landed on disk; drop the listing
+            // cache so reconcile's tick sees the new (or revoked) records.
+            leaseEngine.invalidateStoreCache()
             session.reconcile()
             // Unconditional write: a stale status.json left by another
             // process (an old instance's quit snapshot) must not swallow
@@ -1842,7 +1889,12 @@ final class AppModel {
 
     /// Re-read the system sleep setting that backs the closed-display toggle.
     /// Non-blocking: the underlying `pmset` read runs off the main thread.
-    func refreshClosedDisplay() { Task { await closedDisplay.refresh() } }
+    /// Re-read `pmset disablesleep`. Menu open uses the cached value when it
+    /// is fresher than ``ClosedDisplayController/refreshFreshness``; pass
+    /// `force: true` for launch and correctness-critical enforcement paths.
+    func refreshClosedDisplay(force: Bool = false) {
+        Task { await closedDisplay.refresh(force: force) }
+    }
 
     // MARK: - Claude Code hooks
 
@@ -2452,7 +2504,8 @@ final class AppModel {
             if let delay { try? await Task.sleep(for: delay) }
             // Superseded while sleeping: leave the latch for the newer task.
             guard generation == closedDisplayRefreshGeneration else { return }
-            await closedDisplay.refresh()
+            // Enforcement must not trust a stale menu-open cache.
+            await closedDisplay.refresh(force: true)
             guard generation == closedDisplayRefreshGeneration else { return }
             closedDisplayRefreshPending = false
             // A confirmed-off setting means an earlier clear took: arm again, so

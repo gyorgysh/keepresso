@@ -174,6 +174,10 @@ public protocol LeaseRecordStoring: AnyObject {
     func loadAll() -> [AutomationLeaseRecord]
     func write(_ record: AutomationLeaseRecord)
     func delete(id: String)
+    /// Drop any in-memory listing cache so the next ``loadAll()`` rescans.
+    /// Default is a no-op; ``FileLeaseStore`` also rescans when on-disk
+    /// mtimes change, and uses this for the sync-leases doorbell path.
+    func invalidateCache()
     /// Write `new` only when the stored record for that id still equals
     /// `expected`. Returns false when the record is gone or changed, so a
     /// heartbeat cannot resurrect a concurrent revoke or expiry.
@@ -181,6 +185,8 @@ public protocol LeaseRecordStoring: AnyObject {
 }
 
 public extension LeaseRecordStoring {
+    func invalidateCache() {}
+
     func compareAndSwap(expected: AutomationLeaseRecord, new: AutomationLeaseRecord) -> Bool {
         guard let current = loadAll().first(where: { $0.id == expected.id }),
               current == expected
@@ -194,8 +200,26 @@ public extension LeaseRecordStoring {
 /// `agent-hooks/`. Atomic best-effort IO with errors swallowed, the same
 /// contract as ``StatusFile`` and ``AgentHooks``: leases are advisory and
 /// must never break a tick.
+///
+/// ``loadAll()`` serves an in-memory map between scans. Writes and deletes
+/// update the map. Out-of-process writers (CLI/MCP heartbeat, release, or
+/// acquire) are detected by comparing JSON file names and mtimes before
+/// serving the cache, so a still-heartbeated lease is not expired from a
+/// stale listing. ``invalidateCache()`` (sync-leases doorbell) and a slow
+/// safety TTL also force a rescan.
 public final class FileLeaseStore: LeaseRecordStoring {
     private let directory: URL
+    private let now: () -> Date
+    /// How long a cached listing may be trusted without a rescan when the
+    /// on-disk fingerprint is unchanged. Expiry adjudication still runs
+    /// every tick on whatever the cache holds.
+    private let cacheTTL: TimeInterval
+    private var cached: [String: AutomationLeaseRecord]?
+    private var cachedAt: Date?
+    /// Names and modification dates of `*.json` files at the last scan or
+    /// local write. Compared on each ``loadAll()`` so foreign heartbeats
+    /// and acquires are visible within one tick without a doorbell.
+    private var cachedStamp: String?
 
     /// `~/Library/Application Support/Keepresso/automation-leases/`.
     public static func defaultDirectoryURL(fileManager: FileManager = .default) -> URL {
@@ -204,8 +228,14 @@ public final class FileLeaseStore: LeaseRecordStoring {
             .appendingPathComponent("automation-leases", isDirectory: true)
     }
 
-    public init(directory: URL = FileLeaseStore.defaultDirectoryURL()) {
+    public init(
+        directory: URL = FileLeaseStore.defaultDirectoryURL(),
+        cacheTTL: TimeInterval = 30,
+        now: @escaping () -> Date = Date.init
+    ) {
         self.directory = directory
+        self.cacheTTL = cacheTTL
+        self.now = now
     }
 
     private static let encoder: JSONEncoder = {
@@ -228,11 +258,46 @@ public final class FileLeaseStore: LeaseRecordStoring {
         return "\(safe.isEmpty ? "lease" : safe).json"
     }
 
+    public func invalidateCache() {
+        cached = nil
+        cachedAt = nil
+        cachedStamp = nil
+    }
+
     public func loadAll() -> [AutomationLeaseRecord] {
+        if let cached, let cachedAt, now().timeIntervalSince(cachedAt) < cacheTTL,
+           let cachedStamp, cachedStamp == directoryStamp() {
+            return Array(cached.values)
+        }
+        return rescan()
+    }
+
+    /// Cheap directory fingerprint: each `*.json` name plus its content
+    /// modification date. Atomic foreign writes change mtime (and often add
+    /// or remove names), so the next tick rescans without waiting for TTL.
+    private func directoryStamp() -> String {
+        let keys: Set<URLResourceKey> = [.contentModificationDateKey]
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: Array(keys)
+        )) ?? []
+        return files
+            .filter { $0.pathExtension == "json" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            .map { url -> String in
+                let mtime = (try? url.resourceValues(forKeys: keys))
+                    .flatMap(\.contentModificationDate)?
+                    .timeIntervalSince1970 ?? 0
+                return "\(url.lastPathComponent):\(mtime)"
+            }
+            .joined(separator: "|")
+    }
+
+    @discardableResult
+    private func rescan() -> [AutomationLeaseRecord] {
         let files = (try? FileManager.default.contentsOfDirectory(
             at: directory, includingPropertiesForKeys: nil
         )) ?? []
-        var records: [AutomationLeaseRecord] = []
+        var records: [String: AutomationLeaseRecord] = [:]
         for file in files where file.pathExtension == "json" {
             guard let data = try? Data(contentsOf: file),
                   let record = try? Self.decoder.decode(AutomationLeaseRecord.self, from: data),
@@ -243,9 +308,12 @@ public final class FileLeaseStore: LeaseRecordStoring {
                 try? FileManager.default.removeItem(at: file)
                 continue
             }
-            records.append(record)
+            records[record.id] = record
         }
-        return records
+        cached = records
+        cachedAt = now()
+        cachedStamp = directoryStamp()
+        return Array(records.values)
     }
 
     public func write(_ record: AutomationLeaseRecord) {
@@ -255,11 +323,21 @@ public final class FileLeaseStore: LeaseRecordStoring {
             to: directory.appendingPathComponent(Self.fileName(forId: record.id)),
             options: .atomic
         )
+        if cached == nil {
+            cached = [:]
+            cachedAt = now()
+        }
+        cached?[record.id] = record
+        // Keep the stamp aligned with the local write so the next loadAll
+        // does not immediately rescan what we just put on disk.
+        cachedStamp = directoryStamp()
     }
 
     public func delete(id: String) {
         try? FileManager.default.removeItem(
             at: directory.appendingPathComponent(Self.fileName(forId: id)))
+        cached?[id] = nil
+        cachedStamp = directoryStamp()
     }
 }
 
@@ -296,13 +374,21 @@ public protocol LeaseProviding: AnyObject {
 }
 
 /// Real engine over a record store. Scanning a handful of small files at
-/// 1 Hz matches the agent-hooks cost profile.
+/// 1 Hz matches the agent-hooks cost profile when the store has no cache;
+/// ``FileLeaseStore`` keeps the listing in memory until disk changes,
+/// a doorbell, or the safety TTL.
 @MainActor
 public final class LeaseEngine: LeaseProviding {
     private let store: LeaseRecordStoring
 
     public init(store: LeaseRecordStoring = FileLeaseStore()) {
         self.store = store
+    }
+
+    /// Drop the store's listing cache so the next tick sees out-of-process
+    /// writes (CLI/MCP acquire). Called from the sync-leases doorbell.
+    public func invalidateStoreCache() {
+        store.invalidateCache()
     }
 
     public func tick(now: Date) -> [LeaseSummary] {

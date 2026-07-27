@@ -68,6 +68,12 @@ public final class TriggerGateController {
             engine = nil
             engineRules = []
         }
+        // Skip transcript/hook walks when nothing in the engine can use them.
+        let wantsAgentEvidence = enabled && engineRules.contains {
+            if case .agentActivity = $0 { return true }
+            return false
+        }
+        factory.setAgentEvidenceEnabled(wantsAgentEvidence)
         // The rules (or the engine) just changed; drop the cached states so the
         // next read re-evaluates against the new rule set immediately.
         cachedStates = nil

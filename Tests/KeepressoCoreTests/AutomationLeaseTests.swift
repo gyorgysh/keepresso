@@ -214,6 +214,9 @@ private final class FakeLeaseStore: LeaseRecordStoring {
     // A record whose id is not canonical: also dropped.
     try Data(#"{"id":"nope"}"#.utf8).write(to: dir.appendingPathComponent("nope.json"))
 
+    // write() warms the in-memory map; force a directory rescan so junk is
+    // noticed and discarded the way a doorbell / TTL miss would.
+    store.invalidateCache()
     let loaded = store.loadAll()
     #expect(loaded.count == 1)
     #expect(loaded.first == record())
@@ -221,4 +224,72 @@ private final class FakeLeaseStore: LeaseRecordStoring {
 
     store.delete(id: idA)
     #expect(store.loadAll().isEmpty)
+}
+
+@Test func fileStoreCacheServesMemoryUntilDiskChanges() throws {
+    let dir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keepresso-lease-cache-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: dir) }
+    var clock = base
+    let store = FileLeaseStore(directory: dir, cacheTTL: 30, now: { clock })
+
+    store.write(record())
+    #expect(store.loadAll().count == 1)
+    // Unchanged directory: cache hit (still one record).
+    #expect(store.loadAll().count == 1)
+
+    // Out-of-band acquire: new file mtime/name must be visible without a
+    // doorbell or TTL wait (CLI/MCP from another process).
+    let writer = FileLeaseStore(directory: dir, cacheTTL: 30, now: { clock })
+    writer.write(record(id: idB, tool: "foreign"))
+    let afterAcquire = store.loadAll()
+    #expect(afterAcquire.count == 2)
+    #expect(Set(afterAcquire.map(\.id)) == [idA, idB])
+
+    // Out-of-band heartbeat: same file, fresher updatedAt. Cache TTL would
+    // otherwise keep the stale updatedAt and let the engine expire a live lease.
+    let heartbeatAt = base.addingTimeInterval(200)
+    writer.write(record(id: idA, tool: "test-tool", updatedAt: heartbeatAt))
+    #expect(store.loadAll().first { $0.id == idA }?.updatedAt == heartbeatAt)
+
+    // Out-of-band release: terminal state must land on the next loadAll.
+    writer.write(record(id: idB, tool: "foreign", state: .released, endedAt: heartbeatAt))
+    #expect(store.loadAll().first { $0.id == idB }?.state == .released)
+
+    // Explicit invalidate still forces a clean rescan.
+    store.invalidateCache()
+    #expect(store.loadAll().count == 2)
+
+    // Safety TTL also forces a rescan when the stamp is unchanged.
+    store.write(record(id: idA, tool: "updated"))
+    clock = clock.addingTimeInterval(31)
+    #expect(store.loadAll().first { $0.id == idA }?.tool == "updated")
+}
+
+@MainActor
+@Test func engineSeesForeignHeartbeatWithinCacheTTL() throws {
+    // App store cacheTTL is longer than the adjudication window so a stale
+    // listing would survive past the original TTL; only the on-disk stamp
+    // check (not the safety TTL) can keep the lease live.
+    let dir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keepresso-lease-hb-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: dir) }
+    var clock = base
+    let appStore = FileLeaseStore(directory: dir, cacheTTL: 60, now: { clock })
+    let engine = LeaseEngine(store: appStore)
+
+    appStore.write(record(ttl: 30))
+    #expect(engine.tick(now: clock).map(\.id) == [idA])
+
+    // CLI heartbeat at +25s: new horizon is +55s. Without a rescan, the app
+    // would still hold updatedAt=base and expire at +30.
+    clock = base.addingTimeInterval(25)
+    FileLeaseStore(directory: dir, cacheTTL: 60, now: { clock })
+        .write(record(updatedAt: clock, ttl: 30))
+
+    clock = base.addingTimeInterval(35)
+    let live = engine.tick(now: clock)
+    #expect(live.count == 1)
+    #expect(live.first?.expiresAt == base.addingTimeInterval(55))
+    #expect(appStore.loadAll().first { $0.id == idA }?.state == .active)
 }

@@ -648,6 +648,50 @@ private final class PSOutputStub: @unchecked Sendable {
     #expect(monitor.current.sessions.count == 2) // and it recovered
 }
 
+@Test func monitorSkipsEvidenceWorkWhenDisabled() async throws {
+    var now = Date(timeIntervalSince1970: 0)
+    let evidenceCalls = LockCounter()
+    let hookCalls = LockCounter()
+    let monitor = PSAgentActivityMonitor(
+        ttl: 3,
+        now: { now },
+        fetch: { "  100     1  50.0 ttys003  claude" },
+        evidence: { _, _ in
+            evidenceCalls.increment()
+            return nil
+        },
+        hookRecords: { _ in
+            hookCalls.increment()
+            return []
+        },
+        classifyOrigin: { _ in nil }
+    )
+    monitor.evidenceEnabled = false
+
+    _ = monitor.current
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(monitor.current.sessions.count == 1)
+    #expect(monitor.current.sessions[0].hasFreshEvidence == false)
+    #expect(evidenceCalls.value == 0)
+    #expect(hookCalls.value == 0)
+
+    // Re-enable and refresh: evidence path runs again.
+    monitor.evidenceEnabled = true
+    now = now.addingTimeInterval(4)
+    _ = monitor.current
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(evidenceCalls.value >= 1)
+    #expect(hookCalls.value >= 1)
+}
+
+/// Tiny lock-backed counter for detached-task call tallies.
+private final class LockCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _value = 0
+    var value: Int { lock.withLock { _value } }
+    func increment() { lock.withLock { _value += 1 } }
+}
+
 @Test func claudeTranscriptWriteSeesSubagentStreams() throws {
     // Layout: <project>/<session>.jsonl (old) and
     // <project>/<session>/subagents/agent-x.jsonl (fresh). Appends inside

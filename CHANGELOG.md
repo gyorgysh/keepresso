@@ -17,6 +17,16 @@ Versions follow [Semantic Versioning](https://semver.org).
   allow, deny, or block anything Antigravity does, and never touches the step
   where a tool call is approved.
 
+### Changed
+
+- **The menu stays snappy while Keepresso is working.** Process matching and
+  agent detection share one `ps` snapshot, open-panel assertion and closed-
+  display reads reuse a short cache, and automation lease files reload when
+  they change on disk so CLI heartbeats stay visible without a full rescan
+  every second. Activity history loads after the menu bar is up, the open
+  panel ticks from the session clock instead of a second timer, and agent
+  transcript work stays off when no AI-agent rule is enabled.
+
 ### Fixed
 
 - **No more password prompt after a session ends.** With "Only while brewing"
