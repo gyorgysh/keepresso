@@ -10,6 +10,17 @@ permissions:
   contents: read
 
 jobs:
+  localization:
+    name: Localization
+    # Pure Python over the catalogs, so it needs no Xcode and finishes in
+    # seconds. Gating here means a release can never be tagged on a commit
+    # where a language is incomplete or the generated .strings are stale.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check every language and the generated .strings
+        run: python3 tools/localization/check_all.py
+
   core-tests:
     name: Core build & tests
     runs-on: macos-26
