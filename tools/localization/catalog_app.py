@@ -92,6 +92,9 @@ APP.update(_SHORT)
 _MED = {
     "Keepresso": {"hu": "Keepresso", "es": "Keepresso", "fr": "Keepresso", "de": "Keepresso", "zh-Hans": "Keepresso"},
     "About Keepresso": {"hu": "A Keepressóról", "es": "Acerca de Keepresso", "fr": "À propos de Keepresso", "de": "Über Keepresso", "zh-Hans": "关于 Keepresso"},
+    "Made with ☕ by": {"hu": "☕-val készítette", "es": "Hecho con ☕ por", "fr": "Fait avec ☕ par", "de": "Gemacht mit ☕ von", "zh-Hans": "用 ☕ 制作 · 作者"},
+    "AI-native product engineer": {"hu": "AI-natív termékmérnök", "es": "Ingeniero de producto AI-nativo", "fr": "Ingénieur produit AI-natif", "de": "AI-nativer Produktingenieur", "zh-Hans": "AI 原生产品工程师"},
+    "Contact": {"hu": "Kapcsolat", "es": "Contacto", "fr": "Contact", "de": "Kontakt", "zh-Hans": "联系方式"},
     "Welcome to Keepresso": {"hu": "Üdvözli a Keepresso", "es": "Te damos la bienvenida a Keepresso", "fr": "Bienvenue dans Keepresso", "de": "Willkommen bei Keepresso", "zh-Hans": "欢迎使用 Keepresso"},
     "Keepresso Setup": {"hu": "Keepresso beállítás", "es": "Configuración de Keepresso", "fr": "Configuration de Keepresso", "de": "Keepresso-Einrichtung", "zh-Hans": "Keepresso 设置"},
     "Keepresso Helper": {"hu": "Keepresso segéd", "es": "Asistente de Keepresso", "fr": "Assistant Keepresso", "de": "Keepresso-Hilfsdienst", "zh-Hans": "Keepresso 助理"},

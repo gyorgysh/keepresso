@@ -22,5 +22,19 @@ enum AppInfo {
 
     /// The public website: the destination for a person's "Learn more", where
     /// the repository is aimed at contributors.
-    static let website = URL(string: "https://keepresso.com")!
+    static let website = URL(string: "https://keepresso.com/?ref=\(referrer)")!
+
+    /// Tags outbound links to sites we own, so analytics can tell app traffic
+    /// apart from search and social. Left off mailto and GitHub, which have
+    /// nothing to read it.
+    static let referrer = "keepresso_app"
+
+    /// Who made it, and how to reach them. Shown in the About window.
+    enum Author {
+        static let name = "Gyorgy"
+        static let site = URL(string: "https://gyorgy.sh/?ref=\(AppInfo.referrer)")!
+        static let siteLabel = "gyorgy.sh"
+        static let email = URL(string: "mailto:gyorgy@pueev.com")!
+        static let github = URL(string: "https://github.com/gyorgysh")!
+    }
 }
