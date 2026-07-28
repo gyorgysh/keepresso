@@ -2423,7 +2423,7 @@ final class AppModel {
             // this window; with the helper installed no engage ever prompts,
             // so there is nothing to pre-authorize (and priming through the
             // daemon would flip the real setting on and off for nothing).
-            clearedForeignClosedDisplay = false
+            closedDisplayCoordinator.rearmForeignHoldClear()
             if newValue && !closedDisplayAuto.isAuthorized && !helperInstalled {
                 // A fallback engage may later need a password mid-session; be
                 // able to say so even behind other windows.
@@ -2464,85 +2464,50 @@ final class AppModel {
     /// True while the automation's administrator prompt is on screen.
     var closedDisplayAutoBusy: Bool { closedDisplayAuto.isBusy }
 
-    @ObservationIgnored private var wasBrewingForClosedDisplay = false
-    @ObservationIgnored private var wasClosedDisplayHolding = false
-    @ObservationIgnored private var sawClosedDisplayAutoError = false
-    /// Whether a foreign hold was already cleared, so a write that doesn't take
-    /// (a failing helper, a cancelled prompt) isn't retried every second. Lifted
-    /// again as soon as a read confirms the setting actually went off, so a hold
-    /// taken later is still caught.
-    @ObservationIgnored private var clearedForeignClosedDisplay = false
-    /// Whether the password prompt for such a clear was already shown this app
-    /// run, so a cancelled one isn't re-offered every second.
-    @ObservationIgnored private var askedToClearClosedDisplay = false
-    /// Whether a scheduled re-read of the system setting is still in flight.
-    /// ``closedDisplay``'s state is a cache, and acting on it between an
-    /// engage/release and its re-read would enforce against a stale value (and
-    /// without the helper, spend this run's one password prompt on a no-op).
-    @ObservationIgnored private var closedDisplayRefreshPending = false
-    /// Generation of the in-flight re-read. A second call bumps this so the
-    /// older task can finish without clearing the latch or enforcing on a
-    /// value a newer refresh is about to replace.
-    @ObservationIgnored private var closedDisplayRefreshGeneration = 0
-    /// Ticks since the last unattended re-read of the system setting.
-    @ObservationIgnored private var closedDisplayPollTicks = 0
+    /// Sequencer for the "only while brewing" automation. It owns the edge
+    /// detection and latches; this model only samples the inputs and runs the
+    /// side effects it asks for.
+    @ObservationIgnored private let closedDisplayCoordinator = ClosedDisplayCoordinator()
 
-    /// How many one-second ticks between unattended re-reads of the system
-    /// setting while the automation owns it. Each read shells out to `pmset -g`,
-    /// so this stays slow: it's there to notice a change made behind the app's
-    /// back (`pmset` by hand, another tool), not to drive the UI.
-    private static let closedDisplayPollInterval = 30
-
-    /// Re-read the system setting, then let the automation act on the result.
-    /// The refresh is what makes the enforcement below trustworthy, so the two
-    /// always travel together.
-    private func refreshThenEnforceClosedDisplay(
-        after delay: Duration? = nil,
-        allowPrompt: Bool = false
-    ) {
-        closedDisplayRefreshGeneration += 1
-        let generation = closedDisplayRefreshGeneration
-        closedDisplayRefreshPending = true
-        Task {
-            if let delay { try? await Task.sleep(for: delay) }
-            // Superseded while sleeping: leave the latch for the newer task.
-            guard generation == closedDisplayRefreshGeneration else { return }
-            // Enforcement must not trust a stale menu-open cache.
-            await closedDisplay.refresh(force: true)
-            guard generation == closedDisplayRefreshGeneration else { return }
-            closedDisplayRefreshPending = false
-            // A confirmed-off setting means an earlier clear took: arm again, so
-            // a hold taken later in this idle stretch is still caught.
-            if closedDisplay.isEnabled == false { clearedForeignClosedDisplay = false }
-            enforceClosedDisplayAuthority(allowPrompt: allowPrompt)
-        }
-    }
-
-    /// Enforce "Only while brewing"'s authority: with the feature on, idle
-    /// means the sleep setting is off, even when the hold was taken outside
-    /// the automation (see ``ClosedDisplayAuthority``).
-    ///
-    /// Silent through the helper daemon. Without it the write needs a
-    /// password, and leaving the hold in place is the worse outcome (a laptop
-    /// with the lid shut and no session can run itself flat), so the prompt is
-    /// offered anyway: announced by a notification first, and at most once per
-    /// app run. `allowPrompt` marks the paths where the user is already at the
-    /// keyboard answering dialogs, which need no notification.
-    private func enforceClosedDisplayAuthority(allowPrompt: Bool = false) {
-        guard !closedDisplay.isBusy, !clearedForeignClosedDisplay else { return }
-        // Never act on a value a pending re-read is about to replace.
-        guard !closedDisplayRefreshPending else { return }
-        let needsPassword = !helperInstalled
-        guard ClosedDisplayAuthority.shouldClearForeignHold(
+    /// The coordinator's view of the world, sampled fresh at each decision.
+    private var closedDisplayConditions: ClosedDisplayCoordinator.Conditions {
+        .init(
             onlyWhileBrewing: settings.closedDisplayOnlyWhileBrewing,
             brewing: session.isActive,
+            helperInstalled: helperInstalled,
             automationHolding: closedDisplayAuto.isHolding,
-            settingIsOn: closedDisplay.isEnabled == true,
-            canApply: !needsPassword || allowPrompt || !askedToClearClosedDisplay
-        ) else { return }
-        if needsPassword {
-            askedToClearClosedDisplay = true
-            if !allowPrompt {
+            automationAuthorized: closedDisplayAuto.isAuthorized,
+            automationFailed: closedDisplayAuto.lastError != nil,
+            settingIsOn: closedDisplay.isEnabled,
+            settingIsBusy: closedDisplay.isBusy
+        )
+    }
+
+    /// Run one decision. Everything that touches AppKit, the notifier or the
+    /// system lives here; everything that decides lives in the coordinator.
+    private func perform(_ action: ClosedDisplayCoordinator.Action) {
+        switch action {
+        case .announceEngagePrompt:
+            // Without the helper, the first engage of an app run prompts for the
+            // password (e.g. auto mode was enabled in a previous run): become the
+            // active app so the dialog is focused (same reason as
+            // ``setClosedDisplay(_:)``), and say what's happening in a
+            // notification, since the dialog itself is easy to miss and names
+            // "osascript", not Keepresso.
+            NSApp.activate(ignoringOtherApps: true)
+            notifier.notify(
+                title: L("Keepresso needs your password"),
+                body: L("Enter your administrator password to switch closed-display mode on for this session."),
+                sound: true
+            )
+        case .verifyHelper:
+            verifyHelper()
+        case .runAutoTick(let brewing):
+            Task { await closedDisplayAuto.autoTick(brewing: brewing) }
+        case .refreshThenEnforce(let delay):
+            refreshThenEnforceClosedDisplay(after: delay.map { .seconds($0) })
+        case .clearForeignHold(let announce):
+            if announce {
                 // Never a password dialog out of nowhere: say what it is for
                 // first (the dialog itself names "osascript", not Keepresso).
                 notifier.notify(
@@ -2553,69 +2518,42 @@ final class AppModel {
                     sound: true
                 )
             }
+            setClosedDisplay(false, userInitiated: false)
         }
-        clearedForeignClosedDisplay = true
-        setClosedDisplay(false, userInitiated: false)
+    }
+
+    /// Re-read the system setting, then let the automation act on the result.
+    /// The refresh is what makes the enforcement trustworthy, so the two always
+    /// travel together.
+    private func refreshThenEnforceClosedDisplay(
+        after delay: Duration? = nil,
+        allowPrompt: Bool = false
+    ) {
+        let token = closedDisplayCoordinator.beginRefresh()
+        Task {
+            if let delay { try? await Task.sleep(for: delay) }
+            // Superseded while sleeping: leave the latch for the newer task.
+            guard closedDisplayCoordinator.refreshIsCurrent(token) else { return }
+            // Enforcement must not trust a stale menu-open cache.
+            await closedDisplay.refresh(force: true)
+            guard closedDisplayCoordinator.endRefresh(
+                token,
+                settingIsOn: closedDisplay.isEnabled
+            ) else { return }
+            if let action = closedDisplayCoordinator.enforce(
+                closedDisplayConditions,
+                allowPrompt: allowPrompt
+            ) {
+                perform(action)
+            }
+        }
     }
 
     /// Once-a-second pulse for closed-display mode's "only while brewing"
-    /// automation. The guard keeps the per-tick task from spawning while the
-    /// feature is off.
+    /// automation.
     func closedDisplayAutoTick() {
-        guard settings.closedDisplayOnlyWhileBrewing else { return }
-        let brewing = session.isActive
-        // Without the helper, the first engage of an app run prompts for the
-        // password (e.g. auto mode was enabled in a previous run): become the
-        // active app on the session-start edge so the dialog is focused (same
-        // reason as ``setClosedDisplay(_:)``), and say what's happening in a
-        // notification, since the dialog itself is easy to miss and names
-        // "osascript", not Keepresso. Edge-only, so a cancelled prompt isn't
-        // followed by a focus steal every second for the rest of the session.
-        if brewing, !wasBrewingForClosedDisplay, !closedDisplayAuto.isAuthorized, !helperInstalled {
-            NSApp.activate(ignoringOtherApps: true)
-            notifier.notify(
-                title: L("Keepresso needs your password"),
-                body: L("Enter your administrator password to switch closed-display mode on for this session."),
-                sound: true
-            )
-        }
-        wasBrewingForClosedDisplay = brewing
-        // A session hands the setting back to the automation: let the next idle
-        // stretch clear a foreign hold again (the release may restore one).
-        if brewing { clearedForeignClosedDisplay = false }
-        // With the helper installed an engage should never fail; when one
-        // does, suspect a stale daemon registration and check it (edge-only,
-        // and the check dedupes and repairs at most once per run).
-        let autoFailed = closedDisplayAuto.lastError != nil
-        if autoFailed, !sawClosedDisplayAutoError, helperInstalled {
-            verifyHelper()
-        }
-        sawClosedDisplayAutoError = autoFailed
-        Task { await closedDisplayAuto.autoTick(brewing: brewing) }
-        // Mirror an engage or release into the closed-display toggle's live
-        // state (and the ticker's lid handling, which keys off it) once the
-        // helper has had a cycle to apply the change.
-        let holding = closedDisplayAuto.isHolding
-        if holding != wasClosedDisplayHolding {
-            wasClosedDisplayHolding = holding
-            closedDisplayPollTicks = 0
-            // The release restores whatever the setting was before the engage,
-            // so a hold set outside the automation comes back here. With the
-            // feature on, idle wins: clear it. Ticks in between stay out of the
-            // way, since the cached state is the pre-release one until this
-            // read lands.
-            refreshThenEnforceClosedDisplay(after: .seconds(3))
-            return
-        }
-        // Nothing to mirror, so the cached setting only goes stale from the
-        // outside. Re-read it now and then, and enforce on what comes back.
-        closedDisplayPollTicks += 1
-        if !brewing, closedDisplayPollTicks >= Self.closedDisplayPollInterval,
-           !closedDisplay.isBusy, !closedDisplayRefreshPending {
-            closedDisplayPollTicks = 0
-            refreshThenEnforceClosedDisplay()
-        } else {
-            enforceClosedDisplayAuthority()
+        for action in closedDisplayCoordinator.tick(closedDisplayConditions) {
+            perform(action)
         }
     }
 
