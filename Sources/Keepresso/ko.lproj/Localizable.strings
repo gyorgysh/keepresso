@@ -592,6 +592,8 @@
 "Allow automation to change the wake schedule" = "자동화가 깨우기 일정을 변경하도록 허용";
 "Automation access" = "자동화 접근";
 "A lease is a bounded keep-awake grant an outside tool asks for through the keepresso command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning leases off ends any live lease. The wake schedule switch is separate and off by default because a scheduled wake is a system-wide change applied by the administrator helper: leave it off unless a tool you trust should plan wake-ups for you." = "임대는 외부 도구가 keepresso 명령줄이나 번들 MCP 서버를 통해 요청하는 시간 제한 깨어 있게 유지 권한입니다. 예를 들어 밤새 작업하는 AI 에이전트, 렌더링 스크립트, 백업 작업 등입니다. 각 임대에는 소유자가 계속 갱신해야 하는 시간 제한이 있고, 최대 7일이라는 엄격한 상한도 있어 충돌한 도구가 Mac을 영구히 깨어 있게 유지할 수 없습니다. 메뉴에는 현재 활성 중인 모든 임대가 표시되며, 중지를 누르면 모두 종료되고 마지막 임대가 끝나면 Mac은 다시 잠들 수 있습니다. 임대를 끄면 활성 임대도 모두 종료됩니다. 깨우기 일정 스위치는 별도이며 기본적으로 꺼져 있는데, 예약된 깨우기는 관리자 도우미가 적용하는 시스템 전역 변경이기 때문입니다. 신뢰하는 도구가 대신 깨우기를 계획하도록 하려는 경우가 아니라면 꺼 두십시오.";
+"Let AI agents and scripts keep the Mac awake while work is running. It cannot wake a sleeping Mac." = "AI 에이전트와 스크립트가 작업 중인 Mac을 깨어 있게 합니다. 잠든 Mac을 깨울 수는 없습니다.";
+"Let trusted tools set or clear the Mac's scheduled wake. It needs the administrator helper and does not keep the Mac awake after it wakes." = "신뢰할 수 있는 도구가 Mac의 예약 깨우기를 설정하거나 지울 수 있습니다. 관리자 도우미가 필요하며, 깨운 뒤 Mac을 계속 깨어 있게 하지는 않습니다.";
 "Copy Agent Instructions" = "에이전트 지침 복사";
 "Copy MCP Setup" = "MCP 설정 복사";
 "For Claude Code (JSON)" = "Claude Code용 (JSON)";

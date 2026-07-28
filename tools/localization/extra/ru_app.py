@@ -661,6 +661,8 @@ APP.update({
 # Teach-your-agent actions, end-action wording, and gaming comfort (1.17.0, second batch).
 APP.update({
     "Copy Agent Instructions": "Копировать инструкции для агента",
+    "Let AI agents and scripts keep the Mac awake while work is running. It cannot wake a sleeping Mac.": "Позволяет ИИ-агентам и скриптам не давать Mac уснуть во время работы. Спящий Mac разбудить нельзя.",
+    "Let trusted tools set or clear the Mac's scheduled wake. It needs the administrator helper and does not keep the Mac awake after it wakes.": "Позволяет доверенным инструментам настроить или очистить запланированное пробуждение Mac. Нужен помощник администратора, и Mac не остаётся активным после пробуждения.",
     "Copy MCP Setup": "Копировать настройку MCP",
     "For Claude Code (JSON)": "Для Claude Code (JSON)",
     "For Gemini CLI (JSON)": "Для Gemini CLI (JSON)",

@@ -1440,10 +1440,16 @@ private struct AutomationTab: View {
                 get: { model.automationLeasesEnabled },
                 set: { model.automationLeasesEnabled = $0 }
             ))
+            Text("Let AI agents and scripts keep the Mac awake while work is running. It cannot wake a sleeping Mac.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Toggle("Allow automation to change the wake schedule", isOn: Binding(
                 get: { model.automationWakeControlEnabled },
                 set: { model.automationWakeControlEnabled = $0 }
             ))
+            Text("Let trusted tools set or clear the Mac's scheduled wake. It needs the administrator helper and does not keep the Mac awake after it wakes.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 Button("Copy Agent Instructions") {
                     model.copyAgentInstructions()

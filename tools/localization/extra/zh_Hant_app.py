@@ -626,6 +626,8 @@ APP.update({
 # AWDL watchdog blurb, Steam download trigger.
 APP.update({
     'Copy Agent Instructions': '複製代理指示',
+    'Let AI agents and scripts keep the Mac awake while work is running. It cannot wake a sleeping Mac.': '允許 AI 智能體和指令碼在工作期間保持 Mac 喚醒。無法喚醒已進入睡眠的 Mac。',
+    "Let trusted tools set or clear the Mac's scheduled wake. It needs the administrator helper and does not keep the Mac awake after it wakes.": '允許受信任的工具設定或清除 Mac 的定時喚醒。需要管理員輔助程式，且不會讓 Mac 在喚醒後持續保持喚醒。',
     'Copy MCP Setup': '複製 MCP 設定',
     'For Claude Code (JSON)': '適用於 Claude Code（JSON）',
     'For Gemini CLI (JSON)': '適用於 Gemini CLI（JSON）',

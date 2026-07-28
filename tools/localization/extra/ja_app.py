@@ -636,6 +636,8 @@ APP.update({
 
     # 1.17.0 second batch: teach-your-agent actions, end-action wording, gaming comfort
     'Copy Agent Instructions': 'エージェントへの指示をコピー',
+    'Let AI agents and scripts keep the Mac awake while work is running. It cannot wake a sleeping Mac.': 'AI エージェントやスクリプトが作業中に Mac を起動状態に保てます。スリープ中の Mac を起動することはできません。',
+    "Let trusted tools set or clear the Mac's scheduled wake. It needs the administrator helper and does not keep the Mac awake after it wakes.": '信頼できるツールが Mac のスケジュール起動を設定または消去できます。管理者ヘルパーが必要で、起動後も Mac を起動状態に保つ機能ではありません。',
     'Copy MCP Setup': 'MCP セットアップをコピー',
     'For Claude Code (JSON)': 'Claude Code 用（JSON）',
     'For Gemini CLI (JSON)': 'Gemini CLI 用（JSON）',
