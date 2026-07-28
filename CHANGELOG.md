@@ -19,6 +19,15 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 ### Changed
 
+- **The two Automation access switches explain themselves.** Each one now
+  carries a line saying what it actually does, so it is clear that one lets
+  agents and scripts hold the Mac awake while work runs, and the other only
+  sets the time the Mac wakes up. Contributed by @ivoidcat in #6.
+
+- **Chinese now says 智能体 for an AI agent.** Simplified and Traditional
+  Chinese used 代理 throughout, which also reads as "proxy". Every agent-sense
+  mention in both is now 智能体 (智能體). Suggested by @ivoidcat in #6.
+
 - **The menu stays snappy while Keepresso is working.** Process matching and
   agent detection share one `ps` snapshot, open-panel assertion and closed-
   display reads reuse a short cache, and automation lease files reload when
