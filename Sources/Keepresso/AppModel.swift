@@ -2446,10 +2446,13 @@ final class AppModel {
                 // Turning it off mid-session: release the hold (autoTick won't,
                 // it early-returns once the feature's off), then re-read the
                 // system setting once the helper has had a cycle to apply it.
+                // Force the read: a menu open moments earlier leaves a fresh
+                // cache that would swallow this one, and autoTick is already
+                // gated off, so nothing else would correct it.
                 Task {
                     await closedDisplayAuto.stopIfHolding()
                     try? await Task.sleep(for: .seconds(3))
-                    await closedDisplay.refresh()
+                    await closedDisplay.refresh(force: true)
                 }
             }
         }

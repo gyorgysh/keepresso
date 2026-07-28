@@ -58,7 +58,7 @@ public final class SharedPSSnapshot: @unchecked Sendable {
                 rest = trimmed.dropFirst(token.count)
                 return token
             }
-            // pid, ppid, pcpu, tty — then the remainder is the command.
+            // pid, ppid, pcpu, tty, then the remainder is the command.
             guard nextToken() != nil, nextToken() != nil,
                   nextToken() != nil, nextToken() != nil else { return nil }
             let command = rest.drop(while: { $0 == " " || $0 == "\t" })
