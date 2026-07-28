@@ -10,7 +10,7 @@
 "VPN connected" = "已連接 VPN";
 "Calendar event in progress" = "行事曆事件進行中";
 "Playing a game" = "正在玩遊戲";
-"AI agent working" = "AI 代理工作中";
+"AI agent working" = "AI 智能體工作中";
 "Camera in use" = "相機使用中";
 "Microphone in use" = "麥克風使用中";
 "On Wi-Fi “%@”" = "在 Wi-Fi「%@」上";
@@ -36,14 +36,14 @@
 "Battery pause" = "電池暫停";
 "Thermal pause" = "溫度暫停";
 "Thermal stage changed" = "熱階段已變更";
-"Agent went idle" = "代理已閒置";
+"Agent went idle" = "智能體已閒置";
 "Shortcut: %@" = "捷徑：%@";
 "Webhook: %@" = "Webhook：%@";
 "Command: %@" = "指令：%@";
 "+%ds" = "+%d 秒";
 "waiting counts" = "等待也算工作";
 "%@ (%@)" = "%@（%@）";
-"AI Agent" = "AI 代理";
+"AI Agent" = "AI 智能體";
 "On AC Power" = "使用電源";
 "External Display Connected" = "已連接外接螢幕";
 "Remote Session (SSH)" = "遠端工作階段（SSH）";
@@ -61,8 +61,8 @@
 "Screen Sharing is off. You might want to enable it to view a headless Mac's screen." = "螢幕共享已關閉。若您想檢視無螢幕 Mac 的畫面，可考慮開啟此功能。";
 "Couldn't confirm Screen Sharing. If you want remote viewing, enable it in System Settings." = "無法確認螢幕共享狀態。若您需要遠端檢視，請在系統設定中開啟。";
 "Enable it in System Settings ▸ General ▸ Sharing." = "請在「系統設定 ▸ 一般 ▸ 共享」中開啟。";
-"Run AI agents on this Mac with MyAgens" = "使用 MyAgens 在這台 Mac 上執行 AI 代理";
-"MyAgens lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely." = "MyAgens 可讓 AI 代理操作您的 Mac 並協助您的工作，對於主要以遠端方式使用的常保開機機器相當實用。";
+"Run AI agents on this Mac with MyAgens" = "使用 MyAgens 在這台 Mac 上執行 AI 智能體";
+"MyAgens lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely." = "MyAgens 可讓 AI 智能體操作您的 Mac 並協助您的工作，對於主要以遠端方式使用的常保開機機器相當實用。";
 "Learn more about MyAgens:" = "深入了解 MyAgens：";
 "GitHub" = "GitHub";
 "Read more" = "閱讀更多";
@@ -177,7 +177,7 @@
 "write" = "寫入";
 "read" = "讀取";
 "search" = "搜尋";
-"subagent" = "子代理";
+"subagent" = "子智能體";
 "browse" = "瀏覽";
 "tool" = "工具";
 "permission" = "權限";
