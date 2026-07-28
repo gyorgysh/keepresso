@@ -588,11 +588,13 @@
 "Held awake by an automation lease" = "由一个自动化租约保持唤醒";
 "Held awake by %d automation leases" = "由 %d 个自动化租约保持唤醒";
 "and %d more" = "还有 %d 个";
-"Allow automation leases" = "允许自动化租约";
-"Allow automation to change the wake schedule" = "允许自动化更改唤醒计划";
-"Automation access" = "自动化访问";
-"A lease is a bounded keep-awake grant an outside tool asks for through the keepresso command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning leases off ends any live lease. The wake schedule switch is separate and off by default because a scheduled wake is a system-wide change applied by the administrator helper: leave it off unless a tool you trust should plan wake-ups for you." = "自动化租约是外部工具通过 keepresso 命令行或内置 MCP 服务器申请的一种有限期保持唤醒授权：例如通宵工作的 AI 代理、渲染脚本，或备份任务。每个租约都有时限，其持有者必须不断续期，此外还有严格的七天上限，因此即使工具崩溃，也永远无法让 Mac 永久保持唤醒。菜单会显示所有存活的租约，“停止”会一次性结束全部，最后一个结束后 Mac 便可再次睡眠。关闭租约功能会结束所有存活租约。唤醒计划开关是独立的，默认关闭，因为计划唤醒是由管理员助理执行的系统级更改：除非你信任的工具应替你安排唤醒时间，否则请保持关闭。";
-"Copy Agent Instructions" = "复制代理说明";
+"Allow automation leases" = "允许外部工具在任务期间保持 Mac 唤醒";
+"Allow automation to change the wake schedule" = "允许外部工具设置 Mac 定时唤醒";
+"Automation access" = "外部工具权限";
+"A lease is a bounded keep-awake grant an outside tool asks for through the keepresso command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning leases off ends any live lease. The wake schedule switch is separate and off by default because a scheduled wake is a system-wide change applied by the administrator helper: leave it off unless a tool you trust should plan wake-ups for you." = "两项权限互不依赖。第一项只让外部工具在任务进行时临时保持 Mac 唤醒，不能把已睡眠的 Mac 叫醒。关闭后，所有正在运行的外部任务会立刻失去保持唤醒权限。第二项允许受信任的工具设置或清除 Mac 的定时唤醒，需要管理员助理。它只能决定何时唤醒，不能让 Mac 在唤醒后持续保持唤醒。除非你需要工具替你安排唤醒时间，否则请保持关闭。";
+"Let AI agents and scripts keep the Mac awake while work is running. It cannot wake a sleeping Mac." = "供 AI 代理和脚本在任务期间让 Mac 保持唤醒，不能唤醒已睡眠的 Mac。";
+"Let trusted tools set or clear the Mac's scheduled wake. It needs the administrator helper and does not keep the Mac awake after it wakes." = "允许受信任的工具设置或清除 Mac 的定时唤醒。需要管理员助理，且不会让 Mac 在唤醒后持续保持唤醒。";
+"Copy Agent Instructions" = "复制智能体说明";
 "Copy MCP Setup" = "复制 MCP 设置";
 "For Claude Code (JSON)" = "适用于 Claude Code（JSON）";
 "For Gemini CLI (JSON)" = "适用于 Gemini CLI（JSON）";
@@ -600,7 +602,7 @@
 "For Codex (TOML)" = "适用于 Codex（TOML）";
 "Server path only" = "仅服务器路径";
 "Reveal Skill Folder" = "显示技能文件夹";
-"Copied. Paste it to your agent in a new chat to teach it to manage Keepresso." = "已复制。请在新对话中粘贴给你的代理，教它管理 Keepresso。";
+"Copied. Paste it to your agent in a new chat to teach it to manage Keepresso." = "已复制。请在新对话中粘贴给你的智能体，教它管理 Keepresso。";
 "Copied. Paste it into your agent's MCP configuration file." = "已复制。请将其粘贴到你的代理的 MCP 配置文件中。";
 "Copied. Use it as the MCP server command in your agent's settings." = "已复制。请将其用作你的代理设置中的 MCP 服务器命令。";
 "After the last session ends" = "最后一个会话结束后";

@@ -622,6 +622,8 @@ APP.update({
 # new in the 1.17 cycle (second batch).
 APP.update({
     'Copy Agent Instructions': 'Копіювати інструкції для агента',
+    'Let AI agents and scripts keep the Mac awake while work is running. It cannot wake a sleeping Mac.': 'Дозволяє ШІ-агентам і сценаріям не давати Mac заснути під час роботи. Не може розбудити Mac, який уже спить.',
+    "Let trusted tools set or clear the Mac's scheduled wake. It needs the administrator helper and does not keep the Mac awake after it wakes.": 'Дозволяє надійним інструментам встановлювати або очищати заплановане пробудження Mac. Потрібен помічник адміністратора, і після пробудження Mac не залишається активним.',
     'Copy MCP Setup': 'Копіювати налаштування MCP',
     'For Claude Code (JSON)': 'Для Claude Code (JSON)',
     'For Gemini CLI (JSON)': 'Для Gemini CLI (JSON)',
