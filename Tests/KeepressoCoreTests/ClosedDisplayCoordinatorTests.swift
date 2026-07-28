@@ -88,10 +88,14 @@ private func conditions(
     let engaged = coordinator.tick(conditions(brewing: true, automationHolding: true))
     #expect(engaged.contains(.refreshThenEnforce(delay: ClosedDisplayCoordinator.mirrorDelay)))
     // Steady state while held: nothing to mirror.
-    let held = coordinator.tick(conditions(brewing: true, automationHolding: true))
+    let held = coordinator.tick(conditions(brewing: true, automationHolding: true, settingIsOn: true))
     #expect(!held.contains(.refreshThenEnforce(delay: ClosedDisplayCoordinator.mirrorDelay)))
-    let released = coordinator.tick(conditions(automationHolding: false))
+    // The release leaves a setting that looks like a foreign hold, and the
+    // mirroring tick must not act on it: that reading is the pre-release one
+    // until the re-read lands.
+    let released = coordinator.tick(conditions(automationHolding: false, settingIsOn: true))
     #expect(released.contains(.refreshThenEnforce(delay: ClosedDisplayCoordinator.mirrorDelay)))
+    #expect(!released.contains(.clearForeignHold(announce: false)))
 }
 
 @MainActor
@@ -120,9 +124,12 @@ private func conditions(
     _ = coordinator.tick(conditions())
     // An engage lands on what would have been the last tick before a re-read.
     _ = coordinator.tick(conditions(automationHolding: true))
-    _ = coordinator.tick(conditions(automationHolding: true))
-    #expect(!coordinator.tick(conditions(automationHolding: true))
-        .contains(.refreshThenEnforce(delay: nil)))
+    // Without the restart the very next tick would cross the threshold, so this
+    // is the tick that pins it.
+    for _ in 0..<2 {
+        #expect(!coordinator.tick(conditions(automationHolding: true))
+            .contains(.refreshThenEnforce(delay: nil)))
+    }
 }
 
 @MainActor
@@ -180,8 +187,10 @@ private func conditions(
     // The cached value is the pre-change one until the read lands, so acting on
     // it now would enforce against a stale setting.
     #expect(coordinator.enforce(foreign) == nil)
-    #expect(coordinator.tick(foreign).isEmpty == false) // the tick still pulses the automation
-    #expect(!coordinator.tick(foreign).contains(.clearForeignHold(announce: false)))
+    // The tick still pulses the automation, it just doesn't enforce.
+    let ticked = coordinator.tick(foreign)
+    #expect(ticked.contains(.runAutoTick(brewing: false)))
+    #expect(!ticked.contains(.clearForeignHold(announce: false)))
     #expect(coordinator.endRefresh(token, settingIsOn: true))
     #expect(coordinator.enforce(foreign) == .clearForeignHold(announce: false))
 }

@@ -111,6 +111,12 @@ public final class ClosedDisplayCoordinator {
     }
 
     /// Once-a-second pulse. Returns the actions to run, in order.
+    ///
+    /// The host must run them before the next ``tick(_:)``: a
+    /// ``Action/refreshThenEnforce(delay:)`` only latches enforcement out once
+    /// the host claims it with ``beginRefresh()``, so a tick that drops the
+    /// action, or defers it past another tick, would leave enforcement free to
+    /// act on the reading that refresh is about to replace.
     public func tick(_ conditions: Conditions) -> [Action] {
         guard conditions.onlyWhileBrewing else { return [] }
         var actions: [Action] = []
