@@ -3,7 +3,13 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
-## [Unreleased]
+## [1.20.1] - 2026-07-30
+
+### Added
+
+- **About names the author.** The About window now shows a photo, credit line,
+  and Contact / gyorgy.sh / GitHub links under the tagline, so it is clear who
+  made Keepresso and how to reach them.
 
 ### Fixed
 
