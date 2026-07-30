@@ -160,6 +160,45 @@ public enum ClosedDisplayAuthority {
     }
 }
 
+/// Decides when a battery safety pause should lift (and later restore) sticky
+/// closed-display mode.
+///
+/// Pause-on-low-battery only stops the keep-awake session. Sticky
+/// `pmset disablesleep` outlives that stop, so a lid-closed Mac can keep
+/// running and drain past the cutoff. "Only while brewing" already releases
+/// with the session, so this path covers the sticky case alone. Mirrors the
+/// thermal emergency's closed-display lift in the app host.
+public enum BatteryPauseClosedDisplay {
+    public enum Decision: Equatable, Sendable {
+        /// Nothing to do this tick.
+        case idle
+        /// Turn closed-display off and remember to restore when the pause lifts.
+        case lift
+        /// Closed-display is on but there is no silent way to write it; the host
+        /// should say so (once) rather than prompt for a password unattended.
+        case skipLiftNeedsHelper
+        /// The pause lifted: put closed-display back if the host still can.
+        case restore
+    }
+
+    public static func decide(
+        paused: Bool,
+        onlyWhileBrewing: Bool,
+        settingIsOn: Bool,
+        alreadyLifted: Bool,
+        helperInstalled: Bool
+    ) -> Decision {
+        // Session-tied closed-display already drops with the pause; restoring
+        // a sticky hold afterward would fight that automation.
+        guard !onlyWhileBrewing else { return .idle }
+        if paused {
+            guard settingIsOn, !alreadyLifted else { return .idle }
+            return helperInstalled ? .lift : .skipLiftNeedsHelper
+        }
+        return alreadyLifted ? .restore : .idle
+    }
+}
+
 /// Drives closed-display mode's "only while brewing" automation: the global
 /// `disablesleep` setting follows the keep-awake session, on when it starts
 /// and off when it ends, instead of staying on until manually turned off.

@@ -278,6 +278,59 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     ))
 }
 
+// MARK: - Battery pause lifts sticky closed-display
+
+@Test func batteryPauseLiftsStickyClosedDisplay() {
+    #expect(BatteryPauseClosedDisplay.decide(
+        paused: true, onlyWhileBrewing: false, settingIsOn: true,
+        alreadyLifted: false, helperInstalled: true
+    ) == .lift)
+}
+
+@Test func batteryPauseLeavesOnlyWhileBrewingAlone() {
+    // Session-tied closed-display already releases with the pause.
+    #expect(BatteryPauseClosedDisplay.decide(
+        paused: true, onlyWhileBrewing: true, settingIsOn: true,
+        alreadyLifted: false, helperInstalled: true
+    ) == .idle)
+}
+
+@Test func batteryPauseDoesNotReliftWhatItAlreadyCleared() {
+    #expect(BatteryPauseClosedDisplay.decide(
+        paused: true, onlyWhileBrewing: false, settingIsOn: false,
+        alreadyLifted: true, helperInstalled: true
+    ) == .idle)
+    #expect(BatteryPauseClosedDisplay.decide(
+        paused: true, onlyWhileBrewing: false, settingIsOn: true,
+        alreadyLifted: true, helperInstalled: true
+    ) == .idle)
+}
+
+@Test func batteryPauseWithoutHelperAsksTheHostToExplain() {
+    #expect(BatteryPauseClosedDisplay.decide(
+        paused: true, onlyWhileBrewing: false, settingIsOn: true,
+        alreadyLifted: false, helperInstalled: false
+    ) == .skipLiftNeedsHelper)
+}
+
+@Test func batteryPauseRestoresStickyClosedDisplayWhenItLifts() {
+    #expect(BatteryPauseClosedDisplay.decide(
+        paused: false, onlyWhileBrewing: false, settingIsOn: false,
+        alreadyLifted: true, helperInstalled: true
+    ) == .restore)
+    #expect(BatteryPauseClosedDisplay.decide(
+        paused: false, onlyWhileBrewing: false, settingIsOn: false,
+        alreadyLifted: false, helperInstalled: true
+    ) == .idle)
+}
+
+@Test func batteryPauseDoesNothingWhenClosedDisplayIsAlreadyOff() {
+    #expect(BatteryPauseClosedDisplay.decide(
+        paused: true, onlyWhileBrewing: false, settingIsOn: false,
+        alreadyLifted: false, helperInstalled: true
+    ) == .idle)
+}
+
 // MARK: - Settings
 
 @Test func closedDisplayOnlyWhileBrewingDefaultsOffAndRoundTrips() throws {

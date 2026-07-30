@@ -155,6 +155,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.model.syncWidgetState()
             self?.model.awdlAutoTick()
             self?.model.closedDisplayAutoTick()
+            self?.model.syncBatteryPauseClosedDisplay()
             self?.model.thermalAvailabilityTick()
             self?.model.fireAgentIdleHookIfNeeded()
             self?.model.automationSyncTick()

@@ -3,6 +3,19 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Fixed
+
+- **Pause on low battery now switches off closed-display mode.** Stopping the
+  session alone could not let a lid-closed Mac sleep while sticky
+  `pmset disablesleep` was still on, so charge could keep draining past the
+  cutoff (#7). The pause now turns closed-display off (and puts it back when
+  you plug in), the same way a heat pause already did. "Only while brewing"
+  still handles this on its own by following the session. Needs the
+  administrator helper for a silent flip; without it, a notification explains
+  why closed-display was left on.
+
 ## [1.20.0] - 2026-07-28
 
 ### Added

@@ -1153,6 +1153,15 @@ final class AppModel {
     /// rather than resurrecting a stale intent.
     @ObservationIgnored private var thermalLiftedClosedDisplay = false
 
+    /// Set when a battery safety pause lifted sticky closed-display mode, so
+    /// plugging in puts it back. Same lifetime rules as
+    /// ``thermalLiftedClosedDisplay``.
+    @ObservationIgnored private var batteryLiftedClosedDisplay = false
+
+    /// Prior tick's ``SessionController/pausedByBattery``, so the helper-missing
+    /// notice fires once on the rising edge rather than every second.
+    @ObservationIgnored private var sawBatteryPaused = false
+
     /// The fan boost percent currently held through the helper, or nil when
     /// the fans are under system control. Drives the menu's status line.
     private(set) var fanBoostActivePercent: Int?
@@ -2388,12 +2397,15 @@ final class AppModel {
     /// behind other windows, leaving the menu in a stuck-looking state. With
     /// the helper installed there is no dialog, so no focus grab either.
     func setClosedDisplay(_ on: Bool, userInitiated: Bool = true) {
-        // A user toggling closed-display during a thermal pause has taken over
-        // the intent: cancel any pending "restore on cooldown" so recovery
-        // doesn't silently turn it back on against their choice. The thermal
+        // A user toggling closed-display during a thermal or battery pause has
+        // taken over the intent: cancel any pending "restore when safe" so
+        // recovery doesn't silently turn it back on against their choice. The
         // lift/restore calls pass `userInitiated: false` so they don't clear
         // their own pending restore.
-        if userInitiated { thermalLiftedClosedDisplay = false }
+        if userInitiated {
+            thermalLiftedClosedDisplay = false
+            batteryLiftedClosedDisplay = false
+        }
         if !helperInstalled {
             NSApp.activate(ignoringOtherApps: true)
         }
@@ -2555,6 +2567,51 @@ final class AppModel {
         for action in closedDisplayCoordinator.tick(closedDisplayConditions) {
             perform(action)
         }
+    }
+
+    /// Once-a-second pulse: a battery safety pause also clears sticky
+    /// closed-display mode, otherwise `pmset disablesleep` keeps a lid-closed
+    /// Mac awake past the cutoff. "Only while brewing" already releases with
+    /// the session, so this path is the sticky case (see
+    /// ``BatteryPauseClosedDisplay``).
+    func syncBatteryPauseClosedDisplay() {
+        let paused = session.pausedByBattery
+        let onlyWhileBrewing = settings.closedDisplayOnlyWhileBrewing
+        // Session-tied automation owns the setting; drop any sticky-restore
+        // latch so a later plug-in cannot turn closed-display on against it.
+        if onlyWhileBrewing {
+            batteryLiftedClosedDisplay = false
+            sawBatteryPaused = paused
+            return
+        }
+        switch BatteryPauseClosedDisplay.decide(
+            paused: paused,
+            onlyWhileBrewing: onlyWhileBrewing,
+            settingIsOn: closedDisplayEnabled,
+            alreadyLifted: batteryLiftedClosedDisplay,
+            helperInstalled: helperInstalled
+        ) {
+        case .idle:
+            break
+        case .lift:
+            // Same rule as the thermal lift: only through the prompt-free
+            // daemon path; never ask for a password from an unattended safety
+            // action.
+            batteryLiftedClosedDisplay = true
+            setClosedDisplay(false, userInitiated: false)
+        case .skipLiftNeedsHelper:
+            if !sawBatteryPaused {
+                notifier.notify(
+                    title: L("Closed-display mode left on"),
+                    body: L("Keepresso paused on low battery but can't switch off closed-display mode without the administrator helper (Preferences ▸ General)."),
+                    sound: false
+                )
+            }
+        case .restore:
+            batteryLiftedClosedDisplay = false
+            if helperInstalled { setClosedDisplay(true, userInitiated: false) }
+        }
+        sawBatteryPaused = paused
     }
 
     // MARK: - Virtual display (experimental)

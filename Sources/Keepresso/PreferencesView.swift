@@ -459,7 +459,7 @@ private struct GeneralTab: View {
                 } header: {
                     sectionHeader("Battery", info: L("A safety net for a session you forget about. If the charge falls this low, Keepresso pauses the session and lets the Mac sleep, even mid-session, and tells you why in a notification. The menu-bar cup shows the pause as a last sip of low-power yellow. Plugging in resumes it on its own. This is the same slider as the one in the menu, so the two always agree."))
                 } footer: {
-                    sectionFooter("Lets the Mac sleep once charge drops below this level.")
+                    sectionFooter("Lets the Mac sleep once charge drops below this level, and switches off closed-display mode so a lid-closed Mac can sleep too.")
                 }
             }
             // The thermal net is a lid-closed safety: a desktop has no lid to
