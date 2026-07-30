@@ -295,15 +295,20 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     ) == .idle)
 }
 
-@Test func batteryPauseDoesNotReliftWhatItAlreadyCleared() {
+@Test func batteryPauseIsIdleOnceClosedDisplayIsOff() {
     #expect(BatteryPauseClosedDisplay.decide(
         paused: true, onlyWhileBrewing: false, settingIsOn: false,
         alreadyLifted: true, helperInstalled: true
     ) == .idle)
+}
+
+@Test func batteryPauseReassertsLiftIfClosedDisplayComesBackOn() {
+    // A failed write or another feature restoring the setting mid-pause must
+    // not leave disablesleep on for the rest of the battery pause.
     #expect(BatteryPauseClosedDisplay.decide(
         paused: true, onlyWhileBrewing: false, settingIsOn: true,
         alreadyLifted: true, helperInstalled: true
-    ) == .idle)
+    ) == .lift)
 }
 
 @Test func batteryPauseWithoutHelperAsksTheHostToExplain() {
@@ -311,6 +316,11 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
         paused: true, onlyWhileBrewing: false, settingIsOn: true,
         alreadyLifted: false, helperInstalled: false
     ) == .skipLiftNeedsHelper)
+    // Once the host has explained, don't nag every tick.
+    #expect(BatteryPauseClosedDisplay.decide(
+        paused: true, onlyWhileBrewing: false, settingIsOn: true,
+        alreadyLifted: true, helperInstalled: false
+    ) == .idle)
 }
 
 @Test func batteryPauseRestoresStickyClosedDisplayWhenItLifts() {

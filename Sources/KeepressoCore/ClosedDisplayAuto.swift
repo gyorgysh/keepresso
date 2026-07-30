@@ -192,8 +192,14 @@ public enum BatteryPauseClosedDisplay {
         // a sticky hold afterward would fight that automation.
         guard !onlyWhileBrewing else { return .idle }
         if paused {
-            guard settingIsOn, !alreadyLifted else { return .idle }
-            return helperInstalled ? .lift : .skipLiftNeedsHelper
+            // Keep asserting off for the whole pause: a failed helper write, or
+            // something else turning the setting back on (a thermal restore),
+            // must not leave disablesleep stuck on while battery is low.
+            guard settingIsOn else { return .idle }
+            if helperInstalled { return .lift }
+            // Without a silent write path, explain once; `alreadyLifted` here
+            // means the host already said so this pause.
+            return alreadyLifted ? .idle : .skipLiftNeedsHelper
         }
         return alreadyLifted ? .restore : .idle
     }

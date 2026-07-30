@@ -1248,7 +1248,14 @@ final class AppModel {
                 )
                 if thermalLiftedClosedDisplay {
                     thermalLiftedClosedDisplay = false
-                    if helperInstalled { setClosedDisplay(true, userInitiated: false) }
+                    // Battery pause still needs closed-display off. Hand the
+                    // restore latch over rather than turning the setting back
+                    // on underneath a low-battery pause.
+                    if session.pausedByBattery {
+                        batteryLiftedClosedDisplay = true
+                    } else if helperInstalled {
+                        setClosedDisplay(true, userInitiated: false)
+                    }
                 }
             }
         }
@@ -2596,10 +2603,14 @@ final class AppModel {
         case .lift:
             // Same rule as the thermal lift: only through the prompt-free
             // daemon path; never ask for a password from an unattended safety
-            // action.
+            // action. Re-asserted every tick while the setting is still on, so
+            // a failed write or a thermal restore mid-pause cannot stick.
             batteryLiftedClosedDisplay = true
             setClosedDisplay(false, userInitiated: false)
         case .skipLiftNeedsHelper:
+            // Latch so decide goes idle on later ticks (no per-second nags);
+            // sawBatteryPaused is the rising-edge gate for the banner itself.
+            batteryLiftedClosedDisplay = true
             if !sawBatteryPaused {
                 notifier.notify(
                     title: L("Closed-display mode left on"),
