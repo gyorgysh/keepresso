@@ -14,7 +14,9 @@ Versions follow [Semantic Versioning](https://semver.org).
   you plug in), the same way a heat pause already did. "Only while brewing"
   still handles this on its own by following the session. Needs the
   administrator helper for a silent flip; without it, a notification explains
-  why closed-display was left on.
+  why closed-display was left on. The off is re-asserted if a write fails or
+  another safety net turns the setting back on mid-pause, and a heat recovery
+  will not restore closed-display underneath a live battery pause.
 
 ## [1.20.0] - 2026-07-28
 
