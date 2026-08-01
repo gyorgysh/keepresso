@@ -115,19 +115,29 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
 public struct AppRule: Codable, Equatable, Hashable, Sendable {
     /// Bundle identifier, e.g. `com.apple.FaceTime`.
     public var bundleID: String
+    /// Optional bundle path for matching a specific installed copy of an app.
+    /// This distinguishes apps such as Xcode and Xcode Beta that share a bundle ID.
+    public var bundlePath: String?
     /// A friendly display name (e.g. "NVIDIA GeForce NOW") shown instead of the
     /// bundle id in the menu and rules editor. Optional (older rules and hand-made
     /// ones may lack it); set when the rule is built from a known app, i.e. a
     /// preset or the running-apps menu, which already have the name. Matching is
-    /// always by ``bundleID``, so a stale or missing name never affects behavior.
+    /// by bundle path when one is stored, otherwise by bundle ID.
     public var name: String?
     /// Running vs frontmost.
     public var match: AppMatch
     /// Seconds to stay active after the app stops matching (0 = no grace).
     public var grace: TimeInterval
 
-    public init(bundleID: String, name: String? = nil, match: AppMatch = .running, grace: TimeInterval = 0) {
+    public init(
+        bundleID: String,
+        bundlePath: String? = nil,
+        name: String? = nil,
+        match: AppMatch = .running,
+        grace: TimeInterval = 0
+    ) {
         self.bundleID = bundleID
+        self.bundlePath = bundlePath
         self.name = name
         self.match = match
         self.grace = grace
@@ -378,7 +388,12 @@ public struct TriggerFactory {
         case .wifiSSID(let ssid):
             return WiFiSSIDTrigger(ssid: ssid, monitor: network)
         case .app(let rule):
-            let trigger = AppTrigger(bundleID: rule.bundleID, match: rule.match, monitor: workspace)
+            let trigger = AppTrigger(
+                bundleID: rule.bundleID,
+                bundlePath: rule.bundlePath,
+                match: rule.match,
+                monitor: workspace
+            )
             return rule.grace > 0
                 ? GracePeriodTrigger(wrapping: trigger, grace: rule.grace, now: now)
                 : trigger

@@ -2953,12 +2953,14 @@ final class AppModel {
     }
 
     /// Regular (Dock-visible) running apps, for the "add running app" menu.
-    func runningApps() -> [(name: String, bundleID: String)] {
+    func runningApps() -> [(name: String, bundleID: String, bundlePath: String)] {
         NSWorkspace.shared.runningApplications
             .filter { $0.activationPolicy == .regular }
             .compactMap { app in
-                guard let id = app.bundleIdentifier else { return nil }
-                return (app.localizedName ?? id, id)
+                guard let id = app.bundleIdentifier, let url = app.bundleURL else { return nil }
+                // The bundle filename reflects distinct parallel installs when
+                // their metadata does not (e.g. Xcode.app vs Xcode-beta.app).
+                return (url.deletingPathExtension().lastPathComponent, id, url.path)
             }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }

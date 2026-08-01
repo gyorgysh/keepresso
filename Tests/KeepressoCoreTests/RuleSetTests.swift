@@ -42,6 +42,27 @@ private final class FakeWorkspace: WorkspaceMonitoring {
     #expect(trigger.isSatisfied())
 }
 
+@Test func appTriggerCanMatchOneOfTwoAppsWithTheSameBundleID() {
+    let stablePath = "/Applications/Xcode.app"
+    let betaPath = "/Applications/Xcode-beta.app"
+    let monitor = FakeWorkspace(WorkspaceSnapshot(
+        runningBundleIDs: ["com.apple.dt.Xcode"],
+        runningBundlePaths: [stablePath, betaPath],
+        frontmostBundleID: "com.apple.dt.Xcode",
+        frontmostBundlePath: betaPath
+    ))
+    let trigger = AppTrigger(
+        bundleID: "com.apple.dt.Xcode",
+        bundlePath: betaPath,
+        match: .frontmost,
+        monitor: monitor
+    )
+    #expect(trigger.isSatisfied())
+
+    monitor.current.frontmostBundlePath = stablePath
+    #expect(trigger.isSatisfied() == false)
+}
+
 @Test func gracePeriodLingersAfterConditionDrops() {
     var t = Date(timeIntervalSince1970: 1_000_000)
     let inner = StubFlag(true)
