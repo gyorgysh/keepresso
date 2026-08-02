@@ -3,3 +3,4 @@
 #import "KPVirtualDisplay.h"
 #import "KPHIDSensors.h"
 #import "KPBrightness.h"
+#import "KPKeyboardBrightness.h"
