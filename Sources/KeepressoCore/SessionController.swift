@@ -131,6 +131,20 @@ public final class SessionController {
         case unknown
     }
 
+    /// Whether any display worth holding awake is currently usable.
+    public enum DisplayReading: Equatable, Sendable {
+        /// The lid is shut with no external display attached: the only panel
+        /// there is sits inside a closed lid, so nothing on screen is worth
+        /// holding awake or dimming.
+        case lidShutNoExternal
+        /// A usable display: the lid is open, or an external monitor is
+        /// attached (a clamshell Mac driving a monitor still has a screen).
+        case usable
+        /// No reading this call. Treated as usable, so a failed lid read can
+        /// never silently drop the display assertion.
+        case unknown
+    }
+
     /// Every session transition, with when and why (the awake-explainer's
     /// "why did Keepresso act?" half). In-memory only.
     public let log = DecisionLog()
@@ -485,11 +499,18 @@ public final class SessionController {
             || options.simulateUserActivity
     }
 
-    /// Whether ``reconcile(now:systemIdleSeconds:battery:thermal:)`` can currently
-    /// use a battery reading: battery auto-pause is on. The host skips the
-    /// per-second power-source sweep when this is false (off by default).
+    /// Whether ``reconcile(now:systemIdleSeconds:battery:thermal:display:)`` can
+    /// currently use a battery reading: battery auto-pause is on. The host skips
+    /// the per-second power-source sweep when this is false (off by default).
     public var consumesBatteryReading: Bool {
         pauseBelowBatteryPercent != nil
+    }
+
+    /// Whether a display reading has any effect here: something is asking to
+    /// hold the display awake, so a shut lid can stand it down. The host skips
+    /// the per-second lid and display sweep when this is false.
+    public var consumesDisplayReading: Bool {
+        options.preventDisplaySleep
     }
 
     /// Whether a thermal reading has any effect here: the guard's stop-brewing
@@ -516,11 +537,17 @@ public final class SessionController {
     ///   - thermal: the thermal guard's verdict, dwell and hysteresis already
     ///     applied there. `.unknown` (the internal-reconcile default) leaves
     ///     the thermal latch untouched, exactly like the battery reading.
+    ///   - display: whether a display worth holding awake is usable. The host
+    ///     passes ``DisplayReading/lidShutNoExternal`` once the lid is shut with
+    ///     no external monitor, which drops the display assertion and the dim
+    ///     for as long as it lasts. `.unknown` (the internal-reconcile default)
+    ///     counts as usable, so a missing reading changes nothing.
     public func reconcile(
         now: Date? = nil,
         systemIdleSeconds: TimeInterval? = nil,
         battery: BatteryReading = .unknown,
-        thermal: ThermalReading = .unknown
+        thermal: ThermalReading = .unknown,
+        display: DisplayReading = .unknown
     ) {
         let instant = now ?? self.now()
 
@@ -680,7 +707,7 @@ public final class SessionController {
             return
         }
 
-        let desired = desiredAssertions(systemIdleSeconds: systemIdleSeconds)
+        let desired = desiredAssertions(systemIdleSeconds: systemIdleSeconds, display: display)
         assertions.apply(
             desired,
             reason: "Keepresso is brewing"
@@ -697,7 +724,7 @@ public final class SessionController {
         maybeRemind(at: instant)
         maybeNotifyEndingSoon(at: instant)
         maybePokeActivity(at: instant, systemIdleSeconds: systemIdleSeconds)
-        maybeDim(systemIdleSeconds: systemIdleSeconds)
+        maybeDim(systemIdleSeconds: systemIdleSeconds, display: display)
         flushPendingEndAction(at: instant)
     }
 
@@ -711,10 +738,14 @@ public final class SessionController {
     /// unsupported) restores first. Not while a lease holds the session: an
     /// unattended lease deliberately drops the display assertion (nobody is
     /// watching the screen), so leave the panel and its brightness alone.
-    private func maybeDim(systemIdleSeconds: TimeInterval?) {
+    private func maybeDim(systemIdleSeconds: TimeInterval?, display: DisplayReading = .unknown) {
         guard isActive,
               !leaseHeld,
               options.preventDisplaySleep,
+              // Same rule as the display assertion: with the lid shut and no
+              // external monitor there is no panel worth dimming, and the
+              // guard's restore puts the level back for the lid reopening.
+              display != .lidShutNoExternal,
               let threshold = options.dimDisplayAfter,
               brightness.isSupported
         else { restoreBrightness(); return }
@@ -911,14 +942,21 @@ public final class SessionController {
     }
 
     /// The assertion set implied by the current session and options.
-    func desiredAssertions(systemIdleSeconds: TimeInterval?) -> Set<PowerAssertionKind> {
+    func desiredAssertions(
+        systemIdleSeconds: TimeInterval?,
+        display: DisplayReading = .unknown
+    ) -> Set<PowerAssertionKind> {
         guard isActive else { return [] }
         // A lease-held session keeps the system awake, never the display:
         // unattended work has nobody watching the screen.
         if leaseHeld { return [.system] }
         var kinds: Set<PowerAssertionKind> = []
         if options.preventSystemSleep { kinds.insert(.system) }
-        if options.preventDisplaySleep {
+        // A panel inside a closed lid is not worth holding awake, so the
+        // display assertion stands down for as long as the lid is shut. An
+        // external monitor is the exception: a clamshell Mac driving one still
+        // has a screen somebody may be watching.
+        if options.preventDisplaySleep, display != .lidShutNoExternal {
             let yielded: Bool = {
                 guard let threshold = options.allowScreenSaverAfter,
                       let idle = systemIdleSeconds else { return false }

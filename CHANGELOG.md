@@ -3,6 +3,20 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Changed
+
+- **A shut lid stands the display assertion down.** Holding the display awake is
+  worth it while there is a screen to look at. With the lid shut and no external
+  monitor attached there is not, so Keepresso now drops the display assertion,
+  and the "dim, don't sleep" brightness hold with it, for as long as the lid
+  stays shut, then takes both back up the moment it opens. The setting itself is
+  never touched, so there is nothing to switch off on the way out and nothing to
+  remember on the way back. A clamshell Mac driving an external monitor still has
+  a screen somebody may be watching, so it keeps the assertion, the same carve
+  out closed-display mode already makes before it sleeps the panel.
+
 ## [1.20.1] - 2026-07-30
 
 ### Added

@@ -20,6 +20,9 @@ final class SessionTicker {
     /// Feeds the guard's arming: the net only escalates with the lid closed
     /// while the sleep override holds the Mac awake (the left-in-a-bag case).
     private let lid: LidStateReading
+    /// Tells a clamshell Mac driving a monitor apart from a lid shut over
+    /// nothing: only the latter has no display left worth holding awake.
+    private let externalDisplay: DisplayMonitoring
     private var thermalArming = ThermalArming()
     /// Runs after each reconcile, e.g. to mirror session state to the widget.
     private let onTick: (() -> Void)?
@@ -32,6 +35,7 @@ final class SessionTicker {
         powerSource: PowerSourceMonitoring = IOKitPowerSourceMonitor(),
         thermalGuard: ThermalGuardController? = nil,
         lid: LidStateReading = IORegistryLidState(),
+        externalDisplay: DisplayMonitoring = CoreGraphicsDisplayMonitor(),
         onThermalEffects: (([ThermalEffect]) -> Void)? = nil,
         onTick: (() -> Void)? = nil
     ) {
@@ -41,6 +45,7 @@ final class SessionTicker {
         self.powerSource = powerSource
         self.thermalGuard = thermalGuard
         self.lid = lid
+        self.externalDisplay = externalDisplay
         self.onThermalEffects = onThermalEffects
         self.onTick = onTick
     }
@@ -73,10 +78,15 @@ final class SessionTicker {
                     // closedDisplay.isEnabled is read at launch and refreshed
                     // on every toggle and menu open, so it's current by the
                     // time a lid can close on a configured override.
+                    // At most one lid read a tick, shared by the thermal arming
+                    // and the display reading below, and skipped entirely when
+                    // neither of them would look at it.
+                    let needsLid = self?.thermalGuard != nil || session.consumesDisplayReading
+                    let lidClosed = needsLid ? self?.lid.isClosed() : nil
                     var thermal = ThermalReading.unknown
                     if let guard_ = self?.thermalGuard, let self {
                         let armed = self.thermalArming.update(
-                            lidClosed: self.lid.isClosed(),
+                            lidClosed: lidClosed,
                             sleepOverrideActive: closedDisplay?.isEnabled
                         )
                         let effects = guard_.tick(armed: armed)
@@ -85,10 +95,21 @@ final class SessionTicker {
                             thermal = guard_.readingForSession
                         }
                     }
+                    // A shut lid with no external monitor leaves no panel worth
+                    // holding awake, so the display assertion and the dim stand
+                    // down until it opens again. The display list is only swept
+                    // once the lid actually reads shut.
+                    var display = SessionController.DisplayReading.unknown
+                    if session.consumesDisplayReading, let lidClosed, let self {
+                        display = lidClosed && !self.externalDisplay.current.hasExternalDisplay
+                            ? .lidShutNoExternal
+                            : .usable
+                    }
                     session.reconcile(
                         systemIdleSeconds: session.consumesIdleReading ? Self.systemIdleSeconds() : nil,
                         battery: battery,
-                        thermal: thermal
+                        thermal: thermal,
+                        display: display
                     )
                 }
                 disk?.tick(now: Date())

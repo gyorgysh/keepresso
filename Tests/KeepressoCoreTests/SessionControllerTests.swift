@@ -114,6 +114,26 @@ private final class FakeBrightness: BrightnessControlling {
 }
 
 @MainActor
+@Test func dimStandsDownWithTheLidShutAndRestoresTheLevel() {
+    let clock = Clock()
+    let brightness = FakeBrightness(level: 0.6)
+    let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(
+        preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 60, dimFloor: 0))
+    controller.reconcile(systemIdleSeconds: 90)
+    #expect(brightness.level == 0)      // dimmed while the lid is open
+
+    // Shutting the lid stands the dim down and puts the level back, so the
+    // panel is at the user's brightness the moment the lid opens again.
+    controller.reconcile(systemIdleSeconds: 120, display: .lidShutNoExternal)
+    #expect(brightness.level == 0.6)
+
+    // Still idle, still shut: nothing dims it again.
+    controller.reconcile(systemIdleSeconds: 180, display: .lidShutNoExternal)
+    #expect(brightness.level == 0.6)
+}
+
+@MainActor
 @Test func dimRestoresBrightnessWhenTheSessionStops() {
     let clock = Clock()
     let brightness = FakeBrightness(level: 0.7)
@@ -196,6 +216,44 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
 @Test func displayOptionAddsDisplayAssertion() {
     let (controller, fake, _) = makeController()
     controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    #expect(fake.held == [.system, .display])
+}
+
+@MainActor
+@Test func shutLidDropsTheDisplayAssertionAndRestoresItOnReopen() {
+    let (controller, fake, _) = makeController()
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    #expect(fake.held == [.system, .display])
+
+    // Lid shut over nothing: no panel left worth holding awake.
+    controller.reconcile(display: .lidShutNoExternal)
+    #expect(fake.held == [.system])
+
+    // Opening it again puts the display back, with no restart and no change
+    // to the option itself.
+    controller.reconcile(display: .usable)
+    #expect(fake.held == [.system, .display])
+}
+
+@MainActor
+@Test func aClamshellDrivingAMonitorKeepsTheDisplayAssertion() {
+    let (controller, fake, _) = makeController()
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+
+    // A shut lid with an external monitor still has a screen somebody may be
+    // watching, so the host reports `.usable` and the assertion stays.
+    controller.reconcile(display: .usable)
+    #expect(fake.held == [.system, .display])
+}
+
+@MainActor
+@Test func anUnreadableLidNeverDropsTheDisplayAssertion() {
+    let (controller, fake, _) = makeController()
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+
+    // `.unknown` is what a failed lid read produces. Treating it as shut would
+    // let the display sleep in front of someone using the Mac.
+    controller.reconcile(display: .unknown)
     #expect(fake.held == [.system, .display])
 }
 
