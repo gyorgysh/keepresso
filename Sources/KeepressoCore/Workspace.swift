@@ -5,10 +5,11 @@ import AppKit
 public struct WorkspaceSnapshot: Equatable, Sendable {
     /// Bundle identifiers of every currently running application.
     public var runningBundleIDs: Set<String>
-    /// Bundle paths of every currently running application (`standardizedFileURL`).
-    /// Unlike bundle IDs, these distinguish side-by-side installs such as Xcode
-    /// and Xcode Beta. Must stay in the same form as ``AppRule/bundlePath``.
-    public var runningBundlePaths: Set<String>
+    /// Bundle path → bundle ID for each running app that has both.
+    /// Path-locked app triggers match a single install here, not independent
+    /// set membership of paths and IDs. Paths use `standardizedFileURL.path`,
+    /// the same form as ``AppRule/bundlePath``.
+    public var runningInstalls: [String: String]
     /// Bundle identifier of the frontmost app, if any (for future v0.3 use).
     public var frontmostBundleID: String?
     /// Bundle path of the frontmost app, if any.
@@ -16,12 +17,12 @@ public struct WorkspaceSnapshot: Equatable, Sendable {
 
     public init(
         runningBundleIDs: Set<String>,
-        runningBundlePaths: Set<String> = [],
+        runningInstalls: [String: String] = [:],
         frontmostBundleID: String? = nil,
         frontmostBundlePath: String? = nil
     ) {
         self.runningBundleIDs = runningBundleIDs
-        self.runningBundlePaths = runningBundlePaths
+        self.runningInstalls = runningInstalls
         self.frontmostBundleID = frontmostBundleID
         self.frontmostBundlePath = frontmostBundlePath
     }
@@ -42,13 +43,18 @@ public final class NSWorkspaceMonitor: WorkspaceMonitoring {
 
     public var current: WorkspaceSnapshot {
         let workspace = NSWorkspace.shared
-        let ids = Set(workspace.runningApplications.compactMap(\.bundleIdentifier))
-        let paths = Set(workspace.runningApplications.compactMap {
-            $0.bundleURL?.standardizedFileURL.path
-        })
+        var ids = Set<String>()
+        var installs: [String: String] = [:]
+        for app in workspace.runningApplications {
+            guard let id = app.bundleIdentifier else { continue }
+            ids.insert(id)
+            if let path = app.bundleURL?.standardizedFileURL.path {
+                installs[path] = id
+            }
+        }
         return WorkspaceSnapshot(
             runningBundleIDs: ids,
-            runningBundlePaths: paths,
+            runningInstalls: installs,
             frontmostBundleID: workspace.frontmostApplication?.bundleIdentifier,
             frontmostBundlePath: workspace.frontmostApplication?.bundleURL?.standardizedFileURL.path
         )

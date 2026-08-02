@@ -5,6 +5,8 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [1.20.2] - 2026-08-03
+
 ### Changed
 
 - **Lid shut and prevent display sleep.** With no external monitor, drop the
@@ -15,8 +17,9 @@ Versions follow [Semantic Versioning](https://semver.org).
 ### Fixed
 
 - **App triggers can pin one install when bundle IDs collide.** Xcode and Xcode
-  Beta (and similar side-by-side apps) no longer share one rule. Contributed by
-  @alvst (#9).
+  Beta (and similar side-by-side apps) no longer share one rule. Path locks
+  match one running install (path and bundle ID together), not independent
+  path and ID sets. Contributed by @alvst (#9).
 
 ## [1.20.1] - 2026-07-30
 

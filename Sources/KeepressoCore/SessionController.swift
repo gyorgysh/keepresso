@@ -424,6 +424,10 @@ public final class SessionController {
         remindersFired = 0
         endingSoonFired = false
         lastActivityPokeAt = nil
+        // Drop the lid latch so the next start fails open until the host
+        // supplies a real display reading (avoids holding a stale shut
+        // verdict across open-then-start before the next ticker sample).
+        lastDisplayReading = .unknown
         restorePanelBrightness()
         restoreKeyboardBrightness()
         assertions.releaseAll()
@@ -810,6 +814,12 @@ public final class SessionController {
             if preDimLevel == nil, let current = brightness.currentBrightness() {
                 preDimLevel = current
                 brightness.setBrightness(options.dimFloor)
+            } else if clamshellPanelForced {
+                // Left clamshell while still idle: the panel may still be at 0
+                // from the dark force. Re-apply the configured floor so a
+                // non-zero dimFloor is not left darker than intended.
+                brightness.setBrightness(options.dimFloor)
+                clamshellPanelForced = false
             }
         } else {
             // Definitely active again: undo the dim.

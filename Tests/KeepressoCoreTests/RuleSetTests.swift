@@ -47,7 +47,10 @@ private final class FakeWorkspace: WorkspaceMonitoring {
     let betaPath = "/Applications/Xcode-beta.app"
     let monitor = FakeWorkspace(WorkspaceSnapshot(
         runningBundleIDs: ["com.apple.dt.Xcode"],
-        runningBundlePaths: [stablePath, betaPath],
+        runningInstalls: [
+            stablePath: "com.apple.dt.Xcode",
+            betaPath: "com.apple.dt.Xcode",
+        ],
         frontmostBundleID: "com.apple.dt.Xcode",
         frontmostBundlePath: betaPath
     ))
@@ -68,7 +71,10 @@ private final class FakeWorkspace: WorkspaceMonitoring {
     let betaPath = "/Applications/Xcode-beta.app"
     let monitor = FakeWorkspace(WorkspaceSnapshot(
         runningBundleIDs: ["com.apple.dt.Xcode"],
-        runningBundlePaths: [stablePath, betaPath]
+        runningInstalls: [
+            stablePath: "com.apple.dt.Xcode",
+            betaPath: "com.apple.dt.Xcode",
+        ]
     ))
     let betaOnly = AppTrigger(
         bundleID: "com.apple.dt.Xcode",
@@ -78,7 +84,7 @@ private final class FakeWorkspace: WorkspaceMonitoring {
     )
     #expect(betaOnly.isSatisfied())
 
-    monitor.current.runningBundlePaths = [stablePath]
+    monitor.current.runningInstalls = [stablePath: "com.apple.dt.Xcode"]
     #expect(betaOnly.isSatisfied() == false)
 }
 
@@ -87,7 +93,10 @@ private final class FakeWorkspace: WorkspaceMonitoring {
     // the snapshot also carries paths for those installs.
     let monitor = FakeWorkspace(WorkspaceSnapshot(
         runningBundleIDs: ["com.apple.dt.Xcode"],
-        runningBundlePaths: ["/Applications/Xcode.app", "/Applications/Xcode-beta.app"],
+        runningInstalls: [
+            "/Applications/Xcode.app": "com.apple.dt.Xcode",
+            "/Applications/Xcode-beta.app": "com.apple.dt.Xcode",
+        ],
         frontmostBundleID: "com.apple.dt.Xcode",
         frontmostBundlePath: "/Applications/Xcode-beta.app"
     ))
@@ -100,7 +109,7 @@ private final class FakeWorkspace: WorkspaceMonitoring {
 @Test func appTriggerEmptyPathFallsBackToBundleID() {
     let monitor = FakeWorkspace(WorkspaceSnapshot(
         runningBundleIDs: ["com.apple.FaceTime"],
-        runningBundlePaths: ["/System/Applications/FaceTime.app"]
+        runningInstalls: ["/System/Applications/FaceTime.app": "com.apple.FaceTime"]
     ))
     let trigger = AppTrigger(
         bundleID: "com.apple.FaceTime",
@@ -139,7 +148,7 @@ private final class FakeWorkspace: WorkspaceMonitoring {
     let path = "/Applications/Xcode-beta.app"
     let monitor = FakeWorkspace(WorkspaceSnapshot(
         runningBundleIDs: ["com.other.App"],
-        runningBundlePaths: [path],
+        runningInstalls: [path: "com.other.App"],
         frontmostBundleID: "com.other.App",
         frontmostBundlePath: path
     ))
@@ -160,9 +169,34 @@ private final class FakeWorkspace: WorkspaceMonitoring {
     #expect(frontmost.isSatisfied() == false)
 
     monitor.current.runningBundleIDs = ["com.apple.dt.Xcode"]
+    monitor.current.runningInstalls = [path: "com.apple.dt.Xcode"]
     monitor.current.frontmostBundleID = "com.apple.dt.Xcode"
     #expect(running.isSatisfied())
     #expect(frontmost.isSatisfied())
+}
+
+@Test func appTriggerPathLockDoesNotCrossCoupleSeparateApps() {
+    // Path held by com.other.App while com.apple.dt.Xcode runs elsewhere must
+    // not satisfy a path-locked Xcode rule (independent set membership would).
+    let lockedPath = "/Applications/Xcode-beta.app"
+    let otherXcode = "/Applications/Xcode.app"
+    let monitor = FakeWorkspace(WorkspaceSnapshot(
+        runningBundleIDs: ["com.other.App", "com.apple.dt.Xcode"],
+        runningInstalls: [
+            lockedPath: "com.other.App",
+            otherXcode: "com.apple.dt.Xcode",
+        ]
+    ))
+    let running = AppTrigger(
+        bundleID: "com.apple.dt.Xcode",
+        bundlePath: lockedPath,
+        match: .running,
+        monitor: monitor
+    )
+    #expect(running.isSatisfied() == false)
+
+    monitor.current.runningInstalls[lockedPath] = "com.apple.dt.Xcode"
+    #expect(running.isSatisfied())
 }
 
 @Test func gracePeriodLingersAfterConditionDrops() {

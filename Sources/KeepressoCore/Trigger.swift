@@ -175,11 +175,11 @@ public final class AppTrigger: Trigger {
         let pathLock = bundlePath.flatMap { $0.isEmpty ? nil : $0 }
         switch match {
         case .running:
-            // Path pins a specific install; still require the bundle ID so a
-            // replaced binary at the same path cannot satisfy the wrong rule.
+            // Path pins one install: the same running app must carry both path
+            // and ID (independent set membership would let a replaced binary
+            // at the locked path match while another process holds the ID).
             if let pathLock {
-                return snapshot.runningBundlePaths.contains(pathLock)
-                    && snapshot.runningBundleIDs.contains(bundleID)
+                return snapshot.runningInstalls[pathLock] == bundleID
             }
             return snapshot.runningBundleIDs.contains(bundleID)
         case .frontmost:

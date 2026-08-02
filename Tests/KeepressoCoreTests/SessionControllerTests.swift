@@ -331,6 +331,41 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
 }
 
 @MainActor
+@Test func leavingClamshellWhileIdleAppliesDimFloor() {
+    let clock = Clock()
+    let brightness = FakeBrightness(level: 0.7)
+    let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(
+        preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 60, dimFloor: 0.05))
+
+    // Clamshell zeros the panel while capturing the pre-dark level.
+    controller.reconcile(systemIdleSeconds: 120, display: .lidShutWithExternal)
+    #expect(brightness.level == 0)
+
+    // Lid opens while still idle: hand off to idle-dim at the configured floor,
+    // not leave the panel stuck at clamshell zero.
+    controller.reconcile(systemIdleSeconds: 130, display: .usable)
+    #expect(brightness.level == 0.05)
+
+    // User returns: restore the pre-clamshell capture.
+    controller.reconcile(systemIdleSeconds: 1, display: .usable)
+    #expect(brightness.level == 0.7)
+}
+
+@MainActor
+@Test func stopClearsDisplayLatchSoNextStartFailsOpen() {
+    let (controller, fake, _) = makeController()
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    controller.reconcile(display: .lidShutNoExternal)
+    #expect(fake.held == [.system])
+
+    controller.stop()
+    // Fresh start without a display sample must not keep the shut latch.
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    #expect(fake.held == [.system, .display])
+}
+
+@MainActor
 @Test func anUnreadableLidNeverDropsTheDisplayAssertion() {
     let (controller, fake, _) = makeController()
     controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
