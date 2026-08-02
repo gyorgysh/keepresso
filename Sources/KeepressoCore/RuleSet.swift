@@ -115,14 +115,17 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
 public struct AppRule: Codable, Equatable, Hashable, Sendable {
     /// Bundle identifier, e.g. `com.apple.FaceTime`.
     public var bundleID: String
-    /// Optional bundle path for matching a specific installed copy of an app.
-    /// This distinguishes apps such as Xcode and Xcode Beta that share a bundle ID.
+    /// Optional install lock: absolute path of a specific `.app` bundle. Used
+    /// to distinguish side-by-side installs that share a bundle ID (Xcode and
+    /// Xcode Beta). Matching then requires this path *and* ``bundleID``. Not a
+    /// portable id: if the app is moved or renamed, re-add the rule from the
+    /// running-apps picker. `nil` (presets and older saves) matches by ID only.
     public var bundlePath: String?
     /// A friendly display name (e.g. "NVIDIA GeForce NOW") shown instead of the
     /// bundle id in the menu and rules editor. Optional (older rules and hand-made
     /// ones may lack it); set when the rule is built from a known app, i.e. a
-    /// preset or the running-apps menu, which already have the name. Matching is
-    /// by bundle path when one is stored, otherwise by bundle ID.
+    /// preset or the running-apps menu, which already have the name. A stale or
+    /// missing name never affects matching.
     public var name: String?
     /// Running vs frontmost.
     public var match: AppMatch

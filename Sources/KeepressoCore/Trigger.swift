@@ -175,10 +175,18 @@ public final class AppTrigger: Trigger {
         let pathLock = bundlePath.flatMap { $0.isEmpty ? nil : $0 }
         switch match {
         case .running:
-            if let pathLock { return snapshot.runningBundlePaths.contains(pathLock) }
+            // Path pins a specific install; still require the bundle ID so a
+            // replaced binary at the same path cannot satisfy the wrong rule.
+            if let pathLock {
+                return snapshot.runningBundlePaths.contains(pathLock)
+                    && snapshot.runningBundleIDs.contains(bundleID)
+            }
             return snapshot.runningBundleIDs.contains(bundleID)
         case .frontmost:
-            if let pathLock { return snapshot.frontmostBundlePath == pathLock }
+            if let pathLock {
+                return snapshot.frontmostBundlePath == pathLock
+                    && snapshot.frontmostBundleID == bundleID
+            }
             return snapshot.frontmostBundleID == bundleID
         }
     }

@@ -5,8 +5,9 @@ import AppKit
 public struct WorkspaceSnapshot: Equatable, Sendable {
     /// Bundle identifiers of every currently running application.
     public var runningBundleIDs: Set<String>
-    /// Bundle paths of every currently running application. Unlike bundle IDs,
-    /// these distinguish side-by-side installs such as Xcode and Xcode Beta.
+    /// Bundle paths of every currently running application (`standardizedFileURL`).
+    /// Unlike bundle IDs, these distinguish side-by-side installs such as Xcode
+    /// and Xcode Beta. Must stay in the same form as ``AppRule/bundlePath``.
     public var runningBundlePaths: Set<String>
     /// Bundle identifier of the frontmost app, if any (for future v0.3 use).
     public var frontmostBundleID: String?
