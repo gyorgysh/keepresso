@@ -539,25 +539,46 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         case "bionic":
             // LM Studio Bionic keeps one `ng-sessions.sqlite` per project under
             // `~/.lmstudio/apps/bionic/projects/<uuid>/.internal/`. Not
-            // cwd-keyed. Scan every project's `.internal` for the newest write
-            // (WAL sidecars move between `.sqlite` / `-wal` / `-shm`).
+            // cwd-keyed. Scan every project: the workspace renderer's
+            // `--lmstudio-project-identifier=` can stay stale after a project
+            // switch, so pinning to argv would miss real work. Only the
+            // session store files count (not other churn in `.internal`).
             return bionicSessionWrite(home: home)
         default:
             return nil
         }
     }
 
-    /// Newest write across every Bionic project's session store directory.
+    /// Newest write across every Bionic project's `ng-sessions.sqlite` store
+    /// (including `-wal` / `-shm` sidecars). Ignores other files in `.internal`
+    /// so UI or cache mtimes cannot keep the evidence-only session "working".
     static func bionicSessionWrite(home: String = NSHomeDirectory()) -> Date? {
         let projects = "\(home)/.lmstudio/apps/bionic/projects"
         let manager = FileManager.default
         guard let names = try? manager.contentsOfDirectory(atPath: projects) else { return nil }
         var newest: Date?
         for name in names {
-            guard let written = newestModification(in: "\(projects)/\(name)/.internal") else {
+            let internalDir = "\(projects)/\(name)/.internal"
+            guard let written = newestSessionStoreWrite(in: internalDir) else {
                 continue
             }
             if newest.map({ written > $0 }) ?? true { newest = written }
+        }
+        return newest
+    }
+
+    /// Newest mtime among Bionic session-store files in `path`
+    /// (`ng-sessions.sqlite`, `ng-sessions.sqlite-wal`, `ng-sessions.sqlite-shm`).
+    static func newestSessionStoreWrite(in path: String) -> Date? {
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: path) else { return nil }
+        var newest: Date?
+        for name in names {
+            // Prefix match covers the main db and SQLite sidecars.
+            guard name.hasPrefix("ng-sessions.sqlite") else { continue }
+            guard let date = (try? manager.attributesOfItem(atPath: "\(path)/\(name)"))?[.modificationDate] as? Date
+            else { continue }
+            if newest.map({ date > $0 }) ?? true { newest = date }
         }
         return newest
     }

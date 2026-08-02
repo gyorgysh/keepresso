@@ -19,6 +19,9 @@ final class DisplayServicesBrightnessBackend: BrightnessControlling {
 
     /// Last built-in panel id that was actually in a display list. Prefer a
     /// live id; fall back to this when the lid is shut and both lists omit it.
+    /// Sticky for the process lifetime: a live id always overwrites it, and we
+    /// never clear it just because the lists are non-empty without a built-in
+    /// (that is the clamshell case with externals still online).
     private var lastBuiltInDisplay: CGDirectDisplayID?
 
     /// The built-in panel's display id, re-resolved each call because displays

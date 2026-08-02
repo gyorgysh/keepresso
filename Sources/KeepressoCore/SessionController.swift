@@ -829,6 +829,10 @@ public final class SessionController {
             // snap the panel to 100% instead of the user's setting.
             if preDimLevel == nil, let current = brightness.currentBrightness() {
                 preDimLevel = current
+                // Idle dim holds the panel at dimFloor (often 0). Keep the
+                // open-lid cache on the real pre-dim level so a later clamshell
+                // stretch cannot learn the floor as the restore target.
+                lastOpenPanelLevel = current
                 brightness.setBrightness(options.dimFloor)
             } else if clamshellPanelForced {
                 // Left clamshell while still idle: the panel may still be at 0
@@ -846,11 +850,13 @@ public final class SessionController {
     /// Remember panel and keyboard levels while the lid is open. Used as the
     /// clamshell restore target so we never learn macOS's post-close zero.
     private func noteOpenBrightnessLevels() {
-        // Skip while we still hold a force: the panel/keys are at 0 by our
-        // hand, not the user's open-lid preference.
-        if !clamshellPanelForced, let panel = brightness.currentBrightness() {
+        // Skip the panel while we hold it dimmed or forced dark: the live
+        // reading is our floor/zero, not the user's open-lid preference.
+        if preDimLevel == nil, !clamshellPanelForced,
+           let panel = brightness.currentBrightness() {
             lastOpenPanelLevel = panel
         }
+        // Keyboard is not idle-dimmed; only skip while the clamshell force holds it.
         if !clamshellKeyboardForced, let keys = brightness.currentKeyboardBrightness() {
             lastOpenKeyboardLevel = keys
         }
@@ -930,6 +936,10 @@ public final class SessionController {
     private func restorePanelBrightness() {
         guard let level = preDimLevel else { return }
         brightness.setBrightness(level)
+        // Refresh the open-lid cache with the level we just restored so a
+        // stop-while-dimmed (or activity restore) still seeds the next
+        // clamshell stretch correctly.
+        lastOpenPanelLevel = level
         preDimLevel = nil
         clamshellPanelForced = false
     }

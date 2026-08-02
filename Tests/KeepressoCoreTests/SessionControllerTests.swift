@@ -425,6 +425,66 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
 }
 
 @MainActor
+@Test func idleDimDoesNotPoisonClamshellPanelRestoreAfterActivity() {
+    // Idle dim holds the panel at dimFloor (0). An activity usable tick must
+    // not learn that floor as the open-lid cache; clamshell with a missing
+    // live panel then open again must restore the real pre-dim level.
+    let clock = Clock()
+    let brightness = FakeBrightness(level: 0.8)
+    let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(
+        preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 60, dimFloor: 0))
+
+    controller.reconcile(systemIdleSeconds: 10, display: .usable)
+    #expect(brightness.level == 0.8)
+
+    controller.reconcile(systemIdleSeconds: 120, display: .usable)
+    #expect(brightness.level == 0) // idle dim
+
+    // Brief activity: restore hardware; open-lid cache must stay at 0.8.
+    controller.reconcile(systemIdleSeconds: 1, display: .usable)
+    #expect(brightness.level == 0.8)
+
+    // Clamshell with no live panel (lists dropped the built-in).
+    brightness.supported = false
+    controller.reconcile(systemIdleSeconds: 5, display: .lidShutWithExternal)
+    #expect(brightness.setLevels.last == 0)
+
+    brightness.supported = true
+    controller.reconcile(systemIdleSeconds: 2, display: .usable)
+    #expect(brightness.level == 0.8)
+}
+
+@MainActor
+@Test func stopWhileIdleDimmedStillSeedsNextClamshellRestore() {
+    // stop restores hardware and must refresh lastOpenPanelLevel so a later
+    // start already in clamshell (no open sample) still restores correctly.
+    let clock = Clock()
+    let brightness = FakeBrightness(level: 0.75)
+    let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(
+        preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 60, dimFloor: 0))
+
+    controller.reconcile(systemIdleSeconds: 10, display: .usable)
+    controller.reconcile(systemIdleSeconds: 120, display: .usable)
+    #expect(brightness.level == 0)
+
+    controller.stop()
+    #expect(brightness.level == 0.75)
+
+    // Fresh session already in clamshell; live panel unreadable.
+    controller.start(options: SleepPreventionOptions(
+        preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 60, dimFloor: 0))
+    brightness.supported = false
+    controller.reconcile(systemIdleSeconds: 5, display: .lidShutWithExternal)
+    #expect(brightness.setLevels.last == 0)
+
+    brightness.supported = true
+    controller.reconcile(systemIdleSeconds: 1, display: .usable)
+    #expect(brightness.level == 0.75)
+}
+
+@MainActor
 @Test func stopClearsDisplayLatchSoNextStartFailsOpen() {
     let (controller, fake, _) = makeController()
     controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))

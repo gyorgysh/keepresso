@@ -251,6 +251,63 @@ private let bionicHostCommand =
     #expect(written == newer)
 }
 
+@Test func bionicSessionWriteIgnoresNonSessionFilesInInternal() throws {
+    // Only ng-sessions.sqlite* count; other .internal churn must not keep
+    // the evidence-only host "working".
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keepresso-bionic-noise-\(UUID().uuidString)", isDirectory: true)
+    let storeDir = root.appendingPathComponent(
+        ".lmstudio/apps/bionic/projects/proj/.internal", isDirectory: true)
+    try FileManager.default.createDirectory(at: storeDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let storeTime = Date(timeIntervalSince1970: 1_700_000_000)
+    let noiseTime = Date(timeIntervalSince1970: 1_700_000_500)
+    let store = storeDir.appendingPathComponent("ng-sessions.sqlite")
+    let noise = storeDir.appendingPathComponent("ui-cache.json")
+    try Data([1]).write(to: store)
+    try Data([2]).write(to: noise)
+    try FileManager.default.setAttributes([.modificationDate: storeTime], ofItemAtPath: store.path)
+    try FileManager.default.setAttributes([.modificationDate: noiseTime], ofItemAtPath: noise.path)
+
+    #expect(PSAgentActivityMonitor.bionicSessionWrite(home: root.path) == storeTime)
+}
+
+@Test func bionicEvidenceOnlySessionWorksOnFreshSessionWrite() async throws {
+    // End-to-end: Bionic host + injected session-store mtime → hasFreshEvidence
+    // → evidenceOnly step is working only while inside the 45s window.
+    var now = Date(timeIntervalSince1970: 200_000)
+    let writeAt = Date(timeIntervalSince1970: 200_000 - 10) // 10s ago, within 45s
+    let monitor = PSAgentActivityMonitor(
+        ttl: 3,
+        now: { now },
+        fetch: { "12740     1  2.0 ??  /Applications/Bionic.app/Contents/MacOS/Bionic" },
+        evidence: { agent, _ in agent == "bionic" ? writeAt : nil },
+        hookRecords: { _ in [] }
+    )
+    _ = monitor.current
+    try await Task.sleep(for: .milliseconds(200))
+    let sessions = monitor.current.sessions
+    #expect(sessions.count == 1)
+    #expect(sessions[0].agent == "bionic")
+    #expect(sessions[0].evidenceOnly)
+    #expect(sessions[0].hasFreshEvidence)
+
+    var state = AgentActivityTrigger.State()
+    state = AgentActivityTrigger.step(
+        state, sample: 40, freshEvidence: true, evidenceOnly: true)
+    #expect(state.isWorking)
+
+    // Past the 45s Bionic window the same write is stale.
+    now = now.addingTimeInterval(60)
+    _ = monitor.current
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(monitor.current.sessions.map(\.hasFreshEvidence) == [false])
+    state = AgentActivityTrigger.step(
+        state, sample: 40, freshEvidence: false, evidenceOnly: true)
+    #expect(!state.isWorking)
+}
+
 @Test func sessionsSurviveAPpidCycleFromRacedPSOutput() {
     typealias Sample = PSAgentActivityMonitor.ProcessSample
     // A pid reused mid-scan can appear as its own ancestor; both walks must
