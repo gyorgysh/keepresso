@@ -42,12 +42,14 @@ public final class NSWorkspaceMonitor: WorkspaceMonitoring {
     public var current: WorkspaceSnapshot {
         let workspace = NSWorkspace.shared
         let ids = Set(workspace.runningApplications.compactMap(\.bundleIdentifier))
-        let paths = Set(workspace.runningApplications.compactMap { $0.bundleURL?.path })
+        let paths = Set(workspace.runningApplications.compactMap {
+            $0.bundleURL?.standardizedFileURL.path
+        })
         return WorkspaceSnapshot(
             runningBundleIDs: ids,
             runningBundlePaths: paths,
             frontmostBundleID: workspace.frontmostApplication?.bundleIdentifier,
-            frontmostBundlePath: workspace.frontmostApplication?.bundleURL?.path
+            frontmostBundlePath: workspace.frontmostApplication?.bundleURL?.standardizedFileURL.path
         )
     }
 }

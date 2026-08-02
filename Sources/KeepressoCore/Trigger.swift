@@ -170,12 +170,15 @@ public final class AppTrigger: Trigger {
 
     public func isSatisfied() -> Bool {
         let snapshot = monitor.current
+        // Empty path is treated as unset so hand-edited JSON cannot lock a rule
+        // to a path that never matches.
+        let pathLock = bundlePath.flatMap { $0.isEmpty ? nil : $0 }
         switch match {
         case .running:
-            if let bundlePath { return snapshot.runningBundlePaths.contains(bundlePath) }
+            if let pathLock { return snapshot.runningBundlePaths.contains(pathLock) }
             return snapshot.runningBundleIDs.contains(bundleID)
         case .frontmost:
-            if let bundlePath { return snapshot.frontmostBundlePath == bundlePath }
+            if let pathLock { return snapshot.frontmostBundlePath == pathLock }
             return snapshot.frontmostBundleID == bundleID
         }
     }
