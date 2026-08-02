@@ -1,14 +1,17 @@
 import CoreGraphics
 import KeepressoCore
 
-/// Real ``BrightnessControlling`` over the private DisplayServices API, targeting
-/// the built-in display. Reports unsupported when the private symbols don't
-/// resolve or there is no built-in display, so dim-don't-sleep stays hidden and
-/// inert on hardware or macOS versions where it can't work. Kept in the app
-/// target because `KeepressoCore` is a pure SwiftPM library that must not link a
-/// private framework (mirrors ``CGVirtualDisplayBackend``).
+/// Real ``BrightnessControlling`` over private DisplayServices (panel) and
+/// CoreBrightness (keyboard backlight), targeting the built-in hardware only.
+/// Reports each side unsupported when its symbols don't resolve or no built-in
+/// device exists, so dim-don't-sleep and the clamshell dark force stay hidden
+/// and inert where they can't work. Kept in the app target because
+/// `KeepressoCore` is a pure SwiftPM library that must not link private
+/// frameworks (mirrors ``CGVirtualDisplayBackend``).
 final class DisplayServicesBrightnessBackend: BrightnessControlling {
     var isSupported: Bool { KPBrightnessAvailable() && builtInDisplay != nil }
+
+    var isKeyboardSupported: Bool { KPKeyboardBrightnessAvailable() }
 
     /// The built-in panel's display id, re-resolved each call because displays
     /// come and go: dimming targets the laptop screen, never an attached
@@ -30,5 +33,14 @@ final class DisplayServicesBrightnessBackend: BrightnessControlling {
     func setBrightness(_ level: Double) {
         guard let display = builtInDisplay else { return }
         _ = KPBrightnessSet(display, Float(max(0, min(1, level))))
+    }
+
+    func currentKeyboardBrightness() -> Double? {
+        var level: Float = 0
+        return KPKeyboardBrightnessGet(&level) ? Double(level) : nil
+    }
+
+    func setKeyboardBrightness(_ level: Double) {
+        _ = KPKeyboardBrightnessSet(Float(max(0, min(1, level))))
     }
 }

@@ -95,18 +95,21 @@ final class SessionTicker {
                             thermal = guard_.readingForSession
                         }
                     }
-                    // A shut lid with no external monitor leaves no panel worth
-                    // holding awake, so the display assertion and the dim stand
-                    // down until it opens again. The display list is only swept
-                    // once the lid actually reads shut. A nil lid read stays
+                    // Lid + external layout for the display assertion and the
+                    // clamshell dark force. The display list is only swept once
+                    // the lid actually reads shut. A nil lid read stays
                     // `.unknown` so the controller can keep its latched verdict
                     // (mirroring ClosedDisplay / ThermalArming) instead of
                     // thrashing the assertion on an AppleClamshellState flutter.
                     var display = SessionController.DisplayReading.unknown
                     if session.consumesDisplayReading, let lidClosed, let self {
-                        display = lidClosed && !self.externalDisplay.current.hasExternalDisplay
-                            ? .lidShutNoExternal
-                            : .usable
+                        if lidClosed {
+                            display = self.externalDisplay.current.hasExternalDisplay
+                                ? .lidShutWithExternal
+                                : .lidShutNoExternal
+                        } else {
+                            display = .usable
+                        }
                     }
                     session.reconcile(
                         systemIdleSeconds: session.consumesIdleReading ? Self.systemIdleSeconds() : nil,

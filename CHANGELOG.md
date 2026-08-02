@@ -19,6 +19,12 @@ Versions follow [Semantic Versioning](https://semver.org).
   reading (the occasional `AppleClamshellState` flutter, or an internal reconcile
   without a sample) keeps the last known verdict rather than thrashing the
   assertion, and fails open as usable when there is no prior reading.
+- **Clamshell keeps the external lit and darkens the laptop.** With prevent
+  display sleep on, a shut lid and an external monitor still hold the display
+  assertion for the external, while the built-in panel and keyboard backlight
+  are forced to 0 and restored to their previous levels when the lid opens (or
+  the session stops). There is no public per-display sleep API, so this is a
+  brightness hack for the hardware under the lid only.
 
 ## [1.20.1] - 2026-07-30
 

@@ -28,15 +28,26 @@ private final class FakeActivity: ActivitySimulating {
 /// Records brightness set calls and serves a controllable current level.
 private final class FakeBrightness: BrightnessControlling {
     var supported: Bool
+    var keyboardSupported: Bool
     var level: Double
+    var keyboardLevel: Double
     private(set) var setLevels: [Double] = []
-    init(supported: Bool = true, level: Double = 0.8) {
+    private(set) var setKeyboardLevels: [Double] = []
+    init(supported: Bool = true, keyboardSupported: Bool = true, level: Double = 0.8, keyboardLevel: Double = 0.5) {
         self.supported = supported
+        self.keyboardSupported = keyboardSupported
         self.level = level
+        self.keyboardLevel = keyboardLevel
     }
     var isSupported: Bool { supported }
     func currentBrightness() -> Double? { supported ? level : nil }
     func setBrightness(_ newLevel: Double) { level = newLevel; setLevels.append(newLevel) }
+    var isKeyboardSupported: Bool { keyboardSupported }
+    func currentKeyboardBrightness() -> Double? { keyboardSupported ? keyboardLevel : nil }
+    func setKeyboardBrightness(_ newLevel: Double) {
+        keyboardLevel = newLevel
+        setKeyboardLevels.append(newLevel)
+    }
 }
 
 @MainActor
@@ -245,9 +256,68 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
     controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
 
     // A shut lid with an external monitor still has a screen somebody may be
-    // watching, so the host reports `.usable` and the assertion stays.
-    controller.reconcile(display: .usable)
+    // watching, so the host reports `.lidShutWithExternal` and the assertion stays.
+    controller.reconcile(display: .lidShutWithExternal)
     #expect(fake.held == [.system, .display])
+}
+
+@MainActor
+@Test func clamshellForcesBuiltInPanelAndKeyboardDarkAndRestoresOnOpen() {
+    let clock = Clock()
+    let brightness = FakeBrightness(level: 0.7, keyboardLevel: 0.4)
+    let fake = FakeAssertions()
+    let controller = SessionController(assertions: fake, brightness: brightness, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    #expect(fake.held == [.system, .display])
+    #expect(brightness.level == 0.7)
+    #expect(brightness.keyboardLevel == 0.4)
+
+    // Clamshell: keep the display assertion for the external, zero the built-in
+    // panel and keyboard so they do not glow under the closed lid.
+    controller.reconcile(display: .lidShutWithExternal)
+    #expect(fake.held == [.system, .display])
+    #expect(brightness.level == 0)
+    #expect(brightness.keyboardLevel == 0)
+
+    // Still clamshell: levels stay at 0, no restore thrash.
+    controller.reconcile(display: .lidShutWithExternal)
+    #expect(brightness.level == 0)
+    #expect(brightness.keyboardLevel == 0)
+
+    // Lid opens: panel and keyboard go back to the captured levels.
+    controller.reconcile(display: .usable)
+    #expect(brightness.level == 0.7)
+    #expect(brightness.keyboardLevel == 0.4)
+}
+
+@MainActor
+@Test func clamshellDarkForceNeedsPreventDisplaySleep() {
+    let clock = Clock()
+    let brightness = FakeBrightness(level: 0.7, keyboardLevel: 0.4)
+    let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
+    // System keep-awake only: no prevent-display-sleep, so clamshell must not
+    // touch brightness.
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: false))
+    controller.reconcile(display: .lidShutWithExternal)
+    #expect(brightness.level == 0.7)
+    #expect(brightness.keyboardLevel == 0.4)
+    #expect(brightness.setLevels.isEmpty)
+    #expect(brightness.setKeyboardLevels.isEmpty)
+}
+
+@MainActor
+@Test func clamshellDarkForceRestoresOnStop() {
+    let clock = Clock()
+    let brightness = FakeBrightness(level: 0.6, keyboardLevel: 0.3)
+    let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    controller.reconcile(display: .lidShutWithExternal)
+    #expect(brightness.level == 0)
+    #expect(brightness.keyboardLevel == 0)
+
+    controller.stop()
+    #expect(brightness.level == 0.6)
+    #expect(brightness.keyboardLevel == 0.3)
 }
 
 @MainActor
