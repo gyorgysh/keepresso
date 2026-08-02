@@ -140,8 +140,115 @@ private let antigravityHostCommand =
     // the rule's grace, and padding here would add itself to that grace.
     #expect(PSAgentActivityMonitor.evidenceWindow(for: "antigravity") == 20)
     #expect(PSAgentActivityMonitor.evidenceWindow(for: "agy") == 20)
+    // Live Bionic coding turns write often, but cloud waits leave longer gaps.
+    #expect(PSAgentActivityMonitor.evidenceWindow(for: "bionic") == 45)
     #expect(PSAgentActivityMonitor.evidenceWindow(for: "claude")
         == PSAgentActivityMonitor.evidenceFreshWindow)
+}
+
+// MARK: - LM Studio Bionic
+
+/// Real `ps` line shape for a Bionic workspace renderer (trimmed).
+private let bionicHostCommand =
+    "/Applications/Bionic.app/Contents/Frameworks/Bionic Helper (Renderer).app"
+    + "/Contents/MacOS/Bionic Helper (Renderer) --type=renderer"
+    + " --user-data-dir=/Users/x/Library/Application Support/Bionic"
+    + " --lmstudio-project-identifier=c6cc47b8-7b2f-49e9-aae9-eb263adb5775"
+    + " --lmstudio-window-context=%7B%22type%22%3A%22workspace%22%7D"
+
+@Test func bionicMainAndRendererFoldIntoOneEvidenceOnlySession() {
+    typealias Sample = PSAgentActivityMonitor.ProcessSample
+    let samples: [Sample] = [
+        // Main app is a host: stable when the renderer keeps a stale project id.
+        Sample(pid: 12740, ppid: 1, pcpu: 2.0, tty: nil,
+               command: "/Applications/Bionic.app/Contents/MacOS/Bionic"),
+        // GPU helper: never a session.
+        Sample(pid: 12792, ppid: 12740, pcpu: 18.0, tty: nil,
+               command: "/Applications/Bionic.app/Contents/Frameworks/Bionic Helper.app"
+                   + "/Contents/MacOS/Bionic Helper --type=gpu-process"),
+        // Workspace renderer: also a host, but folds under the main app.
+        Sample(pid: 12834, ppid: 12740, pcpu: 40.0, tty: nil, command: bionicHostCommand),
+        Sample(pid: 13000, ppid: 12834, pcpu: 55.0, tty: nil,
+               command: "/usr/bin/python3 /tmp/bionic-tool.py"),
+    ]
+    let sessions = PSAgentActivityMonitor.sessions(from: samples)
+    #expect(sessions.count == 1)
+    #expect(sessions[0].agent == "bionic")
+    #expect(sessions[0].pid == 12740)
+    #expect(sessions[0].evidenceOnly)
+    #expect(sessions[0].origin == .ide)
+    #expect(sessions[0].cpuPercent == 0)
+    #expect(sessions[0].label == "bionic (IDE)")
+}
+
+@Test func bionicMainAloneIsASessionThatIgnoresCPU() {
+    typealias Sample = PSAgentActivityMonitor.ProcessSample
+    let samples: [Sample] = [
+        Sample(pid: 50, ppid: 1, pcpu: 3.0, tty: nil,
+               command: "/Applications/Bionic.app/Contents/MacOS/Bionic"),
+        Sample(pid: 51, ppid: 50, pcpu: 22.0, tty: nil,
+               command: "/Applications/Bionic.app/Contents/Frameworks/Bionic Helper.app"
+                   + "/Contents/MacOS/Bionic Helper --type=gpu-process"),
+    ]
+    let sessions = PSAgentActivityMonitor.sessions(from: samples)
+    #expect(sessions.count == 1)
+    #expect(sessions[0].pid == 50)
+    #expect(sessions[0].evidenceOnly)
+    #expect(sessions[0].cpuPercent == 0)
+}
+
+@Test func bionicWorkspaceRendererAloneIsASession() {
+    typealias Sample = PSAgentActivityMonitor.ProcessSample
+    let samples: [Sample] = [
+        Sample(pid: 12834, ppid: 1, pcpu: 40.0, tty: nil, command: bionicHostCommand),
+    ]
+    let sessions = PSAgentActivityMonitor.sessions(from: samples)
+    #expect(sessions.count == 1)
+    #expect(sessions[0].agent == "bionic")
+    #expect(sessions[0].evidenceOnly)
+}
+
+@Test func aLmstudioFlagWithoutBionicPathIsNotAnAgent() {
+    typealias Sample = PSAgentActivityMonitor.ProcessSample
+    // Future LM Studio flag reuse must not match without a Bionic path hint.
+    let samples: [Sample] = [
+        Sample(pid: 10, ppid: 1, pcpu: 5.0, tty: nil,
+               command: "/Applications/LM Studio.app/Contents/MacOS/LM Studio"
+                   + " --type=renderer --lmstudio-project-identifier=abc"),
+    ]
+    #expect(PSAgentActivityMonitor.sessions(from: samples).isEmpty)
+}
+
+@Test func bionicGpuHelperIsNotAnAgentHost() {
+    #expect(!PSAgentActivityMonitor.isBionicAgentHost(
+        "/Applications/Bionic.app/Contents/Frameworks/Bionic Helper.app"
+            + "/Contents/MacOS/Bionic Helper --type=gpu-process"))
+    #expect(PSAgentActivityMonitor.isBionicAgentHost(
+        "/Applications/Bionic.app/Contents/MacOS/Bionic"))
+    #expect(PSAgentActivityMonitor.isBionicAgentHost(bionicHostCommand))
+}
+
+@Test func bionicSessionWriteReadsProjectInternalStores() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keepresso-bionic-\(UUID().uuidString)", isDirectory: true)
+    let projects = root.appendingPathComponent(".lmstudio/apps/bionic/projects", isDirectory: true)
+    let internalA = projects.appendingPathComponent("proj-a/.internal", isDirectory: true)
+    let internalB = projects.appendingPathComponent("proj-b/.internal", isDirectory: true)
+    try FileManager.default.createDirectory(at: internalA, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: internalB, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let older = Date(timeIntervalSince1970: 1_700_000_000)
+    let newer = Date(timeIntervalSince1970: 1_700_000_100)
+    let fileA = internalA.appendingPathComponent("ng-sessions.sqlite")
+    let fileB = internalB.appendingPathComponent("ng-sessions.sqlite-wal")
+    try Data([1]).write(to: fileA)
+    try Data([2]).write(to: fileB)
+    try FileManager.default.setAttributes([.modificationDate: older], ofItemAtPath: fileA.path)
+    try FileManager.default.setAttributes([.modificationDate: newer], ofItemAtPath: fileB.path)
+
+    let written = PSAgentActivityMonitor.bionicSessionWrite(home: root.path)
+    #expect(written == newer)
 }
 
 @Test func sessionsSurviveAPpidCycleFromRacedPSOutput() {

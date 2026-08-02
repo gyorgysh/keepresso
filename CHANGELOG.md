@@ -7,6 +7,14 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 ## [1.20.2] - 2026-08-03
 
+### Added
+
+- **LM Studio Bionic is detected while it works.** The AI-agent condition
+  recognises the Bionic app (and its project windows) and treats fresh
+  writes to each project's session store as evidence of work, so a coding
+  or document turn keeps the Mac awake without treating the idle Electron
+  UI as busy.
+
 ### Changed
 
 - **Lid shut and prevent display sleep.** With no external monitor, drop the

@@ -168,6 +168,11 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     static let evidenceWindowOverrides: [String: TimeInterval] = [
         "antigravity": 20,
         "agy": 20,
+        // Bionic streams chat into per-project SQLite (WAL moves between
+        // `.sqlite` / `-wal` / `-shm`). Live coding turns write often, but
+        // cloud-model waits leave multi-tens-of-seconds gaps; 45s stays under
+        // the rule grace while bridging those pauses.
+        "bionic": 45,
     ]
 
     /// The freshness window for `agent`'s on-disk evidence.
@@ -185,6 +190,16 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// is the app's own argument, not something derived from a path that
     /// changes when the app moves.
     static let antigravityHostMarker = "--override_ide_name antigravity"
+
+    /// Argv flag on Bionic's workspace Electron renderer
+    /// (`Bionic Helper (Renderer) … --lmstudio-project-identifier=<uuid> …`).
+    ///
+    /// Not listed in ``agentCommands``: GPU helpers burn CPU for the UI
+    /// whether the agent is working or not, and a basename match on every
+    /// Helper would spam sessions. Host selection is ``isBionicAgentHost(_:)``.
+    static let bionicHostMarker = "--lmstudio-project-identifier="
+    /// Path fragments that identify Bionic (app bundle or its user-data dir).
+    static let bionicHostPathHints = ["Bionic.app/", "/Application Support/Bionic"]
 
     private let ttl: TimeInterval
     private let now: () -> Date
@@ -521,9 +536,65 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             // watcher pinned to one of them goes blind at the checkpoint.
             let root = agent == "agy" ? "antigravity-cli" : "antigravity"
             return newestModification(in: "\(home)/.gemini/\(root)/conversations")
+        case "bionic":
+            // LM Studio Bionic keeps one `ng-sessions.sqlite` per project under
+            // `~/.lmstudio/apps/bionic/projects/<uuid>/.internal/`. Not
+            // cwd-keyed. Scan every project's `.internal` for the newest write
+            // (WAL sidecars move between `.sqlite` / `-wal` / `-shm`).
+            return bionicSessionWrite(home: home)
         default:
             return nil
         }
+    }
+
+    /// Newest write across every Bionic project's session store directory.
+    static func bionicSessionWrite(home: String = NSHomeDirectory()) -> Date? {
+        let projects = "\(home)/.lmstudio/apps/bionic/projects"
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: projects) else { return nil }
+        var newest: Date?
+        for name in names {
+            guard let written = newestModification(in: "\(projects)/\(name)/.internal") else {
+                continue
+            }
+            if newest.map({ written > $0 }) ?? true { newest = written }
+        }
+        return newest
+    }
+
+    /// Whether a `ps` command line is a Bionic agent host we should track.
+    ///
+    /// Matches:
+    /// - the main `…/Contents/MacOS/Bionic` binary (stable; argv does not
+    ///   carry a project id, and the renderer can keep a stale one after a
+    ///   project switch)
+    /// - a workspace Electron renderer that names a project
+    ///   (`--lmstudio-project-identifier=`), under the Bionic app or its
+    ///   user-data directory
+    ///
+    /// Rejects GPU/network helpers and other Electron children. When both
+    /// main and a renderer match, ancestor folding keeps a single root.
+    static func isBionicAgentHost(_ command: String) -> Bool {
+        let inBionic = bionicHostPathHints.contains { command.contains($0) }
+        guard inBionic else { return false }
+
+        // Main app is `…/Contents/MacOS/Bionic` (no further name). Helpers are
+        // `…/Contents/MacOS/Bionic Helper` and `…/Bionic Helper (Renderer)`, so
+        // a naive "starts with Bionic" match would take them too.
+        if let marker = command.range(of: "/Contents/MacOS/Bionic") {
+            let after = command[marker.upperBound...]
+            if after.isEmpty { return true }
+            if after.first == " ", !after.dropFirst().hasPrefix("Helper") {
+                return true
+            }
+        }
+
+        // Workspace renderer with a project attachment.
+        if command.contains("--type=renderer"),
+           command.contains(bionicHostMarker) {
+            return true
+        }
+        return false
     }
 
     /// The newest write in a Claude Code project folder. Session transcripts
@@ -639,6 +710,9 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
                 matched[sample.pid] = agent
             } else if sample.command.contains(antigravityHostMarker) {
                 matched[sample.pid] = "antigravity"
+                evidenceOnly.insert(sample.pid)
+            } else if isBionicAgentHost(sample.command) {
+                matched[sample.pid] = "bionic"
                 evidenceOnly.insert(sample.pid)
             }
         }
