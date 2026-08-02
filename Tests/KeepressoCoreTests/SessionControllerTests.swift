@@ -28,15 +28,26 @@ private final class FakeActivity: ActivitySimulating {
 /// Records brightness set calls and serves a controllable current level.
 private final class FakeBrightness: BrightnessControlling {
     var supported: Bool
+    var keyboardSupported: Bool
     var level: Double
+    var keyboardLevel: Double
     private(set) var setLevels: [Double] = []
-    init(supported: Bool = true, level: Double = 0.8) {
+    private(set) var setKeyboardLevels: [Double] = []
+    init(supported: Bool = true, keyboardSupported: Bool = true, level: Double = 0.8, keyboardLevel: Double = 0.5) {
         self.supported = supported
+        self.keyboardSupported = keyboardSupported
         self.level = level
+        self.keyboardLevel = keyboardLevel
     }
     var isSupported: Bool { supported }
     func currentBrightness() -> Double? { supported ? level : nil }
     func setBrightness(_ newLevel: Double) { level = newLevel; setLevels.append(newLevel) }
+    var isKeyboardSupported: Bool { keyboardSupported }
+    func currentKeyboardBrightness() -> Double? { keyboardSupported ? keyboardLevel : nil }
+    func setKeyboardBrightness(_ newLevel: Double) {
+        keyboardLevel = newLevel
+        setKeyboardLevels.append(newLevel)
+    }
 }
 
 @MainActor
@@ -111,6 +122,30 @@ private final class FakeBrightness: BrightnessControlling {
     // The user returns: restore the pre-dim brightness.
     controller.reconcile(systemIdleSeconds: 1)
     #expect(brightness.level == 0.8)
+}
+
+@MainActor
+@Test func dimStandsDownWithTheLidShutAndRestoresTheLevel() {
+    let clock = Clock()
+    let brightness = FakeBrightness(level: 0.6)
+    let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(
+        preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 60, dimFloor: 0))
+    controller.reconcile(systemIdleSeconds: 90)
+    #expect(brightness.level == 0)      // dimmed while the lid is open
+
+    // Shutting the lid stands the dim down and puts the level back, so the
+    // panel is at the user's brightness the moment the lid opens again.
+    controller.reconcile(systemIdleSeconds: 120, display: .lidShutNoExternal)
+    #expect(brightness.level == 0.6)
+
+    // Still idle, still shut: nothing dims it again.
+    controller.reconcile(systemIdleSeconds: 180, display: .lidShutNoExternal)
+    #expect(brightness.level == 0.6)
+
+    // Lid reopens while still idle: dim re-applies from a clean pre-dim capture.
+    controller.reconcile(systemIdleSeconds: 200, display: .usable)
+    #expect(brightness.level == 0)
 }
 
 @MainActor
@@ -196,6 +231,140 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
 @Test func displayOptionAddsDisplayAssertion() {
     let (controller, fake, _) = makeController()
     controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    #expect(fake.held == [.system, .display])
+}
+
+@MainActor
+@Test func shutLidDropsTheDisplayAssertionAndRestoresItOnReopen() {
+    let (controller, fake, _) = makeController()
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    #expect(fake.held == [.system, .display])
+
+    // Lid shut over nothing: no panel left worth holding awake.
+    controller.reconcile(display: .lidShutNoExternal)
+    #expect(fake.held == [.system])
+
+    // Opening it again puts the display back, with no restart and no change
+    // to the option itself.
+    controller.reconcile(display: .usable)
+    #expect(fake.held == [.system, .display])
+}
+
+@MainActor
+@Test func aClamshellDrivingAMonitorKeepsTheDisplayAssertion() {
+    let (controller, fake, _) = makeController()
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+
+    // A shut lid with an external monitor still has a screen somebody may be
+    // watching, so the host reports `.lidShutWithExternal` and the assertion stays.
+    controller.reconcile(display: .lidShutWithExternal)
+    #expect(fake.held == [.system, .display])
+}
+
+@MainActor
+@Test func clamshellForcesBuiltInPanelAndKeyboardDarkAndRestoresOnOpen() {
+    let clock = Clock()
+    let brightness = FakeBrightness(level: 0.7, keyboardLevel: 0.4)
+    let fake = FakeAssertions()
+    let controller = SessionController(assertions: fake, brightness: brightness, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    #expect(fake.held == [.system, .display])
+    #expect(brightness.level == 0.7)
+    #expect(brightness.keyboardLevel == 0.4)
+
+    // Clamshell: keep the display assertion for the external, zero the built-in
+    // panel and keyboard so they do not glow under the closed lid.
+    controller.reconcile(display: .lidShutWithExternal)
+    #expect(fake.held == [.system, .display])
+    #expect(brightness.level == 0)
+    #expect(brightness.keyboardLevel == 0)
+    let panelWrites = brightness.setLevels.count
+    let keyWrites = brightness.setKeyboardLevels.count
+
+    // Still clamshell: no 1 Hz rewrite spam while levels stay at 0.
+    controller.reconcile(display: .lidShutWithExternal)
+    #expect(brightness.level == 0)
+    #expect(brightness.keyboardLevel == 0)
+    #expect(brightness.setLevels.count == panelWrites)
+    #expect(brightness.setKeyboardLevels.count == keyWrites)
+
+    // A nil lid sample keeps the latched clamshell dark force.
+    controller.reconcile(display: .unknown)
+    #expect(fake.held == [.system, .display])
+    #expect(brightness.level == 0)
+    #expect(brightness.keyboardLevel == 0)
+
+    // Lid opens: panel and keyboard go back to the captured levels.
+    controller.reconcile(display: .usable)
+    #expect(brightness.level == 0.7)
+    #expect(brightness.keyboardLevel == 0.4)
+}
+
+@MainActor
+@Test func clamshellDarkForceNeedsPreventDisplaySleep() {
+    let clock = Clock()
+    let brightness = FakeBrightness(level: 0.7, keyboardLevel: 0.4)
+    let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
+    // System keep-awake only: no prevent-display-sleep, so clamshell must not
+    // touch brightness.
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: false))
+    controller.reconcile(display: .lidShutWithExternal)
+    #expect(brightness.level == 0.7)
+    #expect(brightness.keyboardLevel == 0.4)
+    #expect(brightness.setLevels.isEmpty)
+    #expect(brightness.setKeyboardLevels.isEmpty)
+}
+
+@MainActor
+@Test func clamshellDarkForceRestoresOnStop() {
+    let clock = Clock()
+    let brightness = FakeBrightness(level: 0.6, keyboardLevel: 0.3)
+    let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    controller.reconcile(display: .lidShutWithExternal)
+    #expect(brightness.level == 0)
+    #expect(brightness.keyboardLevel == 0)
+
+    controller.stop()
+    #expect(brightness.level == 0.6)
+    #expect(brightness.keyboardLevel == 0.3)
+}
+
+@MainActor
+@Test func anUnreadableLidNeverDropsTheDisplayAssertion() {
+    let (controller, fake, _) = makeController()
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+
+    // First-ever `.unknown` fails open as usable: treating it as shut would
+    // let the display sleep in front of someone using the Mac.
+    controller.reconcile(display: .unknown)
+    #expect(fake.held == [.system, .display])
+}
+
+@MainActor
+@Test func aNilLidReadKeepsTheLastKnownDisplayStandDown() {
+    let (controller, fake, _) = makeController()
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+
+    controller.reconcile(display: .lidShutNoExternal)
+    #expect(fake.held == [.system])
+
+    // AppleClamshellState flutters to nil while the lid is still shut: hold
+    // the latched stand-down instead of re-creating the display assertion.
+    controller.reconcile(display: .unknown)
+    #expect(fake.held == [.system])
+
+    // An out-of-band reconcile (start/stop/URL command) omits a display
+    // sample the same way; same latch applies.
+    controller.reconcile()
+    #expect(fake.held == [.system])
+
+    // A real open reading clears the latch.
+    controller.reconcile(display: .usable)
+    #expect(fake.held == [.system, .display])
+
+    // And a nil after open keeps the display held, not the old shut verdict.
+    controller.reconcile(display: .unknown)
     #expect(fake.held == [.system, .display])
 }
 

@@ -131,6 +131,26 @@ public final class SessionController {
         case unknown
     }
 
+    /// Whether any display worth holding awake is currently usable.
+    public enum DisplayReading: Equatable, Sendable {
+        /// The lid is shut with no external display attached: the only panel
+        /// there is sits inside a closed lid, so nothing on screen is worth
+        /// holding awake or dimming. The display assertion stands down.
+        case lidShutNoExternal
+        /// The lid is shut but an external monitor is attached (clamshell).
+        /// The display assertion stays so the external can stay awake; the
+        /// built-in panel and keyboard backlight are forced dark instead.
+        case lidShutWithExternal
+        /// A usable built-in panel: the lid is open.
+        case usable
+        /// No reading this call. Leaves the last known reading in place so a
+        /// fluttering `AppleClamshellState` or an out-of-band reconcile (start,
+        /// URL command) cannot re-hold the display assertion over a still-shut
+        /// lid. With no prior reading, treated as usable so a failed lid read
+        /// never silently drops the assertion in front of someone using the Mac.
+        case unknown
+    }
+
     /// Every session transition, with when and why (the awake-explainer's
     /// "why did Keepresso act?" half). In-memory only.
     public let log = DecisionLog()
@@ -152,10 +172,21 @@ public final class SessionController {
     /// cadence (``activityPokeInterval``) rather than every reconcile.
     private var lastActivityPokeAt: Date?
 
-    /// The display brightness before dim-don't-sleep dimmed it, or `nil` when
-    /// not currently dimmed. Set once on the idle transition and cleared on
-    /// restore, so dim/restore stays idempotent under the 1 Hz caller.
+    /// The display brightness before dim-don't-sleep or the clamshell dark
+    /// force lowered it, or `nil` when the panel is not currently held dark by
+    /// us. Set once on the first transition and cleared on restore, so
+    /// dim/restore stays idempotent under the 1 Hz caller.
     private var preDimLevel: Double?
+
+    /// The keyboard backlight before the clamshell dark force zeroed it, or
+    /// `nil` when we are not holding the keyboard dark.
+    private var preKeyboardLevel: Double?
+
+    /// Whether the clamshell dark force already wrote panel / keyboard to 0
+    /// for this hold. Cleared on restore so a new clamshell stretch re-applies
+    /// once instead of every 1 Hz tick.
+    private var clamshellPanelForced = false
+    private var clamshellKeyboardForced = false
 
     /// How often ``options`` `simulateUserActivity` reports activity to the OS.
     /// Comfortably under the shortest common idle timeout (a minute or two).
@@ -237,6 +268,15 @@ public final class SessionController {
     /// Last discharging battery percent fed to reconcile, for decision-log
     /// snapshots. Cleared on AC / unknown.
     private var lastBatteryPercent: Int?
+
+    /// Last known display usability from a real host reading (``.usable`` or
+    /// ``.lidShutNoExternal``). ``DisplayReading/unknown`` does not clear it:
+    /// `AppleClamshellState` flutters to nil the same way ClosedDisplay and
+    /// ThermalArming already latch around, and out-of-band reconciles that
+    /// omit a display reading must keep the lid-shut policy until the next
+    /// good sample. Starts as ``.unknown`` so the first missing reading fails
+    /// open as usable.
+    private var lastDisplayReading: DisplayReading = .unknown
 
     /// - Parameters:
     ///   - assertions: power-assertion backend; inject a fake in tests.
@@ -384,7 +424,8 @@ public final class SessionController {
         remindersFired = 0
         endingSoonFired = false
         lastActivityPokeAt = nil
-        restoreBrightness()
+        restorePanelBrightness()
+        restoreKeyboardBrightness()
         assertions.releaseAll()
         reminder?.cancelPending()
         guard wasActive else { return }
@@ -485,11 +526,18 @@ public final class SessionController {
             || options.simulateUserActivity
     }
 
-    /// Whether ``reconcile(now:systemIdleSeconds:battery:thermal:)`` can currently
-    /// use a battery reading: battery auto-pause is on. The host skips the
-    /// per-second power-source sweep when this is false (off by default).
+    /// Whether ``reconcile(now:systemIdleSeconds:battery:thermal:display:)`` can
+    /// currently use a battery reading: battery auto-pause is on. The host skips
+    /// the per-second power-source sweep when this is false (off by default).
     public var consumesBatteryReading: Bool {
         pauseBelowBatteryPercent != nil
+    }
+
+    /// Whether a display reading has any effect here: something is asking to
+    /// hold the display awake, so a shut lid can stand it down. The host skips
+    /// the per-second lid and display sweep when this is false.
+    public var consumesDisplayReading: Bool {
+        options.preventDisplaySleep
     }
 
     /// Whether a thermal reading has any effect here: the guard's stop-brewing
@@ -516,13 +564,33 @@ public final class SessionController {
     ///   - thermal: the thermal guard's verdict, dwell and hysteresis already
     ///     applied there. `.unknown` (the internal-reconcile default) leaves
     ///     the thermal latch untouched, exactly like the battery reading.
+    ///   - display: lid and external-monitor layout. ``.lidShutNoExternal``
+    ///     drops the display assertion; ``.lidShutWithExternal`` keeps it for
+    ///     the external and forces the built-in panel and keyboard dark when
+    ///     prevent-display-sleep is on. `.unknown` reuses the last known
+    ///     reading so a lid-property flutter or an out-of-band reconcile cannot
+    ///     thrash the assertion; with no prior reading it fails open as usable.
     public func reconcile(
         now: Date? = nil,
         systemIdleSeconds: TimeInterval? = nil,
         battery: BatteryReading = .unknown,
-        thermal: ThermalReading = .unknown
+        thermal: ThermalReading = .unknown,
+        display: DisplayReading = .unknown
     ) {
         let instant = now ?? self.now()
+
+        // Latch real display verdicts; fold `.unknown` onto the last known so
+        // a nil `AppleClamshellState` or a start()/command reconcile without a
+        // display sample keeps the lid-shut stand-down instead of thrashing
+        // the assertion. First-ever unknown stays unknown (fails open).
+        let effectiveDisplay: DisplayReading
+        switch display {
+        case .usable, .lidShutNoExternal, .lidShutWithExternal:
+            lastDisplayReading = display
+            effectiveDisplay = display
+        case .unknown:
+            effectiveDisplay = lastDisplayReading
+        }
 
         // Tick leases first so expiry runs and the menu's rows stay fresh
         // even when a safety pause below early-returns (the same reason those
@@ -680,7 +748,7 @@ public final class SessionController {
             return
         }
 
-        let desired = desiredAssertions(systemIdleSeconds: systemIdleSeconds)
+        let desired = desiredAssertions(systemIdleSeconds: systemIdleSeconds, display: effectiveDisplay)
         assertions.apply(
             desired,
             reason: "Keepresso is brewing"
@@ -697,27 +765,40 @@ public final class SessionController {
         maybeRemind(at: instant)
         maybeNotifyEndingSoon(at: instant)
         maybePokeActivity(at: instant, systemIdleSeconds: systemIdleSeconds)
-        maybeDim(systemIdleSeconds: systemIdleSeconds)
+        maybeDim(systemIdleSeconds: systemIdleSeconds, display: effectiveDisplay)
         flushPendingEndAction(at: instant)
     }
 
-    /// Dim, don't sleep: while a session is holding the display awake and
-    /// dim-after-idle is configured and available, drop brightness to the floor
-    /// once the user has been idle past ``SleepPreventionOptions/dimDisplayAfter``,
-    /// then restore the pre-dim level the moment they return (or when the
-    /// session ends, via ``stop``). Idempotent: the pre-dim level is captured
-    /// once and only transitions touch the hardware. Any precondition dropping
-    /// (session ended, a lease taking over, option turned off, display
-    /// unsupported) restores first. Not while a lease holds the session: an
-    /// unattended lease deliberately drops the display assertion (nobody is
-    /// watching the screen), so leave the panel and its brightness alone.
-    private func maybeDim(systemIdleSeconds: TimeInterval?) {
-        guard isActive,
-              !leaseHeld,
-              options.preventDisplaySleep,
+    /// Panel and keyboard brightness for the current display situation.
+    ///
+    /// - **Clamshell** (lid shut with an external, prevent-display-sleep on):
+    ///   force the built-in panel and keyboard backlight to 0 while the display
+    ///   assertion keeps the external awake. A brightness-only hack: there is
+    ///   no public per-display sleep API.
+    /// - **Lid shut, no external**: restore anything we held and leave the
+    ///   panel alone (the display assertion is already dropped).
+    /// - **Lid open**: optional "dim, don't sleep" after idle, same as before.
+    ///
+    /// Idempotent under the 1 Hz caller. Not while a lease holds the session.
+    private func maybeDim(systemIdleSeconds: TimeInterval?, display: DisplayReading = .unknown) {
+        let canTouch = isActive && !leaseHeld && options.preventDisplaySleep
+
+        // Clamshell: external stays under the display assertion; built-in panel
+        // and keyboard go dark. Runs before idle dim so the two don't fight.
+        if canTouch, display == .lidShutWithExternal {
+            forceClamshellDark()
+            return
+        }
+        // Left clamshell (or never entered): put the keyboard back first.
+        restoreKeyboardBrightness()
+
+        guard canTouch,
+              // Same rule as the display assertion: with the lid shut and no
+              // external monitor there is no panel worth dimming.
+              display != .lidShutNoExternal,
               let threshold = options.dimDisplayAfter,
               brightness.isSupported
-        else { restoreBrightness(); return }
+        else { restorePanelBrightness(); return }
 
         // No idle reading this tick: hold whatever state we're in. Treating an
         // unknown idle time as "active" would flicker a dimmed panel back up.
@@ -732,25 +813,83 @@ public final class SessionController {
             }
         } else {
             // Definitely active again: undo the dim.
-            restoreBrightness()
+            restorePanelBrightness()
         }
     }
 
-    /// Put brightness back to the level captured before dimming, if we dimmed.
-    /// A no-op otherwise, so it's safe to call on every stop and losing tick.
-    private func restoreBrightness() {
+    /// Force the built-in panel and keyboard to 0 for clamshell keep-awake.
+    /// Captures each level once and writes 0 at most once per hold (retries
+    /// only if a later read shows the level drifted back up).
+    private func forceClamshellDark() {
+        if brightness.isSupported {
+            if preDimLevel == nil, let current = brightness.currentBrightness() {
+                preDimLevel = current
+                clamshellPanelForced = false
+            }
+            if preDimLevel != nil {
+                let needsWrite: Bool
+                if !clamshellPanelForced {
+                    needsWrite = true
+                } else if let current = brightness.currentBrightness() {
+                    // Drift or a rejected first set: re-assert without 1 Hz spam
+                    // when the panel is unreadable under a closed lid.
+                    needsWrite = current > 0.02
+                } else {
+                    needsWrite = false
+                }
+                if needsWrite {
+                    brightness.setBrightness(0)
+                    clamshellPanelForced = true
+                }
+            }
+        }
+        if brightness.isKeyboardSupported {
+            if preKeyboardLevel == nil, let current = brightness.currentKeyboardBrightness() {
+                preKeyboardLevel = current
+                clamshellKeyboardForced = false
+            }
+            if preKeyboardLevel != nil {
+                let needsWrite: Bool
+                if !clamshellKeyboardForced {
+                    needsWrite = true
+                } else if let current = brightness.currentKeyboardBrightness() {
+                    needsWrite = current > 0.02
+                } else {
+                    needsWrite = false
+                }
+                if needsWrite {
+                    brightness.setKeyboardBrightness(0)
+                    clamshellKeyboardForced = true
+                }
+            }
+        }
+    }
+
+    /// Put the panel back to the level captured before we dimmed or forced it
+    /// dark. A no-op otherwise, so it's safe on every stop and losing tick.
+    private func restorePanelBrightness() {
         guard let level = preDimLevel else { return }
         brightness.setBrightness(level)
         preDimLevel = nil
+        clamshellPanelForced = false
     }
 
-    /// Restore any "dim, don't sleep" brightness change without ending the
+    /// Put the keyboard backlight back after a clamshell dark force.
+    private func restoreKeyboardBrightness() {
+        guard let level = preKeyboardLevel else { return }
+        brightness.setKeyboardBrightness(level)
+        preKeyboardLevel = nil
+        clamshellKeyboardForced = false
+    }
+
+    /// Restore any panel or keyboard brightness change without ending the
     /// session, for app termination where ``stop`` isn't called. Brightness is a
-    /// persistent display setting the OS won't undo on exit the way it releases
-    /// power assertions, so quitting mid-dim would otherwise leave the panel
-    /// dark. Idempotent and a no-op when nothing was dimmed.
+    /// persistent setting the OS won't undo on exit the way it releases power
+    /// assertions, so quitting mid-dim would otherwise leave the panel or keys
+    /// dark. Idempotent and a no-op when nothing was held.
     public func restoreDisplayBrightness() {
-        restoreBrightness()
+        restorePanelBrightness()
+        restoreKeyboardBrightness()
     }
 
     /// Report user activity to the OS on a slow cadence while a keep-active
@@ -911,14 +1050,21 @@ public final class SessionController {
     }
 
     /// The assertion set implied by the current session and options.
-    func desiredAssertions(systemIdleSeconds: TimeInterval?) -> Set<PowerAssertionKind> {
+    func desiredAssertions(
+        systemIdleSeconds: TimeInterval?,
+        display: DisplayReading = .unknown
+    ) -> Set<PowerAssertionKind> {
         guard isActive else { return [] }
         // A lease-held session keeps the system awake, never the display:
         // unattended work has nobody watching the screen.
         if leaseHeld { return [.system] }
         var kinds: Set<PowerAssertionKind> = []
         if options.preventSystemSleep { kinds.insert(.system) }
-        if options.preventDisplaySleep {
+        // A panel inside a closed lid with nothing external is not worth
+        // holding awake, so the display assertion stands down. Clamshell
+        // (``.lidShutWithExternal``) keeps the assertion so the external can
+        // stay lit; the built-in panel is forced dark via brightness instead.
+        if options.preventDisplaySleep, display != .lidShutNoExternal {
             let yielded: Bool = {
                 guard let threshold = options.allowScreenSaverAfter,
                       let idle = systemIdleSeconds else { return false }

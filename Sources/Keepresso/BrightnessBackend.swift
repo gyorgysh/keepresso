@@ -1,24 +1,34 @@
 import CoreGraphics
 import KeepressoCore
 
-/// Real ``BrightnessControlling`` over the private DisplayServices API, targeting
-/// the built-in display. Reports unsupported when the private symbols don't
-/// resolve or there is no built-in display, so dim-don't-sleep stays hidden and
-/// inert on hardware or macOS versions where it can't work. Kept in the app
-/// target because `KeepressoCore` is a pure SwiftPM library that must not link a
-/// private framework (mirrors ``CGVirtualDisplayBackend``).
+/// Real ``BrightnessControlling`` over private DisplayServices (panel) and
+/// CoreBrightness (keyboard backlight), targeting the built-in hardware only.
+/// Reports each side unsupported when its symbols don't resolve or no built-in
+/// device exists, so dim-don't-sleep and the clamshell dark force stay hidden
+/// and inert where they can't work. Kept in the app target because
+/// `KeepressoCore` is a pure SwiftPM library that must not link private
+/// frameworks (mirrors ``CGVirtualDisplayBackend``).
 final class DisplayServicesBrightnessBackend: BrightnessControlling {
     var isSupported: Bool { KPBrightnessAvailable() && builtInDisplay != nil }
 
+    var isKeyboardSupported: Bool { KPKeyboardBrightnessAvailable() }
+
     /// The built-in panel's display id, re-resolved each call because displays
     /// come and go: dimming targets the laptop screen, never an attached
-    /// external one.
+    /// external one. Prefer the online list so a lid-closed built-in still
+    /// resolves in clamshell (it often drops out of the active list).
     private var builtInDisplay: CGDirectDisplayID? {
+        firstBuiltin(using: CGGetOnlineDisplayList) ?? firstBuiltin(using: CGGetActiveDisplayList)
+    }
+
+    private func firstBuiltin(
+        using list: (UInt32, UnsafeMutablePointer<CGDirectDisplayID>?, UnsafeMutablePointer<UInt32>) -> CGError
+    ) -> CGDirectDisplayID? {
         var count: UInt32 = 0
-        guard CGGetActiveDisplayList(0, nil, &count) == .success, count > 0 else { return nil }
+        guard list(0, nil, &count) == .success, count > 0 else { return nil }
         var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
-        guard CGGetActiveDisplayList(count, &ids, &count) == .success else { return nil }
-        return ids.first { CGDisplayIsBuiltin($0) != 0 }
+        guard list(count, &ids, &count) == .success else { return nil }
+        return ids.prefix(Int(count)).first { CGDisplayIsBuiltin($0) != 0 }
     }
 
     func currentBrightness() -> Double? {
@@ -30,5 +40,14 @@ final class DisplayServicesBrightnessBackend: BrightnessControlling {
     func setBrightness(_ level: Double) {
         guard let display = builtInDisplay else { return }
         _ = KPBrightnessSet(display, Float(max(0, min(1, level))))
+    }
+
+    func currentKeyboardBrightness() -> Double? {
+        var level: Float = 0
+        return KPKeyboardBrightnessGet(&level) ? Double(level) : nil
+    }
+
+    func setKeyboardBrightness(_ level: Double) {
+        _ = KPKeyboardBrightnessSet(Float(max(0, min(1, level))))
     }
 }
