@@ -13,6 +13,7 @@ Versions follow [Semantic Versioning](https://semver.org).
   menu panel. It now leads that same group of switches, so the screen can stay
   lit while you work at the desk and be free to sleep the moment you shut the
   lid. Flipping it applies to a running session on the next tick, no restart.
+  Contributed by @marco-scheffler in #10.
 
 ## [1.20.1] - 2026-07-30
 
