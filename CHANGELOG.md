@@ -3,6 +3,17 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Added
+
+- **Prevent display sleep now switches from the menu.** The display assertion
+  was the last keep-awake option that needed a trip to Preferences, while
+  closed-display, "Only while brewing" and the battery pause already sat in the
+  menu panel. It now leads that same group of switches, so the screen can stay
+  lit while you work at the desk and be free to sleep the moment you shut the
+  lid. Flipping it applies to a running session on the next tick, no restart.
+
 ## [1.20.1] - 2026-07-30
 
 ### Added

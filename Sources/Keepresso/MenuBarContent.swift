@@ -241,11 +241,20 @@ struct MenuBarContent: View {
         }
     }
 
-    /// The middle option toggles (closed-display, only-while-brewing, battery),
-    /// hidden while the panel is collapsed.
+    /// The middle option toggles (display sleep, closed-display,
+    /// only-while-brewing, battery), hidden while the panel is collapsed.
     @ViewBuilder
     private var optionToggles: some View {
         Divider()
+
+        // The display assertion is the one keep-awake switch that flips with the
+        // situation rather than being set once: lit at the desk so nothing locks
+        // behind you, free to sleep the moment the lid shuts. That belongs with
+        // the other situational switches, not two clicks away in Preferences.
+        switchRow("Prevent display sleep", isOn: Binding(
+            get: { session.options.preventDisplaySleep },
+            set: { newValue in model.updateOptions { $0.preventDisplaySleep = newValue } }
+        ))
 
         // The same pmset switch wears two names: on a laptop it exists to
         // survive the lid closing, on a desktop (no lid, no battery) it

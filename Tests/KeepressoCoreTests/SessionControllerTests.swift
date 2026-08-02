@@ -200,6 +200,23 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
 }
 
 @MainActor
+@Test func displayOptionTakesEffectMidSession() {
+    let (controller, fake, _) = makeController()
+    controller.start()
+    #expect(fake.held == [.system])
+
+    // Flipping the option on a running session is what the menu row does: the
+    // next tick picks it up, no restart.
+    controller.options.preventDisplaySleep = true
+    controller.reconcile()
+    #expect(fake.held == [.system, .display])
+
+    controller.options.preventDisplaySleep = false
+    controller.reconcile()
+    #expect(fake.held == [.system])
+}
+
+@MainActor
 @Test func assertionCreateFailureSurfacesOnTheController() {
     let fake = FakeAssertions()
     fake.refuse = [.system]
