@@ -272,6 +272,10 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
     #expect(brightness.level == 0.7)
     #expect(brightness.keyboardLevel == 0.4)
 
+    // Open-lid tick seeds the restore cache (required for correct keyboard
+    // restore when macOS has already zeroed keys before the clamshell tick).
+    controller.reconcile(display: .usable)
+
     // Clamshell: keep the display assertion for the external, zero the built-in
     // panel and keyboard so they do not glow under the closed lid.
     controller.reconcile(display: .lidShutWithExternal)
@@ -321,12 +325,79 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
     let brightness = FakeBrightness(level: 0.6, keyboardLevel: 0.3)
     let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
     controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    // Open-lid sample first: restore targets come from last open, not a
+    // post-close zero (GitHub #13).
+    controller.reconcile(display: .usable)
     controller.reconcile(display: .lidShutWithExternal)
     #expect(brightness.level == 0)
     #expect(brightness.keyboardLevel == 0)
 
     controller.stop()
     #expect(brightness.level == 0.6)
+    #expect(brightness.keyboardLevel == 0.3)
+}
+
+@MainActor
+@Test func clamshellKeyboardRestoreUsesLastOpenLevelNotPostCloseZero() {
+    // Hardware (#13): macOS zeros the keyboard on lid close before our first
+    // clamshell tick. Capturing that live 0 and restoring it left keys dark.
+    let clock = Clock()
+    let brightness = FakeBrightness(level: 0.7, keyboardLevel: 0.5)
+    let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    controller.reconcile(display: .usable)
+    #expect(brightness.keyboardLevel == 0.5)
+
+    // macOS has already darkened the keys by the time we see clamshell.
+    brightness.keyboardLevel = 0
+    controller.reconcile(display: .lidShutWithExternal)
+    #expect(brightness.keyboardLevel == 0)
+
+    // Lid open: restore the open-lid level, not the captured zero.
+    controller.reconcile(display: .usable)
+    #expect(brightness.keyboardLevel == 0.5)
+    #expect(brightness.level == 0.7)
+}
+
+@MainActor
+@Test func clamshellSkipsKeyboardForceWhenNeverSampledOpenAndAlreadyDark() {
+    // Started already in clamshell with keys dark: no open sample, no live
+    // lit reading. Leave the keyboard to macOS instead of learning restore=0.
+    let clock = Clock()
+    let brightness = FakeBrightness(level: 0.7, keyboardLevel: 0)
+    let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    controller.reconcile(display: .lidShutWithExternal)
+    #expect(brightness.setKeyboardLevels.isEmpty)
+    #expect(brightness.keyboardLevel == 0)
+
+    // Opening must not write a spurious 0 over macOS's own restore.
+    brightness.keyboardLevel = 0.4 // macOS restored
+    controller.reconcile(display: .usable)
+    #expect(brightness.setKeyboardLevels.isEmpty)
+    #expect(brightness.keyboardLevel == 0.4)
+}
+
+@MainActor
+@Test func clamshellPanelForceUsesLastOpenWhenLivePanelDisappears() {
+    // Hardware (#13): both display lists drop the built-in under a shut lid,
+    // so currentBrightness is nil. Still force/restore from the open sample.
+    let clock = Clock()
+    let brightness = FakeBrightness(level: 0.65, keyboardLevel: 0.3)
+    let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    controller.reconcile(display: .usable)
+
+    brightness.supported = false // lists lost the built-in
+    controller.reconcile(display: .lidShutWithExternal)
+    // Fake setBrightness still records even when unsupported, mirroring a
+    // backend that keeps a last-known display id.
+    #expect(brightness.setLevels.last == 0)
+    #expect(brightness.keyboardLevel == 0)
+
+    brightness.supported = true
+    controller.reconcile(display: .usable)
+    #expect(brightness.level == 0.65)
     #expect(brightness.keyboardLevel == 0.3)
 }
 
@@ -338,7 +409,8 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
     controller.start(options: SleepPreventionOptions(
         preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 60, dimFloor: 0.05))
 
-    // Clamshell zeros the panel while capturing the pre-dark level.
+    controller.reconcile(systemIdleSeconds: 10, display: .usable)
+    // Clamshell zeros the panel while using the open-lid level as restore target.
     controller.reconcile(systemIdleSeconds: 120, display: .lidShutWithExternal)
     #expect(brightness.level == 0)
 

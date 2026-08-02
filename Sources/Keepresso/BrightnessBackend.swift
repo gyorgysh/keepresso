@@ -9,16 +9,30 @@ import KeepressoCore
 /// `KeepressoCore` is a pure SwiftPM library that must not link private
 /// frameworks (mirrors ``CGVirtualDisplayBackend``).
 final class DisplayServicesBrightnessBackend: BrightnessControlling {
-    var isSupported: Bool { KPBrightnessAvailable() && builtInDisplay != nil }
+    /// True while DisplayServices is present and we have either a live built-in
+    /// id or a last-known one from when the lid was open. Lid-closed clamshell
+    /// drops the built-in from both the active and online lists on current
+    /// macOS, so without the cache the panel branch could never run.
+    var isSupported: Bool { KPBrightnessAvailable() && resolvedBuiltInDisplay != nil }
 
     var isKeyboardSupported: Bool { KPKeyboardBrightnessAvailable() }
 
+    /// Last built-in panel id that was actually in a display list. Prefer a
+    /// live id; fall back to this when the lid is shut and both lists omit it.
+    private var lastBuiltInDisplay: CGDirectDisplayID?
+
     /// The built-in panel's display id, re-resolved each call because displays
-    /// come and go: dimming targets the laptop screen, never an attached
-    /// external one. Prefer the online list so a lid-closed built-in still
-    /// resolves in clamshell (it often drops out of the active list).
-    private var builtInDisplay: CGDirectDisplayID? {
-        firstBuiltin(using: CGGetOnlineDisplayList) ?? firstBuiltin(using: CGGetActiveDisplayList)
+    /// come and go. Prefer the online list so a lid-closed built-in still
+    /// resolves when the system keeps it online; when both lists lose it
+    /// (observed in clamshell), reuse the last open-lid id so get/set can
+    /// still target the hardware DisplayServices already knew.
+    private var resolvedBuiltInDisplay: CGDirectDisplayID? {
+        if let live = firstBuiltin(using: CGGetOnlineDisplayList)
+            ?? firstBuiltin(using: CGGetActiveDisplayList) {
+            lastBuiltInDisplay = live
+            return live
+        }
+        return lastBuiltInDisplay
     }
 
     private func firstBuiltin(
@@ -32,13 +46,13 @@ final class DisplayServicesBrightnessBackend: BrightnessControlling {
     }
 
     func currentBrightness() -> Double? {
-        guard let display = builtInDisplay else { return nil }
+        guard let display = resolvedBuiltInDisplay else { return nil }
         var level: Float = 0
         return KPBrightnessGet(display, &level) ? Double(level) : nil
     }
 
     func setBrightness(_ level: Double) {
-        guard let display = builtInDisplay else { return }
+        guard let display = resolvedBuiltInDisplay else { return }
         _ = KPBrightnessSet(display, Float(max(0, min(1, level))))
     }
 

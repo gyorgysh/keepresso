@@ -20,14 +20,15 @@ Versions follow [Semantic Versioning](https://semver.org).
 - **Lid shut and prevent display sleep.** With no external monitor, drop the
   display assertion (and dim) while the lid is closed. In clamshell, keep the
   assertion for the external and force the built-in panel and keyboard dark
-  until the lid opens again. Contributed by @marco-scheffler (#10, #11).
+  under the lid, then restore the open-lid levels when the lid opens again.
+  Contributed by @marco-scheffler (#10, #11, #13).
 
 ### Fixed
 
 - **App triggers can pin one install when bundle IDs collide.** Xcode and Xcode
   Beta (and similar side-by-side apps) no longer share one rule. Path locks
-  match one running install (path and bundle ID together), not independent
-  path and ID sets. Contributed by @alvst (#9).
+  match one running install (path and bundle ID together). Contributed by
+  @alvst (#9).
 
 ## [1.20.1] - 2026-07-30
 

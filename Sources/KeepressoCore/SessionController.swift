@@ -182,6 +182,14 @@ public final class SessionController {
     /// `nil` when we are not holding the keyboard dark.
     private var preKeyboardLevel: Double?
 
+    /// Last panel / keyboard levels observed while the lid was open. The first
+    /// clamshell tick is too late to sample: macOS has already zeroed the
+    /// keyboard (and the built-in panel often drops out of the display lists),
+    /// so a live read would capture 0 and a restore would leave the keys dark
+    /// (see GitHub #13). Sampled only on ``DisplayReading/usable`` ticks.
+    private var lastOpenPanelLevel: Double?
+    private var lastOpenKeyboardLevel: Double?
+
     /// Whether the clamshell dark force already wrote panel / keyboard to 0
     /// for this hold. Cleared on restore so a new clamshell stretch re-applies
     /// once instead of every 1 Hz tick.
@@ -777,15 +785,23 @@ public final class SessionController {
     ///
     /// - **Clamshell** (lid shut with an external, prevent-display-sleep on):
     ///   force the built-in panel and keyboard backlight to 0 while the display
-    ///   assertion keeps the external awake. A brightness-only hack: there is
-    ///   no public per-display sleep API.
+    ///   assertion keeps the external awake. Restore targets come from the last
+    ///   open-lid sample (not a live read after macOS has already zeroed them).
     /// - **Lid shut, no external**: restore anything we held and leave the
     ///   panel alone (the display assertion is already dropped).
-    /// - **Lid open**: optional "dim, don't sleep" after idle, same as before.
+    /// - **Lid open**: remember levels for a later clamshell stretch, then
+    ///   optional "dim, don't sleep" after idle.
     ///
     /// Idempotent under the 1 Hz caller. Not while a lease holds the session.
     private func maybeDim(systemIdleSeconds: TimeInterval?, display: DisplayReading = .unknown) {
         let canTouch = isActive && !leaseHeld && options.preventDisplaySleep
+
+        // While the lid is open, keep a restore target for clamshell. Do this
+        // before any force/restore so a usable tick after open refreshes the
+        // cache with the levels the user actually wants.
+        if display == .usable {
+            noteOpenBrightnessLevels()
+        }
 
         // Clamshell: external stays under the display assertion; built-in panel
         // and keyboard go dark. Runs before idle dim so the two don't fight.
@@ -827,50 +843,84 @@ public final class SessionController {
         }
     }
 
+    /// Remember panel and keyboard levels while the lid is open. Used as the
+    /// clamshell restore target so we never learn macOS's post-close zero.
+    private func noteOpenBrightnessLevels() {
+        // Skip while we still hold a force: the panel/keys are at 0 by our
+        // hand, not the user's open-lid preference.
+        if !clamshellPanelForced, let panel = brightness.currentBrightness() {
+            lastOpenPanelLevel = panel
+        }
+        if !clamshellKeyboardForced, let keys = brightness.currentKeyboardBrightness() {
+            lastOpenKeyboardLevel = keys
+        }
+    }
+
     /// Force the built-in panel and keyboard to 0 for clamshell keep-awake.
-    /// Captures each level once and writes 0 at most once per hold (retries
-    /// only if a later read shows the level drifted back up).
+    ///
+    /// Restore targets prefer a live **lit** reading, then the last open-lid
+    /// sample. A live near-zero is never stored as the restore target: on the
+    /// first clamshell tick macOS has usually already darkened the keyboard,
+    /// and capturing that 0 was what left keys dark after lid open (#13).
+    /// When no good target exists, that side is left alone so macOS can own it.
     private func forceClamshellDark() {
-        if brightness.isSupported {
-            if preDimLevel == nil, let current = brightness.currentBrightness() {
+        // Panel: try even when `isSupported` flipped false after the lid shut
+        // (lists lose the built-in). setBrightness no-ops if the backend has
+        // no id; preDimLevel still drives a correct restore when the panel
+        // reappears.
+        if preDimLevel == nil {
+            if let current = brightness.currentBrightness(), current > 0.02 {
                 preDimLevel = current
                 clamshellPanelForced = false
-            }
-            if preDimLevel != nil {
-                let needsWrite: Bool
-                if !clamshellPanelForced {
-                    needsWrite = true
-                } else if let current = brightness.currentBrightness() {
-                    // Drift or a rejected first set: re-assert without 1 Hz spam
-                    // when the panel is unreadable under a closed lid.
-                    needsWrite = current > 0.02
-                } else {
-                    needsWrite = false
-                }
-                if needsWrite {
-                    brightness.setBrightness(0)
-                    clamshellPanelForced = true
-                }
+            } else if let open = lastOpenPanelLevel {
+                preDimLevel = open
+                clamshellPanelForced = false
             }
         }
-        if brightness.isKeyboardSupported {
-            if preKeyboardLevel == nil, let current = brightness.currentKeyboardBrightness() {
+        if preDimLevel != nil {
+            let needsWrite: Bool
+            if !clamshellPanelForced {
+                needsWrite = true
+            } else if let current = brightness.currentBrightness() {
+                // Drift or a rejected first set: re-assert without 1 Hz spam
+                // when the panel is unreadable under a closed lid.
+                needsWrite = current > 0.02
+            } else {
+                // No live read (common under a shut lid): do not spam set.
+                needsWrite = false
+            }
+            if needsWrite {
+                brightness.setBrightness(0)
+                clamshellPanelForced = true
+            }
+        }
+
+        guard brightness.isKeyboardSupported else { return }
+        if preKeyboardLevel == nil {
+            if let current = brightness.currentKeyboardBrightness(), current > 0.02 {
                 preKeyboardLevel = current
                 clamshellKeyboardForced = false
+            } else if let open = lastOpenKeyboardLevel {
+                // May be 0 if the user dimmed keys while open; still a real
+                // preference, and safer than capturing macOS's post-close zero
+                // when open was never sampled.
+                preKeyboardLevel = open
+                clamshellKeyboardForced = false
             }
-            if preKeyboardLevel != nil {
-                let needsWrite: Bool
-                if !clamshellKeyboardForced {
-                    needsWrite = true
-                } else if let current = brightness.currentKeyboardBrightness() {
-                    needsWrite = current > 0.02
-                } else {
-                    needsWrite = false
-                }
-                if needsWrite {
-                    brightness.setKeyboardBrightness(0)
-                    clamshellKeyboardForced = true
-                }
+            // else: no open sample and already dark → leave keyboard to macOS.
+        }
+        if preKeyboardLevel != nil {
+            let needsWrite: Bool
+            if !clamshellKeyboardForced {
+                needsWrite = true
+            } else if let current = brightness.currentKeyboardBrightness() {
+                needsWrite = current > 0.02
+            } else {
+                needsWrite = false
+            }
+            if needsWrite {
+                brightness.setKeyboardBrightness(0)
+                clamshellKeyboardForced = true
             }
         }
     }
