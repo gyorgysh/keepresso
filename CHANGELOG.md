@@ -15,7 +15,10 @@ Versions follow [Semantic Versioning](https://semver.org).
   never touched, so there is nothing to switch off on the way out and nothing to
   remember on the way back. A clamshell Mac driving an external monitor still has
   a screen somebody may be watching, so it keeps the assertion, the same carve
-  out closed-display mode already makes before it sleeps the panel.
+  out closed-display mode already makes before it sleeps the panel. A missing lid
+  reading (the occasional `AppleClamshellState` flutter, or an internal reconcile
+  without a sample) keeps the last known verdict rather than thrashing the
+  assertion, and fails open as usable when there is no prior reading.
 
 ## [1.20.1] - 2026-07-30
 

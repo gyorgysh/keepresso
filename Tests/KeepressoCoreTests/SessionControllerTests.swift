@@ -131,6 +131,10 @@ private final class FakeBrightness: BrightnessControlling {
     // Still idle, still shut: nothing dims it again.
     controller.reconcile(systemIdleSeconds: 180, display: .lidShutNoExternal)
     #expect(brightness.level == 0.6)
+
+    // Lid reopens while still idle: dim re-applies from a clean pre-dim capture.
+    controller.reconcile(systemIdleSeconds: 200, display: .usable)
+    #expect(brightness.level == 0)
 }
 
 @MainActor
@@ -251,8 +255,35 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
     let (controller, fake, _) = makeController()
     controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
 
-    // `.unknown` is what a failed lid read produces. Treating it as shut would
+    // First-ever `.unknown` fails open as usable: treating it as shut would
     // let the display sleep in front of someone using the Mac.
+    controller.reconcile(display: .unknown)
+    #expect(fake.held == [.system, .display])
+}
+
+@MainActor
+@Test func aNilLidReadKeepsTheLastKnownDisplayStandDown() {
+    let (controller, fake, _) = makeController()
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+
+    controller.reconcile(display: .lidShutNoExternal)
+    #expect(fake.held == [.system])
+
+    // AppleClamshellState flutters to nil while the lid is still shut: hold
+    // the latched stand-down instead of re-creating the display assertion.
+    controller.reconcile(display: .unknown)
+    #expect(fake.held == [.system])
+
+    // An out-of-band reconcile (start/stop/URL command) omits a display
+    // sample the same way; same latch applies.
+    controller.reconcile()
+    #expect(fake.held == [.system])
+
+    // A real open reading clears the latch.
+    controller.reconcile(display: .usable)
+    #expect(fake.held == [.system, .display])
+
+    // And a nil after open keeps the display held, not the old shut verdict.
     controller.reconcile(display: .unknown)
     #expect(fake.held == [.system, .display])
 }

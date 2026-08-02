@@ -140,8 +140,11 @@ public final class SessionController {
         /// A usable display: the lid is open, or an external monitor is
         /// attached (a clamshell Mac driving a monitor still has a screen).
         case usable
-        /// No reading this call. Treated as usable, so a failed lid read can
-        /// never silently drop the display assertion.
+        /// No reading this call. Leaves the last known reading in place so a
+        /// fluttering `AppleClamshellState` or an out-of-band reconcile (start,
+        /// URL command) cannot re-hold the display assertion over a still-shut
+        /// lid. With no prior reading, treated as usable so a failed lid read
+        /// never silently drops the assertion in front of someone using the Mac.
         case unknown
     }
 
@@ -251,6 +254,15 @@ public final class SessionController {
     /// Last discharging battery percent fed to reconcile, for decision-log
     /// snapshots. Cleared on AC / unknown.
     private var lastBatteryPercent: Int?
+
+    /// Last known display usability from a real host reading (``.usable`` or
+    /// ``.lidShutNoExternal``). ``DisplayReading/unknown`` does not clear it:
+    /// `AppleClamshellState` flutters to nil the same way ClosedDisplay and
+    /// ThermalArming already latch around, and out-of-band reconciles that
+    /// omit a display reading must keep the lid-shut policy until the next
+    /// good sample. Starts as ``.unknown`` so the first missing reading fails
+    /// open as usable.
+    private var lastDisplayReading: DisplayReading = .unknown
 
     /// - Parameters:
     ///   - assertions: power-assertion backend; inject a fake in tests.
@@ -541,7 +553,9 @@ public final class SessionController {
     ///     passes ``DisplayReading/lidShutNoExternal`` once the lid is shut with
     ///     no external monitor, which drops the display assertion and the dim
     ///     for as long as it lasts. `.unknown` (the internal-reconcile default)
-    ///     counts as usable, so a missing reading changes nothing.
+    ///     reuses the last known reading, so a lid-property flutter or an
+    ///     out-of-band reconcile cannot re-assert the display over a still-shut
+    ///     lid; with no prior reading it fails open as usable.
     public func reconcile(
         now: Date? = nil,
         systemIdleSeconds: TimeInterval? = nil,
@@ -550,6 +564,19 @@ public final class SessionController {
         display: DisplayReading = .unknown
     ) {
         let instant = now ?? self.now()
+
+        // Latch real display verdicts; fold `.unknown` onto the last known so
+        // a nil `AppleClamshellState` or a start()/command reconcile without a
+        // display sample keeps the lid-shut stand-down instead of thrashing
+        // the assertion. First-ever unknown stays unknown (fails open).
+        let effectiveDisplay: DisplayReading
+        switch display {
+        case .usable, .lidShutNoExternal:
+            lastDisplayReading = display
+            effectiveDisplay = display
+        case .unknown:
+            effectiveDisplay = lastDisplayReading
+        }
 
         // Tick leases first so expiry runs and the menu's rows stay fresh
         // even when a safety pause below early-returns (the same reason those
@@ -707,7 +734,7 @@ public final class SessionController {
             return
         }
 
-        let desired = desiredAssertions(systemIdleSeconds: systemIdleSeconds, display: display)
+        let desired = desiredAssertions(systemIdleSeconds: systemIdleSeconds, display: effectiveDisplay)
         assertions.apply(
             desired,
             reason: "Keepresso is brewing"
@@ -724,7 +751,7 @@ public final class SessionController {
         maybeRemind(at: instant)
         maybeNotifyEndingSoon(at: instant)
         maybePokeActivity(at: instant, systemIdleSeconds: systemIdleSeconds)
-        maybeDim(systemIdleSeconds: systemIdleSeconds, display: display)
+        maybeDim(systemIdleSeconds: systemIdleSeconds, display: effectiveDisplay)
         flushPendingEndAction(at: instant)
     }
 

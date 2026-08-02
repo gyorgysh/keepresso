@@ -98,7 +98,10 @@ final class SessionTicker {
                     // A shut lid with no external monitor leaves no panel worth
                     // holding awake, so the display assertion and the dim stand
                     // down until it opens again. The display list is only swept
-                    // once the lid actually reads shut.
+                    // once the lid actually reads shut. A nil lid read stays
+                    // `.unknown` so the controller can keep its latched verdict
+                    // (mirroring ClosedDisplay / ThermalArming) instead of
+                    // thrashing the assertion on an AppleClamshellState flutter.
                     var display = SessionController.DisplayReading.unknown
                     if session.consumesDisplayReading, let lidClosed, let self {
                         display = lidClosed && !self.externalDisplay.current.hasExternalDisplay
