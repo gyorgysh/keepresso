@@ -182,6 +182,12 @@ public final class SessionController {
     /// `nil` when we are not holding the keyboard dark.
     private var preKeyboardLevel: Double?
 
+    /// Whether the clamshell dark force already wrote panel / keyboard to 0
+    /// for this hold. Cleared on restore so a new clamshell stretch re-applies
+    /// once instead of every 1 Hz tick.
+    private var clamshellPanelForced = false
+    private var clamshellKeyboardForced = false
+
     /// How often ``options`` `simulateUserActivity` reports activity to the OS.
     /// Comfortably under the shortest common idle timeout (a minute or two).
     static let activityPokeInterval: TimeInterval = 30
@@ -812,24 +818,49 @@ public final class SessionController {
     }
 
     /// Force the built-in panel and keyboard to 0 for clamshell keep-awake.
-    /// Captures each level once so restore puts the user's settings back.
+    /// Captures each level once and writes 0 at most once per hold (retries
+    /// only if a later read shows the level drifted back up).
     private func forceClamshellDark() {
         if brightness.isSupported {
             if preDimLevel == nil, let current = brightness.currentBrightness() {
                 preDimLevel = current
+                clamshellPanelForced = false
             }
-            // Write every tick while held: a lid-closed panel can reject or
-            // ignore a single set, and re-applying 0 is cheap and idempotent.
             if preDimLevel != nil {
-                brightness.setBrightness(0)
+                let needsWrite: Bool
+                if !clamshellPanelForced {
+                    needsWrite = true
+                } else if let current = brightness.currentBrightness() {
+                    // Drift or a rejected first set: re-assert without 1 Hz spam
+                    // when the panel is unreadable under a closed lid.
+                    needsWrite = current > 0.02
+                } else {
+                    needsWrite = false
+                }
+                if needsWrite {
+                    brightness.setBrightness(0)
+                    clamshellPanelForced = true
+                }
             }
         }
         if brightness.isKeyboardSupported {
             if preKeyboardLevel == nil, let current = brightness.currentKeyboardBrightness() {
                 preKeyboardLevel = current
+                clamshellKeyboardForced = false
             }
             if preKeyboardLevel != nil {
-                brightness.setKeyboardBrightness(0)
+                let needsWrite: Bool
+                if !clamshellKeyboardForced {
+                    needsWrite = true
+                } else if let current = brightness.currentKeyboardBrightness() {
+                    needsWrite = current > 0.02
+                } else {
+                    needsWrite = false
+                }
+                if needsWrite {
+                    brightness.setKeyboardBrightness(0)
+                    clamshellKeyboardForced = true
+                }
             }
         }
     }
@@ -840,6 +871,7 @@ public final class SessionController {
         guard let level = preDimLevel else { return }
         brightness.setBrightness(level)
         preDimLevel = nil
+        clamshellPanelForced = false
     }
 
     /// Put the keyboard backlight back after a clamshell dark force.
@@ -847,6 +879,7 @@ public final class SessionController {
         guard let level = preKeyboardLevel else { return }
         brightness.setKeyboardBrightness(level)
         preKeyboardLevel = nil
+        clamshellKeyboardForced = false
     }
 
     /// Restore any panel or keyboard brightness change without ending the

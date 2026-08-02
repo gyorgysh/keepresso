@@ -278,9 +278,19 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
     #expect(fake.held == [.system, .display])
     #expect(brightness.level == 0)
     #expect(brightness.keyboardLevel == 0)
+    let panelWrites = brightness.setLevels.count
+    let keyWrites = brightness.setKeyboardLevels.count
 
-    // Still clamshell: levels stay at 0, no restore thrash.
+    // Still clamshell: no 1 Hz rewrite spam while levels stay at 0.
     controller.reconcile(display: .lidShutWithExternal)
+    #expect(brightness.level == 0)
+    #expect(brightness.keyboardLevel == 0)
+    #expect(brightness.setLevels.count == panelWrites)
+    #expect(brightness.setKeyboardLevels.count == keyWrites)
+
+    // A nil lid sample keeps the latched clamshell dark force.
+    controller.reconcile(display: .unknown)
+    #expect(fake.held == [.system, .display])
     #expect(brightness.level == 0)
     #expect(brightness.keyboardLevel == 0)
 

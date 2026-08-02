@@ -15,13 +15,20 @@ final class DisplayServicesBrightnessBackend: BrightnessControlling {
 
     /// The built-in panel's display id, re-resolved each call because displays
     /// come and go: dimming targets the laptop screen, never an attached
-    /// external one.
+    /// external one. Prefer the online list so a lid-closed built-in still
+    /// resolves in clamshell (it often drops out of the active list).
     private var builtInDisplay: CGDirectDisplayID? {
+        firstBuiltin(using: CGGetOnlineDisplayList) ?? firstBuiltin(using: CGGetActiveDisplayList)
+    }
+
+    private func firstBuiltin(
+        using list: (UInt32, UnsafeMutablePointer<CGDirectDisplayID>?, UnsafeMutablePointer<UInt32>) -> CGError
+    ) -> CGDirectDisplayID? {
         var count: UInt32 = 0
-        guard CGGetActiveDisplayList(0, nil, &count) == .success, count > 0 else { return nil }
+        guard list(0, nil, &count) == .success, count > 0 else { return nil }
         var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
-        guard CGGetActiveDisplayList(count, &ids, &count) == .success else { return nil }
-        return ids.first { CGDisplayIsBuiltin($0) != 0 }
+        guard list(count, &ids, &count) == .success else { return nil }
+        return ids.prefix(Int(count)).first { CGDisplayIsBuiltin($0) != 0 }
     }
 
     func currentBrightness() -> Double? {

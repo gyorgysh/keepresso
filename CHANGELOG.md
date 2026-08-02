@@ -7,24 +7,10 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 ### Changed
 
-- **A shut lid stands the display assertion down.** Holding the display awake is
-  worth it while there is a screen to look at. With the lid shut and no external
-  monitor attached there is not, so Keepresso now drops the display assertion,
-  and the "dim, don't sleep" brightness hold with it, for as long as the lid
-  stays shut, then takes both back up the moment it opens. The setting itself is
-  never touched, so there is nothing to switch off on the way out and nothing to
-  remember on the way back. A clamshell Mac driving an external monitor still has
-  a screen somebody may be watching, so it keeps the assertion, the same carve
-  out closed-display mode already makes before it sleeps the panel. A missing lid
-  reading (the occasional `AppleClamshellState` flutter, or an internal reconcile
-  without a sample) keeps the last known verdict rather than thrashing the
-  assertion, and fails open as usable when there is no prior reading.
-- **Clamshell keeps the external lit and darkens the laptop.** With prevent
-  display sleep on, a shut lid and an external monitor still hold the display
-  assertion for the external, while the built-in panel and keyboard backlight
-  are forced to 0 and restored to their previous levels when the lid opens (or
-  the session stops). There is no public per-display sleep API, so this is a
-  brightness hack for the hardware under the lid only.
+- **Lid shut and prevent display sleep.** With no external monitor, drop the
+  display assertion (and dim) while the lid is closed. In clamshell, keep the
+  assertion for the external and force the built-in panel and keyboard dark
+  until the lid opens again.
 
 ## [1.20.1] - 2026-07-30
 

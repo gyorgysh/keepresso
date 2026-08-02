@@ -11,6 +11,9 @@
 
 static Class gClientClass = Nil;
 static id gClient = nil;
+static BOOL gKeyboardResolved = NO;
+static BOOL gHasKeyboard = NO;
+static unsigned long long gKeyboardID = 0;
 
 static void KPKeyboardBrightnessLoad(void) {
     static dispatch_once_t once;
@@ -26,52 +29,63 @@ static void KPKeyboardBrightnessLoad(void) {
     });
 }
 
-/// First built-in keyboard backlight id, or nil when none / API missing.
-static NSNumber *KPBuiltInKeyboardID(void) {
+/// Resolve the built-in keyboard backlight id once. `copyKeyboardBacklightIDs`
+/// follows the Cocoa copy rule (+1); balance that retain and cache the result
+/// so a 1 Hz clamshell loop cannot leak arrays.
+static BOOL KPEnsureKeyboardID(void) {
+    if (gKeyboardResolved) { return gHasKeyboard; }
+    gKeyboardResolved = YES;
+
     KPKeyboardBrightnessLoad();
-    if (gClient == nil) { return nil; }
+    if (gClient == nil) { return NO; }
     SEL copyIDs = sel_registerName("copyKeyboardBacklightIDs");
     SEL isBuiltIn = sel_registerName("isKeyboardBuiltIn:");
     if (![gClient respondsToSelector:copyIDs] || ![gClient respondsToSelector:isBuiltIn]) {
-        return nil;
+        return NO;
     }
-    NSArray *ids = ((id (*)(id, SEL))objc_msgSend)(gClient, copyIDs);
-    if (![ids isKindOfClass:[NSArray class]]) { return nil; }
+
+    // +1 from the copy* method family; hand ownership to ARC.
+    id raw = ((id (*)(id, SEL))objc_msgSend)(gClient, copyIDs);
+    NSArray *ids = CFBridgingRelease((__bridge CFTypeRef)raw);
+    if (![ids isKindOfClass:[NSArray class]] || ids.count == 0) { return NO; }
+
     for (id kid in ids) {
         if (![kid respondsToSelector:@selector(unsignedLongLongValue)]) { continue; }
         unsigned long long k = [kid unsignedLongLongValue];
         BOOL builtin = ((BOOL (*)(id, SEL, unsigned long long))objc_msgSend)(gClient, isBuiltIn, k);
-        if (builtin) { return @(k); }
+        if (builtin) {
+            gKeyboardID = k;
+            gHasKeyboard = YES;
+            return YES;
+        }
     }
-    // Fall back to the first id when the built-in flag is unavailable.
     id first = ids.firstObject;
-    if ([first respondsToSelector:@selector(unsignedLongLongValue)]) { return first; }
-    return nil;
+    if ([first respondsToSelector:@selector(unsignedLongLongValue)]) {
+        gKeyboardID = [first unsignedLongLongValue];
+        gHasKeyboard = YES;
+        return YES;
+    }
+    return NO;
 }
 
 BOOL KPKeyboardBrightnessAvailable(void) {
-    return KPBuiltInKeyboardID() != nil;
+    return KPEnsureKeyboardID();
 }
 
 BOOL KPKeyboardBrightnessGet(float *out) {
     if (out == NULL) { return NO; }
-    NSNumber *kid = KPBuiltInKeyboardID();
-    if (kid == nil) { return NO; }
+    if (!KPEnsureKeyboardID()) { return NO; }
     SEL getSel = sel_registerName("brightnessForKeyboard:");
     if (![gClient respondsToSelector:getSel]) { return NO; }
-    float level = ((float (*)(id, SEL, unsigned long long))objc_msgSend)(
-        gClient, getSel, kid.unsignedLongLongValue);
-    *out = level;
+    *out = ((float (*)(id, SEL, unsigned long long))objc_msgSend)(gClient, getSel, gKeyboardID);
     return YES;
 }
 
 BOOL KPKeyboardBrightnessSet(float level) {
-    NSNumber *kid = KPBuiltInKeyboardID();
-    if (kid == nil) { return NO; }
+    if (!KPEnsureKeyboardID()) { return NO; }
     SEL setSel = sel_registerName("setBrightness:forKeyboard:");
     if (![gClient respondsToSelector:setSel]) { return NO; }
     float clamped = fmaxf(0.0f, fminf(1.0f, level));
-    ((void (*)(id, SEL, float, unsigned long long))objc_msgSend)(
-        gClient, setSel, clamped, kid.unsignedLongLongValue);
+    ((void (*)(id, SEL, float, unsigned long long))objc_msgSend)(gClient, setSel, clamped, gKeyboardID);
     return YES;
 }
