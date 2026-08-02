@@ -10,7 +10,7 @@ Versions follow [Semantic Versioning](https://semver.org).
 - **Lid shut and prevent display sleep.** With no external monitor, drop the
   display assertion (and dim) while the lid is closed. In clamshell, keep the
   assertion for the external and force the built-in panel and keyboard dark
-  until the lid opens again.
+  until the lid opens again. Contributed by @marco-scheffler (#10, #11).
 
 ## [1.20.1] - 2026-07-30
 
