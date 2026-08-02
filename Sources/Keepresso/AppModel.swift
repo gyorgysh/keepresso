@@ -2953,12 +2953,31 @@ final class AppModel {
     }
 
     /// Regular (Dock-visible) running apps, for the "add running app" menu.
-    func runningApps() -> [(name: String, bundleID: String)] {
-        NSWorkspace.shared.runningApplications
-            .filter { $0.activationPolicy == .regular }
-            .compactMap { app in
-                guard let id = app.bundleIdentifier else { return nil }
-                return (app.localizedName ?? id, id)
+    func runningApps() -> [(name: String, bundleID: String, bundlePath: String)] {
+        let candidates: [(name: String, bundleID: String, bundlePath: String, fileName: String)] =
+            NSWorkspace.shared.runningApplications
+                .filter { $0.activationPolicy == .regular }
+                .compactMap { app in
+                    guard let id = app.bundleIdentifier, let url = app.bundleURL else { return nil }
+                    let path = url.standardizedFileURL.path
+                    let fileName = url.deletingPathExtension().lastPathComponent
+                    // Prefer the Dock-localized name; fall back to the bundle
+                    // filename when localization is missing.
+                    let name = app.localizedName ?? fileName
+                    return (name, id, path, fileName)
+                }
+
+        // When two installs share a bundle ID and the same localized name
+        // (e.g. Xcode + Xcode Beta both report "Xcode"), disambiguate with the
+        // on-disk bundle filename so the picker rows stay distinct.
+        let nameCounts = Dictionary(grouping: candidates, by: { "\($0.bundleID)\0\($0.name)" })
+            .mapValues(\.count)
+
+        return candidates
+            .map { app -> (name: String, bundleID: String, bundlePath: String) in
+                let key = "\(app.bundleID)\0\(app.name)"
+                let display = (nameCounts[key] ?? 0) > 1 ? app.fileName : app.name
+                return (display, app.bundleID, app.bundlePath)
             }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }

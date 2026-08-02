@@ -142,11 +142,13 @@ public enum AppMatch: String, Codable, Sendable, CaseIterable {
     }
 }
 
-/// Fires while a specific app (by bundle identifier) is running or frontmost
-/// (`NSWorkspace`).
+/// Fires while a specific app is running or frontmost (`NSWorkspace`). A bundle
+/// path, when present, distinguishes separately installed apps sharing an ID.
 public final class AppTrigger: Trigger {
     /// The bundle identifier to watch for, e.g. `com.apple.FaceTime`.
     public var bundleID: String
+    /// Optional bundle path for an exact-install match.
+    public var bundlePath: String?
     /// Whether to match the app merely running, or being frontmost.
     public var match: AppMatch
 
@@ -154,10 +156,12 @@ public final class AppTrigger: Trigger {
 
     public init(
         bundleID: String,
+        bundlePath: String? = nil,
         match: AppMatch = .running,
         monitor: WorkspaceMonitoring = NSWorkspaceMonitor()
     ) {
         self.bundleID = bundleID
+        self.bundlePath = bundlePath
         self.match = match
         self.monitor = monitor
     }
@@ -166,9 +170,24 @@ public final class AppTrigger: Trigger {
 
     public func isSatisfied() -> Bool {
         let snapshot = monitor.current
+        // Empty path is treated as unset so hand-edited JSON cannot lock a rule
+        // to a path that never matches.
+        let pathLock = bundlePath.flatMap { $0.isEmpty ? nil : $0 }
         switch match {
-        case .running:   return snapshot.runningBundleIDs.contains(bundleID)
-        case .frontmost: return snapshot.frontmostBundleID == bundleID
+        case .running:
+            // Path pins a specific install; still require the bundle ID so a
+            // replaced binary at the same path cannot satisfy the wrong rule.
+            if let pathLock {
+                return snapshot.runningBundlePaths.contains(pathLock)
+                    && snapshot.runningBundleIDs.contains(bundleID)
+            }
+            return snapshot.runningBundleIDs.contains(bundleID)
+        case .frontmost:
+            if let pathLock {
+                return snapshot.frontmostBundlePath == pathLock
+                    && snapshot.frontmostBundleID == bundleID
+            }
+            return snapshot.frontmostBundleID == bundleID
         }
     }
 }

@@ -42,6 +42,129 @@ private final class FakeWorkspace: WorkspaceMonitoring {
     #expect(trigger.isSatisfied())
 }
 
+@Test func appTriggerCanMatchOneOfTwoAppsWithTheSameBundleID() {
+    let stablePath = "/Applications/Xcode.app"
+    let betaPath = "/Applications/Xcode-beta.app"
+    let monitor = FakeWorkspace(WorkspaceSnapshot(
+        runningBundleIDs: ["com.apple.dt.Xcode"],
+        runningBundlePaths: [stablePath, betaPath],
+        frontmostBundleID: "com.apple.dt.Xcode",
+        frontmostBundlePath: betaPath
+    ))
+    let trigger = AppTrigger(
+        bundleID: "com.apple.dt.Xcode",
+        bundlePath: betaPath,
+        match: .frontmost,
+        monitor: monitor
+    )
+    #expect(trigger.isSatisfied())
+
+    monitor.current.frontmostBundlePath = stablePath
+    #expect(trigger.isSatisfied() == false)
+}
+
+@Test func appTriggerPathMatchWorksForRunning() {
+    let stablePath = "/Applications/Xcode.app"
+    let betaPath = "/Applications/Xcode-beta.app"
+    let monitor = FakeWorkspace(WorkspaceSnapshot(
+        runningBundleIDs: ["com.apple.dt.Xcode"],
+        runningBundlePaths: [stablePath, betaPath]
+    ))
+    let betaOnly = AppTrigger(
+        bundleID: "com.apple.dt.Xcode",
+        bundlePath: betaPath,
+        match: .running,
+        monitor: monitor
+    )
+    #expect(betaOnly.isSatisfied())
+
+    monitor.current.runningBundlePaths = [stablePath]
+    #expect(betaOnly.isSatisfied() == false)
+}
+
+@Test func appTriggerWithoutPathStillMatchesByBundleID() {
+    // Path-less rules (presets, older saves) must keep matching by ID even when
+    // the snapshot also carries paths for those installs.
+    let monitor = FakeWorkspace(WorkspaceSnapshot(
+        runningBundleIDs: ["com.apple.dt.Xcode"],
+        runningBundlePaths: ["/Applications/Xcode.app", "/Applications/Xcode-beta.app"],
+        frontmostBundleID: "com.apple.dt.Xcode",
+        frontmostBundlePath: "/Applications/Xcode-beta.app"
+    ))
+    let byID = AppTrigger(bundleID: "com.apple.dt.Xcode", match: .running, monitor: monitor)
+    #expect(byID.isSatisfied())
+    let frontmost = AppTrigger(bundleID: "com.apple.dt.Xcode", match: .frontmost, monitor: monitor)
+    #expect(frontmost.isSatisfied())
+}
+
+@Test func appTriggerEmptyPathFallsBackToBundleID() {
+    let monitor = FakeWorkspace(WorkspaceSnapshot(
+        runningBundleIDs: ["com.apple.FaceTime"],
+        runningBundlePaths: ["/System/Applications/FaceTime.app"]
+    ))
+    let trigger = AppTrigger(
+        bundleID: "com.apple.FaceTime",
+        bundlePath: "",
+        match: .running,
+        monitor: monitor
+    )
+    #expect(trigger.isSatisfied())
+}
+
+@Test func appRuleWithoutBundlePathDecodesForBackwardCompatibility() throws {
+    let json = """
+    { "bundleID": "com.acme.tool", "match": "running", "grace": 0 }
+    """
+    let decoded = try JSONDecoder().decode(AppRule.self, from: Data(json.utf8))
+    #expect(decoded.bundlePath == nil)
+    #expect(decoded.bundleID == "com.acme.tool")
+}
+
+@Test func appRuleWithBundlePathRoundTrips() throws {
+    let original = AppRule(
+        bundleID: "com.apple.dt.Xcode",
+        bundlePath: "/Applications/Xcode-beta.app",
+        name: "Xcode-beta",
+        match: .frontmost,
+        grace: 30
+    )
+    let data = try JSONEncoder().encode(original)
+    let decoded = try JSONDecoder().decode(AppRule.self, from: data)
+    #expect(decoded == original)
+    #expect(decoded.bundlePath == "/Applications/Xcode-beta.app")
+}
+
+@Test func appTriggerPathMatchAlsoRequiresBundleID() {
+    // Path alone is not enough: a different app at the same path must not match.
+    let path = "/Applications/Xcode-beta.app"
+    let monitor = FakeWorkspace(WorkspaceSnapshot(
+        runningBundleIDs: ["com.other.App"],
+        runningBundlePaths: [path],
+        frontmostBundleID: "com.other.App",
+        frontmostBundlePath: path
+    ))
+    let running = AppTrigger(
+        bundleID: "com.apple.dt.Xcode",
+        bundlePath: path,
+        match: .running,
+        monitor: monitor
+    )
+    #expect(running.isSatisfied() == false)
+
+    let frontmost = AppTrigger(
+        bundleID: "com.apple.dt.Xcode",
+        bundlePath: path,
+        match: .frontmost,
+        monitor: monitor
+    )
+    #expect(frontmost.isSatisfied() == false)
+
+    monitor.current.runningBundleIDs = ["com.apple.dt.Xcode"]
+    monitor.current.frontmostBundleID = "com.apple.dt.Xcode"
+    #expect(running.isSatisfied())
+    #expect(frontmost.isSatisfied())
+}
+
 @Test func gracePeriodLingersAfterConditionDrops() {
     var t = Date(timeIntervalSince1970: 1_000_000)
     let inner = StubFlag(true)

@@ -12,6 +12,12 @@ Versions follow [Semantic Versioning](https://semver.org).
   assertion for the external and force the built-in panel and keyboard dark
   until the lid opens again. Contributed by @marco-scheffler (#10, #11).
 
+### Fixed
+
+- **App triggers can pin one install when bundle IDs collide.** Xcode and Xcode
+  Beta (and similar side-by-side apps) no longer share one rule. Contributed by
+  @alvst (#9).
+
 ## [1.20.1] - 2026-07-30
 
 ### Added

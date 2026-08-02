@@ -179,7 +179,8 @@ struct RulesView: View {
             Picker("Match", selection: Binding(
                 get: { appRule.match },
                 set: { model.updateRule(at: index, to: .app(AppRule(
-                    bundleID: appRule.bundleID, name: appRule.name, match: $0, grace: appRule.grace))) }
+                    bundleID: appRule.bundleID, bundlePath: appRule.bundlePath,
+                    name: appRule.name, match: $0, grace: appRule.grace))) }
             )) {
                 Text("While running").tag(AppMatch.running)
                 Text("While frontmost").tag(AppMatch.frontmost)
@@ -188,7 +189,8 @@ struct RulesView: View {
             Picker("Grace period", selection: Binding(
                 get: { appRule.grace },
                 set: { model.updateRule(at: index, to: .app(AppRule(
-                    bundleID: appRule.bundleID, name: appRule.name, match: appRule.match, grace: $0))) }
+                    bundleID: appRule.bundleID, bundlePath: appRule.bundlePath,
+                    name: appRule.name, match: appRule.match, grace: $0))) }
             )) {
                 ForEach(Self.gracePresets, id: \.seconds) { preset in
                     Text(L(preset.label)).tag(preset.seconds)
@@ -725,10 +727,12 @@ struct RulesView: View {
     @ViewBuilder
     private var appsActivityItems: some View {
         Section("App is running") {
-            appButtons { .app(AppRule(bundleID: $0.bundleID, name: $0.name, match: .running)) }
+            appButtons { .app(AppRule(
+                bundleID: $0.bundleID, bundlePath: $0.bundlePath, name: $0.name, match: .running)) }
         }
         Section("App is frontmost") {
-            appButtons { .app(AppRule(bundleID: $0.bundleID, name: $0.name, match: .frontmost)) }
+            appButtons { .app(AppRule(
+                bundleID: $0.bundleID, bundlePath: $0.bundlePath, name: $0.name, match: .frontmost)) }
         }
         Section("Media") {
             Button("Camera in use") { model.addRule(.mediaInUse(.camera)) }
@@ -805,12 +809,12 @@ struct RulesView: View {
     }
 
     @ViewBuilder
-    private func appButtons(_ make: @escaping ((name: String, bundleID: String)) -> TriggerRule) -> some View {
+    private func appButtons(_ make: @escaping ((name: String, bundleID: String, bundlePath: String)) -> TriggerRule) -> some View {
         let apps = model.runningApps()
         if apps.isEmpty {
             Text("No apps running").foregroundStyle(.secondary)
         } else {
-            ForEach(apps, id: \.bundleID) { app in
+            ForEach(apps, id: \.bundlePath) { app in
                 Button(app.name) { model.addRule(make(app)) }
             }
         }
