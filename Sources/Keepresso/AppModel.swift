@@ -2416,9 +2416,12 @@ final class AppModel {
             thermalLiftedClosedDisplay = false
             batteryLiftedClosedDisplay = false
         }
-        // Only a user-facing toggle can show the password sheet. Background
-        // lifts/restores either use the silent helper or skip the write.
-        let needsAuthDance = userInitiated && !helperInstalled
+        // Without the helper the write goes through osascript, which shows the
+        // password sheet whoever asked for it. `ClosedDisplayCoordinator`'s
+        // foreign-hold clear runs with `userInitiated: false` and still
+        // prompts, so gate the dance on the helper, not on the caller. The
+        // safety lift/restore paths only call here with the helper installed.
+        let needsAuthDance = !helperInstalled
         runAfterPossibleAuthPrompt(needsPrompt: needsAuthDance) {
             await self.closedDisplay.set(on)
             // A failure through the installed helper points at a stale daemon
@@ -2967,32 +2970,57 @@ final class AppModel {
         }
     }
 
-    /// Regular (Dock-visible) running apps, for the "add running app" menu.
-    func runningApps() -> [(name: String, bundleID: String, bundlePath: String)] {
-        let candidates: [(name: String, bundleID: String, bundlePath: String, fileName: String)] =
-            NSWorkspace.shared.runningApplications
-                .filter { $0.activationPolicy == .regular }
-                .compactMap { app in
-                    guard let id = app.bundleIdentifier, let url = app.bundleURL else { return nil }
-                    let path = url.standardizedFileURL.path
-                    let fileName = url.deletingPathExtension().lastPathComponent
-                    // Prefer the Dock-localized name; fall back to the bundle
-                    // filename when localization is missing.
-                    let name = app.localizedName ?? fileName
-                    return (name, id, path, fileName)
-                }
+    /// One row of the "add running app" menu.
+    struct RunningApp: Identifiable, Hashable {
+        /// Where the bundle lives on disk. Also the row's identity, so two
+        /// instances of the same app (`open -n`) collapse into one row.
+        let installPath: String
+        /// What the row shows.
+        let name: String
+        let bundleID: String
+        /// The path to pin a rule to, set only when several installs share
+        /// ``bundleID``. `nil` in the ordinary case keeps the rule portable:
+        /// a moved, re-downloaded or translocated app still matches.
+        let bundlePath: String?
 
-        // When two installs share a bundle ID and the same localized name
-        // (e.g. Xcode + Xcode Beta both report "Xcode"), disambiguate with the
-        // on-disk bundle filename so the picker rows stay distinct.
+        var id: String { installPath }
+    }
+
+    /// Regular (Dock-visible) running apps, for the "add running app" menu.
+    func runningApps() -> [RunningApp] {
+        var candidates: [(name: String, bundleID: String, installPath: String, fileName: String)] = []
+        var seenPaths = Set<String>()
+        for app in NSWorkspace.shared.runningApplications
+        where app.activationPolicy == .regular {
+            guard let id = app.bundleIdentifier, let url = app.bundleURL else { continue }
+            let path = url.standardizedFileURL.path
+            // A second instance of the same bundle is the same row.
+            guard seenPaths.insert(path).inserted else { continue }
+            let fileName = url.deletingPathExtension().lastPathComponent
+            // Prefer the Dock-localized name; fall back to the bundle filename
+            // when localization is missing.
+            candidates.append((app.localizedName ?? fileName, id, path, fileName))
+        }
+
+        // Only a bundle ID running from more than one place is ambiguous
+        // (Xcode + Xcode Beta). Those rows carry a path lock; everything else
+        // stays matched by ID alone.
+        let installsPerID = Dictionary(grouping: candidates, by: \.bundleID).mapValues(\.count)
+        // When the ambiguous installs also share a localized name, show the
+        // on-disk bundle filename so the rows stay tellable apart.
         let nameCounts = Dictionary(grouping: candidates, by: { "\($0.bundleID)\0\($0.name)" })
             .mapValues(\.count)
 
         return candidates
-            .map { app -> (name: String, bundleID: String, bundlePath: String) in
-                let key = "\(app.bundleID)\0\(app.name)"
-                let display = (nameCounts[key] ?? 0) > 1 ? app.fileName : app.name
-                return (display, app.bundleID, app.bundlePath)
+            .map { app in
+                let ambiguous = (installsPerID[app.bundleID] ?? 0) > 1
+                let sharesName = (nameCounts["\(app.bundleID)\0\(app.name)"] ?? 0) > 1
+                return RunningApp(
+                    installPath: app.installPath,
+                    name: sharesName ? app.fileName : app.name,
+                    bundleID: app.bundleID,
+                    bundlePath: ambiguous ? app.installPath : nil
+                )
             }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }

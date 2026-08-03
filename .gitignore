@@ -60,3 +60,4 @@ docs/V1.9-FINDINGS.md
 # is the source of truth, and docs/assets/icon-layers holds the layer sources).
 docs/assets/AppIcon Exports/
 __pycache__/
+docs/AGENT-DETECTION-WORKLOG.md

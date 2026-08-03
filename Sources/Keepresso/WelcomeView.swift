@@ -209,29 +209,23 @@ struct WelcomeView: View {
         // window must not unmount the tour (and must not look like a close).
         // Only a real order-out / close flips visibility.
         .background(WindowVisibilityReader(isVisible: $windowVisible, ignoreOcclusion: true))
-        .onChange(of: windowVisible) { wasVisible, visible in
-            // Restart the tour only when the window reopens after being closed.
-            // Password prompts, focus loss, and temporary coverings used to
-            // flip visibility and send the user back to step 1 mid-setup.
+        .onChange(of: windowVisible) { _, visible in
+            // Only a real reopen gets here: `onChange` fires on transitions,
+            // and with occlusion ignored a password prompt, focus loss or a
+            // covering window no longer counts as one (they used to send the
+            // user back to step 1 mid-setup).
             guard visible else { return }
-            let reopenedAfterClose = !wasVisible
-            if reopenedAfterClose {
-                // The closed window keeps `@State` alive, so without this a
-                // reopen would land on the last step. Fresh open starts over.
-                step = .welcome
-                revealed = false
-            }
+            // The closed window keeps `@State` alive, so without this a reopen
+            // would land on the last step. Fresh open starts over.
+            step = .welcome
+            revealed = false
             refreshScreenHeight()
             // Re-read setup rows and connect status; they can change while the
             // window was away (e.g. login item or notifications in Preferences).
             launchAtLogin = LoginItem.isEnabled
             model.refreshAgentHookStatuses()
             Task { notificationStatus = await model.notificationAuthorizationStatus() }
-            if reopenedAfterClose {
-                withAnimation { revealed = true }
-            } else if !revealed {
-                withAnimation { revealed = true }
-            }
+            withAnimation { revealed = true }
         }
     }
 

@@ -31,8 +31,10 @@ Versions follow [Semantic Versioning](https://semver.org).
 ### Fixed
 
 - **App triggers can pin one install when bundle IDs collide.** Xcode and Xcode
-  Beta (and similar side-by-side apps) no longer share one rule. Path locks
-  match one running install (path and bundle ID together). Contributed by
+  Beta (and similar side-by-side apps) no longer share one rule: a rule added
+  for a bundle ID that is running from more than one place is locked to that
+  install (path and bundle ID together). Every other app rule still matches by
+  bundle ID, so a moved or re-downloaded app keeps working. Contributed by
   @alvst (#9).
 
 - **Welcome keeps its place** when a password dialog appears or the window is

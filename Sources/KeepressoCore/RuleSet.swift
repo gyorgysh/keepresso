@@ -119,7 +119,9 @@ public struct AppRule: Codable, Equatable, Hashable, Sendable {
     /// to distinguish side-by-side installs that share a bundle ID (Xcode and
     /// Xcode Beta). Matching then requires this path *and* ``bundleID``. Not a
     /// portable id: if the app is moved or renamed, re-add the rule from the
-    /// running-apps picker. `nil` (presets and older saves) matches by ID only.
+    /// running-apps picker, which is why the picker only sets it for a bundle
+    /// ID it sees running from more than one place. `nil` (the ordinary case,
+    /// presets and older saves) matches by ID only.
     public var bundlePath: String?
     /// A friendly display name (e.g. "NVIDIA GeForce NOW") shown instead of the
     /// bundle id in the menu and rules editor. Optional (older rules and hand-made

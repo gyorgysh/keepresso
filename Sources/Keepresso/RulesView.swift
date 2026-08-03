@@ -809,12 +809,12 @@ struct RulesView: View {
     }
 
     @ViewBuilder
-    private func appButtons(_ make: @escaping ((name: String, bundleID: String, bundlePath: String)) -> TriggerRule) -> some View {
+    private func appButtons(_ make: @escaping (AppModel.RunningApp) -> TriggerRule) -> some View {
         let apps = model.runningApps()
         if apps.isEmpty {
             Text("No apps running").foregroundStyle(.secondary)
         } else {
-            ForEach(apps, id: \.bundlePath) { app in
+            ForEach(apps) { app in
                 Button(app.name) { model.addRule(make(app)) }
             }
         }
