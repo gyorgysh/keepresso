@@ -426,7 +426,7 @@ struct WelcomeView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .shakes(on: lidRowShakes)
-            } else if model.closedDisplayEnabled {
+            } else if model.closedDisplayEnabled, !model.closedDisplayOnlyWhileBrewing {
                 onlyWhileBrewingHint
             }
             if model.closedDisplayAutoBusy && !model.helperInstalled {

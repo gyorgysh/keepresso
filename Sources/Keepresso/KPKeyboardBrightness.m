@@ -59,12 +59,6 @@ static BOOL KPEnsureKeyboardID(void) {
             return YES;
         }
     }
-    id first = ids.firstObject;
-    if ([first respondsToSelector:@selector(unsignedLongLongValue)]) {
-        gKeyboardID = [first unsignedLongLongValue];
-        gHasKeyboard = YES;
-        return YES;
-    }
     return NO;
 }
 
