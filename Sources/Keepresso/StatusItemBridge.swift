@@ -123,6 +123,7 @@ final class StatusItemBridge: NSObject, NSMenuDelegate {
         let check = entry(L("Check for Updates…"), #selector(checkForUpdates))
         check.isEnabled = updater.canCheckForUpdates
         menu.addItem(check)
+        menu.addItem(entry(L("Support Keepresso…"), #selector(openDonate)))
         menu.addItem(.separator())
         menu.addItem(entry(L("Quit Keepresso"), #selector(quit), key: "q"))
         return menu
@@ -148,6 +149,7 @@ final class StatusItemBridge: NSObject, NSMenuDelegate {
     @objc private func openWelcome() { open(KeepressoApp.welcomeWindowID) }
     @objc private func openAbout() { open(KeepressoApp.aboutWindowID) }
     @objc private func checkForUpdates() { updater.checkForUpdates() }
+    @objc private func openDonate() { NSWorkspace.shared.open(AppInfo.donate) }
     @objc private func quit() { NSApp.terminate(nil) }
 }
 

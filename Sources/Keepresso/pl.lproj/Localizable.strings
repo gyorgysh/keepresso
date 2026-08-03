@@ -26,7 +26,9 @@
 "Battery" = "Bateria";
 "Welcome" = "Powitanie";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Utrzymuje działanie Maca przy zamkniętej pokrywie i bez zewnętrznego wyświetlacza. Zmienia to ustawienie systemowe wymagające uprawnień administratora: bezgłośnie z zainstalowanym pomocnikiem administratora (Ustawienia ▸ Ogólne), w przeciwnym razie macOS poprosi o hasło.";
-"Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences." = "Utrzymuje działanie przy zamkniętej pokrywie i bez zewnętrznego wyświetlacza. Pozostaje włączone, dopóki go nie wyłączysz, lub powiąż to z sesją w Ustawieniach.";
+"Keep running with the lid shut and no external display. Stays on until you switch it off." = "Utrzymuje działanie przy zamkniętej pokrywie i bez zewnętrznego wyświetlacza. Pozostaje włączone, dopóki go nie wyłączysz.";
+"Handle it automatically" = "Obsługuj automatycznie";
+"Enable “Only while brewing” so closed-display follows each keep-awake session (your triggers or a manual brew) and turns off when nothing is holding the Mac awake." = "Włącz „Tylko podczas parzenia”, aby tryb zamkniętej pokrywy podążał za każdą sesją (Twoje wyzwalacze lub ręczne parzenie) i wyłączał się, gdy nic nie trzyma Maca w stanie czuwania.";
 "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "Włącza tryb zamkniętej pokrywy, gdy rozpoczyna się sesja czuwania, i wyłącza go, gdy się kończy lub Keepresso zostaje zamknięte.";
 "Grace period" = "Okres karencji";
 "Section" = "Sekcja";
@@ -103,6 +105,7 @@
 "Change…" = "Zmień…";
 "Charging" = "Ładowanie";
 "Check for Updates…" = "Sprawdź uaktualnienia…";
+"Support Keepresso…" = "Wesprzyj Keepresso…";
 "Closed-display mode" = "Tryb zamkniętej pokrywy";
 "Contacting the helper…" = "Łączenie z pomocnikiem…";
 "Create a virtual display" = "Utwórz wirtualny wyświetlacz";

@@ -15,6 +15,8 @@ Versions follow [Semantic Versioning](https://semver.org).
   or document turn keeps the Mac awake without treating the idle Electron
   UI as busy.
 
+- **Support Keepresso…** in the icon menu and panel, opening the donate page.
+
 ### Changed
 
 - **Lid shut and prevent display sleep.** With no external monitor, drop the
@@ -23,12 +25,18 @@ Versions follow [Semantic Versioning](https://semver.org).
   under the lid, then restore the open-lid levels when the lid opens again.
   Contributed by @marco-scheffler (#10, #11, #13).
 
+- **Welcome lid-closed setup** offers an optional tip to enable Only while
+  brewing so closed-display can follow your sessions.
+
 ### Fixed
 
 - **App triggers can pin one install when bundle IDs collide.** Xcode and Xcode
   Beta (and similar side-by-side apps) no longer share one rule. Path locks
   match one running install (path and bundle ID together). Contributed by
   @alvst (#9).
+
+- **Welcome keeps its place** when a password dialog appears or the window is
+  covered, and comes back to the front after the prompt.
 
 ## [1.20.1] - 2026-07-30
 

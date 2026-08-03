@@ -26,7 +26,9 @@
 "Battery" = "Batterie";
 "Welcome" = "Bienvenue";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Garde le Mac actif capot fermé et sans écran externe. Cela modifie un réglage système qui nécessite des droits d'administrateur : silencieux avec l'assistant administrateur installé (Réglages ▸ Général), sinon macOS demande votre mot de passe.";
-"Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences." = "Gardez-le actif capot fermé et sans écran externe. Il reste actif jusqu’à ce que vous le désactiviez, ou reliez-le à la session dans Réglages.";
+"Keep running with the lid shut and no external display. Stays on until you switch it off." = "Gardez-le actif capot fermé et sans écran externe. Il reste actif jusqu’à ce que vous le désactiviez.";
+"Handle it automatically" = "Le gérer automatiquement";
+"Enable “Only while brewing” so closed-display follows each keep-awake session (your triggers or a manual brew) and turns off when nothing is holding the Mac awake." = "Activez « Uniquement pendant l’infusion » pour que le mode écran fermé suive chaque session (vos déclencheurs ou une infusion manuelle) et s’éteigne quand plus rien ne maintient le Mac éveillé.";
 "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "Active le mode écran fermé au début d'une session et le désactive à la fin ou quand Keepresso se ferme.";
 "Grace period" = "Délai de grâce";
 "Section" = "Section";
@@ -103,6 +105,7 @@
 "Change…" = "Modifier…";
 "Charging" = "En charge";
 "Check for Updates…" = "Rechercher les mises à jour…";
+"Support Keepresso…" = "Soutenir Keepresso…";
 "Closed-display mode" = "Mode écran fermé";
 "Contacting the helper…" = "Contact de l’assistant…";
 "Create a virtual display" = "Créer un écran virtuel";

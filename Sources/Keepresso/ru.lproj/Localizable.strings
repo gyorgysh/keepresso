@@ -26,7 +26,9 @@
 "Battery" = "Аккумулятор";
 "Welcome" = "Приветствие";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Позволяет Mac продолжать работу с закрытой крышкой и без внешнего дисплея. Это переключает системный параметр, который требует прав администратора: бесшумно, если установлен помощник с правами администратора (Настройки ▸ Общие), иначе macOS запрашивает пароль.";
-"Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences." = "Продолжает работать с закрытой крышкой и без внешнего дисплея. Остаётся включённым, пока вы его не выключите, либо привяжите его к сеансу в Настройках.";
+"Keep running with the lid shut and no external display. Stays on until you switch it off." = "Продолжает работать с закрытой крышкой и без внешнего дисплея. Остаётся включённым, пока вы его не выключите.";
+"Handle it automatically" = "Обрабатывать автоматически";
+"Enable “Only while brewing” so closed-display follows each keep-awake session (your triggers or a manual brew) and turns off when nothing is holding the Mac awake." = "Включите «Только во время заваривания», чтобы режим закрытой крышки следовал каждому сеансу (ваши триггеры или ручное заваривание) и отключался, когда ничего не удерживает Mac бодрствующим.";
 "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "Включает режим закрытой крышки при запуске сеанса поддержания активности и выключает его по завершении сеанса или при выходе из Keepresso.";
 "Grace period" = "Период ожидания";
 "Section" = "Раздел";
@@ -103,6 +105,7 @@
 "Change…" = "Изменить…";
 "Charging" = "Зарядка";
 "Check for Updates…" = "Проверить наличие обновлений…";
+"Support Keepresso…" = "Поддержать Keepresso…";
 "Closed-display mode" = "Режим закрытой крышки";
 "Contacting the helper…" = "Связь с помощником…";
 "Create a virtual display" = "Создать виртуальный дисплей";

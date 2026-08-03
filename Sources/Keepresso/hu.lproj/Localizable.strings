@@ -26,7 +26,9 @@
 "Battery" = "Akkumulátor";
 "Welcome" = "Üdvözlés";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "A Macet csukott fedéllel és külső kijelző nélkül is működésben tartja. Ez egy rendszergazdai jogokat igénylő rendszerbeállítást állít át: telepített rendszergazdai segéddel csendes (Beállítások ▸ Általános), egyébként a macOS bekéri a jelszavát.";
-"Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences." = "Csukott fedéllel és külső kijelző nélkül is működésben tartja. Addig marad bekapcsolva, amíg ki nem kapcsolja, vagy a Beállításokban a munkamenethez köti.";
+"Keep running with the lid shut and no external display. Stays on until you switch it off." = "Csukott fedéllel és külső kijelző nélkül is működésben tartja. Addig marad bekapcsolva, amíg ki nem kapcsolja.";
+"Handle it automatically" = "Automatikus kezelés";
+"Enable “Only while brewing” so closed-display follows each keep-awake session (your triggers or a manual brew) and turns off when nothing is holding the Mac awake." = "Kapcsolja be a „Csak főzés közben” opciót, hogy a csukott fedél mód minden ébrentartási munkamenetet kövessen (a triggerek vagy egy kézi főzés), és kikapcsoljon, ha semmi sem tartja ébren a Macet.";
 "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "Bekapcsolja a csukott fedél módot, amikor egy ébrentartási munkamenet elindul, és kikapcsolja, amikor véget ér, vagy a Keepresso kilép.";
 "Grace period" = "Türelmi idő";
 "Section" = "Szakasz";
@@ -103,6 +105,7 @@
 "Change…" = "Módosítás…";
 "Charging" = "Töltés alatt";
 "Check for Updates…" = "Frissítések keresése…";
+"Support Keepresso…" = "A Keepresso támogatása…";
 "Closed-display mode" = "Csukott fedél mód";
 "Contacting the helper…" = "Kapcsolatfelvétel a segéddel…";
 "Create a virtual display" = "Virtuális kijelző létrehozása";

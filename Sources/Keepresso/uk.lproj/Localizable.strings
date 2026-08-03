@@ -26,7 +26,9 @@
 "Battery" = "Акумулятор";
 "Welcome" = "Вітання";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Дозволяє Mac продовжувати працювати із закритою кришкою і без зовнішнього дисплея. Це перемикає системне налаштування, яке потребує прав адміністратора: без запитів, якщо встановлено помічник із правами адміністратора (Налаштування ▸ Загальні), інакше macOS запитує ваш пароль.";
-"Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences." = "Дозволяє продовжувати роботу із закритою кришкою і без зовнішнього дисплея. Залишається увімкненим, доки ви не вимкнете це, або прив'яжіть це до сеансу в Налаштуваннях.";
+"Keep running with the lid shut and no external display. Stays on until you switch it off." = "Дозволяє продовжувати роботу із закритою кришкою і без зовнішнього дисплея. Залишається увімкненим, доки ви не вимкнете це.";
+"Handle it automatically" = "Обробляти автоматично";
+"Enable “Only while brewing” so closed-display follows each keep-awake session (your triggers or a manual brew) and turns off when nothing is holding the Mac awake." = "Увімкніть «Лише під час заварювання», щоб режим закритої кришки йшов за кожним сеансом (ваші тригери або ручне заварювання) і вимикався, коли нічого не тримає Mac пробудженим.";
 "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "Вмикає режим закритої кришки, коли починається сеанс підтримки активності, і вимикає його, коли сеанс завершується або Keepresso закривається.";
 "Grace period" = "Період очікування";
 "Section" = "Розділ";
@@ -103,6 +105,7 @@
 "Change…" = "Змінити…";
 "Charging" = "Заряджається";
 "Check for Updates…" = "Перевірити оновлення…";
+"Support Keepresso…" = "Підтримати Keepresso…";
 "Closed-display mode" = "Режим закритої кришки";
 "Contacting the helper…" = "Зв’язок із помічником…";
 "Create a virtual display" = "Створити віртуальний дисплей";

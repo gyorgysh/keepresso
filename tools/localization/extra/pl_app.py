@@ -25,7 +25,9 @@ APP = {
     'Battery': 'Bateria',
     'Welcome': 'Powitanie',
     "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.": "Utrzymuje działanie Maca przy zamkniętej pokrywie i bez zewnętrznego wyświetlacza. Zmienia to ustawienie systemowe wymagające uprawnień administratora: bezgłośnie z zainstalowanym pomocnikiem administratora (Ustawienia ▸ Ogólne), w przeciwnym razie macOS poprosi o hasło.",
-    "Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences.": "Utrzymuje działanie przy zamkniętej pokrywie i bez zewnętrznego wyświetlacza. Pozostaje włączone, dopóki go nie wyłączysz, lub powiąż to z sesją w Ustawieniach.",
+    'Keep running with the lid shut and no external display. Stays on until you switch it off.': 'Utrzymuje działanie przy zamkniętej pokrywie i bez zewnętrznego wyświetlacza. Pozostaje włączone, dopóki go nie wyłączysz.',
+    'Handle it automatically': 'Obsługuj automatycznie',
+    'Enable “Only while brewing” so closed-display follows each keep-awake session (your triggers or a manual brew) and turns off when nothing is holding the Mac awake.': 'Włącz „Tylko podczas parzenia”, aby tryb zamkniętej pokrywy podążał za każdą sesją (Twoje wyzwalacze lub ręczne parzenie) i wyłączał się, gdy nic nie trzyma Maca w stanie czuwania.',
     "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.": "Włącza tryb zamkniętej pokrywy, gdy rozpoczyna się sesja czuwania, i wyłącza go, gdy się kończy lub Keepresso zostaje zamknięte.",
     'Grace period': 'Okres karencji',
     'Section': 'Sekcja',
@@ -99,6 +101,7 @@ APP = {
     'Change…': 'Zmień…',
     'Charging': 'Ładowanie',
     'Check for Updates…': 'Sprawdź uaktualnienia…',
+    'Support Keepresso…': 'Wesprzyj Keepresso…',
     'Closed-display mode': 'Tryb zamkniętej pokrywy',
     'Contact': 'Kontakt',
     'Contacting the helper…': 'Łączenie z pomocnikiem…',
@@ -425,6 +428,7 @@ APP = {
     "Many external drives and NAS volumes park or disconnect after a few minutes idle, and the next thing that touches them stalls while they spin back up. Keepresso rewrites a tiny hidden marker file in the folder you choose, just enough activity to keep the volume awake. Pick an interval shorter than the drive's own idle timeout. This runs whenever Keepresso is running, with or without a keep-awake session, so a drive stays ready even when the Mac is free to sleep.": 'Wiele zewnętrznych dysków i wolumenów NAS zatrzymuje się lub odłącza po kilku minutach bezczynności, a kolejna operacja, która ich dotyczy, zawiesza się, dopóki znów się nie rozkręcą. Keepresso ponownie zapisuje maleńki ukryty plik znacznika w wybranym folderze, wystarczającą aktywność, aby wolumen pozostał w stanie czuwania. Wybierz interwał krótszy niż własny limit czasu bezczynności dysku. Działa to zawsze, gdy Keepresso jest uruchomione, niezależnie od tego, czy trwa sesja czuwania, dzięki czemu dysk pozostaje gotowy, nawet gdy Mac może swobodnie zasnąć.',
     'Stops an external drive or NAS from spinning down.': 'Zapobiega zatrzymaniu zewnętrznego dysku lub NAS.',
     '3 minutes': '3 minuty',
+    'Turn Off Wake Schedule': 'Wyłącz harmonogram wybudzeń',
 }
 
 
@@ -561,7 +565,6 @@ APP.update({
     'Start keep-awake on wake': 'Po wybudzeniu utrzymaj w stanie czuwania',
     'Starts keep-awake on wake': 'Przy wybudzeniu uruchamia keep-awake',
     'Session length': 'Długość sesji',
-    'Turn Off Wake Schedule': 'Wyłącz harmonogram wybudzeń',
     'Awake this week': 'Czuwanie w tym tygodniu',
     'No held-awake time in the last week.': 'W zeszłym tygodniu brak czasu czuwania.',
     '−%d%% battery': '−%d%% baterii',

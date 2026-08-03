@@ -25,7 +25,9 @@ APP = {
     "Battery": "Batteria",
     "Welcome": "Benvenuto",
     "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.": "Mantiene il Mac in funzione con il coperchio chiuso e senza display esterno. Questo cambia un'impostazione di sistema che richiede i privilegi di amministratore: in silenzio con l'assistente amministratore installato (Impostazioni ▸ Generali), altrimenti macOS chiede la password.",
-    "Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences.": "Continua a funzionare con il coperchio chiuso e senza display esterno. Resta attivo finché non lo disattivi, oppure collegalo alla sessione nelle Impostazioni.",
+    "Keep running with the lid shut and no external display. Stays on until you switch it off.": "Continua a funzionare con il coperchio chiuso e senza display esterno. Resta attivo finché non lo disattivi.",
+    "Handle it automatically": "Gestiscilo automaticamente",
+    "Enable “Only while brewing” so closed-display follows each keep-awake session (your triggers or a manual brew) and turns off when nothing is holding the Mac awake.": "Attiva «Solo durante l’infusione» così la modalità a schermo chiuso segue ogni sessione (i tuoi trigger o un’infusione manuale) e si spegne quando nulla tiene il Mac sveglio.",
     "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.": "Attiva la modalità a schermo chiuso quando inizia una sessione di veglia e la disattiva quando termina o Keepresso viene chiuso.",
     "Grace period": "Periodo di tolleranza",
     "Section": "Sezione",
@@ -103,6 +105,7 @@ APP = {
     "Change…": "Modifica…",
     "Charging": "In carica",
     "Check for Updates…": "Verifica aggiornamenti…",
+    "Support Keepresso…": "Supporta Keepresso…",
     "Closed-display mode": "Modalità a schermo chiuso",
     "Contacting the helper…": "Contatto dell’assistente in corso…",
     "Create a virtual display": "Crea un display virtuale",
@@ -509,6 +512,7 @@ APP = {
     "Many external drives and NAS volumes park or disconnect after a few minutes idle, and the next thing that touches them stalls while they spin back up. Keepresso rewrites a tiny hidden marker file in the folder you choose, just enough activity to keep the volume awake. Pick an interval shorter than the drive's own idle timeout. This runs whenever Keepresso is running, with or without a keep-awake session, so a drive stays ready even when the Mac is free to sleep.": 'Molti dischi esterni e volumi NAS si arrestano o si disconnettono dopo alcuni minuti di inattività, e la prossima cosa che li tocca si blocca mentre tornano a girare. Keepresso riscrive un piccolo file marcatore nascosto nella cartella che scegli, giusto abbastanza attività da tenere sveglio il volume. Scegli un intervallo più breve del timeout di inattività proprio del disco. Questo viene eseguito ogni volta che Keepresso è in esecuzione, con o senza una sessione di veglia, così un disco resta pronto anche quando il Mac è libero di addormentarsi.',
     'Stops an external drive or NAS from spinning down.': 'Impedisce a un disco esterno o a un NAS di fermarsi.',
     '3 minutes': '3 minuti',
+    'Turn Off Wake Schedule': 'Disattiva sveglia programmata',
 }
 
 
@@ -703,7 +707,6 @@ APP.update({
     'Start keep-awake on wake': 'Mantieni sveglio al risveglio',
     'Starts keep-awake on wake': 'Avvia il keep-awake al risveglio',
     'Session length': 'Durata sessione',
-    'Turn Off Wake Schedule': 'Disattiva sveglia programmata',
     'Awake this week': 'Sveglio questa settimana',
     'No held-awake time in the last week.': 'Nessun tempo di keep-awake nell’ultima settimana.',
     '−%d%% battery': '−%d%% batteria',

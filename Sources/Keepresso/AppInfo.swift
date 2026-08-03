@@ -24,6 +24,10 @@ enum AppInfo {
     /// the repository is aimed at contributors.
     static let website = URL(string: "https://keepresso.com/?ref=\(referrer)")!
 
+    /// Tips and sponsorship page. Opened from the icon's right-click menu
+    /// ("Support Keepresso…") and tagged so app traffic is visible in analytics.
+    static let donate = URL(string: "https://gyorgy.sh/donate?ref=\(referrer)")!
+
     /// Tags outbound links to sites we own, so analytics can tell app traffic
     /// apart from search and social. Left off mailto and GitHub, which have
     /// nothing to read it.

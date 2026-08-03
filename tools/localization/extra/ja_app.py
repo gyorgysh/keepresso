@@ -25,7 +25,9 @@ APP = {
     "Battery": "バッテリー",
     "Welcome": "ようこそ",
     "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.": "蓋を閉じて外部ディスプレイがない状態でも Mac を動作させ続けます。これは管理者権限が必要なシステム設定を切り替えます。管理者ヘルパーがインストールされていれば静かに実行されます（設定 ▸ 一般）。そうでない場合、macOS がパスワードを求めます。",
-    "Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences.": "蓋を閉じて外部ディスプレイがない状態でも動作し続けます。オフにするまで有効なままか、設定でセッションに結び付けます。",
+    "Keep running with the lid shut and no external display. Stays on until you switch it off.": "蓋を閉じて外部ディスプレイがない状態でも動作し続けます。オフにするまで有効なままです。",
+    "Handle it automatically": "自動で扱う",
+    "Enable “Only while brewing” so closed-display follows each keep-awake session (your triggers or a manual brew) and turns off when nothing is holding the Mac awake.": "「抽出中のみ」をオンにすると、クラムシェルモードが各スリープ防止セッション（トリガーや手動の抽出）に追従し、Mac を保持しているものがなくなったときにオフになります。",
     "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.": "スリープ防止セッションの開始時にクラムシェルモードをオンにし、終了時または Keepresso の終了時にオフにします。",
     "Grace period": "猶予期間",
     "Section": "セクション",
@@ -101,6 +103,7 @@ APP = {
     "Change…": "変更…",
     "Charging": "充電中",
     "Check for Updates…": "アップデートを確認…",
+    "Support Keepresso…": "Keepresso を支援…",
     "Closed-display mode": "クラムシェルモード",
     "Contacting the helper…": "ヘルパーに接続中…",
     "Create a virtual display": "仮想ディスプレイを作成",
@@ -425,6 +428,7 @@ APP = {
     "Many external drives and NAS volumes park or disconnect after a few minutes idle, and the next thing that touches them stalls while they spin back up. Keepresso rewrites a tiny hidden marker file in the folder you choose, just enough activity to keep the volume awake. Pick an interval shorter than the drive's own idle timeout. This runs whenever Keepresso is running, with or without a keep-awake session, so a drive stays ready even when the Mac is free to sleep.": '多くの外付けドライブや NAS ボリュームは、数分間アイドル状態になるとパーキング（停止）したり切断されたりし、次にそれらにアクセスするものは、再び回転が上がるまで止まってしまいます。Keepresso は、選択したフォルダ内の小さな隠しマーカーファイルを書き換え、ボリュームをスリープ防止に保つのにちょうど十分なアクティビティを発生させます。ドライブ自体のアイドルタイムアウトより短い間隔を選んでください。これは、スリープ防止セッションの有無にかかわらず、Keepresso が実行されている限り実行されるため、Mac が自由にスリープできる状態でもドライブは準備完了のままです。',
     'Stops an external drive or NAS from spinning down.': '外付けドライブや NAS の回転停止を防ぎます。',
     '3 minutes': '3 分',
+    'Turn Off Wake Schedule': '起床スケジュールをオフ',
 }
 
 
@@ -574,7 +578,6 @@ APP.update({
     'Start keep-awake on wake': '起床後にスリープ防止を開始',
     'Starts keep-awake on wake': '起床時にスリープ防止を開始',
     'Session length': 'セッションの長さ',
-    'Turn Off Wake Schedule': '起床スケジュールをオフ',
     'Awake this week': '今週の起動時間',
     'No held-awake time in the last week.': 'この1週間、スリープ防止の記録はありません。',
     '−%d%% battery': '−%d%% バッテリー',

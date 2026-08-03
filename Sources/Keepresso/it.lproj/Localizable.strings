@@ -26,7 +26,9 @@
 "Battery" = "Batteria";
 "Welcome" = "Benvenuto";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Mantiene il Mac in funzione con il coperchio chiuso e senza display esterno. Questo cambia un'impostazione di sistema che richiede i privilegi di amministratore: in silenzio con l'assistente amministratore installato (Impostazioni ▸ Generali), altrimenti macOS chiede la password.";
-"Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences." = "Continua a funzionare con il coperchio chiuso e senza display esterno. Resta attivo finché non lo disattivi, oppure collegalo alla sessione nelle Impostazioni.";
+"Keep running with the lid shut and no external display. Stays on until you switch it off." = "Continua a funzionare con il coperchio chiuso e senza display esterno. Resta attivo finché non lo disattivi.";
+"Handle it automatically" = "Gestiscilo automaticamente";
+"Enable “Only while brewing” so closed-display follows each keep-awake session (your triggers or a manual brew) and turns off when nothing is holding the Mac awake." = "Attiva «Solo durante l’infusione» così la modalità a schermo chiuso segue ogni sessione (i tuoi trigger o un’infusione manuale) e si spegne quando nulla tiene il Mac sveglio.";
 "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "Attiva la modalità a schermo chiuso quando inizia una sessione di veglia e la disattiva quando termina o Keepresso viene chiuso.";
 "Grace period" = "Periodo di tolleranza";
 "Section" = "Sezione";
@@ -103,6 +105,7 @@
 "Change…" = "Modifica…";
 "Charging" = "In carica";
 "Check for Updates…" = "Verifica aggiornamenti…";
+"Support Keepresso…" = "Supporta Keepresso…";
 "Closed-display mode" = "Modalità a schermo chiuso";
 "Contacting the helper…" = "Contatto dell’assistente in corso…";
 "Create a virtual display" = "Crea un display virtuale";

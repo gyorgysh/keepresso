@@ -21,8 +21,16 @@ import AppKit
 struct WindowVisibilityReader: NSViewRepresentable {
     @Binding var isVisible: Bool
 
+    /// When true, only AppKit `isVisible` counts (ordered out, closed, or
+    /// minimized). Being covered by another window (the administrator
+    /// password sheet, a full-screen app, etc.) does not report hidden.
+    /// Menu-bar panels leave this false so a covered panel still tears down
+    /// its animation and observation work.
+    var ignoreOcclusion: Bool = false
+
     func makeNSView(context: Context) -> ReporterView {
         let view = ReporterView()
+        view.ignoreOcclusion = ignoreOcclusion
         view.onChange = { isVisible = $0 }
         return view
     }
@@ -32,6 +40,7 @@ struct WindowVisibilityReader: NSViewRepresentable {
         // in case the window was ordered out without an occlusion note. When
         // AppKit has already ordered the window on (MenuBarExtra reopen), a
         // synchronous visible=true here remounts content in this layout pass.
+        nsView.ignoreOcclusion = ignoreOcclusion
         nsView.onChange = { isVisible = $0 }
         nsView.probe()
     }
@@ -40,6 +49,7 @@ struct WindowVisibilityReader: NSViewRepresentable {
     /// change, so an unchanged state never churns SwiftUI.
     final class ReporterView: NSView {
         var onChange: ((Bool) -> Void)?
+        var ignoreOcclusion = false
         private var tokens: [NSObjectProtocol] = []
         private var isVisibleObservation: NSKeyValueObservation?
         private var last: Bool?
@@ -79,13 +89,15 @@ struct WindowVisibilityReader: NSViewRepresentable {
         /// Recompute from the live window. Safe to call often: ``report``
         /// drops duplicates.
         func probe() {
-            report(Self.effectivelyVisible(window))
+            report(Self.effectivelyVisible(window, ignoreOcclusion: ignoreOcclusion))
         }
 
         /// Ordered-out panels can still carry `.visible` in occlusionState;
-        /// require AppKit's `isVisible` first, then non-occluded.
-        static func effectivelyVisible(_ window: NSWindow?) -> Bool {
+        /// require AppKit's `isVisible` first, then (unless the host asked to
+        /// ignore coverings) non-occluded.
+        static func effectivelyVisible(_ window: NSWindow?, ignoreOcclusion: Bool) -> Bool {
             guard let window, window.isVisible else { return false }
+            if ignoreOcclusion { return true }
             return window.occlusionState.contains(.visible)
         }
 

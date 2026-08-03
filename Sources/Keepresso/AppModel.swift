@@ -2403,6 +2403,9 @@ final class AppModel {
     /// active app first or the system password dialog can appear unfocused
     /// behind other windows, leaving the menu in a stuck-looking state. With
     /// the helper installed there is no dialog, so no focus grab either.
+    /// After the prompt, the window that owned the toggle is ordered front
+    /// again (Welcome, Preferences, …); SecurityAgent otherwise leaves it
+    /// buried under every other app.
     func setClosedDisplay(_ on: Bool, userInitiated: Bool = true) {
         // A user toggling closed-display during a thermal or battery pause has
         // taken over the intent: cancel any pending "restore when safe" so
@@ -2413,16 +2416,42 @@ final class AppModel {
             thermalLiftedClosedDisplay = false
             batteryLiftedClosedDisplay = false
         }
-        if !helperInstalled {
+        // Only a user-facing toggle can show the password sheet. Background
+        // lifts/restores either use the silent helper or skip the write.
+        let needsAuthDance = userInitiated && !helperInstalled
+        runAfterPossibleAuthPrompt(needsPrompt: needsAuthDance) {
+            await self.closedDisplay.set(on)
+            // A failure through the installed helper points at a stale daemon
+            // registration: check and repair it (dedupes, once per run).
+            if self.closedDisplay.lastError != nil, self.helperInstalled {
+                self.verifyHelper()
+            }
+        }
+    }
+
+    /// Activate, run privileged work that may show the osascript password
+    /// sheet, then put the caller's window back in front.
+    ///
+    /// LSUIElement apps lose frontmost status when SecurityAgent takes over.
+    /// Without the restore, Welcome or Preferences drops behind everything
+    /// and people lose the tour mid-setup. No-ops the dance when no prompt
+    /// can appear (helper installed, already authorized this run).
+    private func runAfterPossibleAuthPrompt(
+        needsPrompt: Bool,
+        operation: @escaping @MainActor () async -> Void
+    ) {
+        let window = needsPrompt ? NSApp.keyWindow : nil
+        if needsPrompt {
             NSApp.activate(ignoringOtherApps: true)
         }
         Task {
-            await closedDisplay.set(on)
-            // A failure through the installed helper points at a stale daemon
-            // registration: check and repair it (dedupes, once per run).
-            if closedDisplay.lastError != nil, helperInstalled {
-                verifyHelper()
-            }
+            await operation()
+            guard needsPrompt else { return }
+            NSApp.activate(ignoringOtherApps: true)
+            window?.makeKeyAndOrderFront(nil)
+            // Auth sheets can leave an LSUIElement app half-active; same repair
+            // used when a window first opens.
+            WindowPlacement.repairIfWedged(window, attempts: 3)
         }
     }
 
@@ -2447,17 +2476,13 @@ final class AppModel {
                 // A fallback engage may later need a password mid-session; be
                 // able to say so even behind other windows.
                 notifier.requestAuthorization()
-                NSApp.activate(ignoringOtherApps: true)
-                let window = NSApp.keyWindow
-                Task {
-                    await closedDisplayAuto.prime()
-                    NSApp.activate(ignoringOtherApps: true)
-                    window?.makeKeyAndOrderFront(nil)
+                runAfterPossibleAuthPrompt(needsPrompt: true) {
+                    await self.closedDisplayAuto.prime()
                     // The user is right here answering prompts, so this is the
                     // one moment a fallback clear may ask for the password.
                     // Priming flips the real setting on and off, so re-read it
                     // before deciding anything.
-                    refreshThenEnforceClosedDisplay(allowPrompt: true)
+                    self.refreshThenEnforceClosedDisplay(allowPrompt: true)
                 }
             } else if newValue {
                 refreshThenEnforceClosedDisplay()
@@ -2680,21 +2705,15 @@ final class AppModel {
         // the helper daemon is installed (or the fallback loop is already
         // authorized this run), so skip the dance there.
         let dance = on && !helperInstalled && !awdl.isAuthorized
-        let window = dance ? NSApp.keyWindow : nil
-        if dance { NSApp.activate(ignoringOtherApps: true) }
-        Task {
+        runAfterPossibleAuthPrompt(needsPrompt: dance) {
             if on {
-                await awdl.start()
+                await self.awdl.start()
                 // Same stale-registration suspicion as ``setClosedDisplay(_:)``.
-                if awdl.lastError != nil, helperInstalled {
-                    verifyHelper()
+                if self.awdl.lastError != nil, self.helperInstalled {
+                    self.verifyHelper()
                 }
             } else {
-                await awdl.stop()
-            }
-            if dance {
-                NSApp.activate(ignoringOtherApps: true)
-                window?.makeKeyAndOrderFront(nil)
+                await self.awdl.stop()
             }
         }
     }
@@ -2714,12 +2733,8 @@ final class AppModel {
             // (no engage ever prompts, and priming through the daemon would
             // blip awdl0 down and up for nothing).
             if newValue && !awdl.isAuthorized && !helperInstalled {
-                NSApp.activate(ignoringOtherApps: true)
-                let window = NSApp.keyWindow
-                Task {
-                    await awdl.prime()
-                    NSApp.activate(ignoringOtherApps: true)
-                    window?.makeKeyAndOrderFront(nil)
+                runAfterPossibleAuthPrompt(needsPrompt: true) {
+                    await self.awdl.prime()
                 }
             } else if !newValue {
                 // Turning auto off mid-bout: clear the grace and lift any pause it

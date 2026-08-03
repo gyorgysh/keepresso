@@ -26,7 +26,9 @@
 "Battery" = "Bateria";
 "Welcome" = "Boas-vindas";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Mantém o Mac funcionando com a tampa fechada e sem tela externa. Isso muda um ajuste do sistema que exige privilégios de administrador: silencioso com o assistente de administrador instalado (Preferências ▸ Geral), caso contrário o macOS pede sua senha.";
-"Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences." = "Continua funcionando com a tampa fechada e sem tela externa. Permanece ativado até você desativá-lo, ou vincule-o à sessão em Preferências.";
+"Keep running with the lid shut and no external display. Stays on until you switch it off." = "Continua funcionando com a tampa fechada e sem tela externa. Permanece ativado até você desativá-lo.";
+"Handle it automatically" = "Gerenciar automaticamente";
+"Enable “Only while brewing” so closed-display follows each keep-awake session (your triggers or a manual brew) and turns off when nothing is holding the Mac awake." = "Ative “Somente durante o preparo” para o modo com tela fechada acompanhar cada sessão (seus gatilhos ou um preparo manual) e desligar quando nada estiver mantendo o Mac acordado.";
 "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." = "Ativa o modo com tela fechada quando uma sessão de vigília começa e desativa quando ela termina ou o Keepresso é fechado.";
 "Grace period" = "Período de tolerância";
 "Section" = "Seção";
@@ -103,6 +105,7 @@
 "Change…" = "Alterar…";
 "Charging" = "Carregando";
 "Check for Updates…" = "Verificar atualizações…";
+"Support Keepresso…" = "Apoiar o Keepresso…";
 "Closed-display mode" = "Modo com tela fechada";
 "Contacting the helper…" = "Entrando em contato com o assistente…";
 "Create a virtual display" = "Criar uma tela virtual";

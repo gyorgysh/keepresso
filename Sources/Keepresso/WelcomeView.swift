@@ -205,21 +205,33 @@ struct WelcomeView: View {
         .tint(.keepressoBrew)
         .glassWindowBackground()
         .centersAndFrontsWindow()
-        .background(WindowVisibilityReader(isVisible: $windowVisible))
-        .onChange(of: windowVisible) { _, visible in
-            // Restart the tour whenever the window comes back on screen: the
-            // closed window keeps `step` alive, so a reopen would otherwise show
-            // the last step. Reset the entrance so the first step fades in too.
+        // Ignore occlusion: a password sheet or another app covering this
+        // window must not unmount the tour (and must not look like a close).
+        // Only a real order-out / close flips visibility.
+        .background(WindowVisibilityReader(isVisible: $windowVisible, ignoreOcclusion: true))
+        .onChange(of: windowVisible) { wasVisible, visible in
+            // Restart the tour only when the window reopens after being closed.
+            // Password prompts, focus loss, and temporary coverings used to
+            // flip visibility and send the user back to step 1 mid-setup.
             guard visible else { return }
-            step = .welcome
-            revealed = false
+            let reopenedAfterClose = !wasVisible
+            if reopenedAfterClose {
+                // The closed window keeps `@State` alive, so without this a
+                // reopen would land on the last step. Fresh open starts over.
+                step = .welcome
+                revealed = false
+            }
             refreshScreenHeight()
             // Re-read setup rows and connect status; they can change while the
-            // window was torn down (e.g. login item or notifications in Preferences).
+            // window was away (e.g. login item or notifications in Preferences).
             launchAtLogin = LoginItem.isEnabled
             model.refreshAgentHookStatuses()
             Task { notificationStatus = await model.notificationAuthorizationStatus() }
-            withAnimation { revealed = true }
+            if reopenedAfterClose {
+                withAnimation { revealed = true }
+            } else if !revealed {
+                withAnimation { revealed = true }
+            }
         }
     }
 
@@ -364,6 +376,9 @@ struct WelcomeView: View {
                 .padding(.top, 2)
         }
         .animation(.snappy(duration: 0.25), value: model.closedDisplayError)
+        .animation(.snappy(duration: 0.25), value: model.closedDisplayAutoError)
+        .animation(.snappy(duration: 0.25), value: model.closedDisplayOnlyWhileBrewing)
+        .animation(.snappy(duration: 0.25), value: model.closedDisplayEnabled)
         .entrance(0, revealed: revealed, animated: !reduceMotion)
     }
 
@@ -374,15 +389,16 @@ struct WelcomeView: View {
     /// through the helper above and otherwise with a password prompt (which
     /// the note explains while the dialog is up).
     ///
-    /// It stays on until it is turned off, which is the honest thing to say
-    /// here rather than offering the "only while brewing" refinement: that
-    /// belongs in Preferences, next to the explanation of what it trades.
+    /// The switch itself is sticky (stays on until turned off). A callout
+    /// bubble under it offers **Only while brewing** as an optional tip, so
+    /// people who want session-tied automation can opt in without being
+    /// forced into it.
     private var closedDisplaySetupRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             setupRow(
                 icon: "laptopcomputer",
                 title: "Keep awake with the lid closed",
-                detail: "Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences."
+                detail: "Keep running with the lid shut and no external display. Stays on until you switch it off."
             ) {
                 Toggle("", isOn: Binding(
                     get: { model.closedDisplayEnabled },
@@ -410,9 +426,20 @@ struct WelcomeView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .shakes(on: lidRowShakes)
+            } else if model.closedDisplayEnabled {
+                onlyWhileBrewingHint
+            }
+            if model.closedDisplayAutoBusy && !model.helperInstalled {
+                AdminAuthNote(purpose: L("switch closed-display mode with the session"))
             }
             if model.closedDisplayBusy && !model.helperInstalled {
                 AdminAuthNote(purpose: L("keep the Mac awake with the lid closed"))
+            }
+            if let error = model.closedDisplayAutoError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .font(type.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if let error = model.closedDisplayError {
                 Label(error, systemImage: "exclamationmark.triangle")
@@ -421,6 +448,34 @@ struct WelcomeView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    /// Optional tip after sticky lid-closed is on: offer session-tied
+    /// closed-display without turning it on for them. Same glass-card
+    /// callout shape as the gaming and agent tips on the use-case step.
+    private var onlyWhileBrewingHint: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "cup.and.saucer.fill")
+                .font(type.title3)
+                .foregroundStyle(Color.keepressoBrew)
+                .frame(width: 26 * type.scale)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Handle it automatically")
+                    .font(type.callout.weight(.medium))
+                Text("Enable \u{201C}Only while brewing\u{201D} so closed-display follows each keep-awake session (your triggers or a manual brew) and turns off when nothing is holding the Mac awake.")
+                    .font(type.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Button("Enable") {
+                model.closedDisplayOnlyWhileBrewing = true
+            }
+            .controlSize(.small)
+            .disabled(model.closedDisplayAutoBusy)
+        }
+        .padding(8)
+        .glassCard(cornerRadius: 8, tint: Color.keepressoBrew.opacity(0.14))
     }
 
     /// The two safety nets as one switch: pause on low battery, and the

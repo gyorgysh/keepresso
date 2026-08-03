@@ -25,7 +25,9 @@ APP = {
     "Battery": "배터리",
     "Welcome": "환영",
     "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.": "덮개를 닫고 외부 디스플레이가 없어도 Mac이 계속 실행되도록 유지합니다. 이는 관리자 권한이 필요한 시스템 설정을 전환합니다. 관리자 도우미가 설치되어 있으면 조용히 처리되고 (환경설정 ▸ 일반), 그렇지 않으면 macOS가 암호를 요청합니다.",
-    "Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences.": "덮개를 닫고 외부 디스플레이가 없어도 계속 실행됩니다. 끌 때까지 켜진 상태를 유지하거나, 환경설정에서 세션에 연결할 수 있습니다.",
+    "Keep running with the lid shut and no external display. Stays on until you switch it off.": "덮개를 닫고 외부 디스플레이가 없어도 계속 실행됩니다. 끌 때까지 켜진 상태를 유지합니다.",
+    "Handle it automatically": "자동으로 처리",
+    "Enable “Only while brewing” so closed-display follows each keep-awake session (your triggers or a manual brew) and turns off when nothing is holding the Mac awake.": "“추출 중에만”을 켜면 디스플레이 닫힘 모드가 각 깨어 있음 세션(트리거 또는 수동 추출)을 따르고, Mac을 깨워 두는 것이 없을 때 꺼집니다.",
     "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.": "깨어 있게 유지 세션이 시작될 때 디스플레이 닫힘 모드를 켜고, 세션이 끝나거나 Keepresso가 종료될 때 끕니다.",
     "Grace period": "유예 시간",
     "Section": "섹션",
@@ -101,6 +103,7 @@ APP = {
     "Change…": "변경…",
     "Charging": "충전 중",
     "Check for Updates…": "업데이트 확인…",
+    "Support Keepresso…": "Keepresso 지원…",
     "Closed-display mode": "디스플레이 닫힘 모드",
     "Contacting the helper…": "도우미에 연결하는 중…",
     "Create a virtual display": "가상 디스플레이 생성",
@@ -432,6 +435,7 @@ APP = {
     'Allow automation to change the wake schedule': '자동화가 깨우기 일정을 변경하도록 허용',
     'Automation access': '자동화 접근',
     'A lease is a bounded keep-awake grant an outside tool asks for through the keepresso command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning leases off ends any live lease. The wake schedule switch is separate and off by default because a scheduled wake is a system-wide change applied by the administrator helper: leave it off unless a tool you trust should plan wake-ups for you.': '임대는 외부 도구가 keepresso 명령줄이나 번들 MCP 서버를 통해 요청하는 시간 제한 깨어 있게 유지 권한입니다. 예를 들어 밤새 작업하는 AI 에이전트, 렌더링 스크립트, 백업 작업 등입니다. 각 임대에는 소유자가 계속 갱신해야 하는 시간 제한이 있고, 최대 7일이라는 엄격한 상한도 있어 충돌한 도구가 Mac을 영구히 깨어 있게 유지할 수 없습니다. 메뉴에는 현재 활성 중인 모든 임대가 표시되며, 중지를 누르면 모두 종료되고 마지막 임대가 끝나면 Mac은 다시 잠들 수 있습니다. 임대를 끄면 활성 임대도 모두 종료됩니다. 깨우기 일정 스위치는 별도이며 기본적으로 꺼져 있는데, 예약된 깨우기는 관리자 도우미가 적용하는 시스템 전역 변경이기 때문입니다. 신뢰하는 도구가 대신 깨우기를 계획하도록 하려는 경우가 아니라면 꺼 두십시오.',
+    'Turn Off Wake Schedule': '깨우기 일정 끄기',
 }
 
 
@@ -580,7 +584,6 @@ APP.update({
     'Start keep-awake on wake': '깨어난 뒤 절전 방지 시작',
     'Starts keep-awake on wake': '깨어날 때 절전 방지 시작',
     'Session length': '세션 길이',
-    'Turn Off Wake Schedule': '깨우기 일정 끄기',
     'Awake this week': '이번 주 깨어 있음',
     'No held-awake time in the last week.': '지난 일주일간 절전 방지 기록이 없습니다.',
     '−%d%% battery': '−%d%% 배터리',

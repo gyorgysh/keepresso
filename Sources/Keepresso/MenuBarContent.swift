@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import KeepressoCore
 
 /// The dropdown shown when the menu bar icon is clicked. Kept lean: status, the
@@ -337,6 +338,7 @@ struct MenuBarContent: View {
             Button("About Keepresso") { open(KeepressoApp.aboutWindowID) }
             Button("Check for Updates…") { updater.checkForUpdates() }
                 .disabled(!updater.canCheckForUpdates)
+            Button("Support Keepresso…") { NSWorkspace.shared.open(AppInfo.donate) }
         }
         .buttonStyle(.menuRow)
 

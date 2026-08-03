@@ -25,7 +25,9 @@ APP = {
     'Battery': '電池',
     'Welcome': '歡迎',
     "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.": "即使闔蓋且沒有外接螢幕，也能讓 Mac 持續運作。這會切換一項需要系統管理員權限的系統設定：已安裝系統管理員輔助程式時會靜默執行（偏好設定 ▸ 一般），否則 macOS 會要求輸入密碼。",
-    "Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences.": "即使闔蓋且沒有外接螢幕，也能保持運作。會持續生效，直到您將其關閉，或在偏好設定中將其與工作階段綁定。",
+    'Keep running with the lid shut and no external display. Stays on until you switch it off.': '即使闔蓋且沒有外接螢幕，也能保持運作。會持續生效，直到您將其關閉。',
+    'Handle it automatically': '自動處理',
+    'Enable “Only while brewing” so closed-display follows each keep-awake session (your triggers or a manual brew) and turns off when nothing is holding the Mac awake.': '啟用「僅在保持喚醒工作階段期間」，讓闔蓋模式跟隨每次保持喚醒工作階段（你的觸發條件或手動工作階段），並在沒有內容佔用時關閉。',
     "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.": "在保持喚醒工作階段開始時開啟闔蓋模式，並於工作階段結束或 Keepresso 結束時關閉。",
     'Grace period': '寬限期',
     'Section': '區段',
@@ -99,6 +101,7 @@ APP = {
     'Change…': '變更…',
     'Charging': '充電中',
     'Check for Updates…': '檢查更新項目…',
+    'Support Keepresso…': '支持 Keepresso…',
     'Closed-display mode': '闔蓋模式',
     'Contact': '聯絡',
     'Contacting the helper…': '正在聯絡輔助程式…',
@@ -426,6 +429,7 @@ APP = {
     "Many external drives and NAS volumes park or disconnect after a few minutes idle, and the next thing that touches them stalls while they spin back up. Keepresso rewrites a tiny hidden marker file in the folder you choose, just enough activity to keep the volume awake. Pick an interval shorter than the drive's own idle timeout. This runs whenever Keepresso is running, with or without a keep-awake session, so a drive stays ready even when the Mac is free to sleep.": '許多外接硬碟和 NAS 磁碟區會在閒置數分鐘後停轉或中斷連線，接下來任何存取它們的操作都會卡住，直到它們重新轉動。Keepresso 會在您選擇的資料夾中重寫一個微小的隱藏標記檔案，僅產生足以讓磁碟區保持喚醒的活動量。請選擇比硬碟自身閒置逾時更短的間隔。只要 Keepresso 正在執行，無論是否有保持喚醒工作階段都會執行此操作，因此即使 Mac 可自由進入睡眠，硬碟仍會保持就緒狀態。',
     'Stops an external drive or NAS from spinning down.': '避免外接硬碟或 NAS 停止轉動。',
     '3 minutes': '3 分鐘',
+    'Turn Off Wake Schedule': '關閉喚醒排程',
 }
 
 
@@ -555,7 +559,6 @@ APP.update({
     'Start keep-awake on wake': '喚醒後保持不休眠',
     'Starts keep-awake on wake': '喚醒時啟動保持喚醒',
     'Session length': '工作階段長度',
-    'Turn Off Wake Schedule': '關閉喚醒排程',
     'Awake this week': '本週保持喚醒',
     'No held-awake time in the last week.': '過去一週沒有保持喚醒時間。',
     '−%d%% battery': '−%d%% 電量',

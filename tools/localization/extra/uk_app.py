@@ -25,7 +25,9 @@ APP = {
     "Battery": "Акумулятор",
     "Welcome": "Вітання",
     "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.": "Дозволяє Mac продовжувати працювати із закритою кришкою і без зовнішнього дисплея. Це перемикає системне налаштування, яке потребує прав адміністратора: без запитів, якщо встановлено помічник із правами адміністратора (Налаштування ▸ Загальні), інакше macOS запитує ваш пароль.",
-    "Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences.": "Дозволяє продовжувати роботу із закритою кришкою і без зовнішнього дисплея. Залишається увімкненим, доки ви не вимкнете це, або прив'яжіть це до сеансу в Налаштуваннях.",
+    "Keep running with the lid shut and no external display. Stays on until you switch it off.": "Дозволяє продовжувати роботу із закритою кришкою і без зовнішнього дисплея. Залишається увімкненим, доки ви не вимкнете це.",
+    "Handle it automatically": "Обробляти автоматично",
+    "Enable “Only while brewing” so closed-display follows each keep-awake session (your triggers or a manual brew) and turns off when nothing is holding the Mac awake.": "Увімкніть «Лише під час заварювання», щоб режим закритої кришки йшов за кожним сеансом (ваші тригери або ручне заварювання) і вимикався, коли нічого не тримає Mac пробудженим.",
     "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.": "Вмикає режим закритої кришки, коли починається сеанс підтримки активності, і вимикає його, коли сеанс завершується або Keepresso закривається.",
     "Grace period": "Період очікування",
     "Section": "Розділ",
@@ -99,6 +101,7 @@ APP = {
     "Change…": "Змінити…",
     "Charging": "Заряджається",
     "Check for Updates…": "Перевірити оновлення…",
+    "Support Keepresso…": "Підтримати Keepresso…",
     "Closed-display mode": "Режим закритої кришки",
     "Contact": "Контакт",
     "Contacting the helper…": "Зв’язок із помічником…",
@@ -426,6 +429,7 @@ APP = {
     "Many external drives and NAS volumes park or disconnect after a few minutes idle, and the next thing that touches them stalls while they spin back up. Keepresso rewrites a tiny hidden marker file in the folder you choose, just enough activity to keep the volume awake. Pick an interval shorter than the drive's own idle timeout. This runs whenever Keepresso is running, with or without a keep-awake session, so a drive stays ready even when the Mac is free to sleep.": "Багато зовнішніх дисків і томів NAS переходять у стан паркування або від'єднуються після кількох хвилин бездіяльності, і наступна операція з ними затримується, поки вони знову розкручуються. Keepresso періодично перезаписує крихітний прихований файл-мітку в обраній папці, створюючи рівно стільки активності, скільки потрібно, щоб том не заснув. Виберіть інтервал коротший за власний тайм-аут бездіяльності диска. Це виконується завжди, поки працює Keepresso, незалежно від того, триває сеанс підтримки активності чи ні, тож диск залишається готовим, навіть коли Mac вільний заснути.",
     'Stops an external drive or NAS from spinning down.': 'Не дає зовнішньому диску або NAS перейти в режим спокою.',
     '3 minutes': '3 хвилини',
+    'Turn Off Wake Schedule': 'Вимкнути розклад пробудження',
 }
 
 
@@ -555,7 +559,6 @@ APP.update({
     'Start keep-awake on wake': 'Після пробудження тримати без сну',
     'Starts keep-awake on wake': 'При пробудженні вмикає keep-awake',
     'Session length': 'Тривалість сеансу',
-    'Turn Off Wake Schedule': 'Вимкнути розклад пробудження',
     'Awake this week': 'Без сну цього тижня',
     'No held-awake time in the last week.': 'Минулого тижня не було утримання.',
     '−%d%% battery': '−%d%% батареї',

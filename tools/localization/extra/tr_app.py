@@ -25,7 +25,9 @@ APP = {
     "Battery": "Pil",
     "Welcome": "Hoş geldiniz",
     "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.": "Kapak kapalıyken ve harici ekran yokken Mac'in çalışmaya devam etmesini sağlar. Bu, yönetici hakları gerektiren bir sistem ayarını değiştirir: yönetici yardımcısı yüklüyken sessizce (Tercihler ▸ Genel), aksi halde macOS parolanızı ister.",
-    "Keep running with the lid shut and no external display. Stays on until you switch it off, or tie it to the session in Preferences.": "Kapak kapalıyken ve harici ekran yokken çalışmaya devam eder. Siz kapatana kadar açık kalır, ya da Tercihler'de oturuma bağlayın.",
+    "Keep running with the lid shut and no external display. Stays on until you switch it off.": "Kapak kapalıyken ve harici ekran yokken çalışmaya devam eder. Siz kapatana kadar açık kalır.",
+    "Handle it automatically": "Otomatik yönet",
+    "Enable “Only while brewing” so closed-display follows each keep-awake session (your triggers or a manual brew) and turns off when nothing is holding the Mac awake.": "“Yalnızca demlenirken”i açın; kapalı ekran modu her uyanık tutma oturumunu (tetikleyicileriniz veya elle demleme) izler ve Mac’i uyanık tutan bir şey kalmayınca kapanır.",
     "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.": "Bir uyanık tutma oturumu başladığında kapalı ekran modunu açar, oturum sona erdiğinde veya Keepresso'dan çıkıldığında kapatır.",
     "Grace period": "Ek süre",
     "Section": "Bölüm",
@@ -99,6 +101,7 @@ APP = {
     "Change…": "Değiştir…",
     "Charging": "Şarj oluyor",
     "Check for Updates…": "Güncellemeleri Denetle…",
+    "Support Keepresso…": "Keepresso'yu Destekle…",
     "Closed-display mode": "Kapalı ekran modu",
     "Contact": "İletişim",
     "Contacting the helper…": "Yardımcıyla iletişim kuruluyor…",
@@ -427,6 +430,7 @@ APP = {
     "Many external drives and NAS volumes park or disconnect after a few minutes idle, and the next thing that touches them stalls while they spin back up. Keepresso rewrites a tiny hidden marker file in the folder you choose, just enough activity to keep the volume awake. Pick an interval shorter than the drive's own idle timeout. This runs whenever Keepresso is running, with or without a keep-awake session, so a drive stays ready even when the Mac is free to sleep.": 'Birçok harici sürücü ve NAS birimi, birkaç dakika boşta kaldıktan sonra park olur veya bağlantısı kesilir ve onlara dokunan bir sonraki işlem, tekrar dönmeye başlarken duraklar. Keepresso, seçtiğiniz klasördeki küçük, gizli bir işaretçi dosyasını yeniden yazar; birimi uyanık tutmaya yetecek kadar bir etkinlik oluşturur. Sürücünün kendi boşta kalma zaman aşımından daha kısa bir aralık seçin. Bu, uyanık tutma oturumu olsun ya da olmasın, Keepresso çalıştığı sürece çalışır, böylece Mac serbestçe uyuyabilse bile bir sürücü hazır kalır.',
     'Stops an external drive or NAS from spinning down.': "Harici bir sürücünün veya NAS'ın dönüşünün durmasını önler.",
     '3 minutes': '3 dakika',
+    'Turn Off Wake Schedule': 'Uyandırma planını kapat',
 }
 
 
@@ -554,7 +558,6 @@ APP.update({
     'Start keep-awake on wake': 'Uyanınca uyanık tut',
     'Starts keep-awake on wake': 'Uyanınca keep-awake başlatır',
     'Session length': 'Oturum süresi',
-    'Turn Off Wake Schedule': 'Uyandırma planını kapat',
     'Awake this week': 'Bu hafta uyanık',
     'No held-awake time in the last week.': 'Geçen hafta uyanık tutma yok.',
     '−%d%% battery': '−%d%% pil',
