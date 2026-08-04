@@ -38,12 +38,8 @@ public protocol VirtualDisplaying: AnyObject {
     var isActive: Bool { get }
     /// The display id to exclude from attached-display checks.
     var displayID: UInt32? { get }
-    /// Whether the held display is currently the main display.
-    var isMain: Bool { get }
     /// Create the virtual display. Returns false if unsupported or it failed.
     func start(_ config: VirtualDisplayConfig) -> Bool
-    /// Prefer the held display as main, leaving it extended if promotion fails.
-    func promoteToMain() -> Bool
     /// Tear down the virtual display.
     func stop()
 }
@@ -55,9 +51,7 @@ public final class NullVirtualDisplay: VirtualDisplaying {
     public var isSupported: Bool { false }
     public var isActive: Bool { false }
     public var displayID: UInt32? { nil }
-    public var isMain: Bool { false }
     public func start(_ config: VirtualDisplayConfig) -> Bool { false }
-    public func promoteToMain() -> Bool { false }
     public func stop() {}
 }
 
@@ -89,13 +83,6 @@ public final class VirtualDisplayController {
 
     /// The active virtual display's CoreGraphics id, when one exists.
     public var displayID: UInt32? { backend.displayID }
-
-    /// Whether the active virtual display is the main display.
-    public var isMain: Bool { backend.isMain }
-
-    /// Prefer the virtual display as main. On failure it remains extended.
-    @discardableResult
-    public func promoteToMain() -> Bool { backend.promoteToMain() }
 
     private func apply() {
         guard let config else {
@@ -135,5 +122,18 @@ public enum VirtualDisplayAutoDecision: Equatable, Sendable {
             return .start
         }
         return .hold
+    }
+
+    /// Decide immediately when IOPMrootDomain announces a lid transition.
+    /// A close notification arrives before display sleep starts, which is the
+    /// only reliable window for creating a usable clamshell virtual display.
+    public static func decideClamshellChange(
+        isClosed: Bool,
+        power: PowerSourceSnapshot.Provider,
+        topology: DisplayTopologySnapshot?
+    ) -> Self {
+        if !isClosed || power == .ac { return .stop }
+        guard power == .battery, let topology else { return .hold }
+        return topology.hasExternalOnlineDisplay ? .stop : .start
     }
 }

@@ -36,8 +36,7 @@ final class AppModel {
     let virtualDisplay = VirtualDisplayController(backend: CGVirtualDisplayBackend())
     @ObservationIgnored private let virtualDisplayPower = IOKitPowerSourceMonitor()
     @ObservationIgnored private let virtualDisplayTopology = CoreGraphicsDisplayTopologyMonitor()
-    @ObservationIgnored private var virtualDisplayPlacementID: UInt32?
-    @ObservationIgnored private var virtualDisplayPlacementAttempts = 0
+    @ObservationIgnored private var virtualDisplayClamshellClosed: Bool?
     /// Built-in display brightness control (private DisplayServices API), for
     /// dim-don't-sleep. Reports unsupported when unavailable; the UI hides the
     /// option then. Held here so the controller and the Preferences gate share
@@ -2679,8 +2678,6 @@ final class AppModel {
         settings.virtualDisplay = config
         if config == nil {
             settings.virtualDisplayAutomatic = false
-            virtualDisplayPlacementID = nil
-            virtualDisplayPlacementAttempts = 0
         }
         if !settings.virtualDisplayAutomatic || virtualDisplay.isActive {
             virtualDisplay.config = config
@@ -2699,30 +2696,40 @@ final class AppModel {
     func virtualDisplayAutoTick() {
         guard settings.virtualDisplayAutomatic,
               let config = settings.virtualDisplay else { return }
-        let decision = VirtualDisplayAutoDecision.decide(
+        let power = virtualDisplayPower.current.provider
+        let topology = virtualDisplayTopology.current(excluding: virtualDisplay.displayID)
+        let decision = if let isClosed = virtualDisplayClamshellClosed {
+            VirtualDisplayAutoDecision.decideClamshellChange(
+                isClosed: isClosed, power: power, topology: topology
+            )
+        } else {
+            VirtualDisplayAutoDecision.decide(power: power, topology: topology)
+        }
+        applyVirtualDisplayDecision(decision, config: config)
+    }
+
+    /// React to IOPMrootDomain's pre-sleep lid notification. Creating the
+    /// virtual display here lets macOS keep it as the clamshell's sole display;
+    /// waiting for the built-in panel to report asleep is already too late.
+    func virtualDisplayClamshellChanged(isClosed: Bool) {
+        virtualDisplayClamshellClosed = isClosed
+        guard settings.virtualDisplayAutomatic,
+              let config = settings.virtualDisplay else { return }
+        applyVirtualDisplayDecision(VirtualDisplayAutoDecision.decideClamshellChange(
+            isClosed: isClosed,
             power: virtualDisplayPower.current.provider,
             topology: virtualDisplayTopology.current(excluding: virtualDisplay.displayID)
-        )
+        ), config: config)
+    }
+
+    private func applyVirtualDisplayDecision(
+        _ decision: VirtualDisplayAutoDecision,
+        config: VirtualDisplayConfig
+    ) {
         switch decision {
         case .start:
-            if virtualDisplay.config != config {
-                virtualDisplay.config = config
-                virtualDisplayPlacementID = virtualDisplay.displayID
-                virtualDisplayPlacementAttempts = 0
-                return // let WindowServer finish registering the new display
-            }
-            guard let displayID = virtualDisplay.displayID else { return }
-            if virtualDisplayPlacementID != displayID {
-                virtualDisplayPlacementID = displayID
-                virtualDisplayPlacementAttempts = 0
-            }
-            if !virtualDisplay.isMain, virtualDisplayPlacementAttempts < 5 {
-                virtualDisplayPlacementAttempts += 1
-                _ = virtualDisplay.promoteToMain()
-            }
+            if virtualDisplay.config != config { virtualDisplay.config = config }
         case .stop:
-            virtualDisplayPlacementID = nil
-            virtualDisplayPlacementAttempts = 0
             if virtualDisplay.config != nil { virtualDisplay.config = nil }
         case .hold:
             break

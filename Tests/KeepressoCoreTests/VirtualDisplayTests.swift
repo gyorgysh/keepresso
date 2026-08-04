@@ -18,17 +18,12 @@ private final class FakeVirtualDisplay: VirtualDisplaying {
     var isSupported: Bool { supported }
     var isActive: Bool { active }
     var displayID: UInt32? { active ? 42 : nil }
-    var isMain = false
     func start(_ config: VirtualDisplayConfig) -> Bool {
         startCalls.append(config)
         active = succeed
         return succeed
     }
-    func promoteToMain() -> Bool {
-        isMain = succeed && active
-        return isMain
-    }
-    func stop() { stopCalls += 1; active = false; isMain = false }
+    func stop() { stopCalls += 1; active = false }
 }
 
 @MainActor
@@ -104,13 +99,29 @@ private final class FakeVirtualDisplay: VirtualDisplaying {
     #expect(VirtualDisplayAutoDecision.decide(power: .unknown, topology: nil) == .hold)
 }
 
-@MainActor
-@Test func virtualDisplayCanBePromotedOnlyAfterItStarts() {
-    let backend = FakeVirtualDisplay()
-    let controller = VirtualDisplayController(backend: backend)
+@Test func clamshellNotificationStartsBeforeDisplaySleep() {
+    let noExternal = DisplayTopologySnapshot(
+        builtIn: .init(isOnline: true, isActive: true, isAsleep: false),
+        externalOnlineDisplayCount: 0
+    )
+    let external = DisplayTopologySnapshot(
+        builtIn: noExternal.builtIn,
+        externalOnlineDisplayCount: 1
+    )
 
-    #expect(!controller.promoteToMain())
-    controller.config = VirtualDisplayConfig(width: 1920, height: 1080)
-    #expect(controller.promoteToMain())
-    #expect(controller.isMain)
+    #expect(VirtualDisplayAutoDecision.decideClamshellChange(
+        isClosed: true, power: .battery, topology: noExternal
+    ) == .start)
+    #expect(VirtualDisplayAutoDecision.decideClamshellChange(
+        isClosed: false, power: .battery, topology: noExternal
+    ) == .stop)
+    #expect(VirtualDisplayAutoDecision.decideClamshellChange(
+        isClosed: true, power: .ac, topology: noExternal
+    ) == .stop)
+    #expect(VirtualDisplayAutoDecision.decideClamshellChange(
+        isClosed: true, power: .battery, topology: external
+    ) == .stop)
+    #expect(VirtualDisplayAutoDecision.decideClamshellChange(
+        isClosed: true, power: .unknown, topology: noExternal
+    ) == .hold)
 }
