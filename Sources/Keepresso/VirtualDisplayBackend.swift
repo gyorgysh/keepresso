@@ -96,7 +96,7 @@ final class CGVirtualDisplayBackend: VirtualDisplaying {
                 return false
             }
         }
-        let complete = CGCompleteDisplayConfiguration(configuration, .forAppOnly)
+        let complete = CGCompleteDisplayConfiguration(configuration, .forSession)
         if complete != .success {
             NSLog("Keepresso: complete main-display configuration failed: %d", complete.rawValue)
             return false
@@ -130,7 +130,7 @@ final class CGVirtualDisplayBackend: VirtualDisplaying {
                 return false
             }
         }
-        let complete = CGCompleteDisplayConfiguration(configuration, .forAppOnly)
+        let complete = CGCompleteDisplayConfiguration(configuration, .forSession)
         if complete != .success {
             NSLog("Keepresso: complete unmirror configuration failed: %d", complete.rawValue)
             return false
