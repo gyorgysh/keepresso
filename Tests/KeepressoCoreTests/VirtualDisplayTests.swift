@@ -17,6 +17,7 @@ private final class FakeVirtualDisplay: VirtualDisplaying {
 
     var isSupported: Bool { supported }
     var isActive: Bool { active }
+    var displayID: UInt32? { active ? 42 : nil }
     func start(_ config: VirtualDisplayConfig) -> Bool {
         startCalls.append(config)
         active = succeed
@@ -68,4 +69,32 @@ private final class FakeVirtualDisplay: VirtualDisplaying {
     let data = try JSONEncoder().encode(config)
     #expect(try JSONDecoder().decode(VirtualDisplayConfig.self, from: data) == config)
     #expect(config.label == "2880\u{00D7}1620")
+}
+
+@Test func automaticVirtualDisplayDecisionCoversTheStateMatrix() {
+    let awake = DisplayTopologySnapshot.BuiltInDisplay(
+        isOnline: true, isActive: true, isAsleep: false)
+    let asleep = DisplayTopologySnapshot.BuiltInDisplay(
+        isOnline: true, isActive: false, isAsleep: true)
+    let transitional = DisplayTopologySnapshot.BuiltInDisplay(
+        isOnline: true, isActive: false, isAsleep: false)
+
+    #expect(VirtualDisplayAutoDecision.decide(
+        power: .battery,
+        topology: DisplayTopologySnapshot(builtIn: asleep, externalOnlineDisplayCount: 0)
+    ) == .start)
+    #expect(VirtualDisplayAutoDecision.decide(
+        power: .battery,
+        topology: DisplayTopologySnapshot(builtIn: awake, externalOnlineDisplayCount: 0)
+    ) == .stop)
+    #expect(VirtualDisplayAutoDecision.decide(
+        power: .battery,
+        topology: DisplayTopologySnapshot(builtIn: asleep, externalOnlineDisplayCount: 1)
+    ) == .stop)
+    #expect(VirtualDisplayAutoDecision.decide(power: .ac, topology: nil) == .stop)
+    #expect(VirtualDisplayAutoDecision.decide(
+        power: .battery,
+        topology: DisplayTopologySnapshot(builtIn: transitional, externalOnlineDisplayCount: 0)
+    ) == .hold)
+    #expect(VirtualDisplayAutoDecision.decide(power: .unknown, topology: nil) == .hold)
 }

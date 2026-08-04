@@ -10,6 +10,24 @@ import Foundation
     #expect(decoded.hotKey == settings.hotKey)
 }
 
+@Test func automaticVirtualDisplayRoundTripsAndDefaultsOff() throws {
+    let old = try JSONDecoder().decode(KeepressoSettings.self, from: Data("{}".utf8))
+    #expect(!old.virtualDisplayAutomatic)
+    let invalid = try JSONDecoder().decode(
+        KeepressoSettings.self,
+        from: Data(#"{"virtualDisplayAutomatic":true}"#.utf8)
+    )
+    #expect(!invalid.virtualDisplayAutomatic)
+
+    var settings = KeepressoSettings.default
+    settings.virtualDisplay = VirtualDisplayConfig(width: 2560, height: 1440)
+    settings.virtualDisplayAutomatic = true
+    let data = try JSONEncoder().encode(settings)
+    let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: data)
+    #expect(decoded.virtualDisplay == settings.virtualDisplay)
+    #expect(decoded.virtualDisplayAutomatic)
+}
+
 @Test func settingsWithoutAHotKeyDecodeToNilWithoutThrowing() throws {
     // A blob saved before the hotKey field existed must still decode, keeping
     // the user's other settings rather than resetting to defaults.

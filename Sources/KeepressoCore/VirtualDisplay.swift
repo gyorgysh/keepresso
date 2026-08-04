@@ -36,6 +36,8 @@ public protocol VirtualDisplaying: AnyObject {
     var isSupported: Bool { get }
     /// Whether a virtual display is currently held.
     var isActive: Bool { get }
+    /// The display id to exclude from attached-display checks.
+    var displayID: UInt32? { get }
     /// Create the virtual display. Returns false if unsupported or it failed.
     func start(_ config: VirtualDisplayConfig) -> Bool
     /// Tear down the virtual display.
@@ -48,6 +50,7 @@ public final class NullVirtualDisplay: VirtualDisplaying {
     public init() {}
     public var isSupported: Bool { false }
     public var isActive: Bool { false }
+    public var displayID: UInt32? { nil }
     public func start(_ config: VirtualDisplayConfig) -> Bool { false }
     public func stop() {}
 }
@@ -78,6 +81,9 @@ public final class VirtualDisplayController {
     /// Whether a virtual display is currently held.
     public var isActive: Bool { backend.isActive }
 
+    /// The active virtual display's CoreGraphics id, when one exists.
+    public var displayID: UInt32? { backend.displayID }
+
     private func apply() {
         guard let config else {
             backend.stop()
@@ -89,5 +95,32 @@ public final class VirtualDisplayController {
             return
         }
         lastError = backend.start(config) ? nil : L("Couldn't create the virtual display.")
+    }
+}
+
+/// A conservative automatic-mode verdict. Unknown and transitional states hold
+/// the current state so display reconfiguration cannot make the virtual display
+/// flap on and off.
+public enum VirtualDisplayAutoDecision: Equatable, Sendable {
+    case start
+    case stop
+    case hold
+
+    public static func decide(
+        power: PowerSourceSnapshot.Provider,
+        topology: DisplayTopologySnapshot?
+    ) -> Self {
+        if power == .ac { return .stop }
+        guard let topology else { return .hold }
+        if topology.hasExternalOnlineDisplay { return .stop }
+        guard let builtIn = topology.builtIn else { return .hold }
+        if builtIn.isOnline && builtIn.isActive { return .stop }
+        if power == .battery,
+           builtIn.isOnline,
+           builtIn.isAsleep,
+           !builtIn.isActive {
+            return .start
+        }
+        return .hold
     }
 }

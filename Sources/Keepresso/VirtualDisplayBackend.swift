@@ -8,6 +8,7 @@ final class CGVirtualDisplayBackend: VirtualDisplaying {
 
     var isSupported: Bool { KPVirtualDisplay.isSupported() }
     var isActive: Bool { display.isActive }
+    private(set) var displayID: UInt32?
 
     func start(_ config: VirtualDisplayConfig) -> Bool {
         display.stop() // replace any existing display
@@ -17,8 +18,12 @@ final class CGVirtualDisplayBackend: VirtualDisplaying {
             hiDPI: config.hiDPI,
             name: "Keepresso Virtual Display"
         )
-        return id != 0
+        displayID = id == 0 ? nil : id
+        return displayID != nil
     }
 
-    func stop() { display.stop() }
+    func stop() {
+        display.stop()
+        displayID = nil
+    }
 }

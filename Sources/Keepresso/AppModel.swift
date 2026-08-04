@@ -34,6 +34,8 @@ final class AppModel {
     /// Experimental headless virtual display (private CoreGraphics API), off by
     /// default. Uses the real backend; `nil` config means no virtual display.
     let virtualDisplay = VirtualDisplayController(backend: CGVirtualDisplayBackend())
+    @ObservationIgnored private let virtualDisplayPower = IOKitPowerSourceMonitor()
+    @ObservationIgnored private let virtualDisplayTopology = CoreGraphicsDisplayTopologyMonitor()
     /// Built-in display brightness control (private DisplayServices API), for
     /// dim-don't-sleep. Reports unsupported when unavailable; the UI hides the
     /// option then. Held here so the controller and the Preferences gate share
@@ -187,7 +189,7 @@ final class AppModel {
         GlassClarity.shared.value = Double(loaded.glassClarity) / 100
         self.disk = DiskKeepAliveController()
         self.disk.config = loaded.diskKeepAlive
-        self.virtualDisplay.config = loaded.virtualDisplay
+        self.virtualDisplay.config = loaded.virtualDisplayAutomatic ? nil : loaded.virtualDisplay
         self.awdl.autoWithGaming = loaded.awdlAutoWithGaming
         self.gamingWatcher.grace = loaded.awdlGraceSeconds
         self.closedDisplayAuto.onlyWhileBrewing = loaded.closedDisplayOnlyWhileBrewing
@@ -1526,7 +1528,7 @@ final class AppModel {
         thermalGuard.config = effectiveThermalConfig(newSettings.thermalSafety)
         GlassClarity.shared.value = Double(newSettings.glassClarity) / 100
         disk.config = newSettings.diskKeepAlive
-        virtualDisplay.config = newSettings.virtualDisplay
+        virtualDisplay.config = newSettings.virtualDisplayAutomatic ? nil : newSettings.virtualDisplay
         awdl.autoWithGaming = newSettings.awdlAutoWithGaming
         closedDisplayAuto.onlyWhileBrewing = newSettings.closedDisplayOnlyWhileBrewing
         controllerPoker.enabled = newSettings.controllerPokeWhileGaming
@@ -2664,14 +2666,45 @@ final class AppModel {
     /// The current virtual-display configuration, or `nil` when off.
     var virtualDisplayConfig: VirtualDisplayConfig? { settings.virtualDisplay }
 
+    /// Whether the configured display follows battery and display state.
+    var virtualDisplayAutomatic: Bool { settings.virtualDisplayAutomatic }
+
     /// Any error from the last attempt to create the virtual display.
     var virtualDisplayError: String? { virtualDisplay.lastError }
 
     /// Set (or clear, with `nil`) the virtual display and persist the choice.
     func setVirtualDisplay(_ config: VirtualDisplayConfig?) {
         settings.virtualDisplay = config
-        virtualDisplay.config = config
+        if config == nil { settings.virtualDisplayAutomatic = false }
+        if !settings.virtualDisplayAutomatic || virtualDisplay.isActive {
+            virtualDisplay.config = config
+        }
         persist()
+    }
+
+    func setVirtualDisplayAutomatic(_ automatic: Bool) {
+        settings.virtualDisplayAutomatic = automatic
+        if !automatic { virtualDisplay.config = settings.virtualDisplay }
+        persist()
+    }
+
+    /// Once-a-second automatic virtual-display reconciliation. Starting is
+    /// strict; failed or transitional readings leave the current state alone.
+    func virtualDisplayAutoTick() {
+        guard settings.virtualDisplayAutomatic,
+              let config = settings.virtualDisplay else { return }
+        let decision = VirtualDisplayAutoDecision.decide(
+            power: virtualDisplayPower.current.provider,
+            topology: virtualDisplayTopology.current(excluding: virtualDisplay.displayID)
+        )
+        switch decision {
+        case .start:
+            if virtualDisplay.config != config { virtualDisplay.config = config }
+        case .stop:
+            if virtualDisplay.config != nil { virtualDisplay.config = nil }
+        case .hold:
+            break
+        }
     }
 
     // MARK: - Gaming & Streaming
