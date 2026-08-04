@@ -9,9 +9,10 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 - **Virtual displays can follow a closed, sleeping built-in display.** Automatic
   mode creates the configured virtual display only on battery, when the built-in
-  display is online but asleep and no other online display is attached. It
-  removes the virtual display as soon as the built-in wakes, another display
-  appears, or AC power is connected.
+  display is online but asleep and no other online display is attached. It makes
+  the virtual display main when possible, otherwise leaving it as an unmirrored
+  extension. It removes the virtual display as soon as the built-in wakes,
+  another display appears, or AC power is connected.
 
 ## [1.20.2] - 2026-08-03
 

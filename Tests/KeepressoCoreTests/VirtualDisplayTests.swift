@@ -18,12 +18,17 @@ private final class FakeVirtualDisplay: VirtualDisplaying {
     var isSupported: Bool { supported }
     var isActive: Bool { active }
     var displayID: UInt32? { active ? 42 : nil }
+    var isMain = false
     func start(_ config: VirtualDisplayConfig) -> Bool {
         startCalls.append(config)
         active = succeed
         return succeed
     }
-    func stop() { stopCalls += 1; active = false }
+    func promoteToMain() -> Bool {
+        isMain = succeed && active
+        return isMain
+    }
+    func stop() { stopCalls += 1; active = false; isMain = false }
 }
 
 @MainActor
@@ -97,4 +102,15 @@ private final class FakeVirtualDisplay: VirtualDisplaying {
         topology: DisplayTopologySnapshot(builtIn: transitional, externalOnlineDisplayCount: 0)
     ) == .hold)
     #expect(VirtualDisplayAutoDecision.decide(power: .unknown, topology: nil) == .hold)
+}
+
+@MainActor
+@Test func virtualDisplayCanBePromotedOnlyAfterItStarts() {
+    let backend = FakeVirtualDisplay()
+    let controller = VirtualDisplayController(backend: backend)
+
+    #expect(!controller.promoteToMain())
+    controller.config = VirtualDisplayConfig(width: 1920, height: 1080)
+    #expect(controller.promoteToMain())
+    #expect(controller.isMain)
 }

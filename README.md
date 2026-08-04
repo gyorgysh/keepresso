@@ -210,9 +210,10 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 - 🖼️ **Headless virtual display (experimental).** On a Mac with no monitor,
   create a higher-resolution HiDPI virtual display so Screen Sharing and VNC look
   crisp instead of a fuzzy 1920×1080. It can switch on automatically while the
-  built-in display sleeps on battery, then switch off when a real display or AC
-  power returns. Off by default; uses a private macOS API, so it's a no-dummy-plug
-  software alternative you should treat as experimental.
+  built-in display sleeps on battery, prefer that virtual display as the main
+  display (falling back to an unmirrored extended display), then switch off when
+  a real display or AC power returns. Off by default; uses a private macOS API,
+  so it's a no-dummy-plug software alternative you should treat as experimental.
 - ✨ **Native and quiet.** A menu-bar agent with an animated cup while brewing, a
   live summary of what's holding the session on, a Liquid Glass app icon (Icon
   Composer, with light, dark, and tinted appearances), and Liquid Glass window

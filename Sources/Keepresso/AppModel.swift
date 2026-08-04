@@ -36,6 +36,7 @@ final class AppModel {
     let virtualDisplay = VirtualDisplayController(backend: CGVirtualDisplayBackend())
     @ObservationIgnored private let virtualDisplayPower = IOKitPowerSourceMonitor()
     @ObservationIgnored private let virtualDisplayTopology = CoreGraphicsDisplayTopologyMonitor()
+    @ObservationIgnored private var virtualDisplayPlacementAttemptedID: UInt32?
     /// Built-in display brightness control (private DisplayServices API), for
     /// dim-don't-sleep. Reports unsupported when unavailable; the UI hides the
     /// option then. Held here so the controller and the Preferences gate share
@@ -2675,7 +2676,10 @@ final class AppModel {
     /// Set (or clear, with `nil`) the virtual display and persist the choice.
     func setVirtualDisplay(_ config: VirtualDisplayConfig?) {
         settings.virtualDisplay = config
-        if config == nil { settings.virtualDisplayAutomatic = false }
+        if config == nil {
+            settings.virtualDisplayAutomatic = false
+            virtualDisplayPlacementAttemptedID = nil
+        }
         if !settings.virtualDisplayAutomatic || virtualDisplay.isActive {
             virtualDisplay.config = config
         }
@@ -2700,7 +2704,13 @@ final class AppModel {
         switch decision {
         case .start:
             if virtualDisplay.config != config { virtualDisplay.config = config }
+            if let displayID = virtualDisplay.displayID,
+               virtualDisplayPlacementAttemptedID != displayID {
+                virtualDisplay.promoteToMain()
+                virtualDisplayPlacementAttemptedID = displayID
+            }
         case .stop:
+            virtualDisplayPlacementAttemptedID = nil
             if virtualDisplay.config != nil { virtualDisplay.config = nil }
         case .hold:
             break
