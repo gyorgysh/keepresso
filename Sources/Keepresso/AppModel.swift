@@ -36,7 +36,8 @@ final class AppModel {
     let virtualDisplay = VirtualDisplayController(backend: CGVirtualDisplayBackend())
     @ObservationIgnored private let virtualDisplayPower = IOKitPowerSourceMonitor()
     @ObservationIgnored private let virtualDisplayTopology = CoreGraphicsDisplayTopologyMonitor()
-    @ObservationIgnored private var virtualDisplayPlacementAttemptedID: UInt32?
+    @ObservationIgnored private var virtualDisplayPlacementID: UInt32?
+    @ObservationIgnored private var virtualDisplayPlacementAttempts = 0
     /// Built-in display brightness control (private DisplayServices API), for
     /// dim-don't-sleep. Reports unsupported when unavailable; the UI hides the
     /// option then. Held here so the controller and the Preferences gate share
@@ -2678,7 +2679,8 @@ final class AppModel {
         settings.virtualDisplay = config
         if config == nil {
             settings.virtualDisplayAutomatic = false
-            virtualDisplayPlacementAttemptedID = nil
+            virtualDisplayPlacementID = nil
+            virtualDisplayPlacementAttempts = 0
         }
         if !settings.virtualDisplayAutomatic || virtualDisplay.isActive {
             virtualDisplay.config = config
@@ -2703,14 +2705,24 @@ final class AppModel {
         )
         switch decision {
         case .start:
-            if virtualDisplay.config != config { virtualDisplay.config = config }
-            if let displayID = virtualDisplay.displayID,
-               virtualDisplayPlacementAttemptedID != displayID {
-                virtualDisplay.promoteToMain()
-                virtualDisplayPlacementAttemptedID = displayID
+            if virtualDisplay.config != config {
+                virtualDisplay.config = config
+                virtualDisplayPlacementID = virtualDisplay.displayID
+                virtualDisplayPlacementAttempts = 0
+                return // let WindowServer finish registering the new display
+            }
+            guard let displayID = virtualDisplay.displayID else { return }
+            if virtualDisplayPlacementID != displayID {
+                virtualDisplayPlacementID = displayID
+                virtualDisplayPlacementAttempts = 0
+            }
+            if !virtualDisplay.isMain, virtualDisplayPlacementAttempts < 5 {
+                virtualDisplayPlacementAttempts += 1
+                _ = virtualDisplay.promoteToMain()
             }
         case .stop:
-            virtualDisplayPlacementAttemptedID = nil
+            virtualDisplayPlacementID = nil
+            virtualDisplayPlacementAttempts = 0
             if virtualDisplay.config != nil { virtualDisplay.config = nil }
         case .hold:
             break

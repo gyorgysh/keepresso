@@ -62,7 +62,12 @@ final class CGVirtualDisplayBackend: VirtualDisplaying {
     /// Shift the whole online desktop so `displayID` lands at (0, 0), which is
     /// how CoreGraphics defines the main display. Relative placement is kept.
     private func makeMain(_ displayID: CGDirectDisplayID) -> Bool {
-        guard let displays = onlineDisplays(), displays.contains(displayID) else {
+        guard let displays = onlineDisplays() else {
+            NSLog("Keepresso: online display list unavailable during main promotion")
+            return false
+        }
+        guard displays.contains(displayID) else {
+            NSLog("Keepresso: virtual display %u is not online yet", displayID)
             return false
         }
         let targetOrigin = CGDisplayBounds(displayID).origin
@@ -96,7 +101,11 @@ final class CGVirtualDisplayBackend: VirtualDisplaying {
             NSLog("Keepresso: complete main-display configuration failed: %d", complete.rawValue)
             return false
         }
-        return CGDisplayIsMain(displayID) != 0
+        let isMain = CGDisplayIsMain(displayID) != 0
+        if !isMain {
+            NSLog("Keepresso: display %u remained non-main after successful configuration", displayID)
+        }
+        return isMain
     }
 
     /// A virtual display starts extended. If macOS ever supplies it in a mirror
