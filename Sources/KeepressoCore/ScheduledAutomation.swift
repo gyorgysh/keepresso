@@ -1,9 +1,10 @@
 import Foundation
 
-/// A recurring local automation that a scheduler (Claude Desktop, Codex, ...)
-/// runs *on this Mac*, discovered so Keepresso can wake for it. Deliberately
-/// carries only what a wake needs: identity, a display name, its recurrence, and
-/// whether it is enabled. The task's prompt is never read or retained.
+/// A recurring local automation that a scheduler (Claude Desktop, Codex,
+/// tokenstat, ...) runs *on this Mac*, discovered so Keepresso can wake for it.
+/// Deliberately carries only what a wake needs: identity, a display name, its
+/// recurrence, and whether it is enabled. The task's prompt is never read or
+/// retained.
 ///
 /// Only *local* automations belong here. Cloud routines run on the vendor's
 /// servers whether the Mac is awake or not, so there is nothing to wake for and
@@ -14,12 +15,14 @@ public struct ScheduledAutomation: Equatable, Sendable, Identifiable {
     public enum Source: String, Codable, Sendable, CaseIterable {
         case claudeDesktop = "claude"
         case codex
+        case tokenstat
 
         /// Human label for the source, for the "synced from" UI.
         public var label: String {
             switch self {
             case .claudeDesktop: return "Claude Desktop"
             case .codex:         return "Codex"
+            case .tokenstat:     return "tokenstat.ai"
             }
         }
     }
@@ -49,11 +52,16 @@ public struct ScheduledAutomation: Equatable, Sendable, Identifiable {
 }
 
 /// How an automation recurs. A common surface over the per-source schedule
-/// formats (Claude Desktop stores cron; Codex stores an iCal RRULE) so the wake
-/// planner treats every source the same.
+/// formats (Claude Desktop stores cron; Codex stores an iCal RRULE; tokenstat.ai
+/// stores once/interval/daily/weekdays/weekly/custom, with interval relative
+/// rather than wall-clock) so the wake planner treats every source the same.
 public enum Recurrence: Equatable, Sendable {
     case cron(CronExpression)
     case rrule(RecurrenceRule)
+    /// Every `every` seconds, starting from `anchor`. Used for tokenstat
+    /// interval jobs, which fire relative to their last schedule tick rather
+    /// than a fixed wall-clock time. `anchor` is usually the job's next run.
+    case interval(every: TimeInterval, anchor: Date)
 
     /// The next `count` run times strictly after `date`, in order.
     public func nextOccurrences(after date: Date, count: Int, calendar: Calendar) -> [Date] {
@@ -62,7 +70,31 @@ public enum Recurrence: Equatable, Sendable {
             return expression.nextOccurrences(after: date, count: count, calendar: calendar)
         case .rrule(let rule):
             return rule.nextOccurrences(after: date, count: count, calendar: calendar)
+        case .interval(let every, let anchor):
+            return Self.intervalOccurrences(every: every, anchor: anchor, after: date, count: count)
         }
+    }
+
+    /// Project an interval series strictly after `date`. Floors at one minute
+    /// so a bad or zero period cannot spin.
+    private static func intervalOccurrences(
+        every: TimeInterval, anchor: Date, after date: Date, count: Int
+    ) -> [Date] {
+        let period = max(60, every)
+        var next = anchor
+        if next <= date {
+            let steps = floor(date.timeIntervalSince(next) / period) + 1
+            next = next.addingTimeInterval(steps * period)
+            // Floating point can leave next still on or before date.
+            while next <= date { next = next.addingTimeInterval(period) }
+        }
+        var result: [Date] = []
+        result.reserveCapacity(max(0, count))
+        for _ in 0..<max(0, count) {
+            result.append(next)
+            next = next.addingTimeInterval(period)
+        }
+        return result
     }
 }
 

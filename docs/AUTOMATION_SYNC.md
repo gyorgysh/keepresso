@@ -10,7 +10,7 @@ There are two kinds of scheduled AI task, and only one needs a Mac that's awake:
 
 | | Where it runs | Needs the Mac awake? | Synced by Keepresso |
 | --- | --- | --- | --- |
-| **Local** (Claude Desktop local routine, Codex automation) | Your Mac | **Yes**, skipped if it sleeps through the time | **Yes** |
+| **Local** (Claude Desktop local routine, Codex automation, tokenstat automation) | Your Mac | **Yes**, skipped if it sleeps through the time | **Yes** |
 | **Cloud** (Claude cloud routine, ChatGPT task) | The vendor's servers | No, runs with the lid shut | No |
 
 Cloud routines are neither listed nor woken for: waking the Mac wouldn't change
@@ -30,6 +30,7 @@ with the lid shut).
 1. Keepresso discovers local tasks by reading each tool's on-disk schedule:
    - Claude Desktop: `~/Library/Application Support/Claude/claude-code-sessions/*/*/scheduled-tasks.json` (5-field cron).
    - Codex: `~/.codex/automations/*/automation.toml` (iCal RRULE).
+   - tokenstat.ai: `~/Library/Application Support/ai.tokenstat.tokenstat/automations.json` (daily, weekdays, weekly, custom multi-day, interval; once is skipped).
 2. It arms a firmware wake a few minutes before the next run (`pmset`, through
    the administrator helper), re-arming as runs fire.
 3. When the Mac wakes for a run, Keepresso holds a keep-awake session for a
@@ -46,6 +47,9 @@ same as the manual scheduled-wake feature.
   schedule (Daily, Weekly, ...). Choosing **Cloud** instead runs it on
   Anthropic's servers, where no wake is needed.
 - **Codex:** create an automation with `execution_environment = "local"`.
+- **tokenstat.ai:** create an automation in the tokenstat app with a Daily,
+  Weekdays, Weekly, Custom, or Interval schedule. Once (run-on-demand) jobs
+  are not woken for.
 
 ## Let an agent hold the Mac awake for the whole run
 

@@ -634,7 +634,7 @@
 "A few basics" = "Ein paar Grundlagen";
 "Activation is controlled by triggers.\nEnd the automation leases before pausing." = "Die Aktivierung wird von Auslösern gesteuert.\nBeende die Automatisierungs-Leases, bevor du pausierst.";
 "Add app" = "App hinzufügen";
-"Add one in Claude Desktop (Routines ▸ New routine ▸ Local) or Codex (Scheduled tasks ▸ Create), then refresh. Cloud routines run on the vendor's servers and need no wake." = "Füge eine in Claude Desktop hinzu (Routinen ▸ Neue Routine ▸ Lokal) oder in Codex (Geplante Aufgaben ▸ Erstellen), dann aktualisiere. Cloud-Routinen laufen auf den Servern des Anbieters und brauchen kein Aufwecken.";
+"Add one in Claude Desktop (Routines ▸ New routine ▸ Local), Codex (Scheduled tasks ▸ Create), or tokenstat.ai (Automations), then refresh. Cloud routines run on the vendor's servers and need no wake." = "Füge eine in Claude Desktop hinzu (Routinen ▸ Neue Routine ▸ Lokal) oder in Codex (Geplante Aufgaben ▸ Erstellen), dann aktualisiere. Cloud-Routinen laufen auf den Servern des Anbieters und brauchen kein Aufwecken.";
 "An automation lease is waiting (safety pause)" = "Ein Automatisierungs-Lease wartet (Sicherheitspause)";
 "Awake for a scheduled run" = "Wach für einen geplanten Lauf";
 "Battery below %d%%, Keepresso sessions paused until plugged in" = "Akku unter %d%%, Keepresso-Sitzungen pausiert, bis er am Netzstrom ist";
@@ -653,7 +653,7 @@
 "Keeping awake for calls in" = "Wach gehalten für Anrufe in";
 "Keeping this Mac awake for “%@” to run." = "Hält diesen Mac wach, damit „%@“ laufen kann.";
 "Keepresso keeps your Mac awake from the menu bar, with no Dock icon and no main window." = "Keepresso hält deinen Mac von der Menüleiste aus wach, ohne Dock-Symbol und ohne Hauptfenster.";
-"Keepresso reads the recurring tasks your local AI tools schedule (Claude Desktop local routines, Codex automations), wakes the Mac a few minutes before each run, and holds it awake for a short window so the run is not skipped. It reads only the schedule and name, never the task's prompt. Cloud routines run on the vendor's servers even with the lid shut, so they are neither listed nor woken for. For a run longer than the window, have the agent hold a Keepresso lease (see the command line and MCP setup below) and the Mac stays awake until it releases." = "Keepresso liest die wiederkehrenden Aufgaben, die deine lokalen KI-Tools planen (lokale Claude-Desktop-Routinen, Codex-Automatisierungen), weckt den Mac ein paar Minuten vor jedem Lauf auf und hält ihn für ein kurzes Zeitfenster wach, damit der Lauf nicht ausfällt. Es liest nur den Zeitplan und den Namen, nie den Prompt der Aufgabe. Cloud-Routinen laufen auf den Servern des Anbieters, selbst bei geschlossenem Deckel, daher werden sie weder aufgelistet noch geweckt. Dauert ein Lauf länger als das Zeitfenster, lass den Agenten einen Keepresso-Lease halten (siehe Kommandozeile und MCP-Einrichtung unten), dann bleibt der Mac wach, bis er ihn freigibt.";
+"Keepresso reads the recurring tasks your local AI tools schedule (Claude Desktop local routines, Codex automations, tokenstat.ai automations), wakes the Mac a few minutes before each run, and holds it awake for a short window so the run is not skipped. It reads only the schedule and name, never the task's prompt. Cloud routines run on the vendor's servers even with the lid shut, so they are neither listed nor woken for. For a run longer than the window, have the agent hold a Keepresso lease (see the command line and MCP setup below) and the Mac stays awake until it releases." = "Keepresso liest die wiederkehrenden Aufgaben, die deine lokalen KI-Tools planen (lokale Claude-Desktop-Routinen, Codex-Automatisierungen, tokenstat-Automatisierungen), weckt den Mac ein paar Minuten vor jedem Lauf auf und hält ihn für ein kurzes Zeitfenster wach, damit der Lauf nicht ausfällt. Es liest nur den Zeitplan und den Namen, nie den Prompt der Aufgabe. Cloud-Routinen laufen auf den Servern des Anbieters, selbst bei geschlossenem Deckel, daher werden sie weder aufgelistet noch geweckt. Dauert ein Lauf länger als das Zeitfenster, lass den Agenten einen Keepresso-Lease halten (siehe Kommandozeile und MCP-Einrichtung unten), dann bleibt der Mac wach, bis er ihn freigibt.";
 "Keepresso runs in the menu bar. Click the cup at any time, or open Preferences for everything else." = "Keepresso läuft in der Menüleiste. Klicke jederzeit auf die Tasse, oder öffne die Einstellungen für alles andere.";
 "Keeps the Mac awake only while a chosen app is using the microphone, i.e. on a call (Discord, Slack, Zoom, and the like), so an idle browser tab or Voice Memos doesn't. Reads which app holds the mic, no permission needed. If you're on a call now, the app appears under “Using the mic now”." = "Hält den Mac nur wach, solange eine gewählte App das Mikrofon verwendet, also während eines Anrufs (Discord, Slack, Zoom und Ähnliches), damit ein untätiger Browser-Tab oder Sprachmemos das nicht auslösen. Liest, welche App das Mikrofon belegt, ohne dass eine Berechtigung nötig ist. Bist du gerade in einem Anruf, erscheint die App unter „Nutzt gerade das Mikrofon“.";
 "Leases are off. Turn on “Allow automation leases” under Automation access for the agent's lease to hold." = "Leases sind aus. Aktiviere „Automatisierungs-Leases erlauben“ unter Automatisierungszugriff, damit der Lease des Agenten hält.";
@@ -665,8 +665,8 @@
 "Paused in %@" = "Pausiert in %@";
 "Plugged into power" = "Am Netzstrom";
 "Repeating wake on this Mac: %@" = "Wiederkehrendes Aufwecken auf diesem Mac: %@";
-"Scanning Claude Desktop and Codex" = "Claude Desktop und Codex werden durchsucht";
-"Scanning Claude Desktop and Codex · checked %@" = "Claude Desktop und Codex werden durchsucht · geprüft %@";
+"Scanning Claude Desktop, Codex, and tokenstat.ai" = "Claude Desktop, Codex und tokenstat werden durchsucht";
+"Scanning Claude Desktop, Codex, and tokenstat.ai · checked %@" = "Claude Desktop, Codex und tokenstat werden durchsucht · geprüft %@";
 "Scheduled AI runs" = "Geplante KI-Läufe";
 "Scheduled wakes on this Mac: %@" = "Geplante Aufweckzeiten auf diesem Mac: %@";
 "Stay awake for" = "Wach bleiben für";
@@ -679,7 +679,7 @@
 "Turn on a platform to wake for its runs. Left off, they stay listed but are never woken for." = "Schalte eine Plattform ein, um für ihre Läufe aufzuwecken. Bleibt sie aus, werden sie weiterhin aufgelistet, aber nie geweckt.";
 "Using the mic now" = "Nutzt gerade das Mikrofon";
 "Wake for scheduled AI runs" = "Für geplante KI-Läufe aufwecken";
-"Wake the Mac for local Claude Desktop and Codex tasks, then hold it awake while they run." = "Weckt den Mac für lokale Claude-Desktop- und Codex-Aufgaben auf und hält ihn wach, während sie laufen.";
+"Wake the Mac for local Claude Desktop, Codex, and tokenstat.ai tasks, then hold it awake while they run." = "Weckt den Mac für lokale Claude-Desktop- und Codex-Aufgaben auf und hält ihn wach, während sie laufen.";
 "Waking for scheduled AI runs needs the administrator helper, the same one closed-display mode and fan boost use. Install once, and macOS asks for approval in System Settings." = "Das Aufwecken für geplante KI-Läufe braucht den Administrator-Hilfsdienst, denselben, den der Modus bei geschlossenem Display und der Lüfter-Boost verwenden. Einmal installieren, dann bittet macOS in den Systemeinstellungen um Genehmigung.";
 "Welcome to Keepresso…" = "Willkommen bei Keepresso…";
 "When should it stay awake?" = "Wann soll er wach bleiben?";

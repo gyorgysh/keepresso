@@ -1,10 +1,11 @@
 import Foundation
 import KeepressoCore
 
-/// Discovers local AI automations (Claude Desktop, Codex) and keeps the latest
-/// list for the Automations UI and the wake armer. A thin app wrapper over the
-/// ``LocalAutomationReading`` seams: every schedule decision lives in Core
-/// (``AutomationSync``), this just holds the readers and the discovered list.
+/// Discovers local AI automations (Claude Desktop, Codex, tokenstat.ai) and keeps
+/// the latest list for the Automations UI and the wake armer. A thin app
+/// wrapper over the ``LocalAutomationReading`` seams: every schedule decision
+/// lives in Core (``AutomationSync``), this just holds the readers and the
+/// discovered list.
 @MainActor
 @Observable
 final class AutomationSyncController {
@@ -25,6 +26,7 @@ final class AutomationSyncController {
     init(readers: [LocalAutomationReading] = [
         ClaudeScheduledTasksReader.real(),
         CodexAutomationsReader.real(),
+        TokenstatAutomationsReader.real(),
     ]) {
         self.readers = readers
     }

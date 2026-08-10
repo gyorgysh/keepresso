@@ -5,6 +5,17 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- **Wake for tokenstat.ai automations.** Scheduled AI runs now also discovers
+  tokenstat.ai jobs from
+  `~/Library/Application Support/ai.tokenstat.tokenstat/automations.json`
+  (daily, weekly, weekdays, custom multi-day, and interval schedules; once is
+  skipped), so the Mac can be woken for those the same way it already is for
+  Claude Desktop local routines and Codex automations. Only schedule and name are read, never
+  the prompt. Opt in under Preferences ▸ Automation ▸ Scheduled AI runs by
+  turning on the tokenstat.ai platform.
+
 ## [1.20.2] - 2026-08-03
 
 ### Added

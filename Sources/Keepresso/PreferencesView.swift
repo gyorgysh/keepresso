@@ -1046,9 +1046,9 @@ private struct AutomationTab: View {
                 automationSyncLockedContent
             }
         } header: {
-            sectionHeader("Scheduled AI runs", info: L("Keepresso reads the recurring tasks your local AI tools schedule (Claude Desktop local routines, Codex automations), wakes the Mac a few minutes before each run, and holds it awake for a short window so the run is not skipped. It reads only the schedule and name, never the task's prompt. Cloud routines run on the vendor's servers even with the lid shut, so they are neither listed nor woken for. For a run longer than the window, have the agent hold a Keepresso lease (see the command line and MCP setup below) and the Mac stays awake until it releases."))
+            sectionHeader("Scheduled AI runs", info: L("Keepresso reads the recurring tasks your local AI tools schedule (Claude Desktop local routines, Codex automations, tokenstat.ai automations), wakes the Mac a few minutes before each run, and holds it awake for a short window so the run is not skipped. It reads only the schedule and name, never the task's prompt. Cloud routines run on the vendor's servers even with the lid shut, so they are neither listed nor woken for. For a run longer than the window, have the agent hold a Keepresso lease (see the command line and MCP setup below) and the Mac stays awake until it releases."))
         } footer: {
-            sectionFooter("Wake the Mac for local Claude Desktop and Codex tasks, then hold it awake while they run.")
+            sectionFooter("Wake the Mac for local Claude Desktop, Codex, and tokenstat.ai tasks, then hold it awake while they run.")
         }
     }
 
@@ -1171,9 +1171,9 @@ private struct AutomationTab: View {
 
     private var automationSyncStatusText: String {
         guard let checked = model.automationsLastChecked else {
-            return L("Scanning Claude Desktop and Codex")
+            return L("Scanning Claude Desktop, Codex, and tokenstat.ai")
         }
-        return L("Scanning Claude Desktop and Codex · checked %@", Self.relativeChecked(checked))
+        return L("Scanning Claude Desktop, Codex, and tokenstat.ai · checked %@", Self.relativeChecked(checked))
     }
 
     /// Enabled with nothing discovered: an invitation, not a dead end. Says
@@ -1185,7 +1185,7 @@ private struct AutomationTab: View {
                 .foregroundStyle(.secondary)
             Text("No local scheduled runs found")
                 .font(.callout.weight(.medium))
-            Text("Add one in Claude Desktop (Routines ▸ New routine ▸ Local) or Codex (Scheduled tasks ▸ Create), then refresh. Cloud routines run on the vendor's servers and need no wake.")
+            Text("Add one in Claude Desktop (Routines ▸ New routine ▸ Local), Codex (Scheduled tasks ▸ Create), or tokenstat.ai (Automations), then refresh. Cloud routines run on the vendor's servers and need no wake.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
