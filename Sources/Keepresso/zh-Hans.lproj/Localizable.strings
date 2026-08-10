@@ -634,7 +634,7 @@
 "A few basics" = "几项基础设置";
 "Activation is controlled by triggers.\nEnd the automation leases before pausing." = "启用由触发条件控制。\n暂停前请先结束自动化租约。";
 "Add app" = "添加 App";
-"Add one in Claude Desktop (Routines ▸ New routine ▸ Local), Codex (Scheduled tasks ▸ Create), or tokenstat.ai (Automations), then refresh. Cloud routines run on the vendor's servers and need no wake." = "在 Claude Desktop（例行任务 ▸ 新建例行任务 ▸ 本地）或 Codex（计划任务 ▸ 创建）中添加一个，然后刷新。云端例行任务在供应商的服务器上运行，无需唤醒。";
+"Add one in Claude Desktop (Routines ▸ New routine ▸ Local), Codex (Scheduled tasks ▸ Create), or tokenstat.ai (Automations), then refresh. Cloud routines run on the vendor's servers and need no wake." = "在 Claude Desktop（例行任务 ▸ 新建例行任务 ▸ 本地）、Codex（计划任务 ▸ 创建）或 tokenstat.ai（自动化）中添加一个，然后刷新。云端例行任务在供应商的服务器上运行，无需唤醒。";
 "An automation lease is waiting (safety pause)" = "有一个自动化租约正在等待（安全暂停）";
 "Awake for a scheduled run" = "为计划运行保持唤醒";
 "Battery below %d%%, Keepresso sessions paused until plugged in" = "电量低于 %d%%，Keepresso 会话已暂停，直到接通电源";
@@ -653,7 +653,7 @@
 "Keeping awake for calls in" = "正在为通话保持唤醒：";
 "Keeping this Mac awake for “%@” to run." = "正在让这台 Mac 保持唤醒，以便运行“%@”。";
 "Keepresso keeps your Mac awake from the menu bar, with no Dock icon and no main window." = "Keepresso 从菜单栏让你的 Mac 保持唤醒，没有程序坞图标，也没有主窗口。";
-"Keepresso reads the recurring tasks your local AI tools schedule (Claude Desktop local routines, Codex automations, tokenstat.ai automations), wakes the Mac a few minutes before each run, and holds it awake for a short window so the run is not skipped. It reads only the schedule and name, never the task's prompt. Cloud routines run on the vendor's servers even with the lid shut, so they are neither listed nor woken for. For a run longer than the window, have the agent hold a Keepresso lease (see the command line and MCP setup below) and the Mac stays awake until it releases." = "Keepresso 会读取本地 AI 工具安排的定期任务（Claude Desktop 的本地例行任务、Codex 的自动化任务），在每次运行前几分钟唤醒 Mac，并在一小段时间内保持唤醒，以免运行被跳过。它只读取计划和名称，绝不读取任务的提示词。云端例行任务即使合盖也会在供应商的服务器上运行，因此既不会被列出，也不会为其唤醒。若运行时间超过这段窗口，可让智能体持有一个 Keepresso 租约（参见下方的命令行和 MCP 设置），Mac 会一直保持唤醒，直到该租约释放。";
+"Keepresso reads the recurring tasks your local AI tools schedule (Claude Desktop local routines, Codex automations, tokenstat.ai automations, tokenstat.ai automations), wakes the Mac a few minutes before each run, and holds it awake for a short window so the run is not skipped. It reads only the schedule and name, never the task's prompt. Cloud routines run on the vendor's servers even with the lid shut, so they are neither listed nor woken for. For a run longer than the window, have the agent hold a Keepresso lease (see the command line and MCP setup below) and the Mac stays awake until it releases." = "Keepresso 会读取本地 AI 工具安排的定期任务（Claude Desktop 的本地例行任务、Codex 的自动化任务），在每次运行前几分钟唤醒 Mac，并在一小段时间内保持唤醒，以免运行被跳过。它只读取计划和名称，绝不读取任务的提示词。云端例行任务即使合盖也会在供应商的服务器上运行，因此既不会被列出，也不会为其唤醒。若运行时间超过这段窗口，可让智能体持有一个 Keepresso 租约（参见下方的命令行和 MCP 设置），Mac 会一直保持唤醒，直到该租约释放。";
 "Keepresso runs in the menu bar. Click the cup at any time, or open Preferences for everything else." = "Keepresso 在菜单栏中运行。随时点按杯子图标，或打开偏好设置进行其他操作。";
 "Keeps the Mac awake only while a chosen app is using the microphone, i.e. on a call (Discord, Slack, Zoom, and the like), so an idle browser tab or Voice Memos doesn't. Reads which app holds the mic, no permission needed. If you're on a call now, the app appears under “Using the mic now”." = "只在所选 App 使用麦克风时才让 Mac 保持唤醒，也就是通话中（Discord、Slack、Zoom 等），因此空闲的浏览器标签页或语音备忘录不会触发。读取哪个 App 占用麦克风，无需任何权限。如果你现在正在通话，该 App 会出现在“正在使用麦克风”下方。";
 "Leases are off. Turn on “Allow automation leases” under Automation access for the agent's lease to hold." = "租约功能已关闭。请在“自动化访问”下打开“允许自动化租约”，智能体的租约才能生效。";
@@ -665,8 +665,8 @@
 "Paused in %@" = "将在 %@ 后暂停";
 "Plugged into power" = "接通电源";
 "Repeating wake on this Mac: %@" = "此 Mac 的重复唤醒：%@";
-"Scanning Claude Desktop, Codex, and tokenstat.ai" = "正在扫描 Claude Desktop 和 Codex";
-"Scanning Claude Desktop, Codex, and tokenstat.ai · checked %@" = "正在扫描 Claude Desktop 和 Codex · 已检查 %@";
+"Scanning Claude Desktop, Codex, and tokenstat.ai" = "正在扫描 Claude Desktop、Codex 和 tokenstat.ai";
+"Scanning Claude Desktop, Codex, and tokenstat.ai · checked %@" = "正在扫描 Claude Desktop、Codex 和 tokenstat.ai · 已检查 %@";
 "Scheduled AI runs" = "计划 AI 运行";
 "Scheduled wakes on this Mac: %@" = "此 Mac 的计划唤醒：%@";
 "Stay awake for" = "保持唤醒：";
@@ -679,7 +679,7 @@
 "Turn on a platform to wake for its runs. Left off, they stay listed but are never woken for." = "打开某个平台即可为其运行唤醒。保持关闭时，它们仍会列出，但永远不会被唤醒。";
 "Using the mic now" = "正在使用麦克风";
 "Wake for scheduled AI runs" = "为计划 AI 运行而唤醒";
-"Wake the Mac for local Claude Desktop, Codex, and tokenstat.ai tasks, then hold it awake while they run." = "为本地 Claude Desktop 和 Codex 任务唤醒 Mac，并在其运行期间保持唤醒。";
+"Wake the Mac for local Claude Desktop, Codex, and tokenstat.ai tasks, then hold it awake while they run." = "为本地 Claude Desktop、Codex 和 tokenstat.ai 任务唤醒 Mac，并在其运行期间保持唤醒。";
 "Waking for scheduled AI runs needs the administrator helper, the same one closed-display mode and fan boost use. Install once, and macOS asks for approval in System Settings." = "为计划 AI 运行而唤醒需要管理员助理，与合盖模式和风扇提速使用的是同一个。安装一次后，macOS 会在系统设置中请求批准。";
 "Welcome to Keepresso…" = "欢迎使用 Keepresso…";
 "When should it stay awake?" = "它应该在什么时候保持唤醒？";

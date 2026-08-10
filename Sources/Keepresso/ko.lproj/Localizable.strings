@@ -634,7 +634,7 @@
 "A few basics" = "몇 가지 기본 사항";
 "Activation is controlled by triggers.\nEnd the automation leases before pausing." = "활성화는 트리거로 제어됩니다.\n일시 정지하기 전에 자동화 임대를 종료하십시오.";
 "Add app" = "앱 추가";
-"Add one in Claude Desktop (Routines ▸ New routine ▸ Local), Codex (Scheduled tasks ▸ Create), or tokenstat.ai (Automations), then refresh. Cloud routines run on the vendor's servers and need no wake." = "Claude Desktop(루틴 ▸ 새 루틴 ▸ 로컬) 또는 Codex(예약된 작업 ▸ 생성)에서 하나를 추가한 다음 새로고침하십시오. 클라우드 루틴은 공급업체의 서버에서 실행되므로 깨울 필요가 없습니다.";
+"Add one in Claude Desktop (Routines ▸ New routine ▸ Local), Codex (Scheduled tasks ▸ Create), or tokenstat.ai (Automations), then refresh. Cloud routines run on the vendor's servers and need no wake." = "Claude Desktop(루틴 ▸ 새 루틴 ▸ 로컬) , Codex(예약된 작업 ▸ 생성) 또는 tokenstat.ai(Automations)에서 하나를 추가한 다음 새로고침하십시오. 클라우드 루틴은 공급업체의 서버에서 실행되므로 깨울 필요가 없습니다.";
 "An automation lease is waiting (safety pause)" = "자동화 임대가 대기 중입니다 (안전 일시 정지)";
 "Awake for a scheduled run" = "예약된 실행을 위해 깨어 있음";
 "Battery below %d%%, Keepresso sessions paused until plugged in" = "배터리 %d%% 미만, 전원을 연결할 때까지 Keepresso 세션이 일시 정지됨";
@@ -653,7 +653,7 @@
 "Keeping awake for calls in" = "통화를 위해 깨어 있게 유지 중";
 "Keeping this Mac awake for “%@” to run." = "“%@”을(를) 실행하기 위해 이 Mac을 깨어 있게 유지하는 중입니다.";
 "Keepresso keeps your Mac awake from the menu bar, with no Dock icon and no main window." = "Keepresso는 Dock 아이콘이나 메인 창 없이 메뉴 막대에서 Mac을 깨어 있게 유지합니다.";
-"Keepresso reads the recurring tasks your local AI tools schedule (Claude Desktop local routines, Codex automations, tokenstat.ai automations), wakes the Mac a few minutes before each run, and holds it awake for a short window so the run is not skipped. It reads only the schedule and name, never the task's prompt. Cloud routines run on the vendor's servers even with the lid shut, so they are neither listed nor woken for. For a run longer than the window, have the agent hold a Keepresso lease (see the command line and MCP setup below) and the Mac stays awake until it releases." = "Keepresso는 로컬 AI 도구가 예약한 반복 작업(Claude Desktop 로컬 루틴, Codex 자동화, tokenstat 자동화)을 읽어, 각 실행 몇 분 전에 Mac을 깨우고 실행이 건너뛰어지지 않도록 짧은 시간 동안 깨어 있게 유지합니다. 일정과 이름만 읽으며 작업의 프롬프트는 읽지 않습니다. 클라우드 루틴은 덮개가 닫혀 있어도 공급업체의 서버에서 실행되므로 목록에 표시되지도, 깨우지도 않습니다. 이 시간보다 긴 실행의 경우 에이전트가 Keepresso 임대를 유지하도록 하면(아래의 명령줄 및 MCP 설정 참조) 해제될 때까지 Mac이 깨어 있는 상태를 유지합니다.";
+"Keepresso reads the recurring tasks your local AI tools schedule (Claude Desktop local routines, Codex automations, tokenstat.ai automations, tokenstat.ai automations), wakes the Mac a few minutes before each run, and holds it awake for a short window so the run is not skipped. It reads only the schedule and name, never the task's prompt. Cloud routines run on the vendor's servers even with the lid shut, so they are neither listed nor woken for. For a run longer than the window, have the agent hold a Keepresso lease (see the command line and MCP setup below) and the Mac stays awake until it releases." = "Keepresso는 로컬 AI 도구가 예약한 반복 작업(Claude Desktop 로컬 루틴, Codex 자동화, tokenstat.ai 자동화)을 읽어, 각 실행 몇 분 전에 Mac을 깨우고 실행이 건너뛰어지지 않도록 짧은 시간 동안 깨어 있게 유지합니다. 일정과 이름만 읽으며 작업의 프롬프트는 읽지 않습니다. 클라우드 루틴은 덮개가 닫혀 있어도 공급업체의 서버에서 실행되므로 목록에 표시되지도, 깨우지도 않습니다. 이 시간보다 긴 실행의 경우 에이전트가 Keepresso 임대를 유지하도록 하면(아래의 명령줄 및 MCP 설정 참조) 해제될 때까지 Mac이 깨어 있는 상태를 유지합니다.";
 "Keepresso runs in the menu bar. Click the cup at any time, or open Preferences for everything else." = "Keepresso는 메뉴 막대에서 실행됩니다. 언제든지 컵을 클릭하거나, 그 외의 모든 것은 환경설정을 여십시오.";
 "Keeps the Mac awake only while a chosen app is using the microphone, i.e. on a call (Discord, Slack, Zoom, and the like), so an idle browser tab or Voice Memos doesn't. Reads which app holds the mic, no permission needed. If you're on a call now, the app appears under “Using the mic now”." = "선택한 앱이 마이크를 사용하는 동안, 즉 통화 중일 때만 (Discord, Slack, Zoom 등) Mac을 깨어 있게 유지하므로, 유휴 브라우저 탭이나 음성 메모는 해당되지 않습니다. 어떤 앱이 마이크를 사용 중인지 읽으며 권한이 필요하지 않습니다. 지금 통화 중이라면 앱이 “지금 마이크 사용 중” 아래에 나타납니다.";
 "Leases are off. Turn on “Allow automation leases” under Automation access for the agent's lease to hold." = "임대가 꺼져 있습니다. 에이전트의 임대가 유지되도록 자동화 접근 아래의 “자동화 임대 허용”을 켜십시오.";
@@ -665,8 +665,8 @@
 "Paused in %@" = "%@ 후 일시 정지";
 "Plugged into power" = "전원에 연결됨";
 "Repeating wake on this Mac: %@" = "이 Mac의 반복 깨우기: %@";
-"Scanning Claude Desktop, Codex, and tokenstat.ai" = "Claude Desktop, Codex 및 tokenstat 검색 중";
-"Scanning Claude Desktop, Codex, and tokenstat.ai · checked %@" = "Claude Desktop, Codex 및 tokenstat 검색 중 · %@ 확인됨";
+"Scanning Claude Desktop, Codex, and tokenstat.ai" = "Claude Desktop, Codex 및 tokenstat.ai 검색 중";
+"Scanning Claude Desktop, Codex, and tokenstat.ai · checked %@" = "Claude Desktop, Codex 및 tokenstat.ai 검색 중 · %@ 확인됨";
 "Scheduled AI runs" = "예약된 AI 실행";
 "Scheduled wakes on this Mac: %@" = "이 Mac의 예약된 깨우기: %@";
 "Stay awake for" = "깨어 있을 시간";
@@ -679,7 +679,7 @@
 "Turn on a platform to wake for its runs. Left off, they stay listed but are never woken for." = "실행을 위해 깨우려면 플랫폼을 켜십시오. 꺼두면 목록에는 남지만 절대 깨우지 않습니다.";
 "Using the mic now" = "지금 마이크 사용 중";
 "Wake for scheduled AI runs" = "예약된 AI 실행을 위해 깨우기";
-"Wake the Mac for local Claude Desktop, Codex, and tokenstat.ai tasks, then hold it awake while they run." = "로컬 Claude Desktop, Codex 및 tokenstat 작업을 위해 Mac을 깨우고, 실행되는 동안 깨어 있게 유지합니다.";
+"Wake the Mac for local Claude Desktop, Codex, and tokenstat.ai tasks, then hold it awake while they run." = "로컬 Claude Desktop, Codex 및 tokenstat.ai 작업을 위해 Mac을 깨우고, 실행되는 동안 깨어 있게 유지합니다.";
 "Waking for scheduled AI runs needs the administrator helper, the same one closed-display mode and fan boost use. Install once, and macOS asks for approval in System Settings." = "예약된 AI 실행을 위한 깨우기에는 디스플레이 닫힘 모드 및 팬 부스트가 사용하는 것과 동일한 관리자 도우미가 필요합니다. 한 번 설치하면 macOS가 시스템 설정에서 승인을 요청합니다.";
 "Welcome to Keepresso…" = "Keepresso에 오신 것을 환영합니다…";
 "When should it stay awake?" = "언제 깨어 있어야 합니까?";
