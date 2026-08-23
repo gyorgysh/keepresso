@@ -80,7 +80,7 @@ targets:
       properties:
         CFBundleName: Keepresso
         CFBundleDisplayName: Keepresso
-        CFBundleShortVersionString: "1.21.1"
+        CFBundleShortVersionString: "1.21.0"
         CFBundleVersion: "35"
         LSUIElement: true            # menu-bar agent: no Dock icon
         LSMinimumSystemVersion: "14.0"
@@ -119,7 +119,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: sh.gyorgy.keepresso
-        MARKETING_VERSION: "1.21.1"
+        MARKETING_VERSION: "1.21.0"
         CURRENT_PROJECT_VERSION: "35"
         SWIFT_VERSION: "5.9"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -230,7 +230,7 @@ targets:
       properties:
         CFBundleName: KeepressoWidget
         CFBundleDisplayName: Keepresso
-        CFBundleShortVersionString: "1.21.1"
+        CFBundleShortVersionString: "1.21.0"
         CFBundleVersion: "35"
         # Same six localizations as the app; keep in sync with
         # tools/localization/gen_strings.py.
@@ -255,7 +255,7 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         # Keep in lockstep with the app target's versions on every release
         # bump (the release scripts read the app's, the first in this file).
-        MARKETING_VERSION: "1.21.1"
+        MARKETING_VERSION: "1.21.0"
         CURRENT_PROJECT_VERSION: "35"
         SWIFT_VERSION: "5.9"
         ENABLE_HARDENED_RUNTIME: true
