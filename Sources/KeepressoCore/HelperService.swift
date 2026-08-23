@@ -38,7 +38,9 @@ public enum HelperService {
     ///    `pmset schedule` / `pmset repeat` step). Shipped in v1.16.1.
     /// 7: added the game priority boost's connection-scoped
     ///    `setPriorityHold`.
-    public static let protocolVersion = 7
+    /// 8: added `flushDNS` (the Public Wi-Fi assistant).
+    /// 9: added `setKeyboardLock` (Keyboard Cleaner: root hidutil remap).
+    public static let protocolVersion = 9
 
     /// The code-signing requirement one side demands of the other: an
     /// Apple-issued certificate, the expected identifier, and the same team as
@@ -121,6 +123,18 @@ public enum HelperService {
     /// verb so the clear-then-install ordering runs inside the daemon and a
     /// mid-sequence restart can't leave a cleared-but-not-reinstalled state.
     func applyWakeSchedule(oneShot: String, repeatDays: String, repeatTime: String, reply: @escaping @Sendable (Bool) -> Void)
+    /// Flush the system DNS cache (`dscacheutil -flushcache` plus
+    /// `killall -HUP mDNSResponder`). No arguments: a captive portal that
+    /// poisoned resolution is the only caller, and a generic shell verb is
+    /// out of bounds for this protocol.
+    func flushDNS(reply: @escaping @Sendable (Bool) -> Void)
+    /// Take or release this connection's hold on the Keyboard Cleaner remap
+    /// (baked-in `UserKeyMapping`, never a caller-supplied script). The
+    /// daemon snapshots the live mapping, applies the disable table, and
+    /// restores the snapshot when the last holder drops or the connection
+    /// dies. No JSON in, so a compromised caller cannot remap arbitrary keys
+    /// beyond the lock itself.
+    func setKeyboardLock(_ holding: Bool, reply: @escaping @Sendable (Bool) -> Void)
     /// Ask the daemon to exit at its first fully idle moment, without the
     /// ordinary exit's extra grace period (see ``HelperShutdownPolicy``), so
     /// launchd relaunches the binary currently in the bundle on the next call.
@@ -156,6 +170,11 @@ public protocol PrivilegedHelperCalling: AnyObject, Sendable {
     /// ``HelperXPCProtocol/applyWakeSchedule(oneShot:repeatDays:repeatTime:reply:)``).
     /// `nil` parts are not wanted; all `nil` clears everything.
     func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool
+    /// Flush the system DNS cache (see ``HelperXPCProtocol/flushDNS(reply:)``).
+    func flushDNS() -> Bool
+    /// Take or release the Keyboard Cleaner remap hold (see
+    /// ``HelperXPCProtocol/setKeyboardLock(_:reply:)``).
+    func setKeyboardLock(_ holding: Bool) -> Bool
 }
 
 /// Real client over `NSXPCConnection`. The connection *is* the app's claim on
@@ -177,6 +196,9 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     private var wantsFanHold: Int?
     /// The pid whose priority we want raised, or nil for no priority hold.
     private var wantsPriorityHold: Int?
+    /// Keyboard Cleaner remap hold. Kept for the life of a wipe so a daemon
+    /// restart re-applies the disable table, and an app death restores keys.
+    private var wantsKeyboardLock = false
 
     /// How long a call may wait on the daemon before counting as failed.
     /// Generous enough for launchd to spawn it on first contact.
@@ -325,6 +347,32 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         }
     }
 
+    public func flushDNS() -> Bool {
+        call { proxy, done in proxy.flushDNS(reply: done) }
+    }
+
+    public func setKeyboardLock(_ holding: Bool) -> Bool {
+        if holding {
+            lock.lock()
+            wantsKeyboardLock = true
+            lock.unlock()
+            let ok = call { proxy, done in proxy.setKeyboardLock(true, reply: done) }
+            if !ok {
+                lock.lock()
+                wantsKeyboardLock = false
+                lock.unlock()
+            }
+            return ok
+        }
+        let ok = call { proxy, done in proxy.setKeyboardLock(false, reply: done) }
+        if ok {
+            lock.lock()
+            wantsKeyboardLock = false
+            lock.unlock()
+        }
+        return ok
+    }
+
     /// Fire the version-handshake-and-retire nudge: if the daemon on the other
     /// end predates this app's protocol, or the app itself just updated (the
     /// daemon can't tell; its in-memory image predates the swap either way),
@@ -373,7 +421,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     private func releaseConnectionUnlessHeld() {
         lock.lock()
         let held = wantsSleepHold || wantsAWDLHold || wantsFanHold != nil
-            || wantsPriorityHold != nil
+            || wantsPriorityHold != nil || wantsKeyboardLock
         let stale = held ? nil : connection
         if !held { connection = nil }
         lock.unlock()
@@ -424,13 +472,15 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         let awdl = wantsAWDLHold
         let fan = wantsFanHold
         let priority = wantsPriorityHold
+        let keyboard = wantsKeyboardLock
         lock.unlock()
-        guard sleep || awdl || fan != nil || priority != nil,
+        guard sleep || awdl || fan != nil || priority != nil || keyboard,
               let proxy = proxyForAsyncUse() else { return }
         if sleep { proxy.setSleepHold(true) { _ in } }
         if awdl { proxy.setAWDLHold(true) { _ in } }
         if let fan { proxy.setFanHold(true, percent: fan) { _ in } }
         if let priority { proxy.setPriorityHold(true, pid: priority) { _ in } }
+        if keyboard { proxy.setKeyboardLock(true) { _ in } }
     }
 }
 

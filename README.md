@@ -47,13 +47,15 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   to its dimmest a few minutes after you step away, staying awake but dark, then
   snap back to your brightness the moment you return or the session ends. Kinder
   to the panel and the battery on overnight sessions than a screen left fully lit.
-- 🟢 **Keep me active (defeat idle detectors).** A plain power assertion keeps the
-  Mac awake but doesn't reset app-level or enterprise idle detection. Optionally
-  tell macOS you're active too, so remote-desktop and VDI sessions, meeting
-  presence (Teams, Slack), and corporate idle-logout don't mark you away. It only
-  steps in once you've been idle a few seconds, so it never nudges the pointer
-  while you're using the Mac or gaming. Off by default, and prompt-free (no
-  Accessibility permission).
+- 🟢 **Keep me active.** Keeping the Mac awake does not by itself keep you
+  present. Meeting and chat apps, remote desktop, VDI, cloud gaming, and many
+  other tools still treat a quiet keyboard as idle: they mark you away,
+  disconnect, or time out. Optionally stay active too, and pick how: a
+  prompt-free power/cursor warp, or F15 every 60 seconds, Shift, a specified
+  key, or a posted mouse move when the software only notices a real key or
+  mouse. Those methods request Accessibility only when you pick them. It only
+  steps in once you've been idle a few seconds, so it never types or nudges
+  while you're using the Mac. Off by default.
 - ⚡ **Trigger engine.** Stay awake only while charging or on battery, an external
   display is connected, you're on a chosen Wi-Fi network, **a VPN is
   connected**, the **camera or microphone is in use**, **audio is playing**, a
@@ -68,7 +70,7 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   in the menu bar stops brewing without touching your rules.
 - 🤖 **Agent-aware.** The "AI agent is working" condition keeps the Mac awake
   while a coding agent (claude, cursor, codex, antigravity, gemini, grok, aider,
-  goose, pi, and friends) is actually working, and lets it sleep once every
+  goose, pi, hermes, kilo, opencode, dsh, and friends) is actually working, and lets it sleep once every
   session goes quiet, after a grace you choose. Agents that stream a transcript
   to disk prove their work directly, even through long zero-CPU network waits.
   The rest are judged on the CPU of their processes and tool calls against each
@@ -82,7 +84,8 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   its own. The menu lists every session with a live working / idle state and
   where it runs.
 - ⏰ **Wake for scheduled AI runs.** Keepresso reads the recurring tasks your
-  local AI tools schedule (Claude Desktop routines, Codex automations), wakes the
+  local AI tools schedule (Claude Desktop routines, Codex automations,
+  tokenstat.ai), wakes the
   Mac a few minutes before each run, and holds it awake long enough to finish,
   even with the lid shut. It reads only the schedule and name, never the prompt,
   ignores cloud routines (those run on the vendor's servers, no wake needed), and
@@ -110,6 +113,14 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   pause it. While you play, opt-in comforts keep the display awake during
   controller-only sessions and give the game **high CPU priority** through
   the administrator helper, restored when the bout ends.
+- ⌨️ **Keyboard Cleaner.** Lock the keys from the panel or the icon menu so you
+  can wipe the keyboard without typing into Slack. Top-row Mac keys (Mission
+  Control, Spotlight, Dictation) are included. The pointer stays live. No
+  Accessibility prompt.
+- 🌐 **Public Wi-Fi.** When a cafe or airport network associates but never
+  shows a login page, a Headless-style window diagnoses the captive portal and
+  offers Open login page, Flush DNS, and a Wi-Fi cycle. Opening it does not
+  ask for Location or an administrator password.
 - 📶 **Gaming & Streaming Setup.** macOS hops the Wi-Fi radio off-channel for
   AWDL (AirDrop, Handoff, Sidecar) about once a second, which shows up as
   50-100 ms ping spikes mid-game or mid-stream. A dedicated window diagnoses
@@ -326,7 +337,8 @@ Either way, Keepresso keeps itself up to date from there.
 
 Click the cup in the menu bar to open Keepresso. Right-click (or control-click)
 it for a compact context menu with the app entries: Preferences, Headless
-Setup, Gaming & Streaming, About, Check for Updates, and Quit.
+Setup, Gaming & Streaming, Keyboard Cleaner, Public Wi-Fi, About, Check for
+Updates, and Quit.
 
 - **Quick toggle.** Flip **Keep awake** on or off and pick a duration:
   indefinitely, a preset (15 minutes, 1 hour, 4 hours), any custom duration, or
@@ -362,6 +374,10 @@ Setup, Gaming & Streaming, About, Check for Updates, and Quit.
   causes (jitter test), pauses AWDL for the session with one toggle, and
   checks the radio hygiene around it: wired network, Wi-Fi channel, Bluetooth,
   Game Mode.
+- **Keyboard Cleaner** locks the keys so you can wipe the Mac, including the
+  top-row special keys. Unlock is a click. A crash or quit puts the mapping back.
+- **Public Wi-Fi** diagnoses captive portals that never show a login page and
+  offers Open login page, Flush DNS, and a Wi-Fi cycle.
 
 Keepresso has no Dock icon by design. Everything lives in the menu bar.
 

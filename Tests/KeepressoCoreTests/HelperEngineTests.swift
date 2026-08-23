@@ -333,6 +333,17 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     #expect(FakeRestoreState().markers().isEmpty)
 }
 
+@Test func flushDNSRunsBothCacheCommands() {
+    let runner = FakeRunner()
+    let engine = HelperEngine(runner: runner, state: FakeRestoreState())
+    #expect(engine.flushDNS())
+    #expect(runner.commands == [
+        "/usr/bin/dscacheutil -flushcache",
+        "/usr/bin/killall -HUP mDNSResponder",
+    ])
+    #expect(FakeRestoreState().markers().isEmpty)
+}
+
 // MARK: - CLI symlink
 
 /// A scratch directory standing in for /usr/local/bin plus a fake app bundle,
@@ -610,4 +621,97 @@ private let restorePid = "/usr/bin/renice 0 -p 4242"
     engine.clientDisconnected(1)
     #expect(runner.commands == [boostPid, restorePid])
     #expect(engine.isIdle)
+}
+
+// MARK: - Keyboard Cleaner hold
+
+private final class FakeEngineKeyboard: KeyboardRemapping, @unchecked Sendable {
+    var current = KeyboardKeyMapping(entries: [.init(src: 9, dst: 8)])
+    var applied: [KeyboardKeyMapping] = []
+    var applySucceeds = true
+
+    func currentMapping() -> KeyboardKeyMapping { current }
+
+    func apply(_ mapping: KeyboardKeyMapping) -> Bool {
+        applied.append(mapping)
+        guard applySucceeds else { return false }
+        current = mapping
+        return true
+    }
+}
+
+@Test func keyboardLockSnapshotsAndRestoresTheOriginalMapping() {
+    let keyboard = FakeEngineKeyboard()
+    let state = FakeRestoreState()
+    let original = keyboard.current
+    let engine = HelperEngine(
+        runner: FakeRunner(),
+        state: state,
+        keyboard: keyboard
+    )
+
+    #expect(engine.setKeyboardLock(client: 1, holding: true))
+    #expect(keyboard.applied.last == .disabledKeyboard)
+    #expect(HelperEngine.decodeKeyboardMapping(state.value(for: .keyboardLock)) == original)
+    #expect(!engine.isIdle)
+
+    #expect(engine.setKeyboardLock(client: 1, holding: false))
+    #expect(keyboard.applied.last == original)
+    #expect(state.markers().isEmpty)
+    #expect(engine.isIdle)
+}
+
+@Test func keyboardLockSecondHolderIsANoOpAndDisconnectRestores() {
+    let keyboard = FakeEngineKeyboard()
+    let original = keyboard.current
+    let engine = HelperEngine(
+        runner: FakeRunner(),
+        state: FakeRestoreState(),
+        keyboard: keyboard
+    )
+
+    #expect(engine.setKeyboardLock(client: 1, holding: true))
+    #expect(engine.setKeyboardLock(client: 2, holding: true))
+    #expect(keyboard.applied.filter { $0 == .disabledKeyboard }.count == 1)
+
+    engine.clientDisconnected(1)
+    #expect(keyboard.applied.last == .disabledKeyboard)
+    #expect(!engine.isIdle)
+
+    engine.clientDisconnected(2)
+    #expect(keyboard.applied.last == original)
+    #expect(engine.isIdle)
+}
+
+@Test func keyboardLockFailedApplyDoesNotRecordDebt() {
+    let keyboard = FakeEngineKeyboard()
+    keyboard.applySucceeds = false
+    let state = FakeRestoreState()
+    let engine = HelperEngine(
+        runner: FakeRunner(),
+        state: state,
+        keyboard: keyboard
+    )
+
+    #expect(!engine.setKeyboardLock(client: 1, holding: true))
+    #expect(state.markers().isEmpty)
+    #expect(engine.isIdle)
+}
+
+@Test func keyboardLockRestoresSnapshotAtLaunch() {
+    let keyboard = FakeEngineKeyboard()
+    keyboard.current = .disabledKeyboard
+    let original = KeyboardKeyMapping(entries: [.init(src: 1, dst: 2)])
+    let state = FakeRestoreState(values: [
+        .keyboardLock: HelperEngine.encodeKeyboardMapping(original)
+    ])
+    let engine = HelperEngine(
+        runner: FakeRunner(),
+        state: state,
+        keyboard: keyboard
+    )
+
+    engine.restoreAtLaunch()
+    #expect(keyboard.applied.last == original)
+    #expect(state.markers().isEmpty)
 }

@@ -72,6 +72,14 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
         ))
     }
 
+    func flushDNS(reply: @escaping @Sendable (Bool) -> Void) {
+        reply(engine.flushDNS())
+    }
+
+    func setKeyboardLock(_ holding: Bool, reply: @escaping @Sendable (Bool) -> Void) {
+        reply(engine.setKeyboardLock(client: clientID, holding: holding))
+    }
+
     func terminateWhenIdle() {
         onTerminateRequest()
     }

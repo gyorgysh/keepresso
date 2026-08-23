@@ -80,7 +80,24 @@ import Foundation
     """
     let decoded = try JSONDecoder().decode(SleepPreventionOptions.self, from: Data(json.utf8))
     #expect(decoded.simulateUserActivity == false)
+    #expect(decoded.activitySimulationMethod == .powerWarp)
+    #expect(decoded.activitySimulationKeyCode == nil)
     #expect(decoded.preventDisplaySleep == true)
+}
+
+@Test func optionsKeepActiveMethodRoundTrips() throws {
+    let options = SleepPreventionOptions(
+        preventSystemSleep: true,
+        simulateUserActivity: true,
+        activitySimulationMethod: .specifiedKey,
+        activitySimulationKeyCode: 113
+    )
+    let data = try JSONEncoder().encode(options)
+    let decoded = try JSONDecoder().decode(SleepPreventionOptions.self, from: data)
+    #expect(decoded.simulateUserActivity)
+    #expect(decoded.activitySimulationMethod == .specifiedKey)
+    #expect(decoded.activitySimulationKeyCode == 113)
+    #expect(decoded.activityPokeKind == .key(113))
 }
 
 @Test func quickStopAndEndingSoonRoundTripAndDefault() throws {

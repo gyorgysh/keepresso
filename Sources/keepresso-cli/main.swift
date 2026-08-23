@@ -152,7 +152,7 @@ var retainedSources: [DispatchSourceProtocol] = []
 
 func runHold(_ hold: CLIRequest.Hold) -> Never {
     if hold.declareUserActivity {
-        IOKitActivitySimulator().poke()
+        IOKitActivitySimulator().poke(.powerWarp)
     }
     if hold.oneShot { exit(0) }
 

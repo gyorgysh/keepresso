@@ -334,6 +334,8 @@ struct MenuBarContent: View {
                 .keyboardShortcut(",")
             Button("Headless Setup…") { open(KeepressoApp.setupWindowID) }
             Button("Gaming & Streaming…") { open(KeepressoApp.streamingWindowID) }
+            Button("Keyboard Cleaner…") { open(KeepressoApp.keyboardCleanerWindowID) }
+            Button("Public Wi-Fi…") { open(KeepressoApp.wifiAssistantWindowID) }
             Button("Welcome to Keepresso…") { open(KeepressoApp.welcomeWindowID) }
             Button("About Keepresso") { open(KeepressoApp.aboutWindowID) }
             Button("Check for Updates…") { updater.checkForUpdates() }
@@ -801,7 +803,8 @@ struct MenuBarContent: View {
     private static func detailAccent(_ detail: RuleDetail) -> Color {
         switch detail.agent {
         case "claude": return .claudeAccent
-        case "cursor", "cursor-agent", "grok", "codex", "agy", "antigravity", "bionic":
+        case "cursor", "cursor-agent", "grok", "codex", "agy", "antigravity", "bionic",
+             "hermes", "kilo", "opencode", "opencode2", "dsh":
             return .monochromeAccent
         default: return .green
         }

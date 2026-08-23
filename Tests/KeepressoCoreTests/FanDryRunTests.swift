@@ -28,6 +28,8 @@ private final class FakeFanHelper: PrivilegedHelperCalling, @unchecked Sendable 
     func fanHoldDropped() -> Bool? { false }
     func sleepNow() -> Bool { true }
     func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool { true }
+    func flushDNS() -> Bool { true }
+    func setKeyboardLock(_ holding: Bool) -> Bool { true }
 
     var recorded: [String] {
         lock.lock()
@@ -84,6 +86,8 @@ private final class RigHelper: PrivilegedHelperCalling, @unchecked Sendable {
     func fanHoldDropped() -> Bool? { inner.fanHoldDropped() }
     func sleepNow() -> Bool { true }
     func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool { true }
+    func flushDNS() -> Bool { true }
+    func setKeyboardLock(_ holding: Bool) -> Bool { true }
 }
 
 @MainActor

@@ -10,7 +10,7 @@ private final class FakeControllers: ControllerMonitoring {
 
 private final class CountingActivity: ActivitySimulating {
     private(set) var pokeCount = 0
-    func poke() { pokeCount += 1 }
+    func poke(_: ActivityPokeKind) { pokeCount += 1 }
 }
 
 @MainActor

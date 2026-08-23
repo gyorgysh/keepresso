@@ -113,6 +113,17 @@ struct CheckRow: View {
         "stream-browser-gaming": "globe",
         "stream-location-note": "location.fill",
         "stream-read-more": "book.fill",
+        // Public Wi-Fi assistant
+        "wifi-radio": "wifi",
+        "wifi-associated": "wifi",
+        "wifi-address": "network",
+        "wifi-captive": "globe",
+        "wifi-dns": "server.rack",
+        "wifi-path": "point.3.connected.trianglepath.dotted",
+        "wifi-vpn": "lock.shield.fill",
+        "wifi-custom-dns": "list.bullet.rectangle",
+        "wifi-private-mac": "antenna.radiowaves.left.and.right",
+        "wifi-private-relay": "eye.slash.fill",
     ]
 
     private var isBluetoothRow: Bool {

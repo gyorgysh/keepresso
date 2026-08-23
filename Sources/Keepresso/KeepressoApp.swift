@@ -36,6 +36,18 @@ struct KeepressoApp: App {
         .windowResizability(.contentSize)
         .handlesExternalEvents(matching: [])
 
+        Window("Keyboard Cleaner", id: Self.keyboardCleanerWindowID) {
+            KeyboardCleanerView(model: appDelegate.model)
+        }
+        .windowResizability(.contentSize)
+        .handlesExternalEvents(matching: [])
+
+        Window("Public Wi-Fi", id: Self.wifiAssistantWindowID) {
+            WifiAssistantView(model: appDelegate.model)
+        }
+        .windowResizability(.contentSize)
+        .handlesExternalEvents(matching: [])
+
         Window("Preferences", id: Self.preferencesWindowID) {
             PreferencesView(model: appDelegate.model)
         }
@@ -68,6 +80,8 @@ struct KeepressoApp: App {
     /// Scene ids shared with the menu's window-opening buttons.
     static let setupWindowID = "setup"
     static let streamingWindowID = "streaming"
+    static let keyboardCleanerWindowID = "keyboard-cleaner"
+    static let wifiAssistantWindowID = "wifi-assistant"
     static let preferencesWindowID = "preferences"
     static let aboutWindowID = "about"
     static let welcomeWindowID = "welcome"
@@ -200,6 +214,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // A duplicate instance is on its way out (see applicationWillFinishLaunching);
         // don't start any of the running machinery it would have to tear down.
         if yieldingToPeer { return }
+        // A previous run may have crashed while the keyboard was remapped.
+        // Restore before relocate or anything else that would want keys.
+        model.keyboardLock.restoreIfNeeded()
         // If launched from the DMG / Downloads, move into /Applications and
         // relaunch from there (this instance quits if it relocates).
         AppRelocator.relocateIfNeeded()
@@ -262,6 +279,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // "stopped" into the shared widget state: that copy owns it and may be
         // keeping the Mac awake right now.
         if yieldingToPeer { return }
+        // Unlock before we go so a quit mid-wipe does not leave keys dead.
+        model.keyboardLock.unlock()
+        model.resumeHotKeyAfterKeyboardLock()
         // The session dies with this process; don't leave the widgets lying.
         model.writeWidgetStateStopped()
     }

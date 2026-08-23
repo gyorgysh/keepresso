@@ -196,8 +196,9 @@ public final class SessionController {
     private var clamshellPanelForced = false
     private var clamshellKeyboardForced = false
 
-    /// How often ``options`` `simulateUserActivity` reports activity to the OS.
+    /// How often the prompt-free keep-active method reports activity to the OS.
     /// Comfortably under the shortest common idle timeout (a minute or two).
+    /// HID methods use ``ActivitySimulationMethod/pokeInterval`` (60s) instead.
     static let activityPokeInterval: TimeInterval = 30
 
     /// Only report synthetic activity once the user has been genuinely idle this
@@ -962,12 +963,12 @@ public final class SessionController {
         restoreKeyboardBrightness()
     }
 
-    /// Report user activity to the OS on a slow cadence while a keep-active
-    /// session runs, so app-level and enterprise idle detectors don't mark the
-    /// user away. Skipped while the user is actively providing input (real input
-    /// already keeps them present, and nudging then is the mouse jitter to
-    /// avoid); once idle past ``activityIdleThreshold`` it pokes, then repeats
-    /// every ``activityPokeInterval``. No-op unless active and the option is on.
+    /// Report user activity on a slow cadence while a keep-active session
+    /// runs, so software with its own idle timeout keeps the user present.
+    /// Skipped while they are actually providing input (real input already
+    /// counts, and a key tap or nudge then is the jitter to avoid). Once idle
+    /// past ``activityIdleThreshold`` it pokes, then repeats on the method's
+    /// interval. No-op unless active and the option is on.
     private func maybePokeActivity(at instant: Date, systemIdleSeconds: TimeInterval?) {
         guard isActive, options.simulateUserActivity else { return }
         if let idle = systemIdleSeconds, idle < Self.activityIdleThreshold {
@@ -976,10 +977,11 @@ public final class SessionController {
             lastActivityPokeAt = nil
             return
         }
+        let interval = options.activitySimulationMethod.pokeInterval
         if let last = lastActivityPokeAt,
-           instant.timeIntervalSince(last) < Self.activityPokeInterval { return }
+           instant.timeIntervalSince(last) < interval { return }
         lastActivityPokeAt = instant
-        activity.poke()
+        activity.poke(options.activityPokeKind)
     }
 
     /// Surface the reminder once an active session crosses an interval boundary.

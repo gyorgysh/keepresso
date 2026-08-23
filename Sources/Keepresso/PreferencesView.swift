@@ -378,7 +378,7 @@ private struct GeneralTab: View {
             Section {
                 HelperStatusRows(model: model)
             } header: {
-                sectionHeader("Administrator helper", info: L("A small system service for the switches that need administrator rights: closed-display mode below, the thermal fan boost, and AWDL pausing in Gaming & Streaming. Without it, macOS asks for your password once per app run (and fan boost stays off entirely: fan control can't prompt). With it, everything is instant and silent: macOS asks once, when you approve the helper under Login Items, and the approval survives restarts and app updates. Updates never need a reinstall, the service replaces itself with the app. It can only flip those specific switches, everything it changes is restored if Keepresso quits or crashes, and you can remove it here at any time. It also puts the keepresso command-line tool on your PATH (Homebrew installs already have it). After removal, System Settings can keep showing a stale Login Items row until macOS refreshes its list. The status shown here is the real one."))
+                sectionHeader("Administrator helper", info: L("A small system service for the switches that need administrator rights: closed-display mode below, the thermal fan boost, AWDL pausing in Gaming & Streaming, and flushing DNS from the Public Wi-Fi assistant. Without it, macOS asks for your password once per app run (and fan boost stays off entirely: fan control can't prompt). With it, everything is instant and silent: macOS asks once, when you approve the helper under Login Items, and the approval survives restarts and app updates. Updates never need a reinstall, the service replaces itself with the app. It can only flip those specific switches, everything it changes is restored if Keepresso quits or crashes, and you can remove it here at any time. It also puts the keepresso command-line tool on your PATH (Homebrew installs already have it). After removal, System Settings can keep showing a stale Login Items row until macOS refreshes its list. The status shown here is the real one."))
             } footer: {
                 sectionFooter("Handles the privileged switches for Keepresso, with no password prompts.")
             }
@@ -387,10 +387,41 @@ private struct GeneralTab: View {
                     get: { model.simulateUserActivity },
                     set: { model.simulateUserActivity = $0 }
                 ))
+                if model.simulateUserActivity {
+                    Picker("Method", selection: Binding(
+                        get: { model.activitySimulationMethod },
+                        set: { model.activitySimulationMethod = $0 }
+                    )) {
+                        ForEach(ActivitySimulationMethod.allCases, id: \.self) { method in
+                            Text(presenceMethodLabel(method)).tag(method)
+                        }
+                    }
+                    if model.activitySimulationMethod == .specifiedKey {
+                        LabeledContent("Key") {
+                            PresenceKeyRecorder(keyCode: Binding(
+                                get: { model.activitySimulationKeyCode },
+                                set: { model.activitySimulationKeyCode = $0 }
+                            ))
+                        }
+                    }
+                    if model.activitySimulationMethod.needsAccessibility && !model.accessibilityTrusted {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .foregroundStyle(.orange)
+                                .accessibilityHidden(true)
+                            Text("Needs Accessibility for this method.")
+                            Spacer(minLength: 8)
+                            Button("Open Settings") { model.openAccessibilitySettings() }
+                                .buttonStyle(.link)
+                        }
+                    }
+                }
             } header: {
-                sectionHeader("Presence", info: L("Keeping the Mac awake stops it sleeping, but it doesn't reset app-level or enterprise idle detection: remote-desktop and VDI sessions, meeting presence (Teams, Slack), and corporate idle-logout can still mark you away or log you out. This tells macOS you're active as well, which those do notice. It only steps in once you've been idle a few seconds, so it never nudges the pointer while you're using the Mac or gaming. Off by default, and some managed Macs flag simulated activity, so check your policy first."))
+                sectionHeader("Presence", info: L("Keeping the Mac awake stops it sleeping, but that does not keep you active in other software. Meeting and chat apps, remote desktop and VDI, cloud gaming, and many other tools still apply their own idle timeout: they mark you away, disconnect, or end the session. This reports activity so you stay present. The default method needs no extra permission. Some software only notices a real key or mouse, so you can pick F15, Shift, a specified key, or a posted mouse move. Those need Accessibility, requested only when you choose them, never at launch. F15 is the usual pick (most keyboards lack it, so nothing is typed). Shift is invisible. A specified key or mouse move covers software that only watches those. A letter or number will type into the front app. It only steps in once you've been idle a few seconds, so it never types or nudges while you're using the Mac. Off by default."))
             } footer: {
-                sectionFooter("Also tells macOS you're active, so you aren't marked away.")
+                Text(presenceFooter)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section {
                 Toggle("Show countdown in menu bar", isOn: Binding(
@@ -506,12 +537,47 @@ private struct GeneralTab: View {
         .animation(.snappy(duration: 0.25), value: model.fanDryRun.phase)
         .animation(.snappy(duration: 0.25), value: model.closedDisplayError)
         .animation(.snappy(duration: 0.25), value: model.closedDisplayAutoError)
+        .animation(.snappy(duration: 0.25), value: model.simulateUserActivity)
+        .animation(.snappy(duration: 0.25), value: model.activitySimulationMethod)
+        .animation(.snappy(duration: 0.25), value: model.accessibilityTrusted)
         .onAppear {
             model.refreshClosedDisplay()
+            model.refreshAccessibilityTrust()
             // Re-read the login-item state on appear: it can drift if the user
             // changed it in System Settings, or the app was moved out of
             // /Applications, while this tab was built but not shown.
             launchAtLogin = LoginItem.isEnabled
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            model.refreshAccessibilityTrust()
+        }
+    }
+
+    private func presenceMethodLabel(_ method: ActivitySimulationMethod) -> String {
+        switch method {
+        case .powerWarp: return L("Power / cursor warp")
+        case .f15: return L("F15 key every 60 s")
+        case .shift: return L("Shift every 60 s")
+        case .specifiedKey: return L("Specified key")
+        case .mouseMove: return L("Mouse move")
+        }
+    }
+
+    private var presenceFooter: String {
+        guard model.simulateUserActivity else {
+            return L("Reports activity so you stay present in apps that have their own idle timeout.")
+        }
+        switch model.activitySimulationMethod {
+        case .powerWarp:
+            return L("Prompt-free. Some apps ignore this and need a key or mouse method.")
+        case .f15:
+            return L("Posts F15 every 60 s. A common pick for software that watches the keyboard.")
+        case .shift:
+            return L("Taps Shift every 60 s. Invisible, and nothing is typed.")
+        case .specifiedKey:
+            return L("Taps the recorded key every 60 s. Prefer a function key or modifier.")
+        case .mouseMove:
+            return L("Posts a 1-pixel mouse move every 60 s. For software that watches the pointer.")
         }
     }
 

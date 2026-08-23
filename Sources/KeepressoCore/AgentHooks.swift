@@ -314,6 +314,10 @@ public enum AgentHooks {
         if comm.hasPrefix("Code Helper") || comm.hasPrefix("Code - ")
             || comm.hasPrefix("Cursor Helper") || comm == "Cursor"
             || comm.hasPrefix("Electron") { return .ide }
+        // Codex Desktop lives in ChatGPT.app. The main process is "ChatGPT";
+        // helpers truncate to "ChatGPT Helper (" the same 16-char way Cursor's
+        // do. Matching the prefix is safe: nothing else on a Mac is named that.
+        if comm.hasPrefix("ChatGPT") { return .ide }
         return nil
     }
 
@@ -388,6 +392,82 @@ public enum AgentHooks {
         var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
         guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
         return String(cString: buffer)
+    }
+
+    /// Reconstructs argv as a single space-joined string via `KERN_PROCARGS2`,
+    /// or `nil` when the pid is gone or unreadable. The short BSD comm is only
+    /// 16 characters and cannot tell `codex` (the CLI) from `codex app-server`
+    /// (Codex Desktop's shared host), so the hook write path needs the full
+    /// argument list.
+    public static func defaultArgumentsOf(_ pid: Int32) -> String? {
+        var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
+        var size = 0
+        guard sysctl(&mib, u_int(mib.count), nil, &size, nil, 0) == 0,
+              size > MemoryLayout<Int32>.size else { return nil }
+        let buffer = UnsafeMutablePointer<CChar>.allocate(capacity: size)
+        defer { buffer.deallocate() }
+        var bufSize = size
+        guard sysctl(&mib, u_int(mib.count), buffer, &bufSize, nil, 0) == 0,
+              bufSize > MemoryLayout<Int32>.size else { return nil }
+        return parseProcArgs2(buffer, length: bufSize)
+    }
+
+    /// `KERN_PROCARGS2` layout: int32 argc, then the executable path, then
+    /// padding NULs, then `argc` NUL-terminated argv strings.
+    static func parseProcArgs2(_ buffer: UnsafePointer<CChar>, length: Int) -> String? {
+        let argc = buffer.withMemoryRebound(to: Int32.self, capacity: 1) { $0.pointee }
+        guard argc > 0, argc < 4096 else { return nil }
+        var offset = MemoryLayout<Int32>.size
+        while offset < length, buffer[offset] != 0 { offset += 1 }
+        offset += 1
+        while offset < length, buffer[offset] == 0 { offset += 1 }
+        var args: [String] = []
+        args.reserveCapacity(Int(argc))
+        for _ in 0..<Int(argc) {
+            guard offset < length else { break }
+            let start = buffer + offset
+            while offset < length, buffer[offset] != 0 { offset += 1 }
+            let value = String(cString: start)
+            if !value.isEmpty { args.append(value) }
+            offset += 1
+        }
+        return args.isEmpty ? nil : args.joined(separator: " ")
+    }
+
+    /// Whether this process is Codex Desktop's long-lived `codex app-server`.
+    /// Both that host and a dedicated CLI share the comm `codex`; only argv
+    /// (or a full `ps` command line) names the subcommand.
+    public static func isCodexAppServer(
+        comm: String?, path: String?, arguments: String?
+    ) -> Bool {
+        let namedCodex = comm == "codex"
+            || (path.flatMap { $0.split(separator: "/").last.map(String.init) } == "codex")
+        guard namedCodex else { return false }
+        guard let arguments else { return false }
+        return arguments.split(whereSeparator: \.isWhitespace).contains { $0 == "app-server" }
+    }
+
+    /// Live-pid probe used when reading leftover Desktop records that still
+    /// name the app-server as `agentPid` (written before the shared-host fix).
+    public static func defaultIsCodexAppServer(_ pid: Int32) -> Bool {
+        isCodexAppServer(
+            comm: defaultCommandOf(pid),
+            path: defaultPathOf(pid),
+            arguments: defaultArgumentsOf(pid)
+        )
+    }
+
+    /// A Codex Desktop conversation: anchored to ChatGPT.app (`ownerPid`) with
+    /// no dedicated agent process, or a leftover record whose `agentPid` is
+    /// the shared `app-server`.
+    static func isSharedHostRecord(
+        _ record: HookRecord, isSharedHostAgent: (Int32) -> Bool
+    ) -> Bool {
+        if record.agent == "codex", record.ownerPid != nil, record.agentPid == nil {
+            return true
+        }
+        if let pid = record.agentPid, isSharedHostAgent(pid) { return true }
+        return false
     }
 
     // MARK: - State files
@@ -494,8 +574,18 @@ public enum AgentHooks {
     /// `waiting` nudge), hook-only IDE records (ownerPid, no agentPid), and
     /// records whose agent can't be liveness-checked; `working` and
     /// `waiting-approval` records with a live `agentPid` never expire by age
-    /// (see ``readHookRecords(now:in:isAlive:)``).
+    /// (see ``readHookRecords(now:in:isAlive:)``). Shared-host Codex Desktop
+    /// working records use ``sharedHostWorkingStaleAfter`` instead of
+    /// forever-while-alive, because the app-server outlives every chat.
     public static let staleAfter: TimeInterval = 120
+
+    /// How long a Codex Desktop (shared-host) `working` / `waiting-approval`
+    /// record stays trusted after its last hook event. 120s is too short for
+    /// a quiet model turn; the app-server's lifetime is too long (a missed
+    /// Stop would hold the Mac awake until ChatGPT.app quits). Ten minutes
+    /// bounds the miss; a fresh rollout file can still keep the row working
+    /// past this via transcript evidence.
+    public static let sharedHostWorkingStaleAfter: TimeInterval = 600
 
     /// All usable records in the hooks folder. Hook state is edge-triggered,
     /// so a stale `working` or `waiting-approval` record with a live
@@ -505,16 +595,18 @@ public enum AgentHooks {
     /// no agentPid) do not get that forever-while-alive trust: one long-lived
     /// editor Helper can own many conversation files, and a missed Stop would
     /// otherwise hold the Mac awake forever. Past ``staleAfter`` those are
-    /// dropped and deleted. Stale `idle`/`waiting` records with a live
-    /// agentPid are skipped but kept, letting the transcript + CPU fallbacks
-    /// decide. Stale records whose agent or host is gone, including a pid
-    /// reused by some non-agent process, are deleted during the scan
-    /// (SessionEnd never fired, e.g. a killed terminal).
+    /// dropped and deleted, except Codex Desktop shared-host working records,
+    /// which stay until ``sharedHostWorkingStaleAfter``. Stale `idle`/`waiting`
+    /// records with a live agentPid are skipped but kept, letting the
+    /// transcript + CPU fallbacks decide. Stale records whose agent or host
+    /// is gone, including a pid reused by some non-agent process, are deleted
+    /// during the scan (SessionEnd never fired, e.g. a killed terminal).
     public static func readHookRecords(
         now: Date,
         in directory: URL = directoryURL(),
         isAlive: (Int32) -> Bool = defaultIsAgentAlive,
-        isHostAlive: (Int32) -> Bool = defaultIsAlive
+        isHostAlive: (Int32) -> Bool = defaultIsAlive,
+        isSharedHostAgent: (Int32) -> Bool = defaultIsCodexAppServer
     ) -> [HookRecord] {
         let manager = FileManager.default
         guard let names = try? manager.contentsOfDirectory(atPath: directory.path) else { return [] }
@@ -529,29 +621,48 @@ public enum AgentHooks {
             // The host is probed for bare existence rather than for still
             // being an agent, because it is an editor, not a CLI.
             let liveness = record.agentPid.map(isAlive) ?? record.ownerPid.map(isHostAlive)
-            if now.timeIntervalSince(record.updatedAt) < staleAfter {
+            let shared = isSharedHostRecord(record, isSharedHostAgent: isSharedHostAgent)
+            // Leftover Desktop records named the app-server as agentPid.
+            // Rewrite them in memory as ownerPid-only so the join treats each
+            // conversation as a hook-only row instead of collapsing them.
+            var usable = record
+            if shared, usable.agentPid != nil {
+                usable.ownerPid = usable.ownerPid ?? usable.agentPid
+                usable.agentPid = nil
+                if usable.origin == nil { usable.origin = .ide }
+            }
+            let age = now.timeIntervalSince(record.updatedAt)
+            let workingTrust = record.state == .working
+                || (record.state == .waiting && record.detail == "waiting-approval")
+            if age < staleAfter {
                 // Fresh, but a record carrying a pid must still have a live one:
                 // a SIGKILL'd agent leaves a sub-staleAfter "working" record, and
                 // a pid reused by another detected session would otherwise be
                 // stamped working from it. A record with no pid (nothing to
                 // verify) is trusted as before.
                 if liveness ?? true {
-                    records.append(record)
+                    records.append(usable)
                 }
-            } else if record.agentPid != nil,
+            } else if !shared,
+                      record.agentPid != nil,
                       liveness == true,
-                      record.state == .working
-                          || (record.state == .waiting && record.detail == "waiting-approval") {
+                      workingTrust {
                 // CLI only: trust the edge for as long as the agent process
                 // is alive. Stop, Notification, SessionEnd, or the pid dying
                 // ends a working turn or a sitting approval prompt, never
                 // the record's age. ownerPid alone is not enough: IDE hosts
                 // outlive individual conversations.
-                records.append(record)
-            } else if liveness != true || record.agentPid == nil {
-                // Dead agent/host, or a hook-only IDE record past staleAfter:
-                // drop the file so a missed Stop cannot hold forever under a
-                // long-lived Cursor/Antigravity Helper.
+                records.append(usable)
+            } else if shared, liveness == true, workingTrust,
+                      age < sharedHostWorkingStaleAfter {
+                // Codex Desktop: bound a missed Stop to ten minutes rather
+                // than the life of ChatGPT.app. Rollout-file freshness can
+                // still keep the menu row working past this.
+                records.append(usable)
+            } else if liveness != true || record.agentPid == nil || shared {
+                // Dead agent/host, a hook-only IDE record past staleAfter,
+                // or a shared-host working record past ten minutes: drop the
+                // file so a missed Stop cannot hold forever.
                 try? manager.removeItem(at: url)
             }
         }

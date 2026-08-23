@@ -56,6 +56,7 @@ public struct AgentSession: Equatable, Hashable, Sendable {
         self.hasFreshEvidence = hasFreshEvidence
         self.hookState = hookState
         self.hookDetail = hookDetail
+        self.hookUpdatedAt = nil
         self.origin = origin
     }
 
@@ -113,8 +114,8 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// (cursor-agent, agy).
     public static let agentCommands = [
         "claude", "codex", "gemini", "grok", "agy", "aider", "goose",
-        "cursor-agent", "opencode", "amp", "copilot", "droid", "auggie", "qwen",
-        "pi",
+        "cursor-agent", "opencode", "opencode2", "amp", "copilot", "droid",
+        "auggie", "qwen", "pi", "hermes", "kilo", "dsh",
     ]
 
     /// The names that may also be matched against a *component* of a resolved
@@ -128,11 +129,16 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// are held back from it: a user whose home is `/Users/pi` would otherwise
     /// have every process they run matched as an agent, and `amp` and `agy`
     /// are only a little less likely to appear as some unrelated folder.
-    /// Those three are still detected by their command's basename, which is
-    /// exact; they just don't get the fuzzier second chance.
+    /// Those short names, and ``pathMatchExcludedAgents``, are still detected
+    /// by their command's basename, which is exact; they just don't get the
+    /// fuzzier second chance.
     static let pathMatchMinimumLength = 4
+    /// Four-letter names that are still too common as folder names to trust
+    /// in a path (`kilo` matches `/Users/kilo/...`). Basename matching still
+    /// finds them; they just skip the fuzzier second chance, like `pi`.
+    static let pathMatchExcludedAgents: Set<String> = ["kilo"]
     public static let pathMatchableAgents = agentCommands.filter {
-        $0.count >= pathMatchMinimumLength
+        $0.count >= pathMatchMinimumLength && !pathMatchExcludedAgents.contains($0)
     }
 
     /// Interpreter/runtime launchers whose first non-flag argument is the
@@ -173,6 +179,13 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         // cloud-model waits leave multi-tens-of-seconds gaps; 45s stays under
         // the rule grace while bridging those pauses.
         "bionic": 45,
+        // OpenCode / OpenCode 2 / Kilo / Hermes write SQLite in bursts
+        // (WAL moves between the db and its sidecars), same shape as
+        // Antigravity's conversation store.
+        "opencode": 20,
+        "opencode2": 20,
+        "kilo": 20,
+        "hermes": 20,
     ]
 
     /// The freshness window for `agent`'s on-disk evidence.
@@ -200,6 +213,10 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     static let bionicHostMarker = "--lmstudio-project-identifier="
     /// Path fragments that identify Bionic (app bundle or its user-data dir).
     static let bionicHostPathHints = ["Bionic.app/", "/Application Support/Bionic"]
+    /// npm / npx package marker for DeepSeek Harness. The interactive CLI is
+    /// often `dsh`; the web UI is `npx @deepseek-ai/dsh web`, whose script
+    /// basename is a generic `cli.js` that names no tool.
+    static let dshHostMarker = "@deepseek-ai/dsh"
 
     private let ttl: TimeInterval
     private let now: () -> Date
@@ -350,7 +367,15 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         // Sessions that exist only as hook records (an IDE's built-in
         // agent) are appended last: they have no process, so none of
         // the cwd, evidence, or origin decoration above applies.
-        sessions.append(contentsOf: join.unclaimed.compactMap(Self.hookOnlySession(from:)))
+        sessions.append(contentsOf: join.unclaimed.compactMap { record in
+            guard var session = Self.hookOnlySession(from: record) else { return nil }
+            if record.agent == "codex",
+               let written = Self.codexRolloutWrite(forSessionId: record.sessionId) {
+                let cutoff = scanTime.addingTimeInterval(-Self.evidenceWindow(for: "codex"))
+                session.hasFreshEvidence = written >= cutoff
+            }
+            return session
+        })
         return sessions
     }
 
@@ -544,6 +569,14 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             // switch, so pinning to argv would miss real work. Only the
             // session store files count (not other churn in `.internal`).
             return bionicSessionWrite(home: home)
+        case "opencode", "opencode2":
+            return opencodeStoreWrite(home: home)
+        case "kilo":
+            return kiloStoreWrite(home: home)
+        case "hermes":
+            return hermesStoreWrite(home: home)
+        case "dsh":
+            return dshSessionWrite(home: home)
         default:
             return nil
         }
@@ -563,6 +596,164 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
                 continue
             }
             if newest.map({ written > $0 }) ?? true { newest = written }
+        }
+        return newest
+    }
+
+    /// Whether a matched agent process is a shared host whose CPU is a lie.
+    /// Codex Desktop's `app-server`, Kilo's `kilo serve`, and DeepSeek's
+    /// `dsh web` stay up whether or not a conversation is running.
+    static func isEvidenceOnlyHost(agent: String, command: String) -> Bool {
+        switch agent {
+        case "codex": return isCodexAppServerCommand(command)
+        case "kilo": return commandHasToken(command, "serve")
+        case "dsh": return commandHasToken(command, "web")
+        default: return false
+        }
+    }
+
+    /// Exact token match on a `ps` command line (`app-server`, `serve`, `web`).
+    static func commandHasToken(_ command: String, _ token: String) -> Bool {
+        command.split(whereSeparator: \.isWhitespace).contains { $0 == token }
+    }
+
+    /// `codex` whose argv includes the `app-server` subcommand: Codex Desktop's
+    /// shared host, not a dedicated CLI session.
+    static func isCodexAppServerCommand(_ command: String) -> Bool {
+        agentName(for: command, agents: ["codex"]) == "codex"
+            && commandHasToken(command, "app-server")
+    }
+
+    /// Newest mtime of `basename` and its SQLite sidecars (`-wal`, `-shm`)
+    /// inside `directory`. Does not list the directory, so sibling logs cannot
+    /// count as evidence.
+    static func newestSqliteStoreWrite(in directory: String, basename: String) -> Date? {
+        let manager = FileManager.default
+        var newest: Date?
+        for name in [basename, "\(basename)-wal", "\(basename)-shm"] {
+            let path = (directory as NSString).appendingPathComponent(name)
+            guard let date = (try? manager.attributesOfItem(atPath: path))?[.modificationDate] as? Date
+            else { continue }
+            if newest.map({ date > $0 }) ?? true { newest = date }
+        }
+        return newest
+    }
+
+    /// OpenCode / OpenCode 2 share one store. `OPENCODE_DATA_DIR` relocates it.
+    static func opencodeStoreWrite(
+        home: String = NSHomeDirectory(),
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Date? {
+        if let override = environment["OPENCODE_DATA_DIR"], !override.isEmpty {
+            return newestSqliteStoreWrite(in: override, basename: "opencode.db")
+        }
+        let candidates = [
+            "\(home)/.local/share/opencode",
+            "\(home)/Library/Application Support/opencode",
+        ]
+        return candidates.compactMap { newestSqliteStoreWrite(in: $0, basename: "opencode.db") }.max()
+    }
+
+    /// Kilo Code's OpenCode-fork store. `KILO_DATA_DIR` relocates it.
+    static func kiloStoreWrite(
+        home: String = NSHomeDirectory(),
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Date? {
+        if let override = environment["KILO_DATA_DIR"], !override.isEmpty {
+            return newestSqliteStoreWrite(in: override, basename: "kilo.db")
+        }
+        let candidates = [
+            "\(home)/.local/share/kilo",
+            "\(home)/Library/Application Support/kilo",
+        ]
+        return candidates.compactMap { newestSqliteStoreWrite(in: $0, basename: "kilo.db") }.max()
+    }
+
+    /// Hermes Agent state db, plus per-profile copies. `HERMES_HOME` relocates
+    /// the tree (default `~/.hermes`).
+    static func hermesStoreWrite(
+        home: String = NSHomeDirectory(),
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Date? {
+        let root = environment["HERMES_HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? "\(home)/.hermes"
+        var newest = newestSqliteStoreWrite(in: root, basename: "state.db")
+        let profiles = "\(root)/profiles"
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: profiles) else {
+            return newest
+        }
+        for name in names {
+            guard let written = newestSqliteStoreWrite(in: "\(profiles)/\(name)", basename: "state.db")
+            else { continue }
+            if newest.map({ written > $0 }) ?? true { newest = written }
+        }
+        return newest
+    }
+
+    /// DeepSeek Harness transcripts two directories down:
+    /// `~/.dsh/sessions/<encoded-cwd>/session-<uuid>/session.jsonl.zstd`.
+    /// `DSH_HOME` relocates the tree.
+    static func dshSessionWrite(
+        home: String = NSHomeDirectory(),
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Date? {
+        let root = environment["DSH_HOME"].flatMap { $0.isEmpty ? nil : $0 }
+            .map { "\($0)/sessions" } ?? "\(home)/.dsh/sessions"
+        return newestNestedFileWrite(in: root, named: "session.jsonl.zstd", directoryLevels: 2)
+    }
+
+    /// Walk `directoryLevels` of subdirectories under `root` and take the
+    /// newest mtime of files named `named`. Does not recurse further, so
+    /// caches sitting deeper cannot keep a session "working".
+    static func newestNestedFileWrite(in root: String, named filename: String, directoryLevels: Int) -> Date? {
+        let manager = FileManager.default
+        var newest: Date?
+        func walk(_ path: String, levelsLeft: Int) {
+            guard let names = try? manager.contentsOfDirectory(atPath: path) else { return }
+            if levelsLeft == 0 {
+                let file = (path as NSString).appendingPathComponent(filename)
+                guard let date = (try? manager.attributesOfItem(atPath: file))?[.modificationDate] as? Date
+                else { return }
+                if newest.map({ date > $0 }) ?? true { newest = date }
+                return
+            }
+            for name in names {
+                let child = (path as NSString).appendingPathComponent(name)
+                var isDirectory: ObjCBool = false
+                guard manager.fileExists(atPath: child, isDirectory: &isDirectory),
+                      isDirectory.boolValue else { continue }
+                walk(child, levelsLeft: levelsLeft - 1)
+            }
+        }
+        walk(root, levelsLeft: directoryLevels)
+        return newest
+    }
+
+    /// Newest write to the Codex rollout file whose name carries `sessionId`
+    /// (`rollout-<timestamp>-<sessionId>.jsonl` under `~/.codex/sessions/YYYY/MM/DD/`).
+    /// Filename match only: we do not parse the JSONL. Today and yesterday are
+    /// checked so a session spanning midnight still maps.
+    static func codexRolloutWrite(
+        forSessionId sessionId: String,
+        home: String = NSHomeDirectory(),
+        now: Date = Date()
+    ) -> Date? {
+        let trimmed = sessionId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let day = DateFormatter()
+        day.locale = Locale(identifier: "en_US_POSIX")
+        day.calendar = Calendar(identifier: .gregorian)
+        day.dateFormat = "yyyy/MM/dd"
+        day.timeZone = .current
+        let manager = FileManager.default
+        var newest: Date?
+        for date in [now, now.addingTimeInterval(-86_400)] {
+            let dir = "\(home)/.codex/sessions/\(day.string(from: date))"
+            guard let names = try? manager.contentsOfDirectory(atPath: dir) else { continue }
+            for name in names where name.hasPrefix("rollout-") && name.contains(trimmed) {
+                guard let written = (try? manager.attributesOfItem(atPath: "\(dir)/\(name)"))?[.modificationDate] as? Date
+                else { continue }
+                if newest.map({ written > $0 }) ?? true { newest = written }
+            }
         }
         return newest
     }
@@ -729,12 +920,20 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             if let agent = agentName(for: sample.command, agents: agents)
                 ?? resolvedAgentName(for: sample, agents: agents, pathOf: pathOf) {
                 matched[sample.pid] = agent
+                if isEvidenceOnlyHost(agent: agent, command: sample.command) {
+                    evidenceOnly.insert(sample.pid)
+                }
             } else if sample.command.contains(antigravityHostMarker) {
                 matched[sample.pid] = "antigravity"
                 evidenceOnly.insert(sample.pid)
             } else if isBionicAgentHost(sample.command) {
                 matched[sample.pid] = "bionic"
                 evidenceOnly.insert(sample.pid)
+            } else if sample.command.contains(dshHostMarker) {
+                matched[sample.pid] = "dsh"
+                if commandHasToken(sample.command, "web") {
+                    evidenceOnly.insert(sample.pid)
+                }
             }
         }
 

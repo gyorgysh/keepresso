@@ -47,5 +47,5 @@ private final class ReproAssert: PowerAsserting {
     #expect(session.isActive) // <-- should be Brewing, not Idle
 }
 
-private final class NoopActivity: ActivitySimulating { func poke() {} }
+private final class NoopActivity: ActivitySimulating { func poke(_: ActivityPokeKind) {} }
 private final class NoopEnd: SessionEndActing { func perform(_ action: SessionEndAction) {} }

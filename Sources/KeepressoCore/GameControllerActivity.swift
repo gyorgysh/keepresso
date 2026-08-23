@@ -145,8 +145,9 @@ public final class ControllerActivityPoker {
     /// timer, which also defeats the screen-saver yield, so it stays opt-in.
     public var enabled = false
 
-    /// Matches ``SessionController/activityPokeInterval``: often enough that
-    /// no dim threshold can pass, rare enough to cost nothing.
+    /// Matches the prompt-free keep-active cadence: often enough that no dim
+    /// threshold can pass, rare enough to cost nothing. Always ``.powerWarp``,
+    /// never a HID key.
     public static let pokeInterval: TimeInterval = 30
 
     private let activity: ActivitySimulating
@@ -174,6 +175,6 @@ public final class ControllerActivityPoker {
             return
         }
         lastPokeAt = instant
-        activity.poke()
+        activity.poke(.powerWarp)
     }
 }

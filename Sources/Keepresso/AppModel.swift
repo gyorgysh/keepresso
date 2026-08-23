@@ -46,6 +46,10 @@ final class AppModel {
     /// Backs the Gaming & Streaming Setup screen's check list. Populated on
     /// demand via ``refreshStreaming()``, like ``readiness``.
     let streaming = StreamingReadinessController()
+    /// Keyboard Cleaner: hidutil remap plus crash-restore marker. Not a brew.
+    let keyboardLock: KeyboardLockController
+    /// Public Wi-Fi assistant. Populated on demand via ``refreshCaptive()``.
+    let captive = CaptiveNetworkController()
     /// The built-in AWDL jitter diagnosis (ping burst + analysis).
     let jitter = JitterTestController()
     /// The AWDL watchdog: the helper daemon when installed, else the
@@ -143,6 +147,15 @@ final class AppModel {
                 daemon: HelperDaemonAWDLWatchdog(helper: helperClient),
                 fallback: OsascriptAWDLWatchdog(),
                 helperInstalled: helperInstalled
+            )
+        )
+        self.keyboardLock = KeyboardLockController(
+            locker: KeyboardLocker(
+                remapper: HidutilKeyboardRemapper(),
+                marker: FileKeyboardLockMarker(),
+                helper: helperClient,
+                helperAvailable: helperInstalled,
+                privilegedApply: { OsascriptKeyboardRemapper.apply($0) }
             )
         )
         var loaded = store.load()
@@ -335,12 +348,66 @@ final class AppModel {
 
     // MARK: - Keep-awake options
 
-    /// Whether the session also reports user activity to the OS, defeating
-    /// app-level and enterprise idle detection (remote desktop, meeting
-    /// presence, corporate idle-logout). Off by default.
+    /// Whether the session also reports user activity, so software with its
+    /// own idle timeout keeps the user present. Off by default.
     var simulateUserActivity: Bool {
         get { session.options.simulateUserActivity }
         set { updateOptions { $0.simulateUserActivity = newValue } }
+    }
+
+    /// How keep-active reports activity. HID methods prompt for Accessibility
+    /// only when the user switches to one, never at launch.
+    var activitySimulationMethod: ActivitySimulationMethod {
+        get { session.options.activitySimulationMethod }
+        set {
+            let wasHID = session.options.activitySimulationMethod.needsAccessibility
+            updateOptions { $0.activitySimulationMethod = newValue }
+            if newValue.needsAccessibility && !wasHID {
+                requestAccessibilityForActivityIfNeeded()
+            }
+        }
+    }
+
+    /// Virtual key for the specified-key keep-active method.
+    var activitySimulationKeyCode: Int? {
+        get { session.options.activitySimulationKeyCode }
+        set { updateOptions { $0.activitySimulationKeyCode = newValue } }
+    }
+
+    /// Live Accessibility trust, refreshed when Preferences appears and while
+    /// polling after a prompt or a jump to System Settings.
+    var accessibilityTrusted = false
+
+    @ObservationIgnored private var accessibilityPoll: Task<Void, Never>?
+
+    func refreshAccessibilityTrust() {
+        accessibilityTrusted = AccessibilityTrust.isTrusted
+    }
+
+    func requestAccessibilityForActivityIfNeeded() {
+        accessibilityTrusted = AccessibilityTrust.requestIfNeeded()
+        if !accessibilityTrusted {
+            pollAccessibilityTrust()
+        }
+    }
+
+    func openAccessibilitySettings() {
+        if let url = AccessibilityTrust.settingsURL {
+            NSWorkspace.shared.open(url)
+        }
+        pollAccessibilityTrust()
+    }
+
+    private func pollAccessibilityTrust() {
+        accessibilityPoll?.cancel()
+        accessibilityPoll = Task { @MainActor [weak self] in
+            for _ in 0..<150 {
+                try? await Task.sleep(for: .seconds(2))
+                guard let self, !Task.isCancelled else { return }
+                self.refreshAccessibilityTrust()
+                if self.accessibilityTrusted { return }
+            }
+        }
     }
 
     /// Mutate the keep-awake options, mirror into settings, and persist.
@@ -1349,6 +1416,17 @@ final class AppModel {
     /// and whenever the shortcut changes.
     func registerHotKey() {
         hotKeyManager.update(to: settings.hotKey) { [weak self] in self?.toggleManual() }
+    }
+
+    /// The Keyboard Cleaner overlay is up: a global toggle must not fire from
+    /// a wet finger or a swallowed key. Restored on Unlock, duration end, and
+    /// app quit.
+    func suspendHotKeyForKeyboardLock() {
+        hotKeyManager.update(to: nil) { }
+    }
+
+    func resumeHotKeyAfterKeyboardLock() {
+        registerHotKey()
     }
 
     // MARK: - Start on launch
@@ -2683,6 +2761,46 @@ final class AppModel {
         refreshAWDLState()
         // The window shows the helper's install state alongside the watchdog.
         helper.refresh()
+    }
+
+    /// Re-probe association, captive HTTP, and DNS for the Public Wi-Fi
+    /// assistant. Off-main inside the controller. Opening the window does
+    /// not request Location or an administrator password.
+    func refreshCaptive() {
+        Task { await captive.refresh() }
+        helper.refresh()
+    }
+
+    /// Flush the DNS cache through the helper daemon. Returns false when the
+    /// helper is missing or the call fails, so the window can copy the sudo
+    /// command instead of prompting.
+    func flushDNS() -> Bool {
+        guard helperInstalled else { return false }
+        return helperClient.flushDNS()
+    }
+
+    /// Lock the keyboard for Keyboard Cleaner. If the helper is not
+    /// installed this may show the administrator-password dialog: activate
+    /// first so the dialog is focused, and do not show the overlay until
+    /// this returns. Cancel leaves the keyboard live.
+    func lockKeyboard(duration: TimeInterval?) async -> KeyboardLockResult {
+        let helperCanLockSilently = helperInstalled
+            && (helper.daemonProtocolVersion ?? 0) >= KeyboardLocker.helperMinProtocol
+        let needsPrompt = !helperCanLockSilently
+        let window = needsPrompt ? NSApp.keyWindow : nil
+        if needsPrompt {
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        let result = await keyboardLock.lock(duration: duration)
+        if needsPrompt {
+            NSApp.activate(ignoringOtherApps: true)
+            window?.makeKeyAndOrderFront(nil)
+            WindowPlacement.repairIfWedged(window, attempts: 3)
+        }
+        if result != .cancelled {
+            suspendHotKeyForKeyboardLock()
+        }
+        return result
     }
 
     /// Re-read just the AWDL flag and interface state; cheap enough for the

@@ -40,11 +40,21 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
     /// dark).
     public var dimFloor: Double
 
-    /// Also report user activity to the OS while the session runs, defeating
-    /// app-level and enterprise idle detection (remote-desktop, meeting
-    /// presence, corporate idle-logout) that a plain power assertion doesn't
-    /// reach. Off by default; see ``ActivitySimulating``.
+    /// Also report user activity while the session runs, so software with its
+    /// own idle timeout (meetings, chat, remote desktop, VDI, cloud gaming,
+    /// and many others) keeps the user present. A plain power assertion does
+    /// not reach those. Off by default. See ``ActivitySimulating``.
     public var simulateUserActivity: Bool
+
+    /// How keep-active reports activity when ``simulateUserActivity`` is on.
+    /// Defaults to the prompt-free power/warp path. HID methods need
+    /// Accessibility, requested only when the user picks one.
+    public var activitySimulationMethod: ActivitySimulationMethod
+
+    /// Carbon virtual key code for ``ActivitySimulationMethod/specifiedKey``.
+    /// Ignored for the other methods. `nil` until the user records a key,
+    /// and the poke then falls back to ``ActivityPokeKind/powerWarp``.
+    public var activitySimulationKeyCode: Int?
 
     public init(
         preventSystemSleep: Bool = true,
@@ -52,7 +62,9 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
         allowScreenSaverAfter: TimeInterval? = nil,
         dimDisplayAfter: TimeInterval? = nil,
         dimFloor: Double = 0,
-        simulateUserActivity: Bool = false
+        simulateUserActivity: Bool = false,
+        activitySimulationMethod: ActivitySimulationMethod = .powerWarp,
+        activitySimulationKeyCode: Int? = nil
     ) {
         self.preventSystemSleep = preventSystemSleep
         self.preventDisplaySleep = preventDisplaySleep
@@ -60,6 +72,29 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
         self.dimDisplayAfter = dimDisplayAfter
         self.dimFloor = dimFloor
         self.simulateUserActivity = simulateUserActivity
+        self.activitySimulationMethod = activitySimulationMethod
+        self.activitySimulationKeyCode = activitySimulationKeyCode
+    }
+
+    /// The poke to perform for the current method. A specified key with no
+    /// recorded code falls back to the prompt-free path.
+    public var activityPokeKind: ActivityPokeKind {
+        switch activitySimulationMethod {
+        case .powerWarp:
+            return .powerWarp
+        case .f15:
+            return .key(ActivitySimulationMethod.f15KeyCode)
+        case .shift:
+            return .key(ActivitySimulationMethod.shiftKeyCode)
+        case .specifiedKey:
+            guard let code = activitySimulationKeyCode,
+                  code >= 0, code <= Int(UInt16.max) else {
+                return .powerWarp
+            }
+            return .key(UInt16(code))
+        case .mouseMove:
+            return .mouseMove
+        }
     }
 
     /// The default "brew": keep the system awake, let the screen do its thing.
@@ -68,6 +103,7 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case preventSystemSleep, preventDisplaySleep, allowScreenSaverAfter
         case dimDisplayAfter, dimFloor, simulateUserActivity
+        case activitySimulationMethod, activitySimulationKeyCode
     }
 
     /// Forgiving decoder: each field falls back to its default when absent, so a
@@ -81,5 +117,8 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
         dimDisplayAfter = try c.decodeIfPresent(TimeInterval.self, forKey: .dimDisplayAfter)
         dimFloor = try c.decodeIfPresent(Double.self, forKey: .dimFloor) ?? 0
         simulateUserActivity = try c.decodeIfPresent(Bool.self, forKey: .simulateUserActivity) ?? false
+        activitySimulationMethod = try c.decodeIfPresent(
+            ActivitySimulationMethod.self, forKey: .activitySimulationMethod) ?? .powerWarp
+        activitySimulationKeyCode = try c.decodeIfPresent(Int.self, forKey: .activitySimulationKeyCode)
     }
 }

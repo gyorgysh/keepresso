@@ -60,6 +60,16 @@ private final class FakeHelperClient: PrivilegedHelperCalling, @unchecked Sendab
         return holdSucceeds
     }
 
+    func flushDNS() -> Bool {
+        record("flushDNS")
+        return holdSucceeds
+    }
+
+    func setKeyboardLock(_ holding: Bool) -> Bool {
+        record("setKeyboardLock(\(holding))")
+        return holdSucceeds
+    }
+
     private func record(_ call: String) {
         lock.lock()
         calls.append(call)

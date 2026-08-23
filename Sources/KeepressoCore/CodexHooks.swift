@@ -85,8 +85,15 @@ public enum CodexHooks {
     // MARK: - Handling one invocation
 
     /// Applies one hook invocation. The payload and the events are Claude
-    /// Code's shape, so this decodes and reduces with the shared code and only
-    /// stamps the agent name differently.
+    /// Code's shape, so this decodes and reduces with the shared code.
+    ///
+    /// Codex Desktop is the Cursor-shaped exception: every conversation runs
+    /// under one long-lived `codex app-server` process, so the first `codex`
+    /// ancestor is a shared host, not a conversation. Those records are
+    /// written as hook-only (`ownerPid` on ChatGPT.app, no `agentPid`) so
+    /// each `sessionId` becomes its own menu row. A dedicated CLI `codex`
+    /// (no `app-server` in argv) still writes `agentPid` and keeps the
+    /// forever-while-alive long-turn trust.
     public static func handle(
         event: String,
         payloadData: Data,
@@ -95,12 +102,58 @@ public enum CodexHooks {
         in directory: URL = AgentHooks.directoryURL(),
         parentOf: (Int32) -> Int32? = AgentHooks.defaultParentOf,
         commandOf: (Int32) -> String? = AgentHooks.defaultCommandOf,
-        pathOf: (Int32) -> String? = AgentHooks.defaultPathOf
+        pathOf: (Int32) -> String? = AgentHooks.defaultPathOf,
+        argumentsOf: (Int32) -> String? = AgentHooks.defaultArgumentsOf
     ) {
-        AgentHooks.handle(
-            event: event, payloadData: payloadData, parentPid: parentPid, now: now,
-            in: directory, parentOf: parentOf, commandOf: commandOf, pathOf: pathOf,
-            defaultAgent: "codex")
+        let payload = (try? decoder.decode(AgentHooks.HookPayload.self, from: payloadData))
+            ?? AgentHooks.HookPayload()
+        guard let sessionId = payload.sessionId, !sessionId.isEmpty else { return }
+        switch AgentHooks.reduce(event: event, toolName: payload.toolName, message: payload.message) {
+        case .end:
+            AgentHooks.delete(sessionId: sessionId, in: directory)
+        case .set(let state, let detail):
+            let match = AgentHooks.findAgentAncestor(
+                startingAt: parentPid, parentOf: parentOf, commandOf: commandOf, pathOf: pathOf)
+            let shared = match.map {
+                AgentHooks.isCodexAppServer(
+                    comm: commandOf($0.agentPid),
+                    path: pathOf($0.agentPid),
+                    arguments: argumentsOf($0.agentPid))
+            } ?? false
+            if let match, !shared {
+                AgentHooks.write(
+                    AgentHooks.HookRecord(
+                        sessionId: sessionId,
+                        state: state,
+                        detail: detail,
+                        cwd: payload.cwd,
+                        origin: match.origin,
+                        agentPid: match.agentPid,
+                        agent: match.agentCommand,
+                        updatedAt: now
+                    ),
+                    in: directory
+                )
+            } else {
+                let host = AgentHooks.findAppHost(
+                    startingAt: parentPid, parentOf: parentOf, commandOf: commandOf)
+                AgentHooks.write(
+                    AgentHooks.HookRecord(
+                        sessionId: sessionId,
+                        state: state,
+                        detail: detail,
+                        cwd: payload.cwd,
+                        origin: host?.origin ?? .ide,
+                        ownerPid: host?.hostPid,
+                        agent: "codex",
+                        updatedAt: now
+                    ),
+                    in: directory
+                )
+            }
+        case nil:
+            break
+        }
     }
 
     // MARK: - hooks.json editing
@@ -264,5 +317,11 @@ public enum CodexHooks {
 
     private static func serialize(_ root: [String: Any]) throws -> Data {
         try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
+    }
+
+    private static var decoder: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
     }
 }

@@ -84,6 +84,10 @@ public enum HelperRestoreMarker: String, CaseIterable, Sendable {
     /// schedules behind after a crash. Successful schedules do not set this
     /// (they are meant to survive reboots).
     case wakeClearPending = "wake-clear-pending"
+    /// We remapped the keyboard for Keyboard Cleaner and haven't restored
+    /// the snapshotted `UserKeyMapping`. The file contents are the JSON of
+    /// that snapshot (empty-entries JSON is "no remaps", not a missing marker).
+    case keyboardLock = "keyboard-lock"
 }
 
 /// Persistence seam for the restore markers. A marker may carry a small value
@@ -180,6 +184,7 @@ public final class HelperEngine: @unchecked Sendable {
     private let runner: HelperCommandRunning
     private let state: HelperRestoreStatePersisting
     private let fans: FanControlling
+    private let keyboard: KeyboardRemapping
 
     private var sleepHolders: Set<Int> = []
     private var awdlHolders: Set<Int> = []
@@ -188,6 +193,8 @@ public final class HelperEngine: @unchecked Sendable {
     /// Client → pid whose CPU priority is raised while a game plays. The
     /// effective set is the union of held pids.
     private var priorityHolders: [Int: Int] = [:]
+    /// Clients holding the Keyboard Cleaner remap.
+    private var keyboardHolders: Set<Int> = []
     /// Consecutive failed fan writes; past the cap the engine surrenders the
     /// hold instead of fighting the firmware forever.
     private var fanFailureStreak = 0
@@ -206,11 +213,13 @@ public final class HelperEngine: @unchecked Sendable {
         runner: HelperCommandRunning,
         state: HelperRestoreStatePersisting,
         fans: FanControlling = NullFanControl(),
+        keyboard: KeyboardRemapping = HidutilKeyboardRemapper(),
         sleepDisabledReader: @escaping () -> Bool? = { nil }
     ) {
         self.runner = runner
         self.state = state
         self.fans = fans
+        self.keyboard = keyboard
         self.sleepDisabledReader = sleepDisabledReader
     }
 
@@ -256,6 +265,10 @@ public final class HelperEngine: @unchecked Sendable {
         if leftovers.contains(.wakeClearPending) {
             _ = clearWakeSchedules()
         }
+        if leftovers.contains(.keyboardLock) {
+            let original = Self.decodeKeyboardMapping(state.value(for: .keyboardLock))
+            if keyboard.apply(original) { state.set(.keyboardLock, value: nil) }
+        }
     }
 
     /// The manual closed-display toggle: a plain persistent set, deliberately
@@ -270,6 +283,24 @@ public final class HelperEngine: @unchecked Sendable {
     /// the reply.
     public func sleepNow() -> Bool {
         runner.run("/usr/bin/pmset", ["sleepnow"])
+    }
+
+    /// Flush the DNS cache and bounce mDNSResponder. Not a hold: nothing to
+    /// restore on disconnect. Both steps run even if the first fails, so a
+    /// poisoned cache and a stuck resolver are both given a chance.
+    public func flushDNS() -> Bool {
+        let a = runner.run("/usr/bin/dscacheutil", ["-flushcache"])
+        let b = runner.run("/usr/bin/killall", ["-HUP", "mDNSResponder"])
+        return a && b
+    }
+
+    /// Take or release `client`'s hold on the Keyboard Cleaner remap. Writes
+    /// hidutil only on the union edge. The disable table is baked in, never
+    /// supplied by the caller.
+    public func setKeyboardLock(client: Int, holding: Bool) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return applyKeyboardUnion(client: client, holding: holding)
     }
 
     /// One-shot wake. Schedules persist across reboots by design.
@@ -398,6 +429,7 @@ public final class HelperEngine: @unchecked Sendable {
         _ = applyAWDLUnion(client: client, holding: false)
         _ = applyFanUnion { fanHolders.removeValue(forKey: client) }
         _ = applyPriorityUnion { priorityHolders.removeValue(forKey: client) }
+        _ = applyKeyboardUnion(client: client, holding: false)
     }
 
     /// Re-down `awdl0` while any hold is live: macOS re-raises the interface
@@ -454,6 +486,7 @@ public final class HelperEngine: @unchecked Sendable {
         defer { lock.unlock() }
         return sleepHolders.isEmpty && awdlHolders.isEmpty
             && fanHolders.isEmpty && priorityHolders.isEmpty
+            && keyboardHolders.isEmpty
     }
 
     // MARK: - CLI symlink
@@ -605,6 +638,50 @@ public final class HelperEngine: @unchecked Sendable {
             _ = runner.run("/usr/bin/renice", ["0", "-p", String(pid)])
         }
         return ok
+    }
+
+    /// Keyboard Cleaner union: snapshot the live mapping on first holder,
+    /// apply the baked-in disable table, restore the snapshot on last
+    /// release. Debt-by-attempt: the marker is the JSON snapshot, written
+    /// before hidutil so a crash mid-apply still restores.
+    private func applyKeyboardUnion(client: Int, holding: Bool) -> Bool {
+        let before = !keyboardHolders.isEmpty
+        if holding { keyboardHolders.insert(client) } else { keyboardHolders.remove(client) }
+        let after = !keyboardHolders.isEmpty
+        guard before != after else { return true }
+        if after {
+            let original = keyboard.currentMapping()
+            let payload = Self.encodeKeyboardMapping(original)
+            state.set(.keyboardLock, value: payload)
+            guard state.value(for: .keyboardLock) != nil else {
+                keyboardHolders.remove(client)
+                return false
+            }
+            let ok = keyboard.apply(.disabledKeyboard)
+            if !ok {
+                keyboardHolders.remove(client)
+                state.set(.keyboardLock, value: nil)
+            }
+            return ok
+        }
+        let original = Self.decodeKeyboardMapping(state.value(for: .keyboardLock))
+        let ok = keyboard.apply(original)
+        if ok { state.set(.keyboardLock, value: nil) }
+        return ok
+    }
+
+    static func encodeKeyboardMapping(_ mapping: KeyboardKeyMapping) -> String {
+        guard let data = try? JSONEncoder().encode(mapping),
+              let s = String(data: data, encoding: .utf8)
+        else { return "{\"entries\":[]}" }
+        return s
+    }
+
+    static func decodeKeyboardMapping(_ raw: String?) -> KeyboardKeyMapping {
+        guard let raw, let data = raw.data(using: .utf8),
+              let mapping = try? JSONDecoder().decode(KeyboardKeyMapping.self, from: data)
+        else { return .empty }
+        return mapping
     }
 
     /// One forced write, with the single unlock-and-retry newer firmware

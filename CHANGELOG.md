@@ -3,18 +3,34 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
-## [Unreleased]
+## [1.21.1] - Unreleased
 
 ### Added
 
-- **Wake for tokenstat.ai automations.** Scheduled AI runs now also discovers
-  tokenstat.ai jobs from
-  `~/Library/Application Support/ai.tokenstat.tokenstat/automations.json`
-  (daily, weekly, weekdays, custom multi-day, and interval schedules; once is
-  skipped), so the Mac can be woken for those the same way it already is for
-  Claude Desktop local routines and Codex automations. Only schedule and name are read, never
-  the prompt. Opt in under Preferences ▸ Automation ▸ Scheduled AI runs by
-  turning on the tokenstat.ai platform.
+- **Wake for tokenstat.ai automations.** Scheduled AI runs can wake the Mac
+  for tokenstat.ai jobs the same way they already do for Claude Desktop and
+  Codex. Turn the platform on under Preferences ▸ Automation ▸ Scheduled AI
+  runs. Only schedule and name are read, never the prompt.
+
+- **Keyboard Cleaner.** Locks the keys so you can wipe without typing into
+  whatever is in front, including Mission Control, Spotlight, and Dictation.
+
+- **Public Wi-Fi.** Helps when a cafe or hotel network never shows a login
+  page: open the portal, flush DNS, or cycle Wi-Fi.
+
+- **Hermes Agent, Kilo Code, OpenCode 2, and DeepSeek Harness** are detected
+  while they work.
+
+- **Keep me active methods.** When Keep me active is on, pick how presence is
+  reported: the original prompt-free method, F15, Shift, a specified key, or
+  a mouse move. Accessibility is requested only if you choose a key or mouse
+  method.
+
+### Fixed
+
+- **Codex Desktop chats stay on their own rows.** Several conversations no
+  longer collapse onto one process, so a missed Stop cannot hold the Mac
+  awake for the life of ChatGPT.app.
 
 ## [1.20.2] - 2026-08-03
 

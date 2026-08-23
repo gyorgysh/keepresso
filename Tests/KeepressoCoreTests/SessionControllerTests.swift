@@ -19,10 +19,11 @@ private final class Clock {
     func advance(_ seconds: TimeInterval) { now.addTimeInterval(seconds) }
 }
 
-/// Records how often the keep-active poke fires.
+/// Records how often the keep-active poke fires, and which kind.
 private final class FakeActivity: ActivitySimulating {
-    private(set) var pokeCount = 0
-    func poke() { pokeCount += 1 }
+    private(set) var pokes: [ActivityPokeKind] = []
+    var pokeCount: Int { pokes.count }
+    func poke(_ kind: ActivityPokeKind) { pokes.append(kind) }
 }
 
 /// Records brightness set calls and serves a controllable current level.
@@ -64,6 +65,7 @@ private final class FakeBrightness: BrightnessControlling {
     clock.advance(SessionController.activityPokeInterval)
     controller.reconcile()
     #expect(activity.pokeCount == 2) // interval elapsed: pokes again
+    #expect(activity.pokes == [.powerWarp, .powerWarp])
 }
 
 @MainActor
@@ -202,6 +204,68 @@ private final class FakeBrightness: BrightnessControlling {
     clock.advance(5) // well within the interval
     controller.start(options: options)
     #expect(activity.pokeCount == 2) // the fresh session pokes right away
+}
+
+@MainActor
+@Test func keepActiveHIDMethodUsesSixtySecondIntervalAndPostsTheKey() {
+    let clock = Clock()
+    let activity = FakeActivity()
+    let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(
+        preventSystemSleep: true,
+        simulateUserActivity: true,
+        activitySimulationMethod: .f15
+    ))
+    #expect(activity.pokes == [.key(ActivitySimulationMethod.f15KeyCode)])
+
+    clock.advance(SessionController.activityPokeInterval) // 30s: warp cadence, not HID
+    controller.reconcile()
+    #expect(activity.pokeCount == 1)
+
+    clock.advance(ActivitySimulationMethod.f15.pokeInterval - SessionController.activityPokeInterval)
+    controller.reconcile()
+    #expect(activity.pokes == [
+        .key(ActivitySimulationMethod.f15KeyCode),
+        .key(ActivitySimulationMethod.f15KeyCode),
+    ])
+}
+
+@MainActor
+@Test func keepActiveSpecifiedKeyFallsBackUntilAKeyIsRecorded() {
+    let clock = Clock()
+    let activity = FakeActivity()
+    let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
+    var options = SleepPreventionOptions(
+        preventSystemSleep: true,
+        simulateUserActivity: true,
+        activitySimulationMethod: .specifiedKey
+    )
+    controller.start(options: options)
+    #expect(activity.pokes == [.powerWarp])
+
+    options.activitySimulationKeyCode = 123
+    controller.options = options
+    clock.advance(SessionController.activityPokeInterval)
+    controller.reconcile()
+    // Still inside the 60s HID interval from the first poke.
+    #expect(activity.pokeCount == 1)
+
+    clock.advance(ActivitySimulationMethod.specifiedKey.pokeInterval - SessionController.activityPokeInterval)
+    controller.reconcile()
+    #expect(activity.pokes.last == .key(123))
+}
+
+@MainActor
+@Test func keepActiveMouseMovePostsMouseNotWarp() {
+    let clock = Clock()
+    let activity = FakeActivity()
+    let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(
+        preventSystemSleep: true,
+        simulateUserActivity: true,
+        activitySimulationMethod: .mouseMove
+    ))
+    #expect(activity.pokes == [.mouseMove])
 }
 
 @MainActor
