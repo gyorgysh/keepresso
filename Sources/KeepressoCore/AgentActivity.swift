@@ -243,12 +243,27 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// is live; tests leave it on.
     public var evidenceEnabled: Bool = true
 
+    /// Default hook scan: drop a Codex Desktop working record after ten
+    /// minutes unless that chat's rollout file is still inside the evidence
+    /// window.
+    public static func defaultHookRecords(now: Date) -> [AgentHooks.HookRecord] {
+        AgentHooks.readHookRecords(
+            now: now,
+            hasFreshSharedHostEvidence: { sessionId in
+                guard let written = codexRolloutWrite(forSessionId: sessionId, now: now) else {
+                    return false
+                }
+                return written >= now.addingTimeInterval(-evidenceWindow(for: "codex"))
+            }
+        )
+    }
+
     public init(
         ttl: TimeInterval = 3,
         now: @escaping () -> Date = Date.init,
         fetch: @escaping @Sendable () -> String? = SharedPSSnapshot.runPS,
         evidence: @escaping @Sendable (_ agent: String, _ cwd: String?) -> Date? = PSAgentActivityMonitor.transcriptActivity,
-        hookRecords: @escaping @Sendable (_ now: Date) -> [AgentHooks.HookRecord] = { AgentHooks.readHookRecords(now: $0) },
+        hookRecords: @escaping @Sendable (_ now: Date) -> [AgentHooks.HookRecord] = { defaultHookRecords(now: $0) },
         classifyOrigin: @escaping @Sendable (_ pid: Int32) -> AgentHooks.HookSessionOrigin? = { AgentHooks.classifyOrigin(abovePid: $0) }
     ) {
         self.ttl = ttl

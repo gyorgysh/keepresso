@@ -11,7 +11,6 @@ struct KeyboardCleanerView: View {
     @Bindable var model: AppModel
     @State private var windowVisible = false
     @State private var duration: TimeInterval = 60
-    @State private var overlay: KeyboardLockOverlay?
     @State private var starting = false
 
     private var lock: KeyboardLockController { model.keyboardLock }
@@ -37,16 +36,16 @@ struct KeyboardCleanerView: View {
         .onReceive(Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()) { _ in
             guard windowVisible else { return }
             lock.tick()
-            if !lock.isLocked { overlay?.close() }
+            if !lock.isLocked {
+                model.dismissKeyboardLockOverlay()
+            }
         }
         .onChange(of: lock.isLocked) { _, locked in
             if !locked {
-                overlay?.close()
-                overlay = nil
+                model.dismissKeyboardLockOverlay()
                 model.resumeHotKeyAfterKeyboardLock()
             }
         }
-        .onDisappear { overlay?.close() }
     }
 
     private var header: some View {
@@ -90,7 +89,7 @@ struct KeyboardCleanerView: View {
             HStack {
                 Spacer()
                 if lock.isLocked {
-                    Button("Unlock") { unlock() }
+                    Button("Unlock") { model.unlockKeyboardFromOverlay() }
                         .keyboardShortcut(.defaultAction)
                         .controlSize(.large)
                 } else {
@@ -110,29 +109,22 @@ struct KeyboardCleanerView: View {
             let result = await model.lockKeyboard(duration: duration)
             starting = false
             guard result != .cancelled else { return }
-            let overlay = KeyboardLockOverlay(controller: lock) { unlock() }
-            overlay.show()
-            self.overlay = overlay
+            model.showKeyboardLockOverlay()
         }
-    }
-
-    private func unlock() {
-        overlay?.close()
-        overlay = nil
-        lock.unlock()
-        model.resumeHotKeyAfterKeyboardLock()
     }
 }
 
-/// Borderless dim overlay covering every Space. Mouse clicks reach Unlock;
-/// keyDown is swallowed as a backup if hidutil did not remap.
+/// Borderless dim overlay covering every display and Space. Mouse clicks
+/// reach Unlock. Ordinary keyDown is swallowed while one of these windows
+/// is key: hidutil cannot remap letters without macOS discarding the map.
 @MainActor
 final class KeyboardLockOverlay: NSObject {
-    private var window: NSWindow?
+    private var windows: [NSWindow] = []
     private let controller: KeyboardLockController
     private let onUnlock: () -> Void
     private var keyMonitor: Any?
     private var timer: Timer?
+    private var screenObserver: NSObjectProtocol?
 
     init(controller: KeyboardLockController, onUnlock: @escaping () -> Void) {
         self.controller = controller
@@ -140,62 +132,106 @@ final class KeyboardLockOverlay: NSObject {
     }
 
     func show() {
-        let screen = NSScreen.main ?? NSScreen.screens[0]
-        let view = KeyboardLockOverlayView(
-            remaining: remainingText(),
-            isGlobal: controller.isGlobal,
-            onUnlock: onUnlock
-        )
-        let hosting = NSHostingView(rootView: view)
-        let window = LockOverlayWindow(
-            contentRect: screen.frame,
-            styleMask: [.borderless, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        window.setFrame(screen.frame, display: true)
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.level = .screenSaver
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        window.ignoresMouseEvents = false
-        window.contentView = hosting
-        window.makeKeyAndOrderFront(nil)
-        self.window = window
-
-        keyMonitor = NSEvent.addLocalMonitorForEvents(
-            matching: [.keyDown, .keyUp, .flagsChanged, .systemDefined]
-        ) { _ in
-            nil
-        }
-        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.refresh()
-            }
-        }
+        installMonitorsIfNeeded()
+        rebuildWindows()
     }
 
     func close() {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         keyMonitor = nil
+        if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
+        screenObserver = nil
         timer?.invalidate()
         timer = nil
-        window?.orderOut(nil)
-        window = nil
+        for window in windows {
+            window.orderOut(nil)
+        }
+        windows = []
+    }
+
+    private func installMonitorsIfNeeded() {
+        if keyMonitor == nil {
+            keyMonitor = NSEvent.addLocalMonitorForEvents(
+                matching: [.keyDown, .keyUp, .flagsChanged, .systemDefined]
+            ) { _ in
+                nil
+            }
+        }
+        if timer == nil {
+            timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.refresh()
+                }
+            }
+        }
+        if screenObserver == nil {
+            screenObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didChangeScreenParametersNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.rebuildWindows()
+                }
+            }
+        }
+    }
+
+    private func rebuildWindows() {
+        for window in windows {
+            window.orderOut(nil)
+        }
+        windows = screensToCover().map { screen in
+            let hosting = NSHostingView(rootView: overlayView())
+            let window = LockOverlayWindow(
+                contentRect: screen.frame,
+                styleMask: [.borderless, .fullSizeContentView],
+                backing: .buffered,
+                defer: false
+            )
+            window.setFrame(screen.frame, display: true)
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.level = .screenSaver
+            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+            window.ignoresMouseEvents = false
+            window.contentView = hosting
+            window.orderFront(nil)
+            return window
+        }
+        keyWindowPreference()?.makeKeyAndOrderFront(nil)
+    }
+
+    private func screensToCover() -> [NSScreen] {
+        let screens = NSScreen.screens
+        if !screens.isEmpty { return screens }
+        if let main = NSScreen.main { return [main] }
+        return []
+    }
+
+    private func keyWindowPreference() -> NSWindow? {
+        windows.first { $0.screen == NSScreen.main } ?? windows.first
+    }
+
+    private func overlayView() -> KeyboardLockOverlayView {
+        KeyboardLockOverlayView(
+            remaining: remainingText(),
+            isGlobal: controller.isGlobal,
+            onUnlock: onUnlock
+        )
     }
 
     private func refresh() {
         controller.tick()
-        guard controller.isLocked, let window else {
+        guard controller.isLocked, !windows.isEmpty else {
             onUnlock()
             return
         }
-        if let hosting = window.contentView as? NSHostingView<KeyboardLockOverlayView> {
-            hosting.rootView = KeyboardLockOverlayView(
-                remaining: remainingText(),
-                isGlobal: controller.isGlobal,
-                onUnlock: onUnlock
-            )
+        let view = overlayView()
+        for window in windows {
+            if let hosting = window.contentView as? NSHostingView<KeyboardLockOverlayView> {
+                hosting.rootView = view
+            }
         }
     }
 

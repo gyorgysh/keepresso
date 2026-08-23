@@ -16,7 +16,7 @@ struct HelperStatusRows: View {
                 Image(systemName: "checkmark.seal.fill")
                     .foregroundStyle(.green)
                     .accessibilityHidden(true)
-                Text("Helper installed. Closed-display mode, fan boost, and AWDL pausing work without password prompts.")
+                Text("Helper installed. Closed-display mode, Keyboard Cleaner, fan boost, AWDL pausing, and DNS flush work without password prompts.")
                 Spacer(minLength: 8)
                 Button("Remove") { model.removeHelper() }
             }
@@ -43,7 +43,7 @@ struct HelperStatusRows: View {
             }
         default:
             HStack(alignment: .top, spacing: 6) {
-                Text("Install a small helper service so closed-display mode, the thermal fan boost, and AWDL pausing work without password prompts. macOS will ask you to allow it in System Settings, once. Nothing else changes.")
+                Text("Install a small helper service so closed-display mode, Keyboard Cleaner, the thermal fan boost, AWDL pausing, and DNS flush work without password prompts. macOS will ask you to allow it in System Settings, once. Nothing else changes.")
                 Spacer(minLength: 8)
                 Button("Install Helper…") { model.installHelper() }
             }

@@ -57,6 +57,7 @@ private final class FakeLocker: KeyboardLocking, @unchecked Sendable {
 private final class FakeKeyboardHelper: PrivilegedHelperCalling, @unchecked Sendable {
     var version = HelperService.protocolVersion
     var lockSucceeds = true
+    var unlockSucceeds = true
     private(set) var calls: [Bool] = []
 
     func ping() -> Bool { version == HelperService.protocolVersion }
@@ -72,7 +73,7 @@ private final class FakeKeyboardHelper: PrivilegedHelperCalling, @unchecked Send
     func flushDNS() -> Bool { true }
     func setKeyboardLock(_ holding: Bool) -> Bool {
         calls.append(holding)
-        return lockSucceeds || !holding
+        return holding ? lockSucceeds : unlockSucceeds
     }
 }
 
@@ -107,6 +108,74 @@ private final class FakeKeyboardHelper: PrivilegedHelperCalling, @unchecked Send
     #expect(!locker.isLocked)
 }
 
+@Test func failedUnlockKeepsTheMarkerAndStaysLocked() {
+    let remapper = FakeRemapper()
+    let marker = MemoryMarker()
+    let original = remapper.current
+    let locker = KeyboardLocker(remapper: remapper, marker: marker)
+
+    #expect(locker.lock() == .applied)
+    remapper.applySucceeds = false
+    locker.unlock()
+    #expect(locker.isLocked)
+    #expect(marker.stored == original)
+}
+
+@Test func cancelledUnlockPromptKeepsTheLock() {
+    let remapper = FakeRemapper()
+    remapper.applySucceeds = false
+    let marker = MemoryMarker()
+    let original = remapper.current
+    var privilegedCalls = 0
+    let locker = KeyboardLocker(
+        remapper: remapper,
+        marker: marker,
+        privilegedApply: { mapping in
+            privilegedCalls += 1
+            if mapping == .disabledKeyboard {
+                remapper.current = mapping
+                return .applied
+            }
+            return .cancelled
+        }
+    )
+
+    #expect(locker.lock() == .applied)
+    locker.unlock()
+    #expect(privilegedCalls == 2)
+    #expect(locker.isLocked)
+    #expect(marker.stored == original)
+}
+
+@Test func failedLaunchRestoreKeepsTheMarkerAndStaysLocked() {
+    let remapper = FakeRemapper()
+    remapper.applySucceeds = false
+    remapper.current = .disabledKeyboard
+    let marker = MemoryMarker()
+    let original = KeyboardKeyMapping(entries: [.init(src: 9, dst: 8)])
+    marker.stored = original
+    let locker = KeyboardLocker(remapper: remapper, marker: marker)
+
+    locker.restoreIfNeeded()
+    #expect(locker.isLocked)
+    #expect(marker.stored == original)
+    #expect(remapper.applied.last == original)
+}
+
+@Test func leftoverMarkerAlreadyMatchingCurrentClearsWithoutApply() {
+    let remapper = FakeRemapper()
+    let original = KeyboardKeyMapping(entries: [.init(src: 9, dst: 8)])
+    remapper.current = original
+    let marker = MemoryMarker()
+    marker.stored = original
+    let locker = KeyboardLocker(remapper: remapper, marker: marker)
+
+    locker.restoreIfNeeded()
+    #expect(!locker.isLocked)
+    #expect(marker.stored == nil)
+    #expect(remapper.applied.isEmpty)
+}
+
 @Test func leftoverMarkerIsANoOpWhenAbsent() {
     let remapper = FakeRemapper()
     let locker = KeyboardLocker(remapper: remapper, marker: MemoryMarker())
@@ -126,7 +195,8 @@ private final class FakeKeyboardHelper: PrivilegedHelperCalling, @unchecked Send
     #expect(marker.stored == original)
 
     locker.unlock()
-    #expect(remapper.applied.last == original)
+    #expect(!locker.isLocked)
+    #expect(marker.stored == nil)
 }
 
 @Test func cancelledAdminPromptDoesNotLock() {
@@ -240,7 +310,7 @@ private final class FakeKeyboardHelper: PrivilegedHelperCalling, @unchecked Send
     now = now.addingTimeInterval(2)
     controller.tick()
     #expect(!controller.isLocked)
-    #expect(locker.unlockCalls == 1)
+    #expect(locker.restoreCalls == 1)
 }
 
 @Test @MainActor func controllerCancelDoesNotShowAsLocked() async {
@@ -269,6 +339,18 @@ private final class FakeKeyboardHelper: PrivilegedHelperCalling, @unchecked Send
     controller.restoreIfNeeded()
     #expect(locker.restoreCalls == 1)
     #expect(!controller.isLocked)
+}
+
+@Test @MainActor func controllerUnlockKeepsLockedWhenRestoreFails() async {
+    let remapper = FakeRemapper()
+    let marker = MemoryMarker()
+    let locker = KeyboardLocker(remapper: remapper, marker: marker)
+    let controller = KeyboardLockController(locker: locker)
+    #expect(await controller.lock() == .applied)
+    remapper.applySucceeds = false
+    controller.unlock()
+    #expect(controller.isLocked)
+    #expect(marker.stored != nil)
 }
 
 @Test func hidutilGetParserReadsNeXTSTEPPairs() {

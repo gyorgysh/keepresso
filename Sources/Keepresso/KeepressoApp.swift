@@ -216,7 +216,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if yieldingToPeer { return }
         // A previous run may have crashed while the keyboard was remapped.
         // Restore before relocate or anything else that would want keys.
+        // If restore could not land, put the overlay back so Unlock is
+        // reachable instead of leaving special keys dead with no chrome.
         model.keyboardLock.restoreIfNeeded()
+        if model.keyboardLock.isLocked {
+            model.suspendHotKeyForKeyboardLock()
+            model.showKeyboardLockOverlay()
+        }
         // If launched from the DMG / Downloads, move into /Applications and
         // relaunch from there (this instance quits if it relocates).
         AppRelocator.relocateIfNeeded()
@@ -280,8 +286,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // keeping the Mac awake right now.
         if yieldingToPeer { return }
         // Unlock before we go so a quit mid-wipe does not leave keys dead.
-        model.keyboardLock.unlock()
-        model.resumeHotKeyAfterKeyboardLock()
+        model.unlockKeyboardFromOverlay()
         // The session dies with this process; don't leave the widgets lying.
         model.writeWidgetStateStopped()
     }

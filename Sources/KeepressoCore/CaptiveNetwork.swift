@@ -497,11 +497,11 @@ public final class SystemCaptiveProbe: CaptiveProbing, @unchecked Sendable {
             sem.signal()
         }
         task.resume()
+        defer { session.finishTasksAndInvalidate() }
         if sem.wait(timeout: .now() + 6) == .timedOut {
             task.cancel()
             return .timeout
         }
-        session.finishTasksAndInvalidate()
         return box.value ?? .failed
     }
 

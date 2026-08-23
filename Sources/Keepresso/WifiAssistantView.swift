@@ -146,7 +146,13 @@ struct WifiAssistantView: View {
         let command = "sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder"
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(command, forType: .string)
-        actionNote = L("The helper isn't installed, so the flush command is on the clipboard.")
+        let helperReady = model.helperInstalled
+            && (model.helper.daemonProtocolVersion ?? 0) >= HelperService.flushDNSMinProtocol
+        if helperReady {
+            actionNote = L("The flush didn't land. The command is on the clipboard.")
+        } else {
+            actionNote = L("The helper isn't installed or is still updating, so the flush command is on the clipboard.")
+        }
     }
 
     private func copyDiagnostics() {

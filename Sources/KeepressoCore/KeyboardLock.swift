@@ -304,30 +304,52 @@ public final class KeyboardLocker: KeyboardLocking, @unchecked Sendable {
     }
 
     /// `allowPrompt` is false at launch: a leftover marker must not pop the
-    /// administrator dialog before the menu bar is up.
+    /// administrator dialog before the menu bar is up. Failure keeps the
+    /// marker and stays locked so Unlock can retry instead of snapshotting
+    /// the disable table as "original".
     private func restoreMapping(allowPrompt: Bool) {
         lockQueue.lock()
         let viaHelper = usedHelper
+        lockQueue.unlock()
+
+        guard let original = marker.load() else {
+            finishRestored()
+            return
+        }
+
+        // Overlay-only lock, or a helper that already restored after a crash:
+        // hardware already matches the snapshot, nothing to write.
+        if !viaHelper, remapper.currentMapping() == original {
+            finishRestored()
+            return
+        }
+
+        var restored = false
+        if viaHelper {
+            restored = helper?.setKeyboardLock(false) ?? false
+        }
+        if !restored {
+            restored = remapper.apply(original)
+        }
+        if !restored, allowPrompt, let privilegedApply {
+            restored = privilegedApply(original) == .applied
+        }
+
+        if restored {
+            finishRestored()
+        } else {
+            lockQueue.lock()
+            locked = true
+            lockQueue.unlock()
+        }
+    }
+
+    private func finishRestored() {
+        marker.clear()
+        lockQueue.lock()
         usedHelper = false
         locked = false
         lockQueue.unlock()
-
-        let original = marker.load() ?? .empty
-        if viaHelper {
-            _ = helper?.setKeyboardLock(false)
-        }
-        if remapper.apply(original) {
-            marker.clear()
-            return
-        }
-        if viaHelper {
-            marker.clear()
-            return
-        }
-        if allowPrompt, let privilegedApply {
-            _ = privilegedApply(original)
-        }
-        marker.clear()
     }
 }
 
@@ -382,17 +404,26 @@ public final class KeyboardLockController {
     public func unlock() {
         guard isLocked || locker.isLocked else { return }
         locker.unlock()
-        isLocked = false
-        isGlobal = true
-        unlockAt = nil
-        isBusy = false
+        isLocked = locker.isLocked
+        if !isLocked {
+            isGlobal = true
+            unlockAt = nil
+            isBusy = false
+        }
     }
 
-    /// Auto-unlock when a timed lock has elapsed. The window calls this from
-    /// its timer; tests call it after advancing `now`.
+    /// Auto-unlock when a timed lock has elapsed. Restores without a password
+    /// prompt: a dialog every tick would be unusable. One silent attempt, then
+    /// the overlay stays and Unlock can prompt.
     public func tick() {
         guard isLocked, let unlockAt, now() >= unlockAt else { return }
-        unlock()
+        locker.restoreIfNeeded()
+        isLocked = locker.isLocked
+        self.unlockAt = nil
+        if !isLocked {
+            isGlobal = true
+            isBusy = false
+        }
     }
 
     public func restoreIfNeeded() {

@@ -24,13 +24,13 @@ Versions follow [Semantic Versioning](https://semver.org).
 - **Keep me active methods.** When Keep me active is on, pick how presence is
   reported: the original prompt-free method, F15, Shift, a specified key, or
   a mouse move. Accessibility is requested only if you choose a key or mouse
-  method.
+  method. Suggested by @88808880 (#16).
 
 ### Fixed
 
 - **Codex Desktop chats stay on their own rows.** Several conversations no
   longer collapse onto one process, so a missed Stop cannot hold the Mac
-  awake for the life of ChatGPT.app.
+  awake for the life of ChatGPT.app. Reported by @MassiveMassimo (#15).
 
 ## [1.20.2] - 2026-08-03
 

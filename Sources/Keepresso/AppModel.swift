@@ -48,6 +48,9 @@ final class AppModel {
     let streaming = StreamingReadinessController()
     /// Keyboard Cleaner: hidutil remap plus crash-restore marker. Not a brew.
     let keyboardLock: KeyboardLockController
+    /// Overlay windows live on the model so closing Keyboard Cleaner does not
+    /// drop the lock or the covering windows.
+    var keyboardLockOverlay: KeyboardLockOverlay?
     /// Public Wi-Fi assistant. Populated on demand via ``refreshCaptive()``.
     let captive = CaptiveNetworkController()
     /// The built-in AWDL jitter diagnosis (ping burst + analysis).
@@ -1429,6 +1432,30 @@ final class AppModel {
         registerHotKey()
     }
 
+    func showKeyboardLockOverlay() {
+        keyboardLockOverlay?.close()
+        let overlay = KeyboardLockOverlay(controller: keyboardLock) { [weak self] in
+            self?.unlockKeyboardFromOverlay()
+        }
+        overlay.show()
+        keyboardLockOverlay = overlay
+    }
+
+    /// Unlock from the overlay or the settings window. Overlay stays up if
+    /// restore did not land, so a cancelled password prompt does not uncover
+    /// a still-remapped keyboard.
+    func unlockKeyboardFromOverlay() {
+        keyboardLock.unlock()
+        guard !keyboardLock.isLocked else { return }
+        dismissKeyboardLockOverlay()
+        resumeHotKeyAfterKeyboardLock()
+    }
+
+    func dismissKeyboardLockOverlay() {
+        keyboardLockOverlay?.close()
+        keyboardLockOverlay = nil
+    }
+
     // MARK: - Start on launch
 
     /// Whether a manual session starts as soon as the app launches (when
@@ -2776,6 +2803,9 @@ final class AppModel {
     /// command instead of prompting.
     func flushDNS() -> Bool {
         guard helperInstalled else { return false }
+        guard (helper.daemonProtocolVersion ?? 0) >= HelperService.flushDNSMinProtocol else {
+            return false
+        }
         return helperClient.flushDNS()
     }
 

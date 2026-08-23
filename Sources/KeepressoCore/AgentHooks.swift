@@ -583,8 +583,8 @@ public enum AgentHooks {
     /// record stays trusted after its last hook event. 120s is too short for
     /// a quiet model turn; the app-server's lifetime is too long (a missed
     /// Stop would hold the Mac awake until ChatGPT.app quits). Ten minutes
-    /// bounds the miss; a fresh rollout file can still keep the row working
-    /// past this via transcript evidence.
+    /// bounds the miss. A rollout file inside the Codex evidence window
+    /// still keeps the row after that.
     public static let sharedHostWorkingStaleAfter: TimeInterval = 600
 
     /// All usable records in the hooks folder. Hook state is edge-triggered,
@@ -606,7 +606,8 @@ public enum AgentHooks {
         in directory: URL = directoryURL(),
         isAlive: (Int32) -> Bool = defaultIsAgentAlive,
         isHostAlive: (Int32) -> Bool = defaultIsAlive,
-        isSharedHostAgent: (Int32) -> Bool = defaultIsCodexAppServer
+        isSharedHostAgent: (Int32) -> Bool = defaultIsCodexAppServer,
+        hasFreshSharedHostEvidence: (String) -> Bool = { _ in false }
     ) -> [HookRecord] {
         let manager = FileManager.default
         guard let names = try? manager.contentsOfDirectory(atPath: directory.path) else { return [] }
@@ -654,10 +655,11 @@ public enum AgentHooks {
                 // outlive individual conversations.
                 records.append(usable)
             } else if shared, liveness == true, workingTrust,
-                      age < sharedHostWorkingStaleAfter {
+                      age < sharedHostWorkingStaleAfter
+                        || hasFreshSharedHostEvidence(record.sessionId) {
                 // Codex Desktop: bound a missed Stop to ten minutes rather
-                // than the life of ChatGPT.app. Rollout-file freshness can
-                // still keep the menu row working past this.
+                // than the life of ChatGPT.app, unless that chat's rollout
+                // file is still inside the evidence window.
                 records.append(usable)
             } else if liveness != true || record.agentPid == nil || shared {
                 // Dead agent/host, a hook-only IDE record past staleAfter,

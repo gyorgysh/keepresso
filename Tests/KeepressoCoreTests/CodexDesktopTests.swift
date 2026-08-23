@@ -263,6 +263,38 @@ private let desktopCommand =
         atPath: dir.appendingPathComponent("stuck.json").path))
 }
 
+@Test func staleSharedHostWorkingKeepsRowWhenRolloutIsFresh() throws {
+    let dir = tempHooksDir()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let now = Date()
+    AgentHooks.write(
+        AgentHooks.HookRecord(
+            sessionId: "stuck", state: .working, origin: .ide,
+            ownerPid: 60, agent: "codex",
+            updatedAt: now.addingTimeInterval(-AgentHooks.sharedHostWorkingStaleAfter - 30)),
+        in: dir)
+
+    let records = AgentHooks.readHookRecords(
+        now: now, in: dir, isAlive: { _ in false }, isHostAlive: { $0 == 60 },
+        isSharedHostAgent: { _ in false },
+        hasFreshSharedHostEvidence: { $0 == "stuck" })
+    #expect(records.map(\.sessionId) == ["stuck"])
+    #expect(FileManager.default.fileExists(
+        atPath: dir.appendingPathComponent("stuck.json").path))
+
+    let join = PSAgentActivityMonitor.applyHookRecords(
+        records,
+        to: [AgentSession(pid: 60, agent: "codex", tty: nil, cpuPercent: 0, evidenceOnly: true)],
+        cwdOf: { _ in nil })
+    let record = try #require(join.unclaimed.first)
+    let session = try #require(PSAgentActivityMonitor.hookOnlySession(from: record))
+    #expect(session.hookState == .working)
+    var state = AgentActivityTrigger.State()
+    state = AgentActivityTrigger.step(
+        state, sample: 0, hookState: session.hookState, evidenceOnly: true)
+    #expect(state.isWorking)
+}
+
 @Test func leftoverAppServerWorkingDoesNotTrustForever() {
     let dir = tempHooksDir()
     defer { try? FileManager.default.removeItem(at: dir) }

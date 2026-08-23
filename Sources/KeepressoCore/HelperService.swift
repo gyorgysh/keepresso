@@ -41,6 +41,8 @@ public enum HelperService {
     /// 8: added `flushDNS` (the Public Wi-Fi assistant).
     /// 9: added `setKeyboardLock` (Keyboard Cleaner: root hidutil remap).
     public static let protocolVersion = 9
+    /// First protocol that shipped `flushDNS`. Older daemons lack the verb.
+    public static let flushDNSMinProtocol = 8
 
     /// The code-signing requirement one side demands of the other: an
     /// Apple-issued certificate, the expected identifier, and the same team as
