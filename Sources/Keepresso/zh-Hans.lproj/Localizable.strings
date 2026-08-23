@@ -455,6 +455,13 @@
 "Codex's hooks need repairing, so sessions may not report correctly." = "Codex 的钩子需要修复，因此会话可能无法正确报告状态。";
 "Codex's hooks file couldn't be read, so it was left untouched." = "无法读取 Codex 的钩子文件，因此未作改动。";
 "Couldn't update Codex's hooks file." = "无法更新 Codex 的钩子文件。";
+"Grok connected: sessions report working and waiting exactly." = "已连接 Grok：会话可精确报告工作与等待状态。";
+"Connect Grok for exact session tracking (adds hooks to its config)." = "连接 Grok 以精确跟踪会话（将在其配置中添加钩子）。";
+"Connect Grok" = "连接 Grok";
+"Grok's hooks need repairing, so sessions may not report correctly." = "Grok 的钩子需要修复，因此会话可能无法正确报告状态。";
+"Grok's hooks file couldn't be read, so it was left untouched." = "无法读取 Grok 的钩子文件，因此未作改动。";
+"Couldn't update Grok's hooks file." = "无法更新 Grok 的钩子文件。";
+"Reload hooks in a running Grok session (/hooks, then r) or start a new one." = "在正在运行的 Grok 会话中重新加载钩子（/hooks，然后按 r），或开始新会话。";
 "Know exactly when an agent is working" = "准确知道智能体何时在工作";
 "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look." = "连接你使用的编程工具，让它们的会话自行报告状态，而不是让 Keepresso 通过它们看起来有多忙来判断。";
 "Connect" = "连接";

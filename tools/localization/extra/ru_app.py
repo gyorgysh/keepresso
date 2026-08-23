@@ -480,6 +480,22 @@ APP.update({
     "Couldn't update Codex's hooks file.": "Не удалось обновить файл хуков Codex.",
 })
 
+# --- Agent hooks (Grok connection) ---
+APP.update({
+    "Grok connected: sessions report working and waiting exactly.":
+        "Grok подключён: сеансы точно сообщают о работе и ожидании.",
+    "Connect Grok for exact session tracking (adds hooks to its config).":
+        "Подключите Grok для точного отслеживания сеансов (добавляет хуки в его конфигурацию).",
+    "Connect Grok": "Подключить Grok",
+    "Grok's hooks need repairing, so sessions may not report correctly.":
+        "Хуки Grok нуждаются в восстановлении, поэтому сеансы могут сообщаться неточно.",
+    "Grok's hooks file couldn't be read, so it was left untouched.":
+        "Не удалось прочитать файл хуков Grok, поэтому он не был изменён.",
+    "Couldn't update Grok's hooks file.": "Не удалось обновить файл хуков Grok.",
+    "Reload hooks in a running Grok session (/hooks, then r) or start a new one.":
+        "Перезагрузите хуки в запущенном сеансе Grok (/hooks, затем r) или начните новый.",
+})
+
 # --- Agentic onboarding step (offers to connect the tools you have) ---
 APP.update({
     "Know exactly when an agent is working": "Точно знайте, когда агент работает",

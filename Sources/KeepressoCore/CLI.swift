@@ -27,6 +27,8 @@ public enum CLIRequest: Equatable, Sendable {
     case antigravityHook(event: String)
     /// Record a Codex hook event delivered on stdin. Hidden likewise.
     case codexHook(event: String)
+    /// Record a Grok hook event delivered on stdin. Hidden likewise.
+    case grokHook(event: String)
     /// Manage automation leases (bounded keep-awake grants for scripts and
     /// agents), executed by ``LeaseClient``.
     case lease(LeaseCommand)
@@ -169,6 +171,11 @@ public enum CLIRequest: Equatable, Sendable {
                 throw CLIUsageError("codex-hook takes exactly one event name")
             }
             return .codexHook(event: arguments[1])
+        case "grok-hook":
+            guard arguments.count == 2 else {
+                throw CLIUsageError("grok-hook takes exactly one event name")
+            }
+            return .grokHook(event: arguments[1])
         case "lease":
             return .lease(try parseLease(Array(arguments.dropFirst())))
         case "wake":

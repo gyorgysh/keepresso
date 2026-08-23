@@ -70,6 +70,19 @@ import Foundation
     #expect(tolerant.message == "hi")
 }
 
+@Test func payloadDecodesGrokCamelCase() throws {
+    // Grok's file-hook envelope is camelCase. Claude-compat loads our
+    // Claude settings, so this decoder has to accept that shape or every
+    // Grok session is silently dropped at `guard let sessionId`.
+    let grok = Data(#"{"sessionId":"g-1","cwd":"/proj","hookEventName":"pre_tool_use","toolName":"list_dir","transcriptPath":"/t.jsonl"}"#.utf8)
+    let decoded = try JSONDecoder().decode(AgentHooks.HookPayload.self, from: grok)
+    #expect(decoded.sessionId == "g-1")
+    #expect(decoded.cwd == "/proj")
+    #expect(decoded.hookEventName == "pre_tool_use")
+    #expect(decoded.toolName == "list_dir")
+    #expect(decoded.transcriptPath == "/t.jsonl")
+}
+
 // MARK: - Ancestor walk and origin
 
 /// Builds parentOf/commandOf closures from a scripted chain of
@@ -210,7 +223,8 @@ private func tempHooksDir() -> URL {
     let now = Date()
     AgentHooks.handle(
         event: "PreToolUse", payloadData: payload, parentPid: 50, now: now,
-        in: dir, parentOf: tree.parentOf, commandOf: tree.commandOf, pathOf: tree.pathOf)
+        in: dir, parentOf: tree.parentOf, commandOf: tree.commandOf, pathOf: tree.pathOf,
+        environment: [:])
 
     var records = AgentHooks.readHookRecords(now: now, in: dir, isAlive: { _ in true })
     #expect(records.count == 1)
@@ -224,9 +238,34 @@ private func tempHooksDir() -> URL {
     // SessionEnd deletes the file.
     AgentHooks.handle(
         event: "SessionEnd", payloadData: Data(#"{"session_id":"s-1"}"#.utf8), parentPid: 50,
-        now: now, in: dir, parentOf: tree.parentOf, commandOf: tree.commandOf, pathOf: tree.pathOf)
+        now: now, in: dir, parentOf: tree.parentOf, commandOf: tree.commandOf, pathOf: tree.pathOf,
+        environment: [:])
     records = AgentHooks.readHookRecords(now: now, in: dir, isAlive: { _ in true })
     #expect(records.isEmpty)
+}
+
+@Test func handleFallsBackToGrokSessionIdEnv() throws {
+    // Grok injects GROK_SESSION_ID. When the payload has no session id
+    // (camelCase decode miss, or an empty envelope), that env var is enough
+    // to record. Claude Code never sets it, so its path is unchanged.
+    let dir = tempHooksDir()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let tree = processTree([
+        (pid: 50, ppid: 40, comm: "sh"),
+        (pid: 40, ppid: 30, comm: "grok"),
+        (pid: 30, ppid: 1, comm: "zsh"),
+    ])
+    AgentHooks.handle(
+        event: "UserPromptSubmit",
+        payloadData: Data(#"{}"#.utf8),
+        parentPid: 50, now: Date(),
+        in: dir, parentOf: tree.parentOf, commandOf: tree.commandOf, pathOf: tree.pathOf,
+        environment: ["GROK_SESSION_ID": "env-sess"])
+    let records = AgentHooks.readHookRecords(now: Date(), in: dir, isAlive: { _ in true })
+    #expect(records.count == 1)
+    #expect(records.first?.sessionId == "env-sess")
+    #expect(records.first?.state == .working)
+    #expect(records.first?.agentPid == 40)
 }
 
 @Test func handleIgnoresGarbageAndUnknownEvents() {
@@ -236,11 +275,13 @@ private func tempHooksDir() -> URL {
     // Garbage stdin: no session id, nothing written, no crash.
     AgentHooks.handle(
         event: "PreToolUse", payloadData: Data("not json".utf8), parentPid: 50,
-        in: dir, parentOf: tree.parentOf, commandOf: tree.commandOf, pathOf: tree.pathOf)
+        in: dir, parentOf: tree.parentOf, commandOf: tree.commandOf, pathOf: tree.pathOf,
+        environment: [:])
     // Unknown event: nothing written.
     AgentHooks.handle(
         event: "BrandNewEvent", payloadData: Data(#"{"session_id":"s-9"}"#.utf8), parentPid: 50,
-        in: dir, parentOf: tree.parentOf, commandOf: tree.commandOf, pathOf: tree.pathOf)
+        in: dir, parentOf: tree.parentOf, commandOf: tree.commandOf, pathOf: tree.pathOf,
+        environment: [:])
     #expect(AgentHooks.readHookRecords(now: Date(), in: dir, isAlive: { _ in true }).isEmpty)
 }
 

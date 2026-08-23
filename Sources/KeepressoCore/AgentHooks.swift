@@ -26,12 +26,12 @@ public enum AgentHooks {
         public var transcriptPath: String?
 
         enum CodingKeys: String, CodingKey {
-            case sessionId = "session_id"
+            case session_id, sessionId
             case cwd
-            case hookEventName = "hook_event_name"
-            case toolName = "tool_name"
+            case hook_event_name, hookEventName
+            case tool_name, toolName
             case message
-            case transcriptPath = "transcript_path"
+            case transcript_path, transcriptPath
         }
 
         public init(
@@ -48,6 +48,23 @@ public enum AgentHooks {
             self.toolName = toolName
             self.message = message
             self.transcriptPath = transcriptPath
+        }
+
+        /// Claude Code sends snake_case. Grok's file-hook envelope is
+        /// camelCase, and Grok will fire Claude-compat hooks with that shape.
+        /// Accept both so a Grok session is not silently dropped.
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            sessionId = try c.decodeIfPresent(String.self, forKey: .session_id)
+                ?? c.decodeIfPresent(String.self, forKey: .sessionId)
+            cwd = try c.decodeIfPresent(String.self, forKey: .cwd)
+            hookEventName = try c.decodeIfPresent(String.self, forKey: .hook_event_name)
+                ?? c.decodeIfPresent(String.self, forKey: .hookEventName)
+            toolName = try c.decodeIfPresent(String.self, forKey: .tool_name)
+                ?? c.decodeIfPresent(String.self, forKey: .toolName)
+            message = try c.decodeIfPresent(String.self, forKey: .message)
+            transcriptPath = try c.decodeIfPresent(String.self, forKey: .transcript_path)
+                ?? c.decodeIfPresent(String.self, forKey: .transcriptPath)
         }
     }
 
@@ -117,12 +134,12 @@ public enum AgentHooks {
     /// catch-all the app renders as "using <name>".
     static func detailToken(forTool tool: String) -> String? {
         switch tool {
-        case "Bash": return "running-command"
-        case "Edit", "Write", "MultiEdit", "NotebookEdit": return "editing"
-        case "Read": return "reading"
-        case "Grep", "Glob": return "searching"
-        case "Task", "Agent": return "subagent"
-        case "WebFetch", "WebSearch": return "browsing"
+        case "Bash", "run_terminal_command": return "running-command"
+        case "Edit", "Write", "MultiEdit", "NotebookEdit", "search_replace": return "editing"
+        case "Read", "read_file": return "reading"
+        case "Grep", "Glob", "grep", "list_dir": return "searching"
+        case "Task", "Agent", "spawn_subagent": return "subagent"
+        case "WebFetch", "WebSearch", "web_fetch", "web_search": return "browsing"
         default:
             let trimmed = tool.trimmingCharacters(in: .whitespaces)
             return trimmed.isEmpty ? nil : "tool:\(trimmed)"
@@ -149,6 +166,10 @@ public enum AgentHooks {
         /// Which CLI the session belongs to ("claude", "cursor"), for naming
         /// a hook-only session the `ps` scan never sees.
         public var agent: String?
+        /// Grok's per-turn id. A cancelled turn's StopCancelled can arrive
+        /// after the next UserPromptSubmit. Turn-end events whose promptId
+        /// does not match this are ignored.
+        public var promptId: String?
         public var updatedAt: Date
 
         public init(
@@ -160,6 +181,7 @@ public enum AgentHooks {
             agentPid: Int32? = nil,
             ownerPid: Int32? = nil,
             agent: String? = nil,
+            promptId: String? = nil,
             updatedAt: Date
         ) {
             self.sessionId = sessionId
@@ -170,6 +192,7 @@ public enum AgentHooks {
             self.agentPid = agentPid
             self.ownerPid = ownerPid
             self.agent = agent
+            self.promptId = promptId
             self.updatedAt = updatedAt
         }
     }
@@ -500,6 +523,13 @@ public enum AgentHooks {
             at: directory.appendingPathComponent(fileName(forSessionId: sessionId)))
     }
 
+    /// The current record for `sessionId`, or `nil` if none is on disk.
+    public static func readRecord(sessionId: String, in directory: URL = directoryURL()) -> HookRecord? {
+        let url = directory.appendingPathComponent(fileName(forSessionId: sessionId))
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? decoder.decode(HookRecord.self, from: data)
+    }
+
     /// Removes every session record, for when the user uninstalls the hooks:
     /// with nothing left to emit Stop or SessionEnd, a retained working
     /// record would otherwise hold the trigger for as long as its agent
@@ -538,10 +568,12 @@ public enum AgentHooks {
         parentOf: (Int32) -> Int32? = defaultParentOf,
         commandOf: (Int32) -> String? = defaultCommandOf,
         pathOf: (Int32) -> String? = defaultPathOf,
-        defaultAgent: String? = nil
+        defaultAgent: String? = nil,
+        environment: [String: String] = ProcessInfo.processInfo.environment
     ) {
         let payload = (try? decoder.decode(HookPayload.self, from: payloadData)) ?? HookPayload()
-        guard let sessionId = payload.sessionId, !sessionId.isEmpty else { return }
+        let sessionId = nonEmpty(payload.sessionId) ?? nonEmpty(environment["GROK_SESSION_ID"])
+        guard let sessionId else { return }
         switch reduce(event: event, toolName: payload.toolName, message: payload.message) {
         case .end:
             delete(sessionId: sessionId, in: directory)
@@ -564,6 +596,11 @@ public enum AgentHooks {
         case nil:
             break
         }
+    }
+
+    static func nonEmpty(_ value: String?) -> String? {
+        guard let value, !value.isEmpty else { return nil }
+        return value
     }
 
     // MARK: - Reading (monitor side)

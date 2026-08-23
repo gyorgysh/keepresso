@@ -613,6 +613,19 @@ _CODEX_HOOKS_APP = {
 APP.update(_CODEX_HOOKS_APP)
 
 
+# --- Grok hooks (global Grok hooks are already trusted) ---
+_GROK_HOOKS_APP = {
+    "Grok connected: sessions report working and waiting exactly.": {"hu": "Grok csatlakoztatva: a munkamenetek pontosan jelzik a munkát és a várakozást.", "es": "Grok conectado: las sesiones informan con exactitud cuándo trabajan y cuándo esperan.", "fr": "Grok connecté : les sessions signalent précisément le travail et l’attente.", "de": "Grok verbunden: Sitzungen melden Arbeiten und Warten exakt.", "zh-Hans": "已连接 Grok：会话可精确报告工作与等待状态。"},
+    "Connect Grok for exact session tracking (adds hooks to its config).": {"hu": "Csatlakoztassa a Grokot a munkamenetek pontos követéséhez (hookokat ad a konfigurációjához).", "es": "Conecta Grok para un seguimiento exacto de las sesiones (añade hooks a su configuración).", "fr": "Connectez Grok pour un suivi exact des sessions (ajoute des hooks à sa configuration).", "de": "Verbinde Grok für exaktes Sitzungs-Tracking (fügt Hooks zu dessen Konfiguration hinzu).", "zh-Hans": "连接 Grok 以精确跟踪会话（将在其配置中添加钩子）。"},
+    "Connect Grok": {"hu": "Grok csatlakoztatása", "es": "Conectar Grok", "fr": "Connecter Grok", "de": "Grok verbinden", "zh-Hans": "连接 Grok"},
+    "Grok's hooks need repairing, so sessions may not report correctly.": {"hu": "A Grok hookjait meg kell javítani, ezért előfordulhat, hogy a munkamenetek nem jeleznek pontosan.", "es": "Los hooks de Grok necesitan reparación, así que es posible que las sesiones no informen correctamente.", "fr": "Les hooks de Grok doivent être réparés, il est donc possible que les sessions ne signalent pas correctement.", "de": "Die Hooks von Grok müssen repariert werden, daher melden Sitzungen möglicherweise nicht korrekt.", "zh-Hans": "Grok 的钩子需要修复，因此会话可能无法正确报告状态。"},
+    "Grok's hooks file couldn't be read, so it was left untouched.": {"hu": "A Grok hookfájlja nem olvasható, ezért érintetlen maradt.", "es": "No se pudo leer el archivo de hooks de Grok, así que se dejó intacto.", "fr": "Le fichier de hooks de Grok n’a pas pu être lu, il a été laissé intact.", "de": "Die Hooks-Datei von Grok konnte nicht gelesen werden und blieb unangetastet.", "zh-Hans": "无法读取 Grok 的钩子文件，因此未作改动。"},
+    "Couldn't update Grok's hooks file.": {"hu": "A Grok hookfájlját nem sikerült frissíteni.", "es": "No se pudo actualizar el archivo de hooks de Grok.", "fr": "Impossible de mettre à jour le fichier de hooks de Grok.", "de": "Die Hooks-Datei von Grok konnte nicht aktualisiert werden.", "zh-Hans": "无法更新 Grok 的钩子文件。"},
+    "Reload hooks in a running Grok session (/hooks, then r) or start a new one.": {"hu": "Töltse újra a hookokat egy futó Grok munkamenetben (/hooks, majd r), vagy indítson egy újat.", "es": "Recarga los hooks en una sesión de Grok en curso (/hooks, luego r) o inicia una nueva.", "fr": "Rechargez les hooks dans une session Grok en cours (/hooks, puis r) ou démarrez-en une nouvelle.", "de": "Lade Hooks in einer laufenden Grok-Sitzung neu (/hooks, dann r) oder starte eine neue.", "zh-Hans": "在正在运行的 Grok 会话中重新加载钩子（/hooks，然后按 r），或开始新会话。"},
+}
+APP.update(_GROK_HOOKS_APP)
+
+
 # --- Agentic onboarding step (offers to connect the tools you have) ---
 _AGENT_SETUP_APP = {
     "Know exactly when an agent is working": {"hu": "Pontosan tudja, mikor dolgozik egy ügynök", "es": "Sabe exactamente cuándo está trabajando un agente", "fr": "Sachez exactement quand un agent travaille", "de": "Genau wissen, wann ein Agent arbeitet", "zh-Hans": "准确知道智能体何时在工作"},

@@ -86,6 +86,7 @@ struct RulesView: View {
                     cursorRows
                     codexRows
                     antigravityRows
+                    grokRows
                 }
             }
 
@@ -515,6 +516,63 @@ struct RulesView: View {
         .font(.caption)
         .padding(.leading, 22)
         .onAppear { model.refreshAntigravityHooksStatus() }
+    }
+
+    /// The same three-state row for Grok. Global Grok hooks are already
+    /// trusted, so there is no Codex-style "approve in the tool" note. A
+    /// session that was open before Connect still needs a reload.
+    @ViewBuilder
+    private var grokRows: some View {
+        Group {
+            switch model.grokHooks {
+            case .installed:
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundStyle(.green)
+                            .accessibilityHidden(true)
+                        Text("Grok connected: sessions report working and waiting exactly.")
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Button("Remove") { model.removeGrokHooks() }
+                    }
+                    Text("Reload hooks in a running Grok session (/hooks, then r) or start a new one.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            case .notInstalled:
+                if model.grokPresent {
+                    HStack(alignment: .top, spacing: 6) {
+                        Text("Connect Grok for exact session tracking (adds hooks to its config).")
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Button("Connect Grok") { model.installGrokHooks() }
+                    }
+                }
+            case .needsRepair:
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "wrench.and.screwdriver")
+                        .foregroundStyle(.orange)
+                        .accessibilityHidden(true)
+                    Text("Grok's hooks need repairing, so sessions may not report correctly.")
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Button("Repair") { model.installGrokHooks() }
+                }
+            case .unreadable:
+                Label(
+                    "Grok's hooks file couldn't be read, so it was left untouched.",
+                    systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
+            if let error = model.grokHooksError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
+        }
+        .font(.caption)
+        .padding(.leading, 22)
+        .onAppear { model.refreshGrokHooksStatus() }
     }
 
     /// In-place editor for an agent rule's idle grace and waiting policy.

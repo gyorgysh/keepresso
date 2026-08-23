@@ -284,6 +284,12 @@ func runAntigravityHook(event: String) -> Never {
     exit(0)
 }
 
+func runGrokHook(event: String) -> Never {
+    let payload = FileHandle.standardInput.readDataToEndOfFile()
+    GrokHooks.handle(event: event, payloadData: payload, parentPid: getppid())
+    exit(0)
+}
+
 // MARK: - Entry
 
 let request: CLIRequest
@@ -312,6 +318,8 @@ case .antigravityHook(let event):
     runAntigravityHook(event: event)
 case .codexHook(let event):
     runCodexHook(event: event)
+case .grokHook(let event):
+    runGrokHook(event: event)
 case .lease(let command):
     runLease(command)
 case .wake(let command):

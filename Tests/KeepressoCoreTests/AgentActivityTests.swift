@@ -282,7 +282,7 @@ private let bionicHostCommand =
         ttl: 3,
         now: { now },
         fetch: { "12740     1  2.0 ??  /Applications/Bionic.app/Contents/MacOS/Bionic" },
-        evidence: { agent, _ in agent == "bionic" ? writeAt : nil },
+        evidence: { agent, _, _ in agent == "bionic" ? writeAt : nil },
         hookRecords: { _ in [] }
     )
     _ = monitor.current
@@ -463,7 +463,7 @@ private let bionicHostCommand =
         now: { now },
         // A terminal claude session, and no Cursor process anywhere.
         fetch: { "  100     1  0.1 ttys003  claude" },
-        evidence: { _, _ in nil },
+        evidence: { _, _, _ in nil },
         hookRecords: { _ in
             [AgentHooks.HookRecord(
                 sessionId: "conv-1", state: .working, detail: "editing",
@@ -507,7 +507,7 @@ private let bionicHostCommand =
         ttl: 3,
         now: { now },
         fetch: { "  100     1  0.1 ttys003  claude\n  200     1  0.1 ttys004  aider" },
-        evidence: { agent, _ in
+        evidence: { agent, _, _ in
             // claude's transcript was written 5s ago; aider has none.
             agent == "claude" ? Date(timeIntervalSince1970: 100_000 - 5) : nil
         },
@@ -820,7 +820,7 @@ private final class PSOutputStub: @unchecked Sendable {
         ttl: 3,
         now: { now },
         fetch: { "  100     1  50.0 ttys003  claude" },
-        evidence: { _, _ in
+        evidence: { _, _, _ in
             evidenceCalls.increment()
             return nil
         },
@@ -900,7 +900,7 @@ private final class LockCounter: @unchecked Sendable {
             ttl: 3,
             now: { base },
             fetch: { "  100     1  0.1 ttys003  claude" },
-            evidence: { _, _ in base.addingTimeInterval(-writeAge) },
+            evidence: { _, _, _ in base.addingTimeInterval(-writeAge) },
             hookRecords: { _ in
                 [AgentHooks.HookRecord(
                     sessionId: "s", state: state, detail: detail, agentPid: 100,

@@ -2066,7 +2066,7 @@ final class AppModel {
             // hooks are still installed and still writing.
             AgentHooks.purgeRecords {
                 !CursorHooks.ownsRecord($0) && !CodexHooks.ownsRecord($0)
-                    && !AntigravityHooks.ownsRecord($0)
+                    && !AntigravityHooks.ownsRecord($0) && !GrokHooks.ownsRecord($0)
             }
         }
     }
@@ -2181,6 +2181,7 @@ final class AppModel {
         case .cursor: return cursorPresent
         case .codex: return codexPresent
         case .antigravity: return antigravityPresent
+        case .grok: return grokPresent
         }
     }
 
@@ -2190,6 +2191,7 @@ final class AppModel {
         case .cursor: return cursorHooks
         case .codex: return codexHooks
         case .antigravity: return antigravityHooks
+        case .grok: return grokHooks
         }
     }
 
@@ -2199,15 +2201,17 @@ final class AppModel {
         case .cursor: installCursorHooks()
         case .codex: installCodexHooks()
         case .antigravity: installAntigravityHooks()
+        case .grok: installGrokHooks()
         }
     }
 
-    /// Re-read every tool's install state. Cheap: four small file reads.
+    /// Re-read every tool's install state. Cheap: five small file reads.
     func refreshAgentHookStatuses() {
         refreshClaudeHooksStatus()
         refreshCursorHooksStatus()
         refreshCodexHooksStatus()
         refreshAntigravityHooksStatus()
+        refreshGrokHooksStatus()
     }
 
     /// Tools already repaired once this run.
@@ -2285,6 +2289,70 @@ final class AppModel {
             return false
         } catch {
             codexHooksError = L("Couldn't update Codex's hooks file.")
+            return false
+        }
+    }
+
+    // MARK: - Grok hooks
+
+    /// Where the Grok hook install stands. Grok's global hooks are already
+    /// trusted, so "installed" here means the file is written and current.
+    /// A session that was already open still needs `/hooks` then `r`, or a
+    /// new session, before it emits into this file.
+    private(set) var grokHooks: AgentHooks.HookInstallState = .notInstalled
+    private(set) var grokHooksError: String?
+    private(set) var grokPresent = false
+
+    func refreshGrokHooksStatus() {
+        grokPresent = AgentTool.grok.isPresent()
+        do {
+            grokHooks = GrokHooks.hookInstallState(
+                of: try AgentHooks.readSettings(at: GrokHooks.hooksURL()),
+                cliPath: Self.bundledCLIPath)
+            autoRepairIfNeeded(.grok)
+        } catch {
+            grokHooks = .unreadable
+        }
+    }
+
+    func installGrokHooks() {
+        mutateGrokHooks { existing in
+            try GrokHooks.installHooks(into: existing, cliPath: Self.bundledCLIPath)
+        }
+    }
+
+    /// Delete Keepresso's `keepresso.json`. Sibling files in `~/.grok/hooks/`
+    /// are the user's. Records for grok sessions are purged with it.
+    func removeGrokHooks() {
+        let url = GrokHooks.hooksURL()
+        defer { refreshGrokHooksStatus() }
+        do {
+            if FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.removeItem(at: url.resolvingSymlinksInPath())
+            }
+            grokHooksError = nil
+            AgentHooks.purgeRecords(where: GrokHooks.ownsRecord)
+        } catch {
+            grokHooksError = L("Couldn't update Grok's hooks file.")
+        }
+    }
+
+    @discardableResult
+    private func mutateGrokHooks(_ transform: (Data?) throws -> Data) -> Bool {
+        let url = GrokHooks.hooksURL()
+        defer { refreshGrokHooksStatus() }
+        do {
+            let updated = try transform(try AgentHooks.readSettings(at: url))
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Self.writePreservingPermissions(updated, to: url.resolvingSymlinksInPath())
+            grokHooksError = nil
+            return true
+        } catch is AgentHooks.SettingsUnreadableError {
+            grokHooksError = nil
+            return false
+        } catch {
+            grokHooksError = L("Couldn't update Grok's hooks file.")
             return false
         }
     }

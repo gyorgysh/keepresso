@@ -534,6 +534,17 @@ APP.update({
     "Couldn't update Codex's hooks file.": "Codex のフックファイルを更新できませんでした。",
 })
 
+# --- Agent hooks (Grok connection) ---
+APP.update({
+    "Grok connected: sessions report working and waiting exactly.": "Grok 接続済み: セッションが作業中と待機中を正確に報告します。",
+    "Connect Grok for exact session tracking (adds hooks to its config).": "Grok を接続するとセッションを正確に追跡できます（設定にフックを追加します）。",
+    "Connect Grok": "Grok を接続",
+    "Grok's hooks need repairing, so sessions may not report correctly.": "Grok のフックに修復が必要なため、セッションが正しく報告されないことがあります。",
+    "Grok's hooks file couldn't be read, so it was left untouched.": "Grok のフックファイルを読み取れなかったため、変更していません。",
+    "Couldn't update Grok's hooks file.": "Grok のフックファイルを更新できませんでした。",
+    "Reload hooks in a running Grok session (/hooks, then r) or start a new one.": "実行中の Grok セッションでフックを再読み込みする（/hooks、次に r）か、新しいセッションを開始してください。",
+})
+
 # --- Agentic onboarding step (offers to connect the tools you have) ---
 APP.update({
     "Know exactly when an agent is working": "エージェントが作業中かを正確に把握",

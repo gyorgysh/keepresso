@@ -476,6 +476,17 @@ APP.update({
     "Couldn't update Codex's hooks file.": "Codex 후크 파일을 업데이트할 수 없습니다.",
 })
 
+# --- Agent hooks (Grok connection) ---
+APP.update({
+    "Grok connected: sessions report working and waiting exactly.": "Grok 연결됨: 세션이 작업과 대기를 정확하게 보고합니다.",
+    "Connect Grok for exact session tracking (adds hooks to its config).": "정확한 세션 추적을 위해 Grok을 연결하세요(구성에 후크를 추가합니다).",
+    "Connect Grok": "Grok 연결",
+    "Grok's hooks need repairing, so sessions may not report correctly.": "Grok 후크에 복구가 필요해 세션이 정확하게 보고되지 않을 수 있습니다.",
+    "Grok's hooks file couldn't be read, so it was left untouched.": "Grok 후크 파일을 읽을 수 없어 그대로 두었습니다.",
+    "Couldn't update Grok's hooks file.": "Grok 후크 파일을 업데이트할 수 없습니다.",
+    "Reload hooks in a running Grok session (/hooks, then r) or start a new one.": "실행 중인 Grok 세션에서 후크를 다시 로드하세요(/hooks, 그다음 r) 또는 새 세션을 시작하세요.",
+})
+
 # --- Agentic onboarding step (offers to connect the tools you have) ---
 APP.update({
     "Know exactly when an agent is working": "에이전트가 작업 중인지 정확히 파악",

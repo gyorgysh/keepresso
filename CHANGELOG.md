@@ -28,6 +28,10 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- **Idle Grok sessions no longer look working** because another Grok TUI in
+  the same repo is. Evidence is per conversation now. Connect Grok in
+  Preferences for exact working and waiting edges.
+
 - **Codex Desktop chats stay on their own rows.** Several conversations no
   longer collapse onto one process, so a missed Stop cannot hold the Mac
   awake for the life of ChatGPT.app. Reported by @MassiveMassimo (#15).

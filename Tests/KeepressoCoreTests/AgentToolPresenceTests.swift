@@ -42,6 +42,17 @@ private func mac(_ paths: String...) -> (String) -> Bool {
         #expect(AgentTool.cursor.isPresent(home: "/Users/x", exists: mac(path)),
                 "expected \(path) to prove Cursor is installed")
     }
+    let grok: [String] = [
+        "/Users/x/.grok",
+        "/Users/x/.grok/bin/grok",
+        "/Users/x/.local/bin/grok",
+        "/opt/homebrew/bin/grok",
+        "/usr/local/bin/grok",
+    ]
+    for path in grok {
+        #expect(AgentTool.grok.isPresent(home: "/Users/x", exists: mac(path)),
+                "expected \(path) to prove Grok is installed")
+    }
 }
 
 @Test func oneToolsEvidenceNeverProvesTheOther() {
@@ -52,6 +63,8 @@ private func mac(_ paths: String...) -> (String) -> Bool {
     #expect(!AgentTool.cursor.isPresent(home: "/Users/x", exists: mac("/Applications/Claude.app")))
     #expect(!AgentTool.claudeCode.isPresent(home: "/Users/x", exists: mac("/Users/x/.cursor")))
     #expect(!AgentTool.claudeCode.isPresent(home: "/Users/x", exists: mac("/Applications/Cursor.app")))
+    #expect(!AgentTool.grok.isPresent(home: "/Users/x", exists: mac("/Users/x/.codex")))
+    #expect(!AgentTool.codex.isPresent(home: "/Users/x", exists: mac("/Users/x/.grok")))
 }
 
 @Test func aBareAgentBinaryIsNotEvidenceOfCursor() {
@@ -102,5 +115,5 @@ private func mac(_ paths: String...) -> (String) -> Bool {
     #expect(all == AgentTool.allCases)
     #expect(all == AgentTool.setupTools(present: { _ in true }, connected: { _ in true }))
     #expect(AgentTool.allCases.map(\.displayName)
-        == ["Claude Code", "Cursor", "Codex", "Antigravity"])
+        == ["Claude Code", "Cursor", "Codex", "Antigravity", "Grok"])
 }

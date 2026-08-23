@@ -455,6 +455,13 @@
 "Codex's hooks need repairing, so sessions may not report correctly." = "A Codex hookjait meg kell javítani, ezért előfordulhat, hogy a munkamenetek nem jeleznek pontosan.";
 "Codex's hooks file couldn't be read, so it was left untouched." = "A Codex hookfájlja nem olvasható, ezért érintetlen maradt.";
 "Couldn't update Codex's hooks file." = "A Codex hookfájlját nem sikerült frissíteni.";
+"Grok connected: sessions report working and waiting exactly." = "Grok csatlakoztatva: a munkamenetek pontosan jelzik a munkát és a várakozást.";
+"Connect Grok for exact session tracking (adds hooks to its config)." = "Csatlakoztassa a Grokot a munkamenetek pontos követéséhez (hookokat ad a konfigurációjához).";
+"Connect Grok" = "Grok csatlakoztatása";
+"Grok's hooks need repairing, so sessions may not report correctly." = "A Grok hookjait meg kell javítani, ezért előfordulhat, hogy a munkamenetek nem jeleznek pontosan.";
+"Grok's hooks file couldn't be read, so it was left untouched." = "A Grok hookfájlja nem olvasható, ezért érintetlen maradt.";
+"Couldn't update Grok's hooks file." = "A Grok hookfájlját nem sikerült frissíteni.";
+"Reload hooks in a running Grok session (/hooks, then r) or start a new one." = "Töltse újra a hookokat egy futó Grok munkamenetben (/hooks, majd r), vagy indítson egy újat.";
 "Know exactly when an agent is working" = "Pontosan tudja, mikor dolgozik egy ügynök";
 "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look." = "Csatlakoztassa a használt kódolóeszközöket, és a munkameneteik önmaguktól jeleznek, ahelyett hogy a Keepresso aszerint ítélné meg őket, mennyire elfoglaltnak tűnnek.";
 "Connect" = "Csatlakoztatás";

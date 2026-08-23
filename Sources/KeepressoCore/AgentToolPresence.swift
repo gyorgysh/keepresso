@@ -13,6 +13,7 @@ public enum AgentTool: CaseIterable, Sendable {
     case cursor
     case codex
     case antigravity
+    case grok
 
     /// Paths that each, on their own, prove the tool is here. Any one is
     /// enough, because these tools arrive in several shapes: a config folder
@@ -63,6 +64,14 @@ public enum AgentTool: CaseIterable, Sendable {
                 "/opt/homebrew/bin/codex",
                 "/usr/local/bin/codex",
             ]
+        case .grok:
+            return [
+                "\(home)/.grok",
+                "\(home)/.grok/bin/grok",
+                "\(home)/.local/bin/grok",
+                "/opt/homebrew/bin/grok",
+                "/usr/local/bin/grok",
+            ]
         }
     }
 
@@ -74,6 +83,7 @@ public enum AgentTool: CaseIterable, Sendable {
         case .cursor: return "Cursor"
         case .codex: return "Codex"
         case .antigravity: return "Antigravity"
+        case .grok: return "Grok"
         }
     }
 

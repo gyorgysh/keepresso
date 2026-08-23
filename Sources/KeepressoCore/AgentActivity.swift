@@ -223,9 +223,12 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// Produces the raw `ps` output (`nil` on failure). Injectable so the
     /// cache/refresh logic can be unit-tested without spawning processes.
     private let fetch: @Sendable () -> String?
-    /// Latest transcript write for (agent, cwd), or `nil` when the agent has
-    /// no known transcript. Injectable so evidence logic is unit-testable.
-    private let evidence: @Sendable (_ agent: String, _ cwd: String?) -> Date?
+    /// Latest transcript write for (agent, cwd, pid), or `nil` when the agent
+    /// has no known transcript. Injectable so evidence logic is unit-testable.
+    /// `pid` is how Grok pins evidence to one conversation: its session store
+    /// is grouped by cwd, and a project-wide mtime would mark every TUI in
+    /// that repo working.
+    private let evidence: @Sendable (_ agent: String, _ cwd: String?, _ pid: Int32) -> Date?
     /// The live hook records to join onto sessions. Injectable so the join
     /// and precedence logic is unit-testable without touching the disk.
     private let hookRecords: @Sendable (_ now: Date) -> [AgentHooks.HookRecord]
@@ -262,7 +265,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         ttl: TimeInterval = 3,
         now: @escaping () -> Date = Date.init,
         fetch: @escaping @Sendable () -> String? = SharedPSSnapshot.runPS,
-        evidence: @escaping @Sendable (_ agent: String, _ cwd: String?) -> Date? = PSAgentActivityMonitor.transcriptActivity,
+        evidence: @escaping @Sendable (_ agent: String, _ cwd: String?, _ pid: Int32) -> Date? = PSAgentActivityMonitor.transcriptActivity,
         hookRecords: @escaping @Sendable (_ now: Date) -> [AgentHooks.HookRecord] = { defaultHookRecords(now: $0) },
         classifyOrigin: @escaping @Sendable (_ pid: Int32) -> AgentHooks.HookSessionOrigin? = { AgentHooks.classifyOrigin(abovePid: $0) }
     ) {
@@ -323,7 +326,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             let session = sessions[index]
             let cwd = Self.processCwd(session.pid)
             if let cwd { cwds[session.pid] = cwd }
-            if let written = evidence(session.agent, cwd) {
+            if let written = evidence(session.agent, cwd, session.pid) {
                 evidenceDates[session.pid] = written
                 // Per agent: one that writes its store in bursts needs
                 // a wider window than one that streams (see
@@ -535,8 +538,10 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// When this agent last wrote to its on-disk session data for `cwd`, or
     /// `nil` for agents whose transcripts we don't know how to find. This is
     /// the "real work" signal: claude, grok, and codex all stream session
-    /// files continuously while working.
-    @Sendable public static func transcriptActivity(agent: String, cwd: String?) -> Date? {
+    /// files continuously while working. `pid` is ignored except for Grok,
+    /// whose store is per-conversation and must not leak across TUIs that
+    /// share a working directory.
+    @Sendable public static func transcriptActivity(agent: String, cwd: String?, pid: Int32) -> Date? {
         let home = NSHomeDirectory()
         switch agent {
         case "claude":
@@ -544,9 +549,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             guard let cwd else { return nil }
             return claudeTranscriptWrite(inProjectDir: "\(home)/.claude/projects/\(claudeProjectDirName(forCwd: cwd))")
         case "grok":
-            // ~/.grok/sessions/<percent-encoded cwd>/ per-project session files.
-            guard let cwd else { return nil }
-            return newestModification(in: "\(home)/.grok/sessions/\(grokSessionDirName(forCwd: cwd))")
+            return grokTranscriptWrite(pid: pid, cwd: cwd, home: home)
         case "codex":
             // ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl: date-keyed, not
             // cwd-keyed, so the day directories stand in for every session.
@@ -860,6 +863,117 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     static func grokSessionDirName(forCwd cwd: String) -> String {
         let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
         return cwd.addingPercentEncoding(withAllowedCharacters: unreserved) ?? cwd
+    }
+
+    /// `$GROK_HOME`, or `~/.grok` when that is unset.
+    static func grokHome(
+        home: String = NSHomeDirectory(),
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> String {
+        let override = environment["GROK_HOME"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let override, !override.isEmpty { return override }
+        return "\(home)/.grok"
+    }
+
+    /// Conversation jsonl files that stream during a turn. Parent-level
+    /// `prompt_history.jsonl`, lock files, and `resources_state.json` are
+    /// deliberately not in this list: the first is shared by every session
+    /// in the project, and the others can move without the model working.
+    static let grokEvidenceFiles = ["updates.jsonl", "chat_history.jsonl", "events.jsonl"]
+
+    /// Newest write to the Grok conversation owned by `pid`, or `nil` when
+    /// that pid is not in `active_sessions.json`. Never falls back to the
+    /// project folder: that is how one working TUI used to mark every other
+    /// Grok in the same repo as working.
+    static func grokTranscriptWrite(
+        pid: Int32,
+        cwd: String?,
+        home: String = NSHomeDirectory(),
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Date? {
+        let root = grokHome(home: home, environment: environment)
+        let entries = grokActiveSessions(in: root).filter { $0.pid == pid }
+        guard !entries.isEmpty else { return nil }
+        let sessionsRoot = "\(root)/sessions"
+        var newest: Date?
+        for entry in entries {
+            let groupCwd = entry.cwd ?? cwd
+            guard let groupCwd else { continue }
+            let group = grokSessionGroupDir(forCwd: groupCwd, under: sessionsRoot)
+            let sessionDir = "\(group)/\(entry.sessionId)"
+            for name in grokEvidenceFiles {
+                let path = "\(sessionDir)/\(name)"
+                guard let date = (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate] as? Date
+                else { continue }
+                if newest.map({ date > $0 }) ?? true { newest = date }
+            }
+        }
+        return newest
+    }
+
+    /// One row of Grok's `active_sessions.json`. The live file uses
+    /// snake_case. Both spellings are accepted.
+    struct GrokActiveSession: Decodable, Equatable {
+        var sessionId: String
+        var pid: Int32
+        var cwd: String?
+
+        enum CodingKeys: String, CodingKey {
+            case session_id, sessionId, pid, cwd
+        }
+
+        init(sessionId: String, pid: Int32, cwd: String?) {
+            self.sessionId = sessionId
+            self.pid = pid
+            self.cwd = cwd
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            sessionId = try c.decodeIfPresent(String.self, forKey: .session_id)
+                ?? c.decodeIfPresent(String.self, forKey: .sessionId)
+                ?? ""
+            pid = try c.decode(Int32.self, forKey: .pid)
+            cwd = try c.decodeIfPresent(String.self, forKey: .cwd)
+        }
+    }
+
+    /// Live Grok TUI index: `{session_id, pid, cwd}` at `$GROK_HOME/active_sessions.json`.
+    /// Best-effort. A torn write is treated as no mapping.
+    static func grokActiveSessions(in grokHome: String) -> [GrokActiveSession] {
+        let url = URL(fileURLWithPath: grokHome).appendingPathComponent("active_sessions.json")
+        guard let data = try? Data(contentsOf: url),
+              let entries = try? JSONDecoder().decode([GrokActiveSession].self, from: data)
+        else { return [] }
+        return entries.filter { !$0.sessionId.isEmpty }
+    }
+
+    /// Group directory for `cwd`. The encoded name is the common case. When
+    /// that is missing, Grok may have used a slug-plus-hash name (encoded
+    /// paths over 255 bytes) and left the original path in a `.cwd` file.
+    static func grokSessionGroupDir(forCwd cwd: String, under sessionsRoot: String) -> String {
+        let encoded = grokSessionDirName(forCwd: cwd)
+        let direct = "\(sessionsRoot)/\(encoded)"
+        var isDirectory: ObjCBool = false
+        if FileManager.default.fileExists(atPath: direct, isDirectory: &isDirectory), isDirectory.boolValue {
+            return direct
+        }
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: sessionsRoot) else { return direct }
+        for name in names {
+            let group = "\(sessionsRoot)/\(name)"
+            guard manager.fileExists(atPath: group, isDirectory: &isDirectory), isDirectory.boolValue else {
+                continue
+            }
+            let marker = "\(group)/.cwd"
+            guard let data = try? Data(contentsOf: URL(fileURLWithPath: marker)),
+                  let recorded = String(data: data, encoding: .utf8)
+            else { continue }
+            if recorded.trimmingCharacters(in: .whitespacesAndNewlines) == cwd {
+                return group
+            }
+        }
+        return direct
     }
 
     /// The newest modification date among the files directly inside `path`,

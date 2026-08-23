@@ -455,6 +455,13 @@
 "Codex's hooks need repairing, so sessions may not report correctly." = "Die Hooks von Codex müssen repariert werden, daher melden Sitzungen möglicherweise nicht korrekt.";
 "Codex's hooks file couldn't be read, so it was left untouched." = "Die Hooks-Datei von Codex konnte nicht gelesen werden und blieb unangetastet.";
 "Couldn't update Codex's hooks file." = "Die Hooks-Datei von Codex konnte nicht aktualisiert werden.";
+"Grok connected: sessions report working and waiting exactly." = "Grok verbunden: Sitzungen melden Arbeiten und Warten exakt.";
+"Connect Grok for exact session tracking (adds hooks to its config)." = "Verbinde Grok für exaktes Sitzungs-Tracking (fügt Hooks zu dessen Konfiguration hinzu).";
+"Connect Grok" = "Grok verbinden";
+"Grok's hooks need repairing, so sessions may not report correctly." = "Die Hooks von Grok müssen repariert werden, daher melden Sitzungen möglicherweise nicht korrekt.";
+"Grok's hooks file couldn't be read, so it was left untouched." = "Die Hooks-Datei von Grok konnte nicht gelesen werden und blieb unangetastet.";
+"Couldn't update Grok's hooks file." = "Die Hooks-Datei von Grok konnte nicht aktualisiert werden.";
+"Reload hooks in a running Grok session (/hooks, then r) or start a new one." = "Lade Hooks in einer laufenden Grok-Sitzung neu (/hooks, dann r) oder starte eine neue.";
 "Know exactly when an agent is working" = "Genau wissen, wann ein Agent arbeitet";
 "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look." = "Verbinde die Programmiertools, die du nutzt, und ihre Sitzungen melden sich selbst, statt dass Keepresso sie danach beurteilt, wie beschäftigt sie wirken.";
 "Connect" = "Verbinden";
