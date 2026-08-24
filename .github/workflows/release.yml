@@ -21,7 +21,7 @@ jobs:
     runs-on: macos-26
     environment: release # add a required reviewer to this environment in repo settings
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Pinned to a commit SHA (v1.7.0): this third-party action runs in the
       # same job that later handles the signing cert and Sparkle key, so a
       # moved tag must not be able to swap in new code.
@@ -37,8 +37,8 @@ jobs:
       # tarball instead; a curl download isn't quarantined, so the binary runs.
       - name: Install Sparkle tools
         run: |
-          SPARKLE_VERSION=2.6.4
-          SPARKLE_SHA256=50612a06038abc931f16011d7903b8326a362c1074dabccb718404ce8e585f0b
+          SPARKLE_VERSION=2.9.6
+          SPARKLE_SHA256=52bf9e88cdd972fc0c81501377a880e90d47031bd8ca5462488f843e2609e192
           curl -fsSL -o "$RUNNER_TEMP/sparkle.tar.xz" \
             "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
           # This binary is later run with the EdDSA signing key on disk, so

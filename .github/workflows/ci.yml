@@ -17,7 +17,7 @@ jobs:
     # where a language is incomplete or the generated .strings are stale.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check every language and the generated .strings
         run: python3 tools/localization/check_all.py
 
@@ -25,7 +25,7 @@ jobs:
     name: Core build & tests
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The project format (objectVersion 77) and swift-testing both need
       # Xcode 16+, so pin to the latest stable Xcode on the runner.
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
@@ -40,7 +40,7 @@ jobs:
     name: App build
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
           xcode-version: latest-stable

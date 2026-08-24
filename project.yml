@@ -15,7 +15,7 @@ packages:
     # Pin to an exact version so a floating "latest 2.x" can't flow a
     # compromised Sparkle tag straight into a signed, notarized release.
     # Bump this deliberately when a new Sparkle ships.
-    exactVersion: "2.9.4"
+    exactVersion: "2.9.6"
 
 targets:
   Keepresso:
