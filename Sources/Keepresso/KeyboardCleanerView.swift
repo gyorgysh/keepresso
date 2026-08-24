@@ -10,7 +10,7 @@ import KeepressoCore
 struct KeyboardCleanerView: View {
     @Bindable var model: AppModel
     @State private var windowVisible = false
-    @State private var duration: TimeInterval = 60
+    @State private var duration: TimeInterval = 120
     @State private var starting = false
 
     private var lock: KeyboardLockController { model.keyboardLock }
@@ -289,5 +289,6 @@ private struct KeyboardLockOverlayView: View {
             .padding(40)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .tint(.keepressoBrew)
     }
 }
