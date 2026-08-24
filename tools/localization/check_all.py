@@ -23,6 +23,8 @@ Exits nonzero on any finding, with every finding listed rather than just the
 first, so one run tells you the whole story.
 """
 import os
+import ast
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -38,12 +40,76 @@ from gen_strings import (
     LANGS,
     WIDGET,
     WIDGET_DIR,
+    _REPO_ROOT,
     merge_extra_langs,
     render_table,
     table_for,
 )
 
 CATALOGS = [("APP", APP, APP_DIR), ("CORE", CORE, CORE_DIR), ("WIDGET", WIDGET, WIDGET_DIR)]
+
+# These surfaces were added as one feature batch. SwiftUI silently displays an
+# English literal when its key never reaches the catalog, so catalog-to-catalog
+# completeness alone cannot catch the regression. Keep their source literals
+# covered explicitly as part of the release gate.
+SOURCE_COVERAGE = [
+    (
+        "APP",
+        APP,
+        [
+            "Sources/Keepresso/KeyboardCleanerView.swift",
+            "Sources/Keepresso/WifiAssistantView.swift",
+            "Sources/Keepresso/HelperSetupView.swift",
+            "Sources/Keepresso/PreferencesView.swift",
+            "Sources/Keepresso/MenuBarContent.swift",
+            "Sources/Keepresso/StatusItemBridge.swift",
+            "Sources/Keepresso/ShortcutRecorder.swift",
+        ],
+        [
+            r'\bL\(\s*"((?:[^"\\]|\\.)*)"',
+            r'\b(?:Text|Button|Label|Toggle|Picker|LabeledContent|GroupBox|Section)\(\s*"((?:[^"\\]|\\.)*)"',
+            r'\bsection(?:Header|Footer)\(\s*"((?:[^"\\]|\\.)*)"',
+        ],
+    ),
+    (
+        "CORE",
+        CORE,
+        ["Sources/KeepressoCore/CaptiveNetwork.swift"],
+        [r'\bL\(\s*"((?:[^"\\]|\\.)*)"'],
+    ),
+]
+
+
+def swift_literal(raw: str):
+    """Decode the simple Swift literals used as localization keys."""
+    if "\\(" in raw:
+        return None
+    raw = re.sub(
+        r"\\u\{([0-9a-fA-F]+)\}",
+        lambda match: chr(int(match.group(1), 16)),
+        raw,
+    )
+    try:
+        return ast.literal_eval('"' + raw + '"')
+    except (SyntaxError, ValueError):
+        return None
+
+
+def check_source_coverage(problems: list):
+    for name, catalog, paths, patterns in SOURCE_COVERAGE:
+        for relative_path in paths:
+            path = os.path.join(_REPO_ROOT, relative_path)
+            with open(path, encoding="utf-8") as source_file:
+                source = source_file.read()
+            for pattern in patterns:
+                for match in re.finditer(pattern, source, re.DOTALL):
+                    key = swift_literal(match.group(1))
+                    if key and key not in catalog:
+                        line = source.count("\n", 0, match.start()) + 1
+                        problems.append(
+                            f"{name}: source key missing from catalog at "
+                            f"{relative_path}:{line}: {key!r}"
+                        )
 
 
 def check_translations(problems: list):
@@ -90,6 +156,7 @@ def main() -> int:
     merge_extra_langs()
     problems: list = []
     check_translations(problems)
+    check_source_coverage(problems)
     check_generated_files(problems)
     if problems:
         for problem in problems:

@@ -68,6 +68,9 @@ def write_table(base_dir: str, lang: str, table: dict):
 from catalog_app import APP
 from catalog_core import CORE
 from catalog_widget import WIDGET
+from catalog_v121_app_settings import APP as V121_APP_SETTINGS
+from catalog_v121_app_windows import APP as V121_APP_WINDOWS
+from catalog_v121_core import CORE as V121_CORE
 
 
 def merge_overlay(catalog: dict, lang: str, table: dict, name: str):
@@ -92,6 +95,14 @@ def merge_extra_langs():
         core_mod = importlib.import_module(f"{stem}_core")
         merge_overlay(CORE, lang, core_mod.CORE, "CORE")
         merge_overlay(WIDGET, lang, core_mod.WIDGET, "WIDGET")
+
+    # Feature batches added after the per-language overlays already contain all
+    # shipping languages in one place. Merge them only after validating the
+    # older overlays, otherwise every overlay would need placeholder entries
+    # for keys whose translations live in these supplemental catalogs.
+    APP.update(V121_APP_WINDOWS)
+    APP.update(V121_APP_SETTINGS)
+    CORE.update(V121_CORE)
 
 
 if __name__ == "__main__":
