@@ -170,12 +170,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.model.awdlAutoTick()
             self?.model.closedDisplayAutoTick()
             self?.model.syncBatteryPauseClosedDisplay()
+            self?.model.virtualDisplayAutoTick()
             self?.model.thermalAvailabilityTick()
             self?.model.fireAgentIdleHookIfNeeded()
             self?.model.automationSyncTick()
             self?.model.pulseMenuPanelIfVisible()
         }
     )
+    private lazy var clamshellMonitor = ClamshellStateMonitor { [weak self] isClosed in
+        self?.model.virtualDisplayClamshellChanged(isClosed: isClosed)
+    }
     /// Listens for the Control Center toggle's Darwin doorbell.
     private var widgetObserver: WidgetCommandObserver?
     /// Set when this launch is a duplicate handing over to an already running
@@ -246,6 +250,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // record goes stale after an app update plus a reboot); check it now,
         // and repair the registration, before the first engage fails on it.
         model.verifyHelper()
+        clamshellMonitor.start()
         ticker.start()
         // Register the global keep-awake toggle shortcut, if the user set one.
         model.registerHotKey()
@@ -275,6 +280,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        clamshellMonitor.stop()
         // "Dim, don't sleep" lowers the built-in panel's brightness, a persistent
         // display setting the OS won't restore on exit the way it releases power
         // assertions. Put it back before we go, or quitting mid-dim leaves the

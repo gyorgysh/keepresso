@@ -38,6 +38,9 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     public var diskKeepAlive: DiskKeepAliveConfig?
     /// Experimental headless virtual display, or `nil` (the default) for off.
     public var virtualDisplay: VirtualDisplayConfig?
+    /// Create the configured virtual display only when the Mac is on battery
+    /// and its built-in display is asleep with no other online display.
+    public var virtualDisplayAutomatic: Bool
     /// The thermal safety net (watch a heat signal, boost fans, pause
     /// brewing), or `nil` (the default) for off.
     public var thermalSafety: ThermalSafetyConfig?
@@ -121,6 +124,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         automationSync: AutomationSyncConfig = AutomationSyncConfig(),
         diskKeepAlive: DiskKeepAliveConfig? = nil,
         virtualDisplay: VirtualDisplayConfig? = nil,
+        virtualDisplayAutomatic: Bool = false,
         thermalSafety: ThermalSafetyConfig? = nil,
         pauseBelowBatteryPercent: Int? = nil,
         showCountdownInMenuBar: Bool = false,
@@ -156,6 +160,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.automationSync = automationSync
         self.diskKeepAlive = diskKeepAlive
         self.virtualDisplay = virtualDisplay
+        self.virtualDisplayAutomatic = virtualDisplay != nil && virtualDisplayAutomatic
         self.thermalSafety = thermalSafety
         self.pauseBelowBatteryPercent = pauseBelowBatteryPercent.map(Self.clampedBatteryPausePercent)
         self.showCountdownInMenuBar = showCountdownInMenuBar
@@ -251,6 +256,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         automationSync = try c.decodeIfPresent(AutomationSyncConfig.self, forKey: .automationSync) ?? AutomationSyncConfig()
         diskKeepAlive = try c.decodeIfPresent(DiskKeepAliveConfig.self, forKey: .diskKeepAlive)
         virtualDisplay = try c.decodeIfPresent(VirtualDisplayConfig.self, forKey: .virtualDisplay)
+        let automatic = try c.decodeIfPresent(Bool.self, forKey: .virtualDisplayAutomatic) ?? false
+        virtualDisplayAutomatic = virtualDisplay != nil && automatic
         // ThermalSafetyConfig's own decoder applies the clamps.
         thermalSafety = try c.decodeIfPresent(ThermalSafetyConfig.self, forKey: .thermalSafety)
         pauseBelowBatteryPercent = try c.decodeIfPresent(Int.self, forKey: .pauseBelowBatteryPercent)

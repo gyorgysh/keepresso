@@ -1963,6 +1963,12 @@ private struct DisplayTab: View {
                 }
 
                 if let config = model.virtualDisplayConfig {
+                    Toggle("Handle it automatically", isOn: Binding(
+                        get: { model.virtualDisplayAutomatic },
+                        set: { model.setVirtualDisplayAutomatic($0) }
+                    ))
+                    .help("On battery")
+
                     Picker("Resolution", selection: Binding(
                         get: { Self.key(config.width, config.height) },
                         set: { newKey in
@@ -1994,6 +2000,7 @@ private struct DisplayTab: View {
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .animation(.snappy(duration: 0.25), value: model.virtualDisplayEnabled)
+        .animation(.snappy(duration: 0.25), value: model.virtualDisplayAutomatic)
     }
 }
 

@@ -220,7 +220,10 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   and guides you to fix each one.
 - 🖼️ **Headless virtual display (experimental).** On a Mac with no monitor,
   create a higher-resolution HiDPI virtual display so Screen Sharing and VNC look
-  crisp instead of a fuzzy 1920×1080. Off by default; uses a private macOS API,
+  crisp instead of a fuzzy 1920×1080. It can switch on automatically while the
+  built-in display sleeps on battery, prefer that virtual display as the main
+  display (falling back to an unmirrored extended display), then switch off when
+  a real display or AC power returns. Off by default; uses a private macOS API,
   so it's a no-dummy-plug software alternative you should treat as experimental.
 - ✨ **Native and quiet.** A menu-bar agent with an animated cup while brewing, a
   live summary of what's holding the session on, a Liquid Glass app icon (Icon
@@ -365,7 +368,8 @@ Updates, and Quit.
   - **Automation**: end-of-session actions, outbound event hooks, and scheduled
     wake (with optional wake-and-brew).
   - **Disk**: choose a volume to keep spun up and how often to touch it.
-  - **Display**: create an experimental high-resolution headless virtual display.
+  - **Display**: create an experimental high-resolution headless virtual display,
+    always or automatically when the built-in display sleeps on battery.
   - **Activity**: what's keeping the Mac awake right now, a weekly held-awake
     summary, and why each session started or stopped (persisted across relaunch).
 - **Headless Setup** checks that an always-on Mac (say a Mac mini with no display)
