@@ -3,7 +3,7 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
-## [1.21.0] - Unreleased
+## [1.21.0] - 2026-08-25
 
 ### Added
 
@@ -24,7 +24,7 @@ Versions follow [Semantic Versioning](https://semver.org).
 - **Keep me active methods.** When Keep me active is on, pick how presence is
   reported: the original prompt-free method, F15, Shift, a specified key, or
   a mouse move. Accessibility is requested only if you choose a key or mouse
-  method. Suggested by @88808880 (#16).
+  method. Reported by @88808880 (#16).
 
 ### Fixed
 
