@@ -629,8 +629,9 @@ private final class FakeEngineKeyboard: KeyboardRemapping, @unchecked Sendable {
     var current = KeyboardKeyMapping(entries: [.init(src: 9, dst: 8)])
     var applied: [KeyboardKeyMapping] = []
     var applySucceeds = true
+    var readSucceeds = true
 
-    func currentMapping() -> KeyboardKeyMapping { current }
+    func currentMapping() -> KeyboardKeyMapping? { readSucceeds ? current : nil }
 
     func apply(_ mapping: KeyboardKeyMapping) -> Bool {
         applied.append(mapping)
@@ -694,6 +695,22 @@ private final class FakeEngineKeyboard: KeyboardRemapping, @unchecked Sendable {
     )
 
     #expect(!engine.setKeyboardLock(client: 1, holding: true))
+    #expect(state.markers().isEmpty)
+    #expect(engine.isIdle)
+}
+
+@Test func keyboardLockUnreadableOriginalDoesNotApplyOrRecordDebt() {
+    let keyboard = FakeEngineKeyboard()
+    keyboard.readSucceeds = false
+    let state = FakeRestoreState()
+    let engine = HelperEngine(
+        runner: FakeRunner(),
+        state: state,
+        keyboard: keyboard
+    )
+
+    #expect(!engine.setKeyboardLock(client: 1, holding: true))
+    #expect(keyboard.applied.isEmpty)
     #expect(state.markers().isEmpty)
     #expect(engine.isIdle)
 }

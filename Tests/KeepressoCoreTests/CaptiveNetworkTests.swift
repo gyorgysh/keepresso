@@ -175,4 +175,27 @@ private final class FakeCaptiveProbe: CaptiveProbing, @unchecked Sendable {
     await controller.refresh()
     #expect(controller.captiveDetected)
     #expect(controller.portalLocation == "http://login.example/")
+    #expect(controller.portalURL == URL(string: "http://login.example/"))
+}
+
+@Test @MainActor func controllerRejectsUnsafeOrHostlessPortalURLs() async {
+    let probe = FakeCaptiveProbe()
+    let controller = CaptiveNetworkController(probe: probe)
+
+    for location in [
+        "file:///tmp/portal.html",
+        "keepresso://stop",
+        "javascript:alert(1)",
+        "https:///missing-host",
+        "not a URL",
+    ] {
+        probe.snap.http = .portal(status: 302, location: location)
+        await controller.refresh()
+        #expect(controller.portalURL == nil)
+        #expect(controller.portalLocation == nil)
+    }
+
+    probe.snap.http = .portal(status: 302, location: "https://login.example/path")
+    await controller.refresh()
+    #expect(controller.portalURL == URL(string: "https://login.example/path"))
 }

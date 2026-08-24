@@ -9,8 +9,9 @@ private final class FakeRemapper: KeyboardRemapping, @unchecked Sendable {
     ])
     var applied: [KeyboardKeyMapping] = []
     var applySucceeds = true
+    var readSucceeds = true
 
-    func currentMapping() -> KeyboardKeyMapping { current }
+    func currentMapping() -> KeyboardKeyMapping? { readSucceeds ? current : nil }
 
     func apply(_ mapping: KeyboardKeyMapping) -> Bool {
         applied.append(mapping)
@@ -22,8 +23,13 @@ private final class FakeRemapper: KeyboardRemapping, @unchecked Sendable {
 
 private final class MemoryMarker: KeyboardLockMarking, @unchecked Sendable {
     var stored: KeyboardKeyMapping?
+    var saveSucceeds = true
 
-    func save(original: KeyboardKeyMapping) { stored = original }
+    func save(original: KeyboardKeyMapping) -> Bool {
+        guard saveSucceeds else { return false }
+        stored = original
+        return true
+    }
     func load() -> KeyboardKeyMapping? { stored }
     func clear() { stored = nil }
 }
@@ -93,6 +99,58 @@ private final class FakeKeyboardHelper: PrivilegedHelperCalling, @unchecked Send
     #expect(remapper.applied.last != .empty)
     #expect(marker.stored == nil)
     #expect(!locker.isLocked)
+}
+
+@Test func unreadableOriginalUsesOverlayWithoutApplyingOrSavingAnEmptyMapping() {
+    let remapper = FakeRemapper()
+    remapper.readSucceeds = false
+    let marker = MemoryMarker()
+    var privilegedCalls = 0
+    let locker = KeyboardLocker(
+        remapper: remapper,
+        marker: marker,
+        privilegedApply: { _ in
+            privilegedCalls += 1
+            return .applied
+        }
+    )
+
+    #expect(locker.lock() == .overlayOnly)
+    #expect(locker.isLocked)
+    #expect(marker.stored == nil)
+    #expect(remapper.applied.isEmpty)
+    #expect(privilegedCalls == 0)
+
+    locker.unlock()
+    #expect(!locker.isLocked)
+}
+
+@Test func failedRecoveryMarkerUsesOverlayWithoutApplyingGlobalLock() {
+    let remapper = FakeRemapper()
+    let marker = MemoryMarker()
+    let unrelatedStaleMarker = KeyboardKeyMapping(entries: [.init(src: 99, dst: 100)])
+    marker.stored = unrelatedStaleMarker
+    marker.saveSucceeds = false
+    var privilegedCalls = 0
+    let locker = KeyboardLocker(
+        remapper: remapper,
+        marker: marker,
+        privilegedApply: { _ in
+            privilegedCalls += 1
+            return .applied
+        }
+    )
+
+    #expect(locker.lock() == .overlayOnly)
+    #expect(locker.isLocked)
+    #expect(marker.stored == unrelatedStaleMarker)
+    #expect(remapper.applied.isEmpty)
+    #expect(privilegedCalls == 0)
+
+    locker.unlock()
+    #expect(!locker.isLocked)
+    #expect(remapper.applied.isEmpty)
+    #expect(marker.stored == unrelatedStaleMarker)
 }
 
 @Test func leftoverMarkerRestoresOnLaunch() {

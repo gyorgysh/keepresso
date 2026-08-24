@@ -650,7 +650,10 @@ public final class HelperEngine: @unchecked Sendable {
         let after = !keyboardHolders.isEmpty
         guard before != after else { return true }
         if after {
-            let original = keyboard.currentMapping()
+            guard let original = keyboard.currentMapping() else {
+                keyboardHolders.remove(client)
+                return false
+            }
             let payload = Self.encodeKeyboardMapping(original)
             state.set(.keyboardLock, value: payload)
             guard state.value(for: .keyboardLock) != nil else {

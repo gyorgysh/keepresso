@@ -391,9 +391,20 @@ public final class CaptiveNetworkController {
         isRefreshing = false
     }
 
+    /// A portal-controlled Location header is untrusted. Surface only ordinary
+    /// web URLs, never file URLs or application-specific schemes.
+    public var portalURL: URL? {
+        guard case .portal(_, let location) = snapshot.http,
+              let location,
+              let url = URL(string: location),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              url.host != nil else { return nil }
+        return url
+    }
+
     public var portalLocation: String? {
-        if case .portal(_, let location) = snapshot.http { return location }
-        return nil
+        portalURL?.absoluteString
     }
 
     public var captiveDetected: Bool {

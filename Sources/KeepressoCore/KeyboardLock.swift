@@ -47,7 +47,10 @@ public struct KeyboardKeyMapping: Equatable, Codable, Sendable {
 /// Applies or reads the keyboard `UserKeyMapping`. Tests inject a fake;
 /// production shells `hidutil`.
 public protocol KeyboardRemapping: AnyObject, Sendable {
-    func currentMapping() -> KeyboardKeyMapping
+    /// Returns `nil` when the live mapping cannot be read. Callers must not
+    /// substitute an empty mapping, because restoring it would erase the
+    /// user's existing remaps.
+    func currentMapping() -> KeyboardKeyMapping?
     /// Returns whether the write landed. A failure leaves the hardware mapping
     /// untouched; the overlay can still swallow keys while focused.
     func apply(_ mapping: KeyboardKeyMapping) -> Bool
@@ -56,7 +59,9 @@ public protocol KeyboardRemapping: AnyObject, Sendable {
 /// Crash-recovery marker: the mapping that was live before a lock, persisted
 /// under Application Support so a force-quit mid-lock can restore it.
 public protocol KeyboardLockMarking: AnyObject, Sendable {
-    func save(original: KeyboardKeyMapping)
+    /// Persist the original mapping before any global remap is attempted.
+    /// Returns false when crash recovery could not be armed.
+    @discardableResult func save(original: KeyboardKeyMapping) -> Bool
     func load() -> KeyboardKeyMapping?
     func clear()
 }
@@ -86,8 +91,9 @@ public final class HidutilKeyboardRemapper: KeyboardRemapping, @unchecked Sendab
         self.runner = runner
     }
 
-    public func currentMapping() -> KeyboardKeyMapping {
-        let raw = runner("/usr/bin/hidutil", ["property", "--get", "UserKeyMapping"]) ?? ""
+    public func currentMapping() -> KeyboardKeyMapping? {
+        guard let raw = runner("/usr/bin/hidutil", ["property", "--get", "UserKeyMapping"])
+        else { return nil }
         return KeyboardKeyMapping.parseHidutilGet(raw)
     }
 
@@ -185,11 +191,16 @@ public final class FileKeyboardLockMarker: KeyboardLockMarking, @unchecked Senda
             .appendingPathComponent("keyboard-lock.json")
     }
 
-    public func save(original: KeyboardKeyMapping) {
-        guard let data = try? JSONEncoder().encode(original) else { return }
-        try? FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: url, options: .atomic)
+    public func save(original: KeyboardKeyMapping) -> Bool {
+        do {
+            let data = try JSONEncoder().encode(original)
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: url, options: .atomic)
+            return load() == original
+        } catch {
+            return false
+        }
     }
 
     public func load() -> KeyboardKeyMapping? {
@@ -224,6 +235,10 @@ public final class KeyboardLocker: KeyboardLocking, @unchecked Sendable {
     private let lockQueue = NSLock()
     private var locked = false
     private var usedHelper = false
+    /// True only after this run durably recorded a mapping, or when launch
+    /// recovery explicitly found a marker. An overlay-only fallback must not
+    /// consume an unrelated stale marker when it closes.
+    private var restoreArmed = false
 
     public init(
         remapper: KeyboardRemapping = HidutilKeyboardRemapper(),
@@ -253,8 +268,20 @@ public final class KeyboardLocker: KeyboardLocking, @unchecked Sendable {
         }
         lockQueue.unlock()
 
-        let original = remapper.currentMapping()
-        marker.save(original: original)
+        // A global remap is safe only when the exact live mapping was read and
+        // durably recorded. Otherwise use the focused overlay without touching
+        // hidutil, so an unlock can never erase an unknown user mapping.
+        guard let original = remapper.currentMapping(), marker.save(original: original) else {
+            lockQueue.lock()
+            locked = true
+            usedHelper = false
+            restoreArmed = false
+            lockQueue.unlock()
+            return .overlayOnly
+        }
+        lockQueue.lock()
+        restoreArmed = true
+        lockQueue.unlock()
 
         if helperAvailable(),
            let helper,
@@ -300,6 +327,9 @@ public final class KeyboardLocker: KeyboardLocking, @unchecked Sendable {
 
     public func restoreIfNeeded() {
         guard marker.load() != nil else { return }
+        lockQueue.lock()
+        restoreArmed = true
+        lockQueue.unlock()
         restoreMapping(allowPrompt: false)
     }
 
@@ -310,7 +340,13 @@ public final class KeyboardLocker: KeyboardLocking, @unchecked Sendable {
     private func restoreMapping(allowPrompt: Bool) {
         lockQueue.lock()
         let viaHelper = usedHelper
+        let shouldRestore = restoreArmed
         lockQueue.unlock()
+
+        guard shouldRestore else {
+            finishOverlayOnly()
+            return
+        }
 
         guard let original = marker.load() else {
             finishRestored()
@@ -348,6 +384,15 @@ public final class KeyboardLocker: KeyboardLocking, @unchecked Sendable {
         marker.clear()
         lockQueue.lock()
         usedHelper = false
+        restoreArmed = false
+        locked = false
+        lockQueue.unlock()
+    }
+
+    private func finishOverlayOnly() {
+        lockQueue.lock()
+        usedHelper = false
+        restoreArmed = false
         locked = false
         lockQueue.unlock()
     }

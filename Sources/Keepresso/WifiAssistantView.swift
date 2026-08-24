@@ -80,7 +80,7 @@ struct WifiAssistantView: View {
             }
             .buttonStyle(.borderedProminent)
 
-            if let location = captive.portalLocation, let url = URL(string: location) {
+            if let url = captive.portalURL {
                 Button("Open portal URL") { NSWorkspace.shared.open(url) }
                     .buttonStyle(.bordered)
             }
