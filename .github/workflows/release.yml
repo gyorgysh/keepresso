@@ -28,6 +28,10 @@ jobs:
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90
         with:
           xcode-version: latest-stable
+      - name: Localization
+        run: python3 tools/localization/check_all.py
+      - name: Core tests
+        run: swift test
       - name: Install tools
         run: brew install xcodegen
 

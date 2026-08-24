@@ -1614,6 +1614,7 @@ final class AppModel {
     /// that were holding it are gone).
     private func apply(_ newSettings: KeepressoSettings) {
         session.stop()
+        revokeLeases()
         settings = newSettings
         session.options = newSettings.options
         session.reminderAfter = newSettings.reminderAfter
@@ -2868,7 +2869,11 @@ final class AppModel {
     /// command instead of prompting.
     func flushDNS() -> Bool {
         guard helperInstalled else { return false }
-        guard (helper.daemonProtocolVersion ?? 0) >= HelperService.flushDNSMinProtocol else {
+        // Live handshake: the cached `daemonProtocolVersion` stays nil until
+        // a verify run, so an early Wi-Fi assistant flush must not treat a
+        // ready protocol-9 daemon as too old.
+        guard let version = helperClient.pingVersion(),
+              version >= HelperService.flushDNSMinProtocol else {
             return false
         }
         return helperClient.flushDNS()

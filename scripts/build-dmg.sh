@@ -91,20 +91,22 @@ info "Verifying signature"
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
 # Build a simple DMG with the app and an /Applications drop target.
+# Always stage a folder: create-dmg's source is -srcfolder, so passing the
+# .app itself copies Contents/ to the volume root instead of Keepresso.app.
 info "Building DMG"
+STAGE="$BUILD_DIR/dmg"
+rm -rf "$STAGE"
+mkdir -p "$STAGE"
+cp -R "$APP_PATH" "$STAGE/"
+ln -s /Applications "$STAGE/Applications"
 if command -v create-dmg >/dev/null 2>&1; then
   create-dmg \
     --volname "$APP_NAME" \
     --app-drop-link 480 200 \
     --icon "$APP_NAME.app" 160 200 \
     --window-size 640 400 \
-    "$DMG_PATH" "$APP_PATH"
+    "$DMG_PATH" "$STAGE"
 else
-  # Fallback: stage a folder with an Applications symlink, then hdiutil.
-  STAGE="$BUILD_DIR/dmg"
-  mkdir -p "$STAGE"
-  cp -R "$APP_PATH" "$STAGE/"
-  ln -s /Applications "$STAGE/Applications"
   hdiutil create -volname "$APP_NAME" -srcfolder "$STAGE" -ov -format UDZO "$DMG_PATH"
 fi
 

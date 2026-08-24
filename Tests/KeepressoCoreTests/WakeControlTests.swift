@@ -176,6 +176,24 @@ private func ack(_ outcome: String) -> StatusSnapshot {
     #expect(AutomationWakeRequestFile.claim(requestId: reqId, at: url) == false)
 }
 
+@Test func wakeRequestClaimDoesNotDeleteAReplacedRequest() {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keepresso-wake-claim-race-\(UUID().uuidString)")
+        .appendingPathComponent("wake.json")
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+    let first = AutomationWakeRequest(
+        requestId: reqId, oneShot: base.addingTimeInterval(3_600), requestedAt: base)
+    let secondId = "dddddddd-1111-2222-3333-444444444444"
+    let second = AutomationWakeRequest(
+        requestId: secondId, oneShot: base.addingTimeInterval(7_200), requestedAt: base)
+
+    AutomationWakeRequestFile.write(first, to: url)
+    AutomationWakeRequestFile.write(second, to: url)
+    #expect(AutomationWakeRequestFile.claim(requestId: reqId, at: url) == false)
+    #expect(AutomationWakeRequestFile.read(from: url)?.requestId == secondId)
+}
+
 @Test func wakeApplyRejectsInvalidRequestsWithoutARoundTrip() {
     let world = World()
     let outcome = world.client().apply(

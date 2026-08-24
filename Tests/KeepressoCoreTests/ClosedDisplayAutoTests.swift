@@ -37,6 +37,7 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     var flagPresent = false
     var result: SleepSettingResult = .applied
     var createFlagSucceeds = true
+    var removeClearsFlag = true
     var engageFailureMessage = "backend says no"
     /// Helper spawns, i.e. how often the user was asked for a password.
     var startCalls = 0
@@ -47,7 +48,9 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
         flagPresent = true
         return true
     }
-    func removeFlag() { flagPresent = false }
+    func removeFlag() {
+        if removeClearsFlag { flagPresent = false }
+    }
     func startHelper(appPID: Int32) -> SleepSettingResult {
         startCalls += 1
         return result
@@ -72,6 +75,24 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     await controller.autoTick(brewing: false)
     #expect(!controller.isHolding)
     #expect(!launcher.flagPresent)
+}
+
+@MainActor
+@Test func closedDisplayAutoKeepsHoldingWhenReleaseDoesNotClearTheFlag() async {
+    let launcher = FakeSleepWatchdogLauncher()
+    launcher.removeClearsFlag = false
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+    controller.onlyWhileBrewing = true
+
+    await controller.autoTick(brewing: true)
+    #expect(controller.isHolding)
+    #expect(launcher.flagPresent)
+
+    await controller.autoTick(brewing: false)
+    // A failed XPC/osascript release still has the flag; dropping the latch
+    // would skip retries and leave disablesleep stuck.
+    #expect(controller.isHolding)
+    #expect(launcher.flagPresent)
 }
 
 @MainActor

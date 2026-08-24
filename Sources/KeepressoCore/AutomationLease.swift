@@ -264,12 +264,21 @@ public final class FileLeaseStore: LeaseRecordStoring {
         cachedStamp = nil
     }
 
+    public func compareAndSwap(expected: AutomationLeaseRecord, new: AutomationLeaseRecord) -> Bool {
+        FileExclusiveLock.withLock(directory: directory) {
+            guard let current = readFromDisk(id: expected.id), current == expected else {
+                return false
+            }
+            return persist(new)
+        }
+    }
+
     public func loadAll() -> [AutomationLeaseRecord] {
         if let cached, let cachedAt, now().timeIntervalSince(cachedAt) < cacheTTL,
            let cachedStamp, cachedStamp == directoryStamp() {
             return Array(cached.values)
         }
-        return rescan()
+        return FileExclusiveLock.withLock(directory: directory) { rescan() }
     }
 
     /// Cheap directory fingerprint: each `*.json` name plus its content
@@ -317,12 +326,39 @@ public final class FileLeaseStore: LeaseRecordStoring {
     }
 
     public func write(_ record: AutomationLeaseRecord) {
-        guard let data = try? Self.encoder.encode(record) else { return }
+        FileExclusiveLock.withLock(directory: directory) {
+            _ = persist(record)
+        }
+    }
+
+    public func delete(id: String) {
+        FileExclusiveLock.withLock(directory: directory) {
+            try? FileManager.default.removeItem(
+                at: directory.appendingPathComponent(Self.fileName(forId: id)))
+            cached?[id] = nil
+            cachedStamp = directoryStamp()
+        }
+    }
+
+    /// Disk read that bypasses the listing cache, for compare-and-swap.
+    private func readFromDisk(id: String) -> AutomationLeaseRecord? {
+        let url = directory.appendingPathComponent(Self.fileName(forId: id))
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? Self.decoder.decode(AutomationLeaseRecord.self, from: data)
+    }
+
+    /// Write to disk and, only if that landed, update the listing cache.
+    /// Call with the directory lock held.
+    @discardableResult
+    private func persist(_ record: AutomationLeaseRecord) -> Bool {
+        guard let data = try? Self.encoder.encode(record) else { return false }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try? data.write(
-            to: directory.appendingPathComponent(Self.fileName(forId: record.id)),
-            options: .atomic
-        )
+        let url = directory.appendingPathComponent(Self.fileName(forId: record.id))
+        do {
+            try data.write(to: url, options: .atomic)
+        } catch {
+            return false
+        }
         if cached == nil {
             cached = [:]
             cachedAt = now()
@@ -331,13 +367,7 @@ public final class FileLeaseStore: LeaseRecordStoring {
         // Keep the stamp aligned with the local write so the next loadAll
         // does not immediately rescan what we just put on disk.
         cachedStamp = directoryStamp()
-    }
-
-    public func delete(id: String) {
-        try? FileManager.default.removeItem(
-            at: directory.appendingPathComponent(Self.fileName(forId: id)))
-        cached?[id] = nil
-        cachedStamp = directoryStamp()
+        return true
     }
 }
 
@@ -401,19 +431,25 @@ public final class LeaseEngine: LeaseProviding {
             if record != raw { store.write(record) }
             switch AutomationLease.adjudicate(record, now: now) {
             case .live:
-                live.append(LeaseSummary(
-                    id: record.id,
-                    owner: AutomationLease.sanitized(record.owner),
-                    tool: AutomationLease.sanitized(record.tool),
-                    task: AutomationLease.sanitized(record.task),
-                    expiresAt: AutomationLease.expiryDate(of: record)
-                ))
+                live.append(Self.summary(for: record))
             case .lapsed(let reason):
                 var ended = record
                 ended.state = .expired
                 ended.endedAt = now
                 ended.endReason = reason
-                store.write(ended)
+                // Compare-and-swap: a heartbeat that landed after this
+                // loadAll must not be overwritten with a stale expiry.
+                if store.compareAndSwap(expected: record, new: ended) {
+                    break
+                }
+                // The write lost: honor whatever is on disk now so demand
+                // does not drop for a tick and bounce the session.
+                if let latest = store.loadAll().first(where: { $0.id == record.id }) {
+                    let healed = AutomationLease.normalized(latest, now: now)
+                    if case .live = AutomationLease.adjudicate(healed, now: now) {
+                        live.append(Self.summary(for: healed))
+                    }
+                }
             case .terminal(let prune):
                 if prune { store.delete(id: record.id) }
             }
@@ -432,5 +468,15 @@ public final class LeaseEngine: LeaseProviding {
             ended.endReason = "stopped-by-user"
             store.write(ended)
         }
+    }
+
+    private static func summary(for record: AutomationLeaseRecord) -> LeaseSummary {
+        LeaseSummary(
+            id: record.id,
+            owner: AutomationLease.sanitized(record.owner),
+            tool: AutomationLease.sanitized(record.tool),
+            task: AutomationLease.sanitized(record.task),
+            expiresAt: AutomationLease.expiryDate(of: record)
+        )
     }
 }

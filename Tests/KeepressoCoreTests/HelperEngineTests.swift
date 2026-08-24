@@ -326,22 +326,24 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 
 @Test func sleepNowIsFireAndForgetPmset() {
     let runner = FakeRunner()
-    let engine = HelperEngine(runner: runner, state: FakeRestoreState())
+    let state = FakeRestoreState()
+    let engine = HelperEngine(runner: runner, state: state)
     #expect(engine.sleepNow())
     #expect(runner.commands == ["/usr/bin/pmset sleepnow"])
     // Not a hold: nothing to restore if the daemon dies after.
-    #expect(FakeRestoreState().markers().isEmpty)
+    #expect(state.markers().isEmpty)
 }
 
 @Test func flushDNSRunsBothCacheCommands() {
     let runner = FakeRunner()
-    let engine = HelperEngine(runner: runner, state: FakeRestoreState())
+    let state = FakeRestoreState()
+    let engine = HelperEngine(runner: runner, state: state)
     #expect(engine.flushDNS())
     #expect(runner.commands == [
         "/usr/bin/dscacheutil -flushcache",
         "/usr/bin/killall -HUP mDNSResponder",
     ])
-    #expect(FakeRestoreState().markers().isEmpty)
+    #expect(state.markers().isEmpty)
 }
 
 // MARK: - CLI symlink
@@ -615,6 +617,7 @@ private let restorePid = "/usr/bin/renice 0 -p 4242"
 
     #expect(!engine.setPriorityHold(client: 1, holding: true, pid: 0))
     #expect(!engine.setPriorityHold(client: 1, holding: true, pid: -5))
+    #expect(!engine.setPriorityHold(client: 1, holding: true, pid: 1))
     #expect(runner.commands.isEmpty)
 
     _ = engine.setPriorityHold(client: 1, holding: true, pid: 4242)
@@ -731,4 +734,24 @@ private final class FakeEngineKeyboard: KeyboardRemapping, @unchecked Sendable {
     engine.restoreAtLaunch()
     #expect(keyboard.applied.last == original)
     #expect(state.markers().isEmpty)
+}
+
+@Test func restoreAtLaunchLeavesCorruptKeyboardMarkerUntouched() {
+    let keyboard = FakeEngineKeyboard()
+    let original = keyboard.current
+    let state = FakeRestoreState(values: [
+        .keyboardLock: "not-json"
+    ])
+    let engine = HelperEngine(
+        runner: FakeRunner(),
+        state: state,
+        keyboard: keyboard
+    )
+
+    engine.restoreAtLaunch()
+    // Applying `.empty` would wipe the user's own remaps. Leave the mapping
+    // and keep the marker so a later launch can retry.
+    #expect(keyboard.applied.isEmpty)
+    #expect(keyboard.current == original)
+    #expect(state.markers().contains(.keyboardLock))
 }

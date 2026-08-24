@@ -39,7 +39,12 @@ public final class HelperDaemonSleepWatchdog: SleepWatchdogLaunching, @unchecked
     }
 
     public func removeFlag() {
-        _ = helper.setSleepHold(false)
+        let ok = helper.setSleepHold(false)
+        // Only drop the local bookkeeping when the daemon confirmed the
+        // release. A failed XPC call leaves the hold live on the other
+        // side; reporting "not holding" would stop retries and leave
+        // disablesleep on.
+        guard ok else { return }
         lock.lock()
         holding = false
         lock.unlock()
@@ -80,7 +85,8 @@ public final class HelperDaemonAWDLWatchdog: AWDLWatchdogLaunching, @unchecked S
     }
 
     public func removeFlag() {
-        _ = helper.setAWDLHold(false)
+        let ok = helper.setAWDLHold(false)
+        guard ok else { return }
         lock.lock()
         holding = false
         lock.unlock()

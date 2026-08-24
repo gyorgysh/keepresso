@@ -67,7 +67,7 @@ public enum WidgetBridge {
                   task, "com.apple.security.application-groups" as CFString, nil),
               let groups = value as? [String]
         else { return nil }
-        return groups.first
+        return groups.first { $0.hasSuffix("sh.gyorgy.keepresso") } ?? groups.first
     }()
 
     /// The group's `UserDefaults`, or `nil` when the entitlement (or the

@@ -293,3 +293,53 @@ private final class FakeLeaseStore: LeaseRecordStoring {
     #expect(live.first?.expiresAt == base.addingTimeInterval(55))
     #expect(appStore.loadAll().first { $0.id == idA }?.state == .active)
 }
+
+@Test func fileStoreCompareAndSwapRefusesAChangedRecord() throws {
+    let dir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keepresso-lease-cas-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = FileLeaseStore(directory: dir)
+    let live = record()
+    store.write(live)
+
+    var revoked = live
+    revoked.state = .revoked
+    revoked.endedAt = base
+    revoked.endReason = "stopped-by-user"
+    FileLeaseStore(directory: dir).write(revoked)
+
+    var heartbeat = live
+    heartbeat.updatedAt = base.addingTimeInterval(10)
+    #expect(!store.compareAndSwap(expected: live, new: heartbeat))
+    #expect(store.loadAll().first?.state == .revoked)
+}
+
+@MainActor
+@Test func engineExpiryLosesToAConcurrentHeartbeat() {
+    // loadAll returns a lapsed record; compareAndSwap then sees a heartbeat
+    // that landed underneath. Demand must stay up in the same tick.
+    let inner = FakeLeaseStore([record(ttl: 30)])
+    final class RacingStore: LeaseRecordStoring {
+        let inner: FakeLeaseStore
+        var flipped = false
+        init(_ inner: FakeLeaseStore) { self.inner = inner }
+        func loadAll() -> [AutomationLeaseRecord] { inner.loadAll() }
+        func write(_ record: AutomationLeaseRecord) { inner.write(record) }
+        func delete(id: String) { inner.delete(id: id) }
+        func compareAndSwap(expected: AutomationLeaseRecord, new: AutomationLeaseRecord) -> Bool {
+            if !flipped {
+                flipped = true
+                var fresh = expected
+                fresh.updatedAt = expected.updatedAt.addingTimeInterval(200)
+                inner.write(fresh)
+            }
+            return inner.compareAndSwap(expected: expected, new: new)
+        }
+    }
+    let racing = RacingStore(inner)
+    let engine = LeaseEngine(store: racing)
+    let live = engine.tick(now: base.addingTimeInterval(31))
+    #expect(live.count == 1)
+    #expect(inner.records[idA]?.state == .active)
+    #expect(inner.records[idA]?.updatedAt == base.addingTimeInterval(200))
+}

@@ -95,6 +95,7 @@
 "Paused on low battery" = "Pausado por bateria baixa";
 "Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge." = "A bateria está em %d%%. O Keepresso está deixando o Mac suspender até você conectar o carregador.";
 "Keepresso is still brewing" = "O Keepresso ainda está preparando";
+"Couldn't create a power assertion. The Mac may still sleep." = "Não foi possível criar uma asserção de energia. O Mac ainda pode suspender.";
 "Your Mac is still awake. It's been %@." = "O seu Mac ainda está acordado. Já se passaram %@.";
 "Your Mac has been kept awake for %@." = "O seu Mac foi mantido acordado por %@.";
 "Started manually" = "Iniciado manualmente";

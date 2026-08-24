@@ -184,6 +184,20 @@ private final class FakeFallbackSleepControl: SleepSettingControlling, @unchecke
     #expect(!routed.isFlagPresent())
 }
 
+@Test func routedSleepWatchdogKeepsHoldingWhenReleaseFails() {
+    let client = FakeHelperClient()
+    let routed = RoutedSleepWatchdog(
+        daemon: HelperDaemonSleepWatchdog(helper: client),
+        fallback: FakeFallbackSleepWatchdog(),
+        helperInstalled: { true }
+    )
+    #expect(routed.createFlag())
+    client.holdSucceeds = false
+    routed.removeFlag()
+    #expect(routed.isFlagPresent())
+    #expect(client.calls.contains("setSleepHold(false)"))
+}
+
 @Test func routedAWDLWatchdogMirrorsTheSleepRouting() {
     let client = FakeHelperClient()
     let routed = RoutedAWDLWatchdog(

@@ -64,6 +64,8 @@ SOURCE_COVERAGE = [
             "Sources/Keepresso/MenuBarContent.swift",
             "Sources/Keepresso/StatusItemBridge.swift",
             "Sources/Keepresso/ShortcutRecorder.swift",
+            "Sources/Keepresso/WelcomeView.swift",
+            "Sources/Keepresso/AppModel.swift",
         ],
         [
             r'\bL\(\s*"((?:[^"\\]|\\.)*)"',
@@ -74,7 +76,7 @@ SOURCE_COVERAGE = [
     (
         "CORE",
         CORE,
-        ["Sources/KeepressoCore/CaptiveNetwork.swift"],
+        ["Sources/KeepressoCore/CaptiveNetwork.swift", "Sources/KeepressoCore/SessionController.swift"],
         [r'\bL\(\s*"((?:[^"\\]|\\.)*)"'],
     ),
 ]

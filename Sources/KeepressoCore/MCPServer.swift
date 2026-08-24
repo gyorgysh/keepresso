@@ -108,7 +108,9 @@ public struct MCPServer {
             return nil
         }
         func argumentError(_ message: String) -> LeaseOutcome {
-            LeaseOutcome(exitCode: 64, json: "{\"error\": \"\(message)\"}", human: message)
+            struct Payload: Codable { var error: String }
+            return LeaseOutcome(
+                exitCode: 64, json: AutomationJSON.encode(Payload(error: message)), human: message)
         }
 
         switch tool {
@@ -149,7 +151,7 @@ public struct MCPServer {
         case "set_wake_schedule":
             var oneShot: Date?
             if let raw = string("one_shot") {
-                guard let parsed = ISO8601DateFormatter().date(from: raw) else {
+                guard let parsed = AutomationJSON.parseISO8601(raw) else {
                     return argumentError("one_shot must be an ISO 8601 date")
                 }
                 oneShot = parsed
@@ -176,7 +178,9 @@ public struct MCPServer {
         }
         guard let snapshot = readStatus() else {
             let message = "no status recorded yet. Launch the Keepresso app once."
-            return LeaseOutcome(exitCode: 2, json: "{\"error\": \"\(message)\"}", human: message)
+            struct Payload: Codable { var error: String }
+            return LeaseOutcome(
+                exitCode: 2, json: AutomationJSON.encode(Payload(error: message)), human: message)
         }
         let report = Report(appRunning: isPidAlive(snapshot.pid), status: snapshot)
         return LeaseOutcome(exitCode: 0, json: encodeJSON(report), human: "")

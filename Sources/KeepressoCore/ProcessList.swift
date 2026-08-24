@@ -62,7 +62,18 @@ public final class PSProcessLister: ProcessListing {
         if shouldRefresh {
             Task.detached { [weak self] in
                 guard let self else { return }
-                let fetched = self.fetch().map { $0.split(whereSeparator: \.isNewline).map(String.init) } ?? []
+                // A transient `ps` failure keeps the previous snapshot: an
+                // empty one would make a process trigger drop a keep-awake
+                // session mid-download or build. Agent monitoring does the
+                // same; match it here.
+                guard let raw = self.fetch() else {
+                    self.withLock {
+                        self.lastFetch = self.now()
+                        self.isRefreshing = false
+                    }
+                    return
+                }
+                let fetched = raw.split(whereSeparator: \.isNewline).map(String.init)
                 self.withLock {
                     self.cached = fetched
                     self.lastFetch = self.now()

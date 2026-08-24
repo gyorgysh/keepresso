@@ -95,6 +95,7 @@
 "Paused on low battery" = "因電量低而暫停";
 "Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge." = "電量為 %d%%。Keepresso 將讓 Mac 進入睡眠，直到您接上電源充電為止。";
 "Keepresso is still brewing" = "Keepresso 仍在運作中";
+"Couldn't create a power assertion. The Mac may still sleep." = "無法建立電源斷言。Mac 仍可能進入睡眠。";
 "Your Mac is still awake. It's been %@." = "您的 Mac 仍處於喚醒狀態，已經過 %@。";
 "Your Mac has been kept awake for %@." = "您的 Mac 已保持喚醒 %@。";
 "Started manually" = "手動啟動";

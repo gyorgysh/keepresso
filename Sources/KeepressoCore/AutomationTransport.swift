@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// The one JSON dialect every automation surface speaks (CLI output, MCP tool
@@ -6,6 +7,19 @@ import Foundation
 public enum AutomationJSON {
     public static func encode<T: Encodable>(_ payload: T) -> String {
         String(decoding: encodeData(payload) ?? Data("{}".utf8), as: UTF8.self)
+    }
+
+    /// Accept both `2026-08-25T07:30:00Z` and the fractional-second form
+    /// agents often emit (`...00.000Z`). The stock formatter with
+    /// `.withFractionalSeconds` *requires* a fraction, so try that first and
+    /// fall back to the plain internet-date form.
+    public static func parseISO8601(_ raw: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: raw) { return date }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: raw)
     }
 
     public static func encodeData<T: Encodable>(_ payload: T) -> Data? {
@@ -37,5 +51,25 @@ public enum AppDoorbell {
         }
         open.waitUntilExit()
         return open.terminationStatus == 0
+    }
+}
+
+/// Cross-process exclusive lock for the automation file stores (leases and
+/// the pending wake request). `flock` on a sidecar file serializes the
+/// check-then-write that compare-and-swap and claim need; atomic file
+/// replaces alone cannot.
+enum FileExclusiveLock {
+    static func withLock<T>(directory: URL, name: String = ".lock", _ body: () -> T) -> T {
+        try? FileManager.default.createDirectory(
+            at: directory, withIntermediateDirectories: true)
+        let path = directory.appendingPathComponent(name, isDirectory: false).path
+        let fd = open(path, O_CREAT | O_RDWR, 0o644)
+        guard fd >= 0 else { return body() }
+        flock(fd, LOCK_EX)
+        defer {
+            flock(fd, LOCK_UN)
+            close(fd)
+        }
+        return body()
     }
 }

@@ -128,10 +128,12 @@ public enum AutomationWakeRequestFile {
     }
 
     public static func write(_ request: AutomationWakeRequest, to url: URL = defaultURL()) {
-        guard let data = AutomationJSON.encodeData(request) else { return }
-        try? FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: url, options: .atomic)
+        FileExclusiveLock.withLock(directory: url.deletingLastPathComponent(), name: ".wake.lock") {
+            guard let data = AutomationJSON.encodeData(request) else { return }
+            try? FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? data.write(to: url, options: .atomic)
+        }
     }
 
     public static func read(from url: URL = defaultURL()) -> AutomationWakeRequest? {
@@ -140,7 +142,9 @@ public enum AutomationWakeRequestFile {
     }
 
     public static func delete(at url: URL = defaultURL()) {
-        try? FileManager.default.removeItem(at: url)
+        FileExclusiveLock.withLock(directory: url.deletingLastPathComponent(), name: ".wake.lock") {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     /// Delete the pending request only when it is still `requestId`. Used by
@@ -149,11 +153,13 @@ public enum AutomationWakeRequestFile {
     /// before applying it (apply only if the claim succeeds).
     @discardableResult
     public static func claim(requestId: String, at url: URL = defaultURL()) -> Bool {
-        guard let current = read(from: url), current.requestId == requestId else {
-            return false
+        FileExclusiveLock.withLock(directory: url.deletingLastPathComponent(), name: ".wake.lock") {
+            guard let current = read(from: url), current.requestId == requestId else {
+                return false
+            }
+            try? FileManager.default.removeItem(at: url)
+            return true
         }
-        delete(at: url)
-        return true
     }
 }
 

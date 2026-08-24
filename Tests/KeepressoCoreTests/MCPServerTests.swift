@@ -209,3 +209,33 @@ private func json(_ line: String?) throws -> [String: Any] {
     #expect((response["result"] as? [String: Any])?["isError"] as? Bool == true)
     #expect(store.records.isEmpty)
 }
+
+@Test func parseISO8601AcceptsFractionalSeconds() {
+    #expect(AutomationJSON.parseISO8601("2026-08-25T07:30:00Z") != nil)
+    #expect(AutomationJSON.parseISO8601("2026-08-25T07:30:00.000Z") != nil)
+    #expect(AutomationJSON.parseISO8601("not a date") == nil)
+}
+
+@Test func setWakeScheduleAcceptsFractionalISO8601() throws {
+    let (server, _) = makeServer()
+    // A past instant: parsing must succeed (fractional seconds), then policy
+    // rejects it as too soon. That path never waits for an app ack.
+    let response = try json(server.handle(
+        line: #"{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"set_wake_schedule","arguments":{"one_shot":"1970-01-01T00:00:00.000Z"}}}"#
+    ))
+    let result = try #require(response["result"] as? [String: Any])
+    #expect(result["isError"] as? Bool == true)
+    let text = try #require((result["content"] as? [[String: Any]])?.first?["text"] as? String)
+    #expect(text.contains("already passed") || text.contains("too soon"))
+}
+
+@Test func argumentErrorsAreValidJSON() throws {
+    let (server, _) = makeServer()
+    let response = try json(server.handle(
+        line: #"{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"acquire_lease","arguments":{"tool":"agent","task":"x"}}}"#
+    ))
+    let text = try #require(
+        ((response["result"] as? [String: Any])?["content"] as? [[String: Any]])?.first?["text"] as? String)
+    let payload = try json(text)
+    #expect(payload["error"] as? String == "acquire_lease needs a positive ttl_seconds")
+}

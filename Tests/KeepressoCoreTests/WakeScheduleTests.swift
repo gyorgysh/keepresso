@@ -203,6 +203,32 @@ import Foundation
     #expect(!state.markers().contains(.wakeClearPending))
 }
 
+@Test func applyWakeScheduleRejectsGarbageBeforeAnyPmset() {
+    let runner = RecordingRunner()
+    let state = FakeMarkerState()
+    let engine = HelperEngine(runner: runner, state: state)
+
+    #expect(!engine.applyWakeSchedule(
+        oneShot: "tomorrow; rm -rf /", repeatDays: nil, repeatTime: nil))
+    #expect(!engine.applyWakeSchedule(
+        oneShot: nil, repeatDays: "MTWRF", repeatTime: nil))
+    #expect(!engine.applyWakeSchedule(
+        oneShot: nil, repeatDays: "every day", repeatTime: "07:00:00"))
+    #expect(!engine.applyWakeSchedule(
+        oneShot: nil, repeatDays: "MTWRF", repeatTime: "25:00:00"))
+    #expect(runner.commands.isEmpty)
+    #expect(state.markers().isEmpty)
+}
+
+@Test func applyWakeScheduleAcceptsTheAppFormattedStamps() {
+    let runner = RecordingRunner()
+    let engine = HelperEngine(runner: runner, state: FakeMarkerState())
+    #expect(engine.applyWakeSchedule(
+        oneShot: "08/01/26 06:30:00", repeatDays: "MWF", repeatTime: "07:00:00"))
+    #expect(runner.commands.contains { $0.contains("schedule wake") })
+    #expect(runner.commands.contains { $0.contains("repeat wakeorpoweron") })
+}
+
 // MARK: - Fakes
 
 private final class RecordingRunner: HelperCommandRunning, @unchecked Sendable {

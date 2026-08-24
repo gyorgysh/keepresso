@@ -355,6 +355,9 @@ public final class ClosedDisplayAutoController {
     private func release() async {
         let launcher = self.launcher
         await Task.detached { launcher.removeFlag() }.value
-        isHolding = false
+        // Only drop the local latch when the backend agrees the hold is gone.
+        // A failed XPC release leaves the daemon holding `disablesleep`;
+        // clearing `isHolding` here would skip retries.
+        isHolding = launcher.isFlagPresent()
     }
 }

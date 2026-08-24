@@ -105,16 +105,38 @@ private func eventually(_ condition: @escaping () -> Bool) async -> Bool {
     #expect(stub.callCount == 1)
 }
 
-@Test func failedFetchResetsTheLatchAndCachesEmpty() async {
+@Test func failedFetchResetsTheLatchAndKeepsTheSnapshot() async {
+    let stub = FetchStub(output: "node server.js")
+    let clock = TestClock()
+    let lister = PSProcessLister(ttl: 3, now: { clock.now }, fetch: stub.fetch)
+
+    _ = lister.current
+    #expect(await eventually { lister.current == ["node server.js"] })
+
+    // A failed `ps` must not empty a good snapshot (that would drop a
+    // process trigger mid-build) and must not leave `isRefreshing` stuck.
+    stub.output = nil
+    clock.advance(4)
+    #expect(lister.current == ["node server.js"])
+    #expect(await eventually { stub.callCount == 2 })
+    #expect(lister.current == ["node server.js"])
+
+    stub.output = "recovered"
+    clock.advance(4)
+    _ = lister.current
+    #expect(await eventually { lister.current == ["recovered"] })
+    #expect(stub.callCount == 3)
+}
+
+@Test func firstFetchFailureLeavesEmptyUntilALaterRefresh() async {
     let stub = FetchStub(output: nil)
     let clock = TestClock()
     let lister = PSProcessLister(ttl: 3, now: { clock.now }, fetch: stub.fetch)
 
     _ = lister.current
     #expect(await eventually { stub.callCount == 1 })
+    #expect(lister.current.isEmpty)
 
-    // A failed fetch must not leave `isRefreshing` stuck (which would freeze
-    // the lister on a stale snapshot forever): past the TTL it tries again.
     stub.output = "recovered"
     clock.advance(4)
     _ = lister.current

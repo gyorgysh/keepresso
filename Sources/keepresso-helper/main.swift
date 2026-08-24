@@ -1,5 +1,6 @@
 import Foundation
 import KeepressoCore
+import SystemConfiguration
 
 /// The Keepresso privileged helper daemon.
 ///
@@ -99,10 +100,15 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection newConnection: NSXPCConnection) -> Bool {
         // Only the Keepresso app may connect: Apple-issued signature, the
         // app's identifier, and the same Team ID as this helper (read from our
-        // own signature at runtime, never hardcoded).
+        // own signature at runtime, never hardcoded). Then the console user's
+        // uid: a second local account running the same signed app must not
+        // drive machine-wide root verbs.
         newConnection.setCodeSigningRequirement(
             HelperService.peerRequirement(identifier: HelperService.appCodeSignIdentifier)
         )
+        guard let peerUID = HelperPeerPolicy.uid(ofPID: newConnection.processIdentifier),
+              HelperPeerPolicy.shouldAccept(peerUID: peerUID, consoleUID: consoleUserID())
+        else { return false }
 
         lock.lock()
         let clientID = nextClientID
@@ -157,6 +163,15 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
         liveConnections -= 1
         lock.unlock()
     }
+}
+
+/// The GUI session's uid, or nil when nobody is sitting at the console.
+private func consoleUserID() -> uid_t? {
+    var uid: uid_t = 0
+    guard let name = SCDynamicStoreCopyConsoleUser(nil, &uid, nil) as String?,
+          !name.isEmpty
+    else { return nil }
+    return uid
 }
 
 let engine = HelperEngine(

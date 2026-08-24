@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import Darwin
 
 /// The contract between the app and the privileged helper daemon
 /// (`keepresso-helper`), a `SMAppService` LaunchDaemon bundled inside the app
@@ -76,6 +77,32 @@ public enum HelperService {
             let info = infoRef as? [String: Any]
         else { return nil }
         return info[kSecCodeInfoTeamIdentifier as String] as? String
+    }
+}
+
+/// Who may talk to the privileged daemon. The daemon is a system
+/// LaunchDaemon: its verbs affect the whole Mac, so only the console (GUI)
+/// user's Keepresso may connect. Testable without XPC.
+public enum HelperPeerPolicy {
+    /// `peerUID` is the connecting process's real uid. `consoleUID` is the
+    /// current GUI session's uid, or nil when no console user is logged in
+    /// (SSH-only). Root (uid 0) is never the app, so it is always refused.
+    public static func shouldAccept(peerUID: uid_t, consoleUID: uid_t?) -> Bool {
+        guard peerUID != 0 else { return false }
+        if let consoleUID { return peerUID == consoleUID }
+        return true
+    }
+
+    /// Real uid of `pid`, via `sysctl`. Nil when the process is gone.
+    public static func uid(ofPID pid: pid_t) -> uid_t? {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        let err = mib.withUnsafeMutableBufferPointer { buf in
+            sysctl(buf.baseAddress, u_int(buf.count), &info, &size, nil, 0)
+        }
+        guard err == 0, size >= MemoryLayout<kinfo_proc>.stride else { return nil }
+        return info.kp_eproc.e_ucred.cr_uid
     }
 }
 
@@ -201,6 +228,10 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     /// Keyboard Cleaner remap hold. Kept for the life of a wipe so a daemon
     /// restart re-applies the disable table, and an app death restores keys.
     private var wantsKeyboardLock = false
+    /// Bumped on every release and at the start of a reassert so an
+    /// in-flight `set*Hold(true)` from a previous interrupt cannot re-take
+    /// a hold the app already released.
+    private var holdGeneration = 0
 
     /// How long a call may wait on the daemon before counting as failed.
     /// Generous enough for launchd to spawn it on first contact.
@@ -238,6 +269,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
             if !ok {
                 lock.lock()
                 wantsSleepHold = false
+                holdGeneration += 1
                 lock.unlock()
             }
             return ok
@@ -249,6 +281,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         if ok {
             lock.lock()
             wantsSleepHold = false
+            holdGeneration += 1
             lock.unlock()
         }
         return ok
@@ -263,6 +296,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
             if !ok {
                 lock.lock()
                 wantsAWDLHold = false
+                holdGeneration += 1
                 lock.unlock()
             }
             return ok
@@ -271,6 +305,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         if ok {
             lock.lock()
             wantsAWDLHold = false
+            holdGeneration += 1
             lock.unlock()
         }
         return ok
@@ -285,6 +320,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
             if !ok {
                 lock.lock()
                 wantsFanHold = nil
+                holdGeneration += 1
                 lock.unlock()
             }
             return ok
@@ -293,6 +329,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         if ok {
             lock.lock()
             wantsFanHold = nil
+            holdGeneration += 1
             lock.unlock()
         }
         return ok
@@ -307,6 +344,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
             if !ok {
                 lock.lock()
                 wantsPriorityHold = nil
+                holdGeneration += 1
                 lock.unlock()
             }
             return ok
@@ -315,6 +353,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         if ok {
             lock.lock()
             wantsPriorityHold = nil
+            holdGeneration += 1
             lock.unlock()
         }
         return ok
@@ -362,6 +401,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
             if !ok {
                 lock.lock()
                 wantsKeyboardLock = false
+                holdGeneration += 1
                 lock.unlock()
             }
             return ok
@@ -370,6 +410,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         if ok {
             lock.lock()
             wantsKeyboardLock = false
+            holdGeneration += 1
             lock.unlock()
         }
         return ok
@@ -457,7 +498,10 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         fresh.invalidationHandler = { [weak self] in
             guard let self else { return }
             self.lock.lock()
-            self.connection = nil
+            // Only drop this connection. Invalidation of an interrupted
+            // predecessor must not nil a replacement already created for
+            // reassert.
+            if self.connection === fresh { self.connection = nil }
             self.lock.unlock()
         }
         fresh.resume()
@@ -470,19 +514,67 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     /// relaunched daemon, without blocking whoever's runloop we're on.
     private func reassertHolds() {
         lock.lock()
+        holdGeneration += 1
+        let gen = holdGeneration
         let sleep = wantsSleepHold
         let awdl = wantsAWDLHold
         let fan = wantsFanHold
         let priority = wantsPriorityHold
         let keyboard = wantsKeyboardLock
+        let stale = connection
+        connection = nil
         lock.unlock()
+        // The interrupted connection cannot carry the reassert. Drop it
+        // (without holding the lock: invalidationHandler also takes it)
+        // so the next proxy opens a fresh one to the relaunched daemon.
+        stale?.invalidate()
         guard sleep || awdl || fan != nil || priority != nil || keyboard,
               let proxy = proxyForAsyncUse() else { return }
-        if sleep { proxy.setSleepHold(true) { _ in } }
-        if awdl { proxy.setAWDLHold(true) { _ in } }
-        if let fan { proxy.setFanHold(true, percent: fan) { _ in } }
-        if let priority { proxy.setPriorityHold(true, pid: priority) { _ in } }
-        if keyboard { proxy.setKeyboardLock(true) { _ in } }
+        if sleep, holdStillWanted(generation: gen, { wantsSleepHold }) {
+            proxy.setSleepHold(true) { [weak self] _ in
+                guard let self, !self.holdStillWanted(generation: gen, { self.wantsSleepHold })
+                else { return }
+                proxy.setSleepHold(false) { _ in }
+            }
+        }
+        if awdl, holdStillWanted(generation: gen, { wantsAWDLHold }) {
+            proxy.setAWDLHold(true) { [weak self] _ in
+                guard let self, !self.holdStillWanted(generation: gen, { self.wantsAWDLHold })
+                else { return }
+                proxy.setAWDLHold(false) { _ in }
+            }
+        }
+        if let fan, holdStillWanted(generation: gen, { wantsFanHold != nil }) {
+            proxy.setFanHold(true, percent: fan) { [weak self] _ in
+                guard let self, !self.holdStillWanted(generation: gen, { self.wantsFanHold != nil })
+                else { return }
+                proxy.setFanHold(false, percent: fan) { _ in }
+            }
+        }
+        if let priority, holdStillWanted(generation: gen, { wantsPriorityHold != nil }) {
+            proxy.setPriorityHold(true, pid: priority) { [weak self] _ in
+                guard let self,
+                      !self.holdStillWanted(generation: gen, { self.wantsPriorityHold != nil })
+                else { return }
+                proxy.setPriorityHold(false, pid: priority) { _ in }
+            }
+        }
+        if keyboard, holdStillWanted(generation: gen, { wantsKeyboardLock }) {
+            proxy.setKeyboardLock(true) { [weak self] _ in
+                guard let self, !self.holdStillWanted(generation: gen, { self.wantsKeyboardLock })
+                else { return }
+                proxy.setKeyboardLock(false) { _ in }
+            }
+        }
+    }
+
+    /// True when this reassert generation is still current and `check` agrees
+    /// we want the hold. A concurrent release bumps `holdGeneration` so an
+    /// in-flight re-take is skipped or undone instead of sticking.
+    private func holdStillWanted(generation: Int, _ check: () -> Bool) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return holdGeneration == generation && check()
     }
 }
 

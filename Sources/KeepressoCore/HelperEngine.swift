@@ -266,8 +266,13 @@ public final class HelperEngine: @unchecked Sendable {
             _ = clearWakeSchedules()
         }
         if leftovers.contains(.keyboardLock) {
-            let original = Self.decodeKeyboardMapping(state.value(for: .keyboardLock))
-            if keyboard.apply(original) { state.set(.keyboardLock, value: nil) }
+            // Corrupt or unreadable snapshot: leave the hardware mapping
+            // alone and keep the marker so the next launch retries. Applying
+            // `.empty` would wipe the user's own remaps.
+            if let original = Self.decodeKeyboardMapping(state.value(for: .keyboardLock)),
+               keyboard.apply(original) {
+                state.set(.keyboardLock, value: nil)
+            }
         }
     }
 
@@ -337,7 +342,16 @@ public final class HelperEngine: @unchecked Sendable {
     /// app calls it through a single XPC verb rather than sequencing the
     /// primitives itself.
     public func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool {
-        let wantsRepeat = repeatDays != nil && repeatTime != nil
+        // Untrusted XPC strings: refuse before any pmset write so a truncated
+        // payload cannot cancelall the user's (and everyone else's) schedules,
+        // and so junk never reaches argv.
+        if let oneShot, !Self.isValidOneShotStamp(oneShot) { return false }
+        let hasDays = repeatDays != nil
+        let hasTime = repeatTime != nil
+        if hasDays != hasTime { return false }
+        if let repeatDays, !Self.isValidRepeatDays(repeatDays) { return false }
+        if let repeatTime, !Self.isValidRepeatTime(repeatTime) { return false }
+        let wantsRepeat = hasDays && hasTime
         guard oneShot != nil || wantsRepeat else {
             return clearWakeSchedules()
         }
@@ -368,6 +382,47 @@ public final class HelperEngine: @unchecked Sendable {
             repeatDays: parts.repeatDays,
             repeatTime: parts.repeatTime
         )
+    }
+
+    /// `MM/dd/yy HH:mm:ss`, the stamp ``WakeScheduleConfig/oneShotString(for:)``
+    /// produces. Anything else is refused so `pmset schedule wake` never sees
+    /// a caller-supplied extra token.
+    static func isValidOneShotStamp(_ raw: String) -> Bool {
+        let parts = raw.split(separator: " ", omittingEmptySubsequences: false)
+        guard parts.count == 2 else { return false }
+        let date = parts[0].split(separator: "/", omittingEmptySubsequences: false)
+        let time = parts[1].split(separator: ":", omittingEmptySubsequences: false)
+        guard date.count == 3, time.count == 3,
+              date.allSatisfy({ $0.count == 2 && $0.allSatisfy(\.isNumber) }),
+              time.allSatisfy({ $0.count == 2 && $0.allSatisfy(\.isNumber) }),
+              let month = Int(date[0]), (1...12).contains(month),
+              let day = Int(date[1]), (1...31).contains(day),
+              Int(date[2]) != nil,
+              let hour = Int(time[0]), (0...23).contains(hour),
+              let minute = Int(time[1]), (0...59).contains(minute),
+              let second = Int(time[2]), (0...59).contains(second)
+        else { return false }
+        return true
+    }
+
+    /// Non-empty `MTWRFSU` letters only. Deliberately stricter than
+    /// ``WakeScheduleConfig/normalizedWeekdays(_:)``, which forgives junk by
+    /// defaulting to every day.
+    static func isValidRepeatDays(_ raw: String) -> Bool {
+        let upper = raw.uppercased()
+        return !upper.isEmpty && upper.allSatisfy { "MTWRFSU".contains($0) }
+    }
+
+    /// `HH:mm:ss`, the stamp ``WakeScheduleConfig/repeatTimeString`` produces.
+    static func isValidRepeatTime(_ raw: String) -> Bool {
+        let parts = raw.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count == 3,
+              parts.allSatisfy({ $0.count == 2 && $0.allSatisfy(\.isNumber) }),
+              let hour = Int(parts[0]), (0...23).contains(hour),
+              let minute = Int(parts[1]), (0...59).contains(minute),
+              let second = Int(parts[2]), (0...59).contains(second)
+        else { return false }
+        return true
     }
 
     /// Take or release `client`'s hold on `disablesleep`. Writes the system
@@ -407,7 +462,10 @@ public final class HelperEngine: @unchecked Sendable {
     /// process, and after a crash or reboot the recorded pid could belong to
     /// an innocent newcomer, so restoring it would be worse than the leak.
     public func setPriorityHold(client: Int, holding: Bool, pid: Int) -> Bool {
-        guard pid > 0 else { return false }
+        // Pid 1 is launchd; pid 0 and negatives are not processes. A release
+        // still has to work if a bad pid was ever recorded, so the guard
+        // applies only when taking a hold.
+        if holding, pid <= 1 { return false }
         lock.lock()
         defer { lock.unlock() }
         return applyPriorityUnion {
@@ -667,7 +725,12 @@ public final class HelperEngine: @unchecked Sendable {
             }
             return ok
         }
-        let original = Self.decodeKeyboardMapping(state.value(for: .keyboardLock))
+        guard let original = Self.decodeKeyboardMapping(state.value(for: .keyboardLock)) else {
+            // Don't restore an empty mapping over a corrupt snapshot. Put the
+            // holder back so a later release (or launch restore) can retry.
+            keyboardHolders.insert(client)
+            return false
+        }
         let ok = keyboard.apply(original)
         if ok { state.set(.keyboardLock, value: nil) }
         return ok
@@ -680,10 +743,10 @@ public final class HelperEngine: @unchecked Sendable {
         return s
     }
 
-    static func decodeKeyboardMapping(_ raw: String?) -> KeyboardKeyMapping {
+    static func decodeKeyboardMapping(_ raw: String?) -> KeyboardKeyMapping? {
         guard let raw, let data = raw.data(using: .utf8),
               let mapping = try? JSONDecoder().decode(KeyboardKeyMapping.self, from: data)
-        else { return .empty }
+        else { return nil }
         return mapping
     }
 
