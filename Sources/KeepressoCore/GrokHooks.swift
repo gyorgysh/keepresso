@@ -2,20 +2,11 @@ import Foundation
 
 /// Exact session-state tracking for Grok Build.
 ///
-/// Grok has its own hook system (`~/.grok/hooks/*.json`, always trusted,
-/// fail-open) and also loads Claude Code's `~/.claude/settings.json` by
-/// default. The Claude-compat path is not enough: Grok's envelope is
-/// camelCase, Keepresso's Claude matcher `"*"` is not a valid Grok regex,
-/// and Grok-only events (`StopFailure`, `StopCancelled`) never reach the
-/// shared reducer. This writes a file Keepresso owns so those edges are
-/// exact and per-session.
-///
-/// Driven against the real binary: stdin is camelCase (`sessionId`,
-/// `toolName`, `promptId`, `hookEventName` as `pre_tool_use`); argv still
-/// receives the PascalCase name we installed. `Stop` fires twice, once
-/// with `reason: end_turn` and a `promptId`, then at teardown with
-/// `reason: shutdown` and no `promptId`. A cancelled turn's report can
-/// arrive after the next `UserPromptSubmit`, so handle() keys on promptId.
+/// Grok always trusts `~/.grok/hooks/*.json` (fail-open). Keepresso owns
+/// `keepresso.json`: no matcher, timeout 5. Child-session events
+/// (`subagentType`) are ignored so a subagent Stop cannot idle the parent.
+/// Turn-end events whose promptId does not match the record's current one
+/// are ignored.
 public enum GrokHooks {
 
     /// Events Keepresso installs, spelled as Grok matches them. Unrecognized

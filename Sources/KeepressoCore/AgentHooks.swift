@@ -556,6 +556,15 @@ public enum AgentHooks {
         }
     }
 
+    /// Records to delete when the user removes Claude Code's hooks.
+    /// Cursor, Codex, Antigravity, and Grok share this folder and keep writing.
+    public static func shouldPurgeOnClaudeUninstall(_ record: HookRecord) -> Bool {
+        !CursorHooks.ownsRecord(record)
+            && !CodexHooks.ownsRecord(record)
+            && !AntigravityHooks.ownsRecord(record)
+            && !GrokHooks.ownsRecord(record)
+    }
+
     /// Applies one hook invocation end to end: decode the stdin payload,
     /// reduce the event, resolve the agent ancestor, write or delete the
     /// state file. Never throws, never prints; the caller exits 0 regardless.
@@ -571,6 +580,27 @@ public enum AgentHooks {
         defaultAgent: String? = nil,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) {
+        // Grok loads ~/.claude/settings.json, so Claude-compat invocations
+        // reach this path. Dedicated GrokHooks.handle owns promptId,
+        // subagentType, and Grok-only events. Hand off so the two writers
+        // cannot clobber one session file.
+        if nonEmpty(environment["GROK_SESSION_ID"]) != nil
+            || findAgentAncestor(
+                startingAt: parentPid, parentOf: parentOf, commandOf: commandOf, pathOf: pathOf
+            )?.agentCommand == "grok" {
+            GrokHooks.handle(
+                event: event,
+                payloadData: payloadData,
+                parentPid: parentPid,
+                now: now,
+                in: directory,
+                parentOf: parentOf,
+                commandOf: commandOf,
+                pathOf: pathOf,
+                environment: environment
+            )
+            return
+        }
         let payload = (try? decoder.decode(HookPayload.self, from: payloadData)) ?? HookPayload()
         let sessionId = nonEmpty(payload.sessionId) ?? nonEmpty(environment["GROK_SESSION_ID"])
         guard let sessionId else { return }

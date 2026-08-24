@@ -525,6 +525,34 @@ private let bionicHostCommand =
     #expect(monitor.current.sessions.map(\.hasFreshEvidence) == [false, false])
 }
 
+@Test func monitorPinsGrokEvidenceToThePidItWasGiven() async throws {
+    let now = Date(timeIntervalSince1970: 100_000)
+    let fresh = Date(timeIntervalSince1970: 100_000 - 5)
+    let stale = Date(timeIntervalSince1970: 100_000 - 600)
+    let seen = LockedPids()
+    let monitor = PSAgentActivityMonitor(
+        ttl: 3,
+        now: { now },
+        fetch: { "  100     1  0.1 ttys003  grok\n  200     1  0.1 ttys004  grok" },
+        evidence: { agent, _, pid in
+            seen.insert(pid)
+            guard agent == "grok" else { return nil }
+            if pid == 100 { return fresh }
+            if pid == 200 { return stale }
+            return nil
+        },
+        hookRecords: { _ in [] }
+    )
+    _ = monitor.current
+    try await Task.sleep(for: .milliseconds(200))
+    let sessions = monitor.current.sessions
+    let working = try #require(sessions.first { $0.pid == 100 })
+    let idle = try #require(sessions.first { $0.pid == 200 })
+    #expect(working.hasFreshEvidence == true)
+    #expect(idle.hasFreshEvidence == false)
+    #expect(seen.value.isSuperset(of: [100, 200]))
+}
+
 // MARK: - Working/idle smoothing
 
 @Test func stepJudgesWorkRelativeToTheSessionsOwnBaseline() {
@@ -854,6 +882,13 @@ private final class LockCounter: @unchecked Sendable {
     private var _value = 0
     var value: Int { lock.withLock { _value } }
     func increment() { lock.withLock { _value += 1 } }
+}
+
+private final class LockedPids: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _value: Set<Int32> = []
+    func insert(_ pid: Int32) { lock.withLock { _ = _value.insert(pid) } }
+    var value: Set<Int32> { lock.withLock { _value } }
 }
 
 @Test func claudeTranscriptWriteSeesSubagentStreams() throws {

@@ -2062,12 +2062,9 @@ final class AppModel {
     /// would hold the trigger for as long as its agent runs.
     func removeClaudeHooks() {
         if mutateClaudeSettings({ try AgentHooks.removeHooks(from: $0) }) {
-            // Only Claude Code's records: Cursor shares this folder, and its
-            // hooks are still installed and still writing.
-            AgentHooks.purgeRecords {
-                !CursorHooks.ownsRecord($0) && !CodexHooks.ownsRecord($0)
-                    && !AntigravityHooks.ownsRecord($0) && !GrokHooks.ownsRecord($0)
-            }
+            // Cursor, Codex, Antigravity, and Grok share this folder and
+            // keep writing. Only Claude Code's records go.
+            AgentHooks.purgeRecords(where: AgentHooks.shouldPurgeOnClaudeUninstall)
         }
     }
 

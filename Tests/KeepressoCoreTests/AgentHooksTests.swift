@@ -245,9 +245,8 @@ private func tempHooksDir() -> URL {
 }
 
 @Test func handleFallsBackToGrokSessionIdEnv() throws {
-    // Grok injects GROK_SESSION_ID. When the payload has no session id
-    // (camelCase decode miss, or an empty envelope), that env var is enough
-    // to record. Claude Code never sets it, so its path is unchanged.
+    // Grok injects GROK_SESSION_ID. An empty envelope still records through
+    // the Grok handler. Claude Code never sets it, so its path is unchanged.
     let dir = tempHooksDir()
     defer { try? FileManager.default.removeItem(at: dir) }
     let tree = processTree([

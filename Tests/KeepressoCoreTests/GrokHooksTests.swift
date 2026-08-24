@@ -308,6 +308,65 @@ private func grokRecord(
     #expect(AgentHooks.detailToken(forTool: "image_gen") == "tool:image_gen")
 }
 
+@Test func agentHookOnAGrokAncestorDoesNotClobberPromptId() throws {
+    let dir = tempHooksDir()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+    handle(
+        event: "UserPromptSubmit",
+        payload: #"{"sessionId":"s-1","promptId":"p2"}"#,
+        in: dir, now: t0)
+    AgentHooks.handle(
+        event: "Stop",
+        payloadData: Data(#"{"sessionId":"s-1","promptId":"p1"}"#.utf8),
+        parentPid: 90,
+        now: t0.addingTimeInterval(1),
+        in: dir,
+        parentOf: grokTree.parentOf,
+        commandOf: grokTree.commandOf,
+        pathOf: grokTree.pathOf,
+        environment: [:])
+    let afterStale = records(in: dir, now: t0.addingTimeInterval(1))
+    #expect(afterStale.first?.state == .working)
+    #expect(afterStale.first?.promptId == "p2")
+
+    AgentHooks.handle(
+        event: "UserPromptSubmit",
+        payloadData: Data(#"{"sessionId":"s-1","promptId":"p2"}"#.utf8),
+        parentPid: 90,
+        now: t0.addingTimeInterval(2),
+        in: dir,
+        parentOf: grokTree.parentOf,
+        commandOf: grokTree.commandOf,
+        pathOf: grokTree.pathOf,
+        environment: [:])
+    let afterSubmit = records(in: dir, now: t0.addingTimeInterval(2))
+    #expect(afterSubmit.first?.state == .working)
+    #expect(afterSubmit.first?.promptId == "p2")
+}
+
+@Test func agentHookOnAGrokAncestorIgnoresSubagentStop() throws {
+    let dir = tempHooksDir()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    handle(
+        event: "UserPromptSubmit",
+        payload: #"{"sessionId":"s-1","promptId":"p2"}"#,
+        in: dir)
+    AgentHooks.handle(
+        event: "Stop",
+        payloadData: Data(#"{"sessionId":"s-1","promptId":"p2","subagentType":"explore"}"#.utf8),
+        parentPid: 90,
+        now: Date(),
+        in: dir,
+        parentOf: grokTree.parentOf,
+        commandOf: grokTree.commandOf,
+        pathOf: grokTree.pathOf,
+        environment: [:])
+    let found = records(in: dir)
+    #expect(found.first?.state == .working)
+    #expect(found.first?.promptId == "p2")
+}
+
 @Test func grokRecordsSurviveAClaudeUninstallPredicate() throws {
     let dir = tempHooksDir()
     defer { try? FileManager.default.removeItem(at: dir) }
@@ -323,10 +382,7 @@ private func grokRecord(
             sessionId: "cursor-1", state: .working, ownerPid: 12, agent: "cursor",
             updatedAt: now),
         in: dir)
-    AgentHooks.purgeRecords(in: dir) {
-        !CursorHooks.ownsRecord($0) && !CodexHooks.ownsRecord($0)
-            && !AntigravityHooks.ownsRecord($0) && !GrokHooks.ownsRecord($0)
-    }
+    AgentHooks.purgeRecords(in: dir, where: AgentHooks.shouldPurgeOnClaudeUninstall)
     let left = records(in: dir, now: now)
     #expect(Set(left.map(\.sessionId)) == ["s-1", "cursor-1"])
     #expect(GrokHooks.ownsRecord(grokRecord()))

@@ -2,9 +2,8 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-/// Per-session Grok transcript evidence. The leak this covers: one working
-/// TUI used to mark every other Grok in the same repo as working, because
-/// evidence was the newest mtime in the project folder.
+/// Per-session Grok transcript evidence: pid join onto that conversation's
+/// jsonl, never the project folder.
 
 private let cwd = "/Users/x/git/demo"
 private let now = Date(timeIntervalSince1970: 1_700_000_000)
@@ -77,9 +76,8 @@ private func evidence(pid: Int32, cwd: String? = cwd, home: URL) -> Date? {
 
     let a = try #require(evidence(pid: 100, home: home))
     #expect(abs(a.timeIntervalSince(fresh)) < 1)
-    let b = evidence(pid: 200, home: home)
-    #expect(b == nil || abs(b!.timeIntervalSince(stale)) < 1)
-    #expect(b.map { abs($0.timeIntervalSince(fresh)) < 1 } != true)
+    let b = try #require(evidence(pid: 200, home: home))
+    #expect(abs(b.timeIntervalSince(stale)) < 1)
 }
 
 @Test func sharedPromptHistoryDoesNotMarkASiblingWorking() throws {
@@ -197,6 +195,23 @@ private func evidence(pid: Int32, cwd: String? = cwd, home: URL) -> Date? {
         "updates.jsonl": fresh,
     ])
     #expect(evidence(pid: 100, home: home) == nil)
+}
+
+@Test func oneBadActiveSessionRowDoesNotDropTheRest() throws {
+    let home = try grokHome()
+    defer { try? FileManager.default.removeItem(at: home) }
+    let group = PSAgentActivityMonitor.grokSessionDirName(forCwd: cwd)
+    try writeSessionFiles(home: home, group: group, sessionId: "sess-a", files: [
+        "updates.jsonl": fresh,
+    ])
+    try writeActive([
+        ["session_id": "sess-a", "pid": 100, "cwd": cwd],
+        ["session_id": "no-pid", "cwd": cwd],
+        ["session_id": "string-pid", "pid": "200", "cwd": cwd],
+        ["not": "a session"],
+    ], home: home)
+    #expect(evidence(pid: 100, home: home) != nil)
+    #expect(evidence(pid: 200, home: home) == nil)
 }
 
 @Test func camelCaseActiveSessionKeysAreAccepted() throws {

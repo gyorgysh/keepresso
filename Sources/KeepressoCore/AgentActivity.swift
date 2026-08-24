@@ -225,9 +225,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     private let fetch: @Sendable () -> String?
     /// Latest transcript write for (agent, cwd, pid), or `nil` when the agent
     /// has no known transcript. Injectable so evidence logic is unit-testable.
-    /// `pid` is how Grok pins evidence to one conversation: its session store
-    /// is grouped by cwd, and a project-wide mtime would mark every TUI in
-    /// that repo working.
+    /// Grok joins by pid: never fall back to the project folder.
     private let evidence: @Sendable (_ agent: String, _ cwd: String?, _ pid: Int32) -> Date?
     /// The live hook records to join onto sessions. Injectable so the join
     /// and precedence logic is unit-testable without touching the disk.
@@ -539,8 +537,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// `nil` for agents whose transcripts we don't know how to find. This is
     /// the "real work" signal: claude, grok, and codex all stream session
     /// files continuously while working. `pid` is ignored except for Grok,
-    /// whose store is per-conversation and must not leak across TUIs that
-    /// share a working directory.
+    /// which joins by conversation.
     @Sendable public static func transcriptActivity(agent: String, cwd: String?, pid: Int32) -> Date? {
         let home = NSHomeDirectory()
         switch agent {
@@ -883,8 +880,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
 
     /// Newest write to the Grok conversation owned by `pid`, or `nil` when
     /// that pid is not in `active_sessions.json`. Never falls back to the
-    /// project folder: that is how one working TUI used to mark every other
-    /// Grok in the same repo as working.
+    /// project folder.
     static func grokTranscriptWrite(
         pid: Int32,
         cwd: String?,
@@ -939,13 +935,22 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     }
 
     /// Live Grok TUI index: `{session_id, pid, cwd}` at `$GROK_HOME/active_sessions.json`.
-    /// Best-effort. A torn write is treated as no mapping.
+    /// Best-effort. A torn write is treated as no mapping. One unreadable
+    /// row is skipped so a heartbeat-style extra object cannot drop every
+    /// other session.
     static func grokActiveSessions(in grokHome: String) -> [GrokActiveSession] {
         let url = URL(fileURLWithPath: grokHome).appendingPathComponent("active_sessions.json")
         guard let data = try? Data(contentsOf: url),
-              let entries = try? JSONDecoder().decode([GrokActiveSession].self, from: data)
+              let raw = try? JSONSerialization.jsonObject(with: data) as? [Any]
         else { return [] }
-        return entries.filter { !$0.sessionId.isEmpty }
+        let decoder = JSONDecoder()
+        return raw.compactMap { element in
+            guard let piece = try? JSONSerialization.data(withJSONObject: element),
+                  let entry = try? decoder.decode(GrokActiveSession.self, from: piece),
+                  !entry.sessionId.isEmpty
+            else { return nil }
+            return entry
+        }
     }
 
     /// Group directory for `cwd`. The encoded name is the common case. When
