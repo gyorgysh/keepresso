@@ -3,6 +3,15 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Added
+
+- **Muse Code is detected while it works.** The AI-agent condition recognises
+  the `muse` CLI and its versioned `muse-bin-*` process, and treats fresh
+  writes to the session event log (including subagents) as evidence of work.
+  The long-lived `session-message` helper is ignored.
+
 ## [1.21.0] - 2026-08-25
 
 ### Added

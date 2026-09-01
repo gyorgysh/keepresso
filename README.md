@@ -70,7 +70,7 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   in the menu bar stops brewing without touching your rules.
 - 🤖 **Agent-aware.** The "AI agent is working" condition keeps the Mac awake
   while a coding agent (claude, cursor, codex, antigravity, gemini, grok, aider,
-  goose, pi, hermes, kilo, opencode, dsh, and friends) is actually working, and lets it sleep once every
+  goose, pi, hermes, kilo, opencode, dsh, muse, and friends) is actually working, and lets it sleep once every
   session goes quiet, after a grace you choose. Agents that stream a transcript
   to disk prove their work directly, even through long zero-CPU network waits.
   The rest are judged on the CPU of their processes and tool calls against each

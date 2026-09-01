@@ -17,6 +17,15 @@ private typealias Sample = PSAgentActivityMonitor.ProcessSample
     #expect(match("~/.opencode/bin/opencode2") == "opencode2")
     #expect(match("dsh") == "dsh")
     #expect(match("dsh web") == "dsh")
+    #expect(match("muse") == "muse")
+    #expect(match("/Users/x/.local/bin/muse --yolo") == "muse")
+    #expect(match("/Users/x/.local/bin/muse-bin-1.0.1-R2006.1") == "muse")
+    #expect(match("muse-bin") == "muse")
+    #expect(match("muse-code") == "muse")
+    #expect(match("muse-cli exec") == "muse")
+    #expect(match("museum") == nil)
+    #expect(match("muse-helper") == nil)
+    #expect(match("grep muse notes.txt") == nil)
 }
 
 @Test func kiloDoesNotMatchAPathComponent() {
@@ -35,6 +44,17 @@ private typealias Sample = PSAgentActivityMonitor.ProcessSample
     #expect(AgentHooks.agentMatch(
         comm: nil, path: "/Users/dsh/bin/unrelated", agents: agents) == nil)
     #expect(AgentHooks.agentMatch(comm: "dsh", path: nil, agents: agents) == "dsh")
+}
+
+@Test func museDoesNotMatchAPathComponent() {
+    // Four letters, same /Users/muse/... trap as kilo. The live binary is
+    // `muse-bin-<version>`, matched by prefix on the command basename.
+    let agents = PSAgentActivityMonitor.agentCommands
+    #expect(AgentHooks.agentMatch(
+        comm: nil, path: "/Users/muse/bin/unrelated", agents: agents) == nil)
+    #expect(AgentHooks.agentMatch(
+        comm: nil, path: "/Users/x/.local/share/muse/versions/1.0.0", agents: agents) == nil)
+    #expect(AgentHooks.agentMatch(comm: "muse", path: nil, agents: agents) == "muse")
 }
 
 @Test func kiloServeAndDshWebAreEvidenceOnly() {
@@ -159,4 +179,81 @@ private typealias Sample = PSAgentActivityMonitor.ProcessSample
     #expect(PSAgentActivityMonitor.evidenceWindow(for: "hermes") == 20)
     #expect(PSAgentActivityMonitor.evidenceWindow(for: "dsh")
         == PSAgentActivityMonitor.evidenceFreshWindow)
+    #expect(PSAgentActivityMonitor.evidenceWindow(for: "muse")
+        == PSAgentActivityMonitor.evidenceFreshWindow)
+}
+
+@Test func museSessionMessageIsNotASession() {
+    let samples: [Sample] = [
+        Sample(pid: 10, ppid: 1, pcpu: 0.7, tty: "s006",
+               command: "/Users/x/.local/bin/muse-bin-1.0.1-R2006.1"),
+        Sample(pid: 11, ppid: 1, pcpu: 0.0, tty: "s006",
+               command: "/Users/x/.local/bin/muse-bin-0.2.1-R1215.1 session-message serve --socket /tmp/muse.sock"),
+        Sample(pid: 12, ppid: 10, pcpu: 40.0, tty: "s006", command: "/bin/zsh -c swift test"),
+    ]
+    let sessions = PSAgentActivityMonitor.sessions(from: samples)
+    #expect(sessions.count == 1)
+    #expect(sessions[0].pid == 10)
+    #expect(sessions[0].agent == "muse")
+    #expect(sessions[0].evidenceOnly == false)
+    #expect(abs(sessions[0].cpuPercent - 40.7) < 0.001)
+}
+
+@Test func museSessionJsonlCountsAndSiblingsDoNot() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keepresso-muse-\(UUID().uuidString)", isDirectory: true)
+    let now = Date(timeIntervalSince1970: 1_788_258_000) // 2026-09-01 10:20 UTC
+    let day = DateFormatter()
+    day.locale = Locale(identifier: "en_US_POSIX")
+    day.calendar = Calendar(identifier: .gregorian)
+    day.dateFormat = "yyyy/MM/dd"
+    day.timeZone = .current
+    let sessionDir = root.appendingPathComponent(
+        ".local/share/muse/sessions/\(day.string(from: now))/sess-1", isDirectory: true)
+    let subDir = sessionDir.appendingPathComponent("subagent/child-1", isDirectory: true)
+    try FileManager.default.createDirectory(at: subDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let jsonlTime = Date(timeIntervalSince1970: 1_788_258_100)
+    let subTime = Date(timeIntervalSince1970: 1_788_258_200)
+    let noiseTime = Date(timeIntervalSince1970: 1_788_258_900)
+    let jsonl = sessionDir.appendingPathComponent("session.jsonl")
+    let sub = subDir.appendingPathComponent("session.jsonl")
+    let noise = sessionDir.appendingPathComponent("cron.db")
+    try Data([1]).write(to: jsonl)
+    try Data([2]).write(to: sub)
+    try Data([3]).write(to: noise)
+    try FileManager.default.setAttributes([.modificationDate: jsonlTime], ofItemAtPath: jsonl.path)
+    try FileManager.default.setAttributes([.modificationDate: subTime], ofItemAtPath: sub.path)
+    try FileManager.default.setAttributes([.modificationDate: noiseTime], ofItemAtPath: noise.path)
+
+    #expect(PSAgentActivityMonitor.museSessionWrite(
+        home: root.path, now: now, environment: [:]) == subTime)
+}
+
+@Test func museSessionHonoursXDGDataHomeAndYesterday() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keepresso-muse-xdg-\(UUID().uuidString)", isDirectory: true)
+    let now = Date(timeIntervalSince1970: 1_788_258_000)
+    let yesterday = now.addingTimeInterval(-86_400)
+    let day = DateFormatter()
+    day.locale = Locale(identifier: "en_US_POSIX")
+    day.calendar = Calendar(identifier: .gregorian)
+    day.dateFormat = "yyyy/MM/dd"
+    day.timeZone = .current
+    let xdg = root.appendingPathComponent("xdg", isDirectory: true)
+    let yDir = xdg.appendingPathComponent(
+        "muse/sessions/\(day.string(from: yesterday))/old-sess", isDirectory: true)
+    try FileManager.default.createDirectory(at: yDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let yTime = Date(timeIntervalSince1970: 1_788_171_600)
+    let jsonl = yDir.appendingPathComponent("session.jsonl")
+    try Data([1]).write(to: jsonl)
+    try FileManager.default.setAttributes([.modificationDate: yTime], ofItemAtPath: jsonl.path)
+
+    #expect(PSAgentActivityMonitor.museSessionWrite(
+        home: root.path, now: now, environment: ["XDG_DATA_HOME": xdg.path]) == yTime)
+    #expect(PSAgentActivityMonitor.museSessionWrite(
+        home: root.path, now: now, environment: [:]) == nil)
 }

@@ -115,7 +115,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     public static let agentCommands = [
         "claude", "codex", "gemini", "grok", "agy", "aider", "goose",
         "cursor-agent", "opencode", "opencode2", "amp", "copilot", "droid",
-        "auggie", "qwen", "pi", "hermes", "kilo", "dsh",
+        "auggie", "qwen", "pi", "hermes", "kilo", "dsh", "muse",
     ]
 
     /// The names that may also be matched against a *component* of a resolved
@@ -134,9 +134,13 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// fuzzier second chance.
     static let pathMatchMinimumLength = 4
     /// Four-letter names that are still too common as folder names to trust
-    /// in a path (`kilo` matches `/Users/kilo/...`). Basename matching still
-    /// finds them; they just skip the fuzzier second chance, like `pi`.
-    static let pathMatchExcludedAgents: Set<String> = ["kilo"]
+    /// in a path (`kilo` matches `/Users/kilo/...`, `muse` matches
+    /// `/Users/muse/...` and `~/.local/share/muse/...`). Basename matching
+    /// still finds them; they just skip the fuzzier second chance, like `pi`.
+    /// Muse's live binary is `muse-bin-<version>`, matched by prefix in
+    /// ``agentName(for:agents:)``, so excluding it from path matching does
+    /// not hide a real session.
+    static let pathMatchExcludedAgents: Set<String> = ["kilo", "muse"]
     public static let pathMatchableAgents = agentCommands.filter {
         $0.count >= pathMatchMinimumLength && !pathMatchExcludedAgents.contains($0)
     }
@@ -592,6 +596,8 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             return hermesStoreWrite(home: home)
         case "dsh":
             return dshSessionWrite(home: home)
+        case "muse":
+            return museSessionWrite(home: home)
         default:
             return nil
         }
@@ -700,6 +706,63 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             guard let written = newestSqliteStoreWrite(in: "\(profiles)/\(name)", basename: "state.db")
             else { continue }
             if newest.map({ written > $0 }) ?? true { newest = written }
+        }
+        return newest
+    }
+
+    /// Muse Code event logs:
+    /// `$XDG_DATA_HOME/muse/sessions/YYYY/MM/DD/<uuid>/session.jsonl`, plus
+    /// `subagent/<id>/session.jsonl` one level down. `XDG_DATA_HOME`
+    /// relocates the tree (default `~/.local/share`). Today and yesterday,
+    /// like Codex: a session spanning midnight keeps appending to the
+    /// previous day's directory. Only `session.jsonl` counts. Sibling
+    /// `cron.db`, tool-output spools, and `session-index.db` churn without
+    /// the model working.
+    static func museSessionWrite(
+        home: String = NSHomeDirectory(),
+        now: Date = Date(),
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Date? {
+        let root: String
+        if let override = environment["XDG_DATA_HOME"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !override.isEmpty {
+            root = "\(override)/muse/sessions"
+        } else {
+            root = "\(home)/.local/share/muse/sessions"
+        }
+        let day = DateFormatter()
+        day.locale = Locale(identifier: "en_US_POSIX")
+        day.calendar = Calendar(identifier: .gregorian)
+        day.dateFormat = "yyyy/MM/dd"
+        day.timeZone = .current
+        return [now, now.addingTimeInterval(-86_400)]
+            .compactMap { museSessionWrite(inDayDir: "\(root)/\(day.string(from: $0))") }
+            .max()
+    }
+
+    /// Newest `session.jsonl` (main or subagent) under one `YYYY/MM/DD` dir.
+    static func museSessionWrite(inDayDir path: String) -> Date? {
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: path) else { return nil }
+        var newest: Date?
+        func consider(_ file: String) {
+            guard let date = (try? manager.attributesOfItem(atPath: file))?[.modificationDate] as? Date
+            else { return }
+            if newest.map({ date > $0 }) ?? true { newest = date }
+        }
+        for name in names {
+            let sessionDir = (path as NSString).appendingPathComponent(name)
+            var isDirectory: ObjCBool = false
+            guard manager.fileExists(atPath: sessionDir, isDirectory: &isDirectory),
+                  isDirectory.boolValue else { continue }
+            consider((sessionDir as NSString).appendingPathComponent("session.jsonl"))
+            if let sub = newestNestedFileWrite(
+                in: (sessionDir as NSString).appendingPathComponent("subagent"),
+                named: "session.jsonl",
+                directoryLevels: 1
+            ) {
+                if newest.map({ sub > $0 }) ?? true { newest = sub }
+            }
         }
         return newest
     }
@@ -1053,6 +1116,14 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         for sample in samples {
             if let agent = agentName(for: sample.command, agents: agents)
                 ?? resolvedAgentName(for: sample, agents: agents, pathOf: pathOf) {
+                // Muse's session-message daemon is a long-lived bus
+                // (`muse-bin-* session-message serve`), not a coding
+                // session. Evidence is date-keyed and shared, so leaving
+                // it as a row would mark the helper working whenever any
+                // Muse TUI is.
+                if agent == "muse", isMuseSessionMessageCommand(sample.command) {
+                    continue
+                }
                 matched[sample.pid] = agent
                 if isEvidenceOnlyHost(agent: agent, command: sample.command) {
                     evidenceOnly.insert(sample.pid)
@@ -1129,6 +1200,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             candidate = basename(script)
         }
         if let agent = agents.first(where: { $0 == candidate }) { return agent }
+        if agents.contains("muse"), isMuseAgentBasename(candidate) { return "muse" }
         // An app-bundle binary's path can hold spaces anywhere before the
         // bundle ("~/Library/Application Support/Claude/claude-code/…"), which
         // the token split above mangles. The name after the last bundle marker
@@ -1136,10 +1208,31 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         // binary ("claude" for the Claude Code copy embedded in the desktop
         // app, "Claude" for the app itself, which case-sensitivity rejects).
         if let marker = command.range(of: "/Contents/MacOS/", options: .backwards) {
-            let name = command[marker.upperBound...].prefix(while: { $0 != " " })
-            return agents.first { $0 == name }
+            let name = String(command[marker.upperBound...].prefix(while: { $0 != " " }))
+            if let agent = agents.first(where: { $0 == name }) { return agent }
+            if agents.contains("muse"), isMuseAgentBasename(name) { return "muse" }
+            return nil
         }
         return nil
+    }
+
+    /// Muse Code's launcher is `muse`. The process that actually stays
+    /// running is a versioned `muse-bin-<release>` (observed:
+    /// `muse-bin-1.0.1-R2006.1`). Some detectors also name `muse-code` /
+    /// `muse-cli`. Prefix-only on `muse-bin-` so `museum` and `muse-helper`
+    /// never match.
+    static func isMuseAgentBasename(_ name: String) -> Bool {
+        switch name {
+        case "muse", "muse-bin", "muse-code", "muse-cli": return true
+        default: return name.hasPrefix("muse-bin-")
+        }
+    }
+
+    /// Muse's cross-session message bus (`session-message serve`), not a
+    /// coding session. The send/list CLI uses the same token and is equally
+    /// not "the agent is working".
+    static func isMuseSessionMessageCommand(_ command: String) -> Bool {
+        commandHasToken(command, "session-message")
     }
 
     /// Second-chance match for a launcher whose command line names nothing.
