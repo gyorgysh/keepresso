@@ -115,7 +115,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     public static let agentCommands = [
         "claude", "codex", "gemini", "grok", "agy", "aider", "goose",
         "cursor-agent", "opencode", "opencode2", "amp", "copilot", "droid",
-        "auggie", "qwen", "pi", "hermes", "kilo", "dsh", "muse",
+        "auggie", "qwen", "pi", "hermes", "kilo", "dsh", "muse", "devin",
     ]
 
     /// The names that may also be matched against a *component* of a resolved
@@ -133,14 +133,16 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// by their command's basename, which is exact; they just don't get the
     /// fuzzier second chance.
     static let pathMatchMinimumLength = 4
-    /// Four-letter names that are still too common as folder names to trust
-    /// in a path (`kilo` matches `/Users/kilo/...`, `muse` matches
-    /// `/Users/muse/...` and `~/.local/share/muse/...`). Basename matching
-    /// still finds them; they just skip the fuzzier second chance, like `pi`.
-    /// Muse's live binary is `muse-bin-<version>`, matched by prefix in
+    /// Names that are still too common as folder names to trust in a path
+    /// (`kilo` matches `/Users/kilo/...`, `muse` matches `/Users/muse/...`
+    /// and `~/.local/share/muse/...`, `devin` matches `/Users/devin/...`
+    /// and `~/.local/share/devin/...`). Basename matching still finds them;
+    /// they just skip the fuzzier second chance, like `pi`. Muse's live
+    /// binary is `muse-bin-<version>`, matched by prefix in
     /// ``agentName(for:agents:)``, so excluding it from path matching does
-    /// not hide a real session.
-    static let pathMatchExcludedAgents: Set<String> = ["kilo", "muse"]
+    /// not hide a real session. Devin's command basename is `devin` (or
+    /// `devin-cli`), so the same.
+    static let pathMatchExcludedAgents: Set<String> = ["kilo", "muse", "devin"]
     public static let pathMatchableAgents = agentCommands.filter {
         $0.count >= pathMatchMinimumLength && !pathMatchExcludedAgents.contains($0)
     }
@@ -190,6 +192,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         "opencode2": 20,
         "kilo": 20,
         "hermes": 20,
+        "devin": 20,
     ]
 
     /// The freshness window for `agent`'s on-disk evidence.
@@ -598,6 +601,8 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             return dshSessionWrite(home: home)
         case "muse":
             return museSessionWrite(home: home)
+        case "devin":
+            return devinStoreWrite(home: home)
         default:
             return nil
         }
@@ -622,13 +627,16 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     }
 
     /// Whether a matched agent process is a shared host whose CPU is a lie.
-    /// Codex Desktop's `app-server`, Kilo's `kilo serve`, and DeepSeek's
-    /// `dsh web` stay up whether or not a conversation is running.
+    /// Codex Desktop's `app-server`, Kilo's `kilo serve`, DeepSeek's
+    /// `dsh web`, and Devin's `acp` server stay up whether or not a
+    /// conversation is running. A `devin acp` child of the TUI still folds
+    /// into that TUI; this flag only matters for a standalone ACP host.
     static func isEvidenceOnlyHost(agent: String, command: String) -> Bool {
         switch agent {
         case "codex": return isCodexAppServerCommand(command)
         case "kilo": return commandHasToken(command, "serve")
         case "dsh": return commandHasToken(command, "web")
+        case "devin": return commandHasToken(command, "acp")
         default: return false
         }
     }
@@ -706,6 +714,41 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             guard let written = newestSqliteStoreWrite(in: "\(profiles)/\(name)", basename: "state.db")
             else { continue }
             if newest.map({ written > $0 }) ?? true { newest = written }
+        }
+        return newest
+    }
+
+    /// Devin CLI store: `$XDG_DATA_HOME/devin/cli` (default
+    /// `~/.local/share/devin/cli`). Work evidence is `sessions.db` plus its
+    /// SQLite sidecars, and `transcripts/*.json`. Logs, plugin lock files,
+    /// and `app_state.json` churn while the TUI sits idle.
+    static func devinStoreWrite(
+        home: String = NSHomeDirectory(),
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Date? {
+        let root: String
+        if let override = environment["XDG_DATA_HOME"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !override.isEmpty {
+            root = "\(override)/devin/cli"
+        } else {
+            root = "\(home)/.local/share/devin/cli"
+        }
+        let sqlite = newestSqliteStoreWrite(in: root, basename: "sessions.db")
+        let transcripts = newestJSONWrite(in: "\(root)/transcripts")
+        return [sqlite, transcripts].compactMap { $0 }.max()
+    }
+
+    /// Newest `*.json` directly inside `directory`. Does not recurse, so
+    /// nested caches cannot count as evidence.
+    static func newestJSONWrite(in directory: String) -> Date? {
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: directory) else { return nil }
+        var newest: Date?
+        for name in names where name.hasSuffix(".json") {
+            let path = (directory as NSString).appendingPathComponent(name)
+            guard let date = (try? manager.attributesOfItem(atPath: path))?[.modificationDate] as? Date
+            else { continue }
+            if newest.map({ date > $0 }) ?? true { newest = date }
         }
         return newest
     }
@@ -1201,6 +1244,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         }
         if let agent = agents.first(where: { $0 == candidate }) { return agent }
         if agents.contains("muse"), isMuseAgentBasename(candidate) { return "muse" }
+        if agents.contains("devin"), isDevinAgentBasename(candidate) { return "devin" }
         // An app-bundle binary's path can hold spaces anywhere before the
         // bundle ("~/Library/Application Support/Claude/claude-code/…"), which
         // the token split above mangles. The name after the last bundle marker
@@ -1211,6 +1255,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             let name = String(command[marker.upperBound...].prefix(while: { $0 != " " }))
             if let agent = agents.first(where: { $0 == name }) { return agent }
             if agents.contains("muse"), isMuseAgentBasename(name) { return "muse" }
+            if agents.contains("devin"), isDevinAgentBasename(name) { return "devin" }
             return nil
         }
         return nil
@@ -1233,6 +1278,12 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// not "the agent is working".
     static func isMuseSessionMessageCommand(_ command: String) -> Bool {
         commandHasToken(command, "session-message")
+    }
+
+    /// Devin CLI is `devin`. Some installs and docs also name `devin-cli`.
+    /// Both map to `devin` so the menu does not split one tool in two.
+    static func isDevinAgentBasename(_ name: String) -> Bool {
+        name == "devin" || name == "devin-cli"
     }
 
     /// Second-chance match for a launcher whose command line names nothing.

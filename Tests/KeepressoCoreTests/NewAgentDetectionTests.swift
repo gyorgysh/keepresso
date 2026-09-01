@@ -26,6 +26,12 @@ private typealias Sample = PSAgentActivityMonitor.ProcessSample
     #expect(match("museum") == nil)
     #expect(match("muse-helper") == nil)
     #expect(match("grep muse notes.txt") == nil)
+    #expect(match("devin") == "devin")
+    #expect(match("/Users/x/.local/bin/devin") == "devin")
+    #expect(match("devin acp") == "devin")
+    #expect(match("devin-cli") == "devin")
+    #expect(match("/Users/x/.local/bin/devin-cli --resume") == "devin")
+    #expect(match("grep devin notes.txt") == nil)
 }
 
 @Test func kiloDoesNotMatchAPathComponent() {
@@ -55,6 +61,18 @@ private typealias Sample = PSAgentActivityMonitor.ProcessSample
     #expect(AgentHooks.agentMatch(
         comm: nil, path: "/Users/x/.local/share/muse/versions/1.0.0", agents: agents) == nil)
     #expect(AgentHooks.agentMatch(comm: "muse", path: nil, agents: agents) == "muse")
+}
+
+@Test func devinDoesNotMatchAPathComponent() {
+    // Five letters, same /Users/devin/... trap as kilo. The live command
+    // basename is `devin` or `devin-cli`.
+    let agents = PSAgentActivityMonitor.agentCommands
+    #expect(AgentHooks.agentMatch(
+        comm: nil, path: "/Users/devin/bin/unrelated", agents: agents) == nil)
+    #expect(AgentHooks.agentMatch(
+        comm: nil, path: "/Users/x/.local/share/devin/cli/_versions/3000.6.7/bin/unrelated",
+        agents: agents) == nil)
+    #expect(AgentHooks.agentMatch(comm: "devin", path: nil, agents: agents) == "devin")
 }
 
 @Test func kiloServeAndDshWebAreEvidenceOnly() {
@@ -181,6 +199,7 @@ private typealias Sample = PSAgentActivityMonitor.ProcessSample
         == PSAgentActivityMonitor.evidenceFreshWindow)
     #expect(PSAgentActivityMonitor.evidenceWindow(for: "muse")
         == PSAgentActivityMonitor.evidenceFreshWindow)
+    #expect(PSAgentActivityMonitor.evidenceWindow(for: "devin") == 20)
 }
 
 @Test func museSessionMessageIsNotASession() {
@@ -256,4 +275,84 @@ private typealias Sample = PSAgentActivityMonitor.ProcessSample
         home: root.path, now: now, environment: ["XDG_DATA_HOME": xdg.path]) == yTime)
     #expect(PSAgentActivityMonitor.museSessionWrite(
         home: root.path, now: now, environment: [:]) == nil)
+}
+
+@Test func devinAcpIsEvidenceOnlyAndFoldsUnderTheTUI() {
+    let samples: [Sample] = [
+        Sample(pid: 10, ppid: 1, pcpu: 0.7, tty: "s008", command: "devin"),
+        Sample(pid: 11, ppid: 10, pcpu: 0.1, tty: "s008",
+               command: "/Users/x/.local/bin/devin acp"),
+        Sample(pid: 20, ppid: 1, pcpu: 3.0, tty: nil,
+               command: "/Users/x/.local/bin/devin acp"),
+        Sample(pid: 30, ppid: 1, pcpu: 1.2, tty: "s009", command: "devin-cli"),
+    ]
+    let sessions = PSAgentActivityMonitor.sessions(from: samples)
+    let byPid = Dictionary(uniqueKeysWithValues: sessions.map { ($0.pid, $0) })
+    #expect(sessions.count == 3)
+    #expect(byPid[11] == nil)
+
+    #expect(byPid[10]?.agent == "devin")
+    #expect(byPid[10]?.evidenceOnly == false)
+    #expect(abs((byPid[10]?.cpuPercent ?? 0) - 0.8) < 0.001)
+
+    #expect(byPid[20]?.agent == "devin")
+    #expect(byPid[20]?.evidenceOnly == true)
+    #expect(byPid[20]?.cpuPercent == 0)
+
+    #expect(byPid[30]?.agent == "devin")
+    #expect(byPid[30]?.evidenceOnly == false)
+}
+
+@Test func devinStoreCountsSqliteAndTranscriptsNotLogs() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keepresso-devin-\(UUID().uuidString)", isDirectory: true)
+    let cli = root.appendingPathComponent(".local/share/devin/cli", isDirectory: true)
+    let transcripts = cli.appendingPathComponent("transcripts", isDirectory: true)
+    let logs = cli.appendingPathComponent("logs", isDirectory: true)
+    try FileManager.default.createDirectory(at: transcripts, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let walTime = Date(timeIntervalSince1970: 1_788_260_100)
+    let jsonTime = Date(timeIntervalSince1970: 1_788_260_200)
+    let noiseTime = Date(timeIntervalSince1970: 1_788_260_900)
+    let wal = cli.appendingPathComponent("sessions.db-wal")
+    let json = transcripts.appendingPathComponent("cheddar-windscreen.json")
+    let log = logs.appendingPathComponent("devin_20260901.log")
+    let appState = cli.appendingPathComponent("app_state.json")
+    try Data([1]).write(to: wal)
+    try Data([2]).write(to: json)
+    try Data([3]).write(to: log)
+    try Data([4]).write(to: appState)
+    try FileManager.default.setAttributes([.modificationDate: walTime], ofItemAtPath: wal.path)
+    try FileManager.default.setAttributes([.modificationDate: jsonTime], ofItemAtPath: json.path)
+    try FileManager.default.setAttributes([.modificationDate: noiseTime], ofItemAtPath: log.path)
+    try FileManager.default.setAttributes([.modificationDate: noiseTime], ofItemAtPath: appState.path)
+
+    #expect(PSAgentActivityMonitor.devinStoreWrite(home: root.path, environment: [:]) == jsonTime)
+}
+
+@Test func devinStoreHonoursXDGDataHome() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keepresso-devin-xdg-\(UUID().uuidString)", isDirectory: true)
+    let xdg = root.appendingPathComponent("xdg", isDirectory: true)
+    let xdgCli = xdg.appendingPathComponent("devin/cli", isDirectory: true)
+    let defaultCli = root.appendingPathComponent(".local/share/devin/cli", isDirectory: true)
+    try FileManager.default.createDirectory(at: xdgCli, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: defaultCli, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let xdgTime = Date(timeIntervalSince1970: 1_788_260_300)
+    let defaultTime = Date(timeIntervalSince1970: 1_788_260_900)
+    let xdgDB = xdgCli.appendingPathComponent("sessions.db")
+    let defaultDB = defaultCli.appendingPathComponent("sessions.db")
+    try Data([1]).write(to: xdgDB)
+    try Data([2]).write(to: defaultDB)
+    try FileManager.default.setAttributes([.modificationDate: xdgTime], ofItemAtPath: xdgDB.path)
+    try FileManager.default.setAttributes([.modificationDate: defaultTime], ofItemAtPath: defaultDB.path)
+
+    #expect(PSAgentActivityMonitor.devinStoreWrite(
+        home: root.path, environment: ["XDG_DATA_HOME": xdg.path]) == xdgTime)
+    #expect(PSAgentActivityMonitor.devinStoreWrite(
+        home: root.path, environment: [:]) == defaultTime)
 }

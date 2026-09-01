@@ -12,6 +12,11 @@ Versions follow [Semantic Versioning](https://semver.org).
   writes to the session event log (including subagents) as evidence of work.
   The long-lived `session-message` helper is ignored.
 
+- **Devin CLI is detected while it works.** Matches `devin` and `devin-cli`.
+  Fresh writes to `sessions.db` (and its WAL) or `transcripts/*.json` count
+  as work. A standalone `devin acp` host is evidence-only. The ACP child of
+  the TUI folds into that session.
+
 ## [1.21.0] - 2026-08-25
 
 ### Added
