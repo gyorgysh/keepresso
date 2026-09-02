@@ -57,6 +57,27 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     #expect(match("node server.js") == nil)
 }
 
+@Test func qwenCodeBundledNodeProcessesFoldIntoOneSession() {
+    typealias Sample = PSAgentActivityMonitor.ProcessSample
+    let root = "/Users/x/.local/lib/qwen-code"
+    let samples: [Sample] = [
+        Sample(pid: 100, ppid: 1, pcpu: 0.1, tty: "s009",
+               command: "\(root)/node/bin/node \(root)/lib/cli-entry.js"),
+        Sample(pid: 101, ppid: 100, pcpu: 0.2, tty: "s009",
+               command: "\(root)/node/bin/node --expose-gc \(root)/lib/cli.js"),
+        Sample(pid: 102, ppid: 101, pcpu: 39.1, tty: "s009",
+               command: "\(root)/node/bin/node --expose-gc \(root)/lib/cli.js"),
+        // A mention outside Qwen's bundled runtime is not a session.
+        Sample(pid: 200, ppid: 1, pcpu: 1, tty: "s010",
+               command: "/usr/bin/grep qwen-code/lib/cli.js"),
+    ]
+    let sessions = PSAgentActivityMonitor.sessions(from: samples)
+    #expect(sessions.count == 1)
+    #expect(sessions[0].pid == 100)
+    #expect(sessions[0].agent == "qwen")
+    #expect(abs(sessions[0].cpuPercent - 39.4) < 0.001)
+}
+
 // MARK: - Session reduction
 
 @Test func sessionsFoldNestedAgentsAndSumSubtreeCPU() {
@@ -916,6 +937,26 @@ private final class LockedPids: @unchecked Sendable {
 
     let written = try #require(PSAgentActivityMonitor.claudeTranscriptWrite(inProjectDir: project.path))
     #expect(abs(written.timeIntervalSince(fresh)) < 1)
+}
+
+@Test func qwenTranscriptWriteReadsOnlyConversationJsonl() throws {
+    let manager = FileManager.default
+    let chats = manager.temporaryDirectory
+        .appendingPathComponent("keepresso-qwen-\(UUID().uuidString)")
+    try manager.createDirectory(at: chats, withIntermediateDirectories: true)
+    defer { try? manager.removeItem(at: chats) }
+
+    let transcriptTime = Date(timeIntervalSince1970: 1_700_000_000)
+    let runtimeTime = Date(timeIntervalSince1970: 1_700_000_500)
+    let transcript = chats.appendingPathComponent("session.jsonl")
+    let runtime = chats.appendingPathComponent("session.runtime.json")
+    try Data([1]).write(to: transcript)
+    try Data([2]).write(to: runtime)
+    try manager.setAttributes([.modificationDate: transcriptTime], ofItemAtPath: transcript.path)
+    try manager.setAttributes([.modificationDate: runtimeTime], ofItemAtPath: runtime.path)
+
+    #expect(PSAgentActivityMonitor.qwenTranscriptWrite(inChatsDir: chats.path)
+        == transcriptTime)
 }
 
 @Test func freshTranscriptOutranksAnOlderNotWorkingVerdict() async throws {

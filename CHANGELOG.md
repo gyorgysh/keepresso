@@ -7,6 +7,10 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 ### Added
 
+- **Qwen Code is detected in its bundled runtime.** Recognises the persistent
+  `node …/qwen-code/lib/cli*.js` process tree and uses fresh per-project JSONL
+  transcript writes as direct evidence that the harness is working.
+
 - **Muse Code is detected while it works.** The AI-agent condition recognises
   the `muse` CLI and its versioned `muse-bin-*` process, and treats fresh
   writes to the session event log (including subagents) as evidence of work.

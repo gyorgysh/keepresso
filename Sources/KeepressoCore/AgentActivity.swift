@@ -571,6 +571,16 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             return [today, today.addingTimeInterval(-86_400)]
                 .compactMap { newestModification(in: "\(home)/.codex/sessions/\(day.string(from: $0))") }
                 .max()
+        case "qwen":
+            // Qwen Code streams the active conversation under
+            // ~/.qwen/projects/<encoded cwd>/chats/*.jsonl. The project-name
+            // encoding is the same ASCII-alphanumeric flattening Claude uses.
+            // Only transcripts count: runtime metadata and extension state can
+            // change while the agent is idle.
+            guard let cwd else { return nil }
+            let project = claudeProjectDirName(forCwd: cwd)
+            return qwenTranscriptWrite(
+                inChatsDir: "\(home)/.qwen/projects/\(project)/chats")
         case "antigravity", "agy":
             // Antigravity keeps one SQLite database per conversation, the app
             // under `antigravity/` and its CLI under `antigravity-cli/`. Not
@@ -960,6 +970,22 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         String(cwd.map { $0.isASCII && ($0.isLetter || $0.isNumber) ? $0 : "-" })
     }
 
+    /// Newest Qwen Code conversation write. Runtime JSON is deliberately
+    /// excluded: it is created when the TUI starts, while the JSONL transcript
+    /// continues to stream during model and tool turns.
+    static func qwenTranscriptWrite(inChatsDir path: String) -> Date? {
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: path) else { return nil }
+        var newest: Date?
+        for name in names where name.hasSuffix(".jsonl") {
+            let file = (path as NSString).appendingPathComponent(name)
+            guard let date = (try? manager.attributesOfItem(atPath: file))?[.modificationDate] as? Date
+            else { continue }
+            if newest.map({ date > $0 }) ?? true { newest = date }
+        }
+        return newest
+    }
+
     /// Grok's per-project session folder name: the working directory
     /// percent-encoded with only RFC 3986 unreserved characters kept
     /// (`/Users/x/git/demo` becomes `%2FUsers%2Fx%2Fgit%2Fdemo`).
@@ -1243,6 +1269,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             candidate = basename(script)
         }
         if let agent = agents.first(where: { $0 == candidate }) { return agent }
+        if agents.contains("qwen"), isQwenCodeCommand(command) { return "qwen" }
         if agents.contains("muse"), isMuseAgentBasename(candidate) { return "muse" }
         if agents.contains("devin"), isDevinAgentBasename(candidate) { return "devin" }
         // An app-bundle binary's path can hold spaces anywhere before the
@@ -1259,6 +1286,22 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             return nil
         }
         return nil
+    }
+
+    /// Qwen Code bundles its own Node runtime. Once launched, every persistent
+    /// process has the generic basename `node` and runs a generic `cli.js` or
+    /// `cli-entry.js`, but both paths remain inside the distinctive
+    /// `qwen-code` package directory. Require that shape on both argv entries
+    /// so an unrelated command that merely mentions qwen-code cannot match.
+    static func isQwenCodeCommand(_ command: String) -> Bool {
+        let tokens = command.split(whereSeparator: \.isWhitespace)
+        guard let executable = tokens.first,
+              basename(executable).lowercased() == "node",
+              executable.split(separator: "/").contains("qwen-code"),
+              let script = tokens.dropFirst().first(where: { !$0.hasPrefix("-") }),
+              script.split(separator: "/").contains("qwen-code")
+        else { return false }
+        return basename(script) == "cli.js" || basename(script) == "cli-entry.js"
     }
 
     /// Muse Code's launcher is `muse`. The process that actually stays
