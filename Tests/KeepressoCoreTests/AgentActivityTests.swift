@@ -55,6 +55,7 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     #expect(match("vim notes-about-claude.md") == nil)
     #expect(match("/bin/ps -axww") == nil)
     #expect(match("node server.js") == nil)
+    #expect(match("/Users/x/.kimi-code/bin/kimi") == "kimi")
 }
 
 @Test func qwenCodeBundledNodeProcessesFoldIntoOneSession() {
@@ -163,6 +164,7 @@ private let antigravityHostCommand =
     #expect(PSAgentActivityMonitor.evidenceWindow(for: "agy") == 20)
     // Live Bionic coding turns write often, but cloud waits leave longer gaps.
     #expect(PSAgentActivityMonitor.evidenceWindow(for: "bionic") == 45)
+    #expect(PSAgentActivityMonitor.evidenceWindow(for: "kimi") == 45)
     #expect(PSAgentActivityMonitor.evidenceWindow(for: "claude")
         == PSAgentActivityMonitor.evidenceFreshWindow)
 }
@@ -957,6 +959,49 @@ private final class LockedPids: @unchecked Sendable {
 
     #expect(PSAgentActivityMonitor.qwenTranscriptWrite(inChatsDir: chats.path)
         == transcriptTime)
+}
+
+@Test func kimiSessionWriteScopesEvidenceToTheWorkingDirectory() throws {
+    let manager = FileManager.default
+    let root = manager.temporaryDirectory
+        .appendingPathComponent("keepresso-kimi-\(UUID().uuidString)", isDirectory: true)
+    defer { try? manager.removeItem(at: root) }
+
+    func makeSession(_ id: String, cwd: String, stateTime: Date, logTime: Date) throws {
+        let session = root.appendingPathComponent(
+            ".kimi-code/sessions/workspace/session_\(id)", isDirectory: true)
+        let logs = session.appendingPathComponent("logs", isDirectory: true)
+        try manager.createDirectory(at: logs, withIntermediateDirectories: true)
+        let state = session.appendingPathComponent("state.json")
+        let log = logs.appendingPathComponent("kimi-code.log")
+        try JSONSerialization.data(withJSONObject: ["cwd": cwd]).write(to: state)
+        try Data("llm request".utf8).write(to: log)
+        try manager.setAttributes([.modificationDate: stateTime], ofItemAtPath: state.path)
+        try manager.setAttributes([.modificationDate: logTime], ofItemAtPath: log.path)
+    }
+
+    let wantedState = Date(timeIntervalSince1970: 1_700_000_000)
+    let wantedLog = Date(timeIntervalSince1970: 1_700_000_100)
+    let otherLog = Date(timeIntervalSince1970: 1_700_000_500)
+    try makeSession("wanted", cwd: "/repo/a", stateTime: wantedState, logTime: wantedLog)
+    try makeSession("other", cwd: "/repo/b", stateTime: otherLog, logTime: otherLog)
+
+    #expect(PSAgentActivityMonitor.kimiSessionWrite(
+        cwd: "/repo/a", home: root.path, environment: [:]) == wantedLog)
+    #expect(PSAgentActivityMonitor.kimiSessionWrite(
+        cwd: "/repo/missing", home: root.path, environment: [:]) == nil)
+}
+
+@Test func kimiCodeHomeHonoursItsEnvironmentOverride() {
+    #expect(PSAgentActivityMonitor.kimiCodeHome(
+        home: "/Users/x", environment: ["KIMI_CODE_HOME": "/tmp/kimi-data"])
+        == "/tmp/kimi-data")
+    #expect(PSAgentActivityMonitor.kimiCodeHome(home: "/Users/x", environment: [:])
+        == "/Users/x/.kimi-code")
+    #expect(PSAgentActivityMonitor.kimiCodeHome(
+        forExecutablePath: "/Volumes/tools/kimi-data/bin/kimi") == "/Volumes/tools/kimi-data")
+    #expect(PSAgentActivityMonitor.kimiCodeHome(
+        forExecutablePath: "/usr/local/bin/kimi") == nil)
 }
 
 @Test func freshTranscriptOutranksAnOlderNotWorkingVerdict() async throws {

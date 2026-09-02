@@ -115,7 +115,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     public static let agentCommands = [
         "claude", "codex", "gemini", "grok", "agy", "aider", "goose",
         "cursor-agent", "opencode", "opencode2", "amp", "copilot", "droid",
-        "auggie", "qwen", "pi", "hermes", "kilo", "dsh", "muse", "devin",
+        "auggie", "qwen", "kimi", "pi", "hermes", "kilo", "dsh", "muse", "devin",
     ]
 
     /// The names that may also be matched against a *component* of a resolved
@@ -193,6 +193,10 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         "kilo": 20,
         "hermes": 20,
         "devin": 20,
+        // Kimi logs request/response boundaries rather than every streamed
+        // token. A slow model response can leave tens of seconds between the
+        // two writes even though the turn is continuously active.
+        "kimi": 45,
     ]
 
     /// The freshness window for `agent`'s on-disk evidence.
@@ -581,6 +585,14 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             let project = claudeProjectDirName(forCwd: cwd)
             return qwenTranscriptWrite(
                 inChatsDir: "\(home)/.qwen/projects/\(project)/chats")
+        case "kimi":
+            guard let cwd else { return nil }
+            // A Kimi process launched with KIMI_CODE_HOME does not share that
+            // environment with Keepresso. Infer the data root from its bundled
+            // `<home>/bin/kimi` executable when possible.
+            let installedHome = AgentHooks.defaultPathOf(pid)
+                .flatMap(kimiCodeHome(forExecutablePath:))
+            return kimiSessionWrite(cwd: cwd, home: home, root: installedHome)
         case "antigravity", "agy":
             // Antigravity keeps one SQLite database per conversation, the app
             // under `antigravity/` and its CLI under `antigravity-cli/`. Not
@@ -982,6 +994,72 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
             guard let date = (try? manager.attributesOfItem(atPath: file))?[.modificationDate] as? Date
             else { continue }
             if newest.map({ date > $0 }) ?? true { newest = date }
+        }
+        return newest
+    }
+
+    /// `$KIMI_CODE_HOME`, or `~/.kimi-code` when that is unset.
+    static func kimiCodeHome(
+        home: String = NSHomeDirectory(),
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> String {
+        let override = environment["KIMI_CODE_HOME"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let override, !override.isEmpty { return override }
+        return "\(home)/.kimi-code"
+    }
+
+    /// Data root implied by Kimi's bundled `<root>/bin/kimi` executable.
+    /// Returns nil for a generic system `bin/kimi`, where the executable path
+    /// does not establish that its parent is Kimi's writable data directory.
+    static func kimiCodeHome(forExecutablePath path: String) -> String? {
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        guard url.lastPathComponent == "kimi",
+              url.deletingLastPathComponent().lastPathComponent == "bin"
+        else { return nil }
+        let root = url.deletingLastPathComponent().deletingLastPathComponent().path
+        guard root != "/usr", root != "/usr/local", root != "/opt/homebrew" else {
+            return nil
+        }
+        return root
+    }
+
+    /// Newest activity write for a Kimi Code session in `cwd`. Kimi groups
+    /// sessions under opaque workspace and session directory names, so the
+    /// session's `state.json` is the authoritative cwd join. The per-session
+    /// log records LLM request/response boundaries; global logs, user history,
+    /// cache WALs, and the session index are deliberately ignored because a
+    /// different TUI or background maintenance can update them.
+    static func kimiSessionWrite(
+        cwd: String,
+        home: String = NSHomeDirectory(),
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        root: String? = nil
+    ) -> Date? {
+        let dataRoot = root ?? kimiCodeHome(home: home, environment: environment)
+        let sessions = "\(dataRoot)/sessions"
+        let manager = FileManager.default
+        guard let workspaces = try? manager.contentsOfDirectory(atPath: sessions) else { return nil }
+        var newest: Date?
+        for workspace in workspaces {
+            let workspacePath = "\(sessions)/\(workspace)"
+            guard let sessionNames = try? manager.contentsOfDirectory(atPath: workspacePath) else {
+                continue
+            }
+            for session in sessionNames where session.hasPrefix("session_") {
+                let sessionPath = "\(workspacePath)/\(session)"
+                let statePath = "\(sessionPath)/state.json"
+                guard let data = try? Data(contentsOf: URL(fileURLWithPath: statePath)),
+                      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      object["cwd"] as? String == cwd
+                else { continue }
+                for path in [statePath, "\(sessionPath)/logs/kimi-code.log"] {
+                    guard let date = (try? manager.attributesOfItem(atPath: path))?[.modificationDate]
+                            as? Date
+                    else { continue }
+                    if newest.map({ date > $0 }) ?? true { newest = date }
+                }
+            }
         }
         return newest
     }

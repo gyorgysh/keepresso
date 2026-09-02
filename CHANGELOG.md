@@ -7,6 +7,11 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 ### Added
 
+- **Kimi Code is detected while it works.** Recognises the `kimi` CLI and uses
+  request/response log and session-state writes scoped to the working directory
+  as direct activity evidence, including installations moved with
+  `KIMI_CODE_HOME`.
+
 - **Qwen Code is detected in its bundled runtime.** Recognises the persistent
   `node …/qwen-code/lib/cli*.js` process tree and uses fresh per-project JSONL
   transcript writes as direct evidence that the harness is working.
