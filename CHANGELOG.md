@@ -10,7 +10,8 @@ Theme: More coding agents watched, steadier restores.
 ### Added
 
 - **More coding agents are detected while they work.** The AI-agent condition
-  now recognises Kimi Code, Qwen Code, Muse Code, and Devin CLI.
+  now recognises Kimi Code, Qwen Code, Muse Code, and Devin CLI. Devin CLI
+  detection suggested by @CheerChen (#17).
 
 ### Fixed
 
