@@ -3,20 +3,9 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
-## [Unreleased]
-
-### Fixed
-
-- **The screen no longer stays lit inside a closed lid.** With lid-closed mode
-  on, the display was only put to sleep once, when the lid shut. Anything that
-  woke it afterwards (a notification, a keypress on a paired keyboard, another
-  app asking for the display) left the lock screen burning inside the shut lid
-  until you opened it again. Keepresso now puts the panel back to sleep for as
-  long as the lid stays shut with no external display attached.
-
 ## [1.22.0] - 2026-09-03
 
-Theme: More coding agents watched, steadier restores.
+Theme: the lid stays dark, and more coding agents watched.
 
 ### Added
 
@@ -24,20 +13,32 @@ Theme: More coding agents watched, steadier restores.
   now recognises Kimi Code, Qwen Code, Muse Code, and Devin CLI. Devin CLI
   detection suggested by @CheerChen (#17).
 
-- **Keep me active can wait for real idleness.** A new Only after idle
-  switch holds the presence poke until you have been idle 1 to 30 minutes
-  (3 by default), and never pokes while a game is frontmost.
+- **Keep me active can wait for real idleness.** A new Only after idle switch
+  holds the presence poke until you have been idle for 1 to 30 minutes (3 by
+  default), and never pokes while a game is frontmost.
 
 ### Fixed
 
-- **Keyboard Cleaner restores keys reliably** after unlocking or closing the
-  app.
+- **The screen sometimes stayed lit inside a closed lid.** Closing the lid sent
+  the display to sleep once and then left it alone. A notification, a keypress
+  on a paired keyboard, or another app asking for the display could wake it
+  again, and the lock screen then sat lit under the shut lid until you opened
+  it. The panel now goes back to sleep for as long as the lid stays shut with
+  no external display attached.
 
-- **System controls recover more reliably** after the app or its helper
-  restarts.
+- **Keyboard Cleaner could leave Return and Space remapped.** A failed unlock
+  cleared the record of what to put back, so the keys stayed locked until the
+  helper next launched. Unlocking and quitting now both restore them.
 
-- **Automation and wake scheduling handle failures more safely**, avoiding
-  stale jobs that could keep the Mac awake unexpectedly.
+- **System holds survive a restart, the login window, and fast user switching.**
+  Ending one hold could drop an unrelated one, so the Mac could start sleeping
+  again mid-session. At the login window the helper refused every request, so a
+  hold taken before you switched away could not be renewed or released.
+
+- **Automation leases no longer lapse while the work is still running.** Two
+  processes writing at once could overwrite a heartbeat and let the lease
+  expire underneath a live job. Wake schedules are now checked before they
+  reach `pmset`.
 
 ## [1.21.0] - 2026-08-25
 
