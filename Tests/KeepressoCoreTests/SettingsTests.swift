@@ -82,6 +82,7 @@ import Foundation
     #expect(decoded.simulateUserActivity == false)
     #expect(decoded.activitySimulationMethod == .powerWarp)
     #expect(decoded.activitySimulationKeyCode == nil)
+    #expect(decoded.activityPokeIdleMinutes == nil)
     #expect(decoded.preventDisplaySleep == true)
 }
 
@@ -90,13 +91,15 @@ import Foundation
         preventSystemSleep: true,
         simulateUserActivity: true,
         activitySimulationMethod: .specifiedKey,
-        activitySimulationKeyCode: 113
+        activitySimulationKeyCode: 113,
+        activityPokeIdleMinutes: 5
     )
     let data = try JSONEncoder().encode(options)
     let decoded = try JSONDecoder().decode(SleepPreventionOptions.self, from: data)
     #expect(decoded.simulateUserActivity)
     #expect(decoded.activitySimulationMethod == .specifiedKey)
     #expect(decoded.activitySimulationKeyCode == 113)
+    #expect(decoded.activityPokeIdleMinutes == 5)
     #expect(decoded.activityPokeKind == .key(113))
 }
 

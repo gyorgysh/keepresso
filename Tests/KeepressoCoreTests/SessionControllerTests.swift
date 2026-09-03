@@ -99,6 +99,67 @@ private final class FakeBrightness: BrightnessControlling {
     #expect(activity.pokeCount == 2)
 }
 
+// MARK: - Idle-only keep-active mode
+
+@MainActor
+@Test func keepActiveIdleOnlyModeWaitsForTheConfiguredMinutes() {
+    let clock = Clock()
+    let activity = FakeActivity()
+    let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
+    var options = SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true)
+    options.activityPokeIdleMinutes = 3
+    controller.start(options: options)
+    #expect(activity.pokeCount == 1) // start reconciles with no idle info: fail open
+
+    // Two idle minutes: still waiting, even across the poke interval.
+    clock.advance(120)
+    controller.reconcile(systemIdleSeconds: 120)
+    #expect(activity.pokeCount == 1)
+
+    // Past three idle minutes: pokes promptly, then repeats on the interval.
+    clock.advance(70)
+    controller.reconcile(systemIdleSeconds: 190)
+    #expect(activity.pokeCount == 2)
+    clock.advance(SessionController.activityPokeInterval)
+    controller.reconcile(systemIdleSeconds: 220)
+    #expect(activity.pokeCount == 3)
+}
+
+@MainActor
+@Test func keepActiveIdleOnlyModePausesWhileAGameIsFrontmost() {
+    let clock = Clock()
+    let activity = FakeActivity()
+    let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
+    var options = SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true)
+    options.activityPokeIdleMinutes = 3
+    controller.start(options: options)
+    #expect(activity.pokeCount == 1)
+
+    // Idle past the wait but gaming: suppressed, and re-armed.
+    clock.advance(300)
+    controller.reconcile(systemIdleSeconds: 300, gameFrontmost: true)
+    #expect(activity.pokeCount == 1)
+
+    // Game quits: fires promptly instead of a full interval later.
+    controller.reconcile(systemIdleSeconds: 301, gameFrontmost: false)
+    #expect(activity.pokeCount == 2)
+}
+
+@MainActor
+@Test func keepActiveIgnoresGameFrontmostWhenIdleOnlyModeIsOff() {
+    let clock = Clock()
+    let activity = FakeActivity()
+    let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true))
+    #expect(activity.pokeCount == 1)
+
+    // Mode off: only the seconds-scale activity gate applies. A game in
+    // front with an otherwise idle machine still gets the poke.
+    clock.advance(60)
+    controller.reconcile(systemIdleSeconds: 60, gameFrontmost: true)
+    #expect(activity.pokeCount == 2)
+}
+
 // MARK: - Dim, don't sleep
 
 @MainActor
