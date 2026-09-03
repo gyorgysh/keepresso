@@ -3,6 +3,17 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Fixed
+
+- **The screen no longer stays lit inside a closed lid.** With lid-closed mode
+  on, the display was only put to sleep once, when the lid shut. Anything that
+  woke it afterwards (a notification, a keypress on a paired keyboard, another
+  app asking for the display) left the lock screen burning inside the shut lid
+  until you opened it again. Keepresso now puts the panel back to sleep for as
+  long as the lid stays shut with no external display attached.
+
 ## [1.22.0] - 2026-09-03
 
 Theme: More coding agents watched, steadier restores.

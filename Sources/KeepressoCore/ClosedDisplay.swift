@@ -53,11 +53,16 @@ public final class ClosedDisplayController {
     private let lid: LidStateReading
     private let externalDisplay: DisplayMonitoring
     private let displaySleeper: DisplaySleepCommanding
+    private let displayPower: DisplayPowerReading
 
     /// Whether the last ``tick()`` already wanted the panel asleep (lid closed
     /// with no external display), so the sleep command fires once per
     /// transition into that state.
     private var wantedPanelAsleep = false
+    /// When the last `displaysleepnow` was issued, so a panel that gets lit
+    /// again inside the closed lid is put back to sleep without firing `pmset`
+    /// every second while the panel is on its way down.
+    private var lastPanelSleepAt: Date?
     /// When ``isEnabled`` was last read from the system. Menu opens reuse a
     /// fresh-enough cache instead of shelling `pmset -g` every time.
     private var lastRefreshedAt: Date?
@@ -65,29 +70,46 @@ public final class ClosedDisplayController {
     /// How long a successful read may be trusted for menu-driven refreshes.
     public static let refreshFreshness: TimeInterval = 20
 
+    /// How long after a `displaysleepnow` a still-lit panel counts as woken
+    /// rather than still on its way down. Long enough for the panel to go dark
+    /// and report it, short enough that a notification's wake doesn't sit lit
+    /// inside a closed lid.
+    public static let resleepGrace: TimeInterval = 5
+
     public init(
         control: SleepSettingControlling = PMSetSleepControl(),
         lid: LidStateReading = IORegistryLidState(),
         externalDisplay: DisplayMonitoring = CoreGraphicsDisplayMonitor(),
         displaySleeper: DisplaySleepCommanding = PMSetDisplaySleeper(),
+        displayPower: DisplayPowerReading = CoreGraphicsDisplayPower(),
         now: @escaping () -> Date = Date.init
     ) {
         self.control = control
         self.lid = lid
         self.externalDisplay = externalDisplay
         self.displaySleeper = displaySleeper
+        self.displayPower = displayPower
         self.now = now
     }
 
-    /// Force the display to sleep the instant the lid is closed with no
-    /// external display attached, while lid-closed mode is on. That covers
-    /// both edges into that state: the lid closing, and the external display
-    /// being unplugged with the lid already shut (which otherwise leaves the
-    /// internal panel lit inside the closed lid). With an external display
-    /// attached nothing fires: `displaysleepnow` would also blank that
-    /// monitor, breaking a legitimate clamshell-with-monitor setup. macOS
-    /// auto-wakes the panel when the lid reopens, so there's nothing to do on
-    /// that edge. Safe to call every second.
+    /// Keep the display dark for as long as the lid is shut with no external
+    /// display attached, while lid-closed mode is on.
+    ///
+    /// Two things to do. The edges *into* that state get a `displaysleepnow`:
+    /// the lid closing, and the external display being unplugged with the lid
+    /// already shut (which otherwise leaves the internal panel lit inside the
+    /// closed lid). After that the panel has to be held dark, because a single
+    /// `displaysleepnow` does not stick: a notification, a Bluetooth keypress,
+    /// or any app taking a display assertion lights the panel back up, and
+    /// with sleep disabled it then stays lit on the lock screen inside the
+    /// shut lid until the lid is opened. So while the state holds, a panel
+    /// that reads awake is put back to sleep.
+    ///
+    /// With an external display attached nothing fires: `displaysleepnow`
+    /// would also blank that monitor, breaking a legitimate
+    /// clamshell-with-monitor setup. macOS auto-wakes the panel when the lid
+    /// reopens, so there's nothing to do on that edge. Safe to call every
+    /// second.
     public func tick() {
         // Only reset the edge flag when the mode is actually off. A transient
         // nil lid read (AppleClamshellState occasionally returns nil) must not
@@ -96,13 +118,33 @@ public final class ClosedDisplayController {
         // processes during a nil-read flutter.
         guard isEnabled == true else {
             wantedPanelAsleep = false
+            lastPanelSleepAt = nil
             return
         }
         guard let closed = lid.isClosed() else { return }
         let wantsPanelAsleep = closed && !externalDisplay.current.hasExternalDisplay
         defer { wantedPanelAsleep = wantsPanelAsleep }
-        guard wantsPanelAsleep, !wantedPanelAsleep else { return }
+        guard wantsPanelAsleep else {
+            lastPanelSleepAt = nil
+            return
+        }
+        guard wantedPanelAsleep else {
+            sleepPanel()
+            return
+        }
+        // Already inside the closed-lid stretch. Re-sleep a panel that was lit
+        // from outside, but only on a reading that actually says so: an
+        // unreadable panel state falls back to the old fire-once behavior
+        // rather than shelling out to `pmset` on a guess.
+        guard let lastPanelSleepAt,
+              now().timeIntervalSince(lastPanelSleepAt) >= Self.resleepGrace,
+              displayPower.builtInIsAsleep() == false else { return }
+        sleepPanel()
+    }
+
+    private func sleepPanel() {
         displaySleeper.sleepNow()
+        lastPanelSleepAt = now()
     }
 
     /// Re-read the current system setting. The read shells out to `pmset -g`,

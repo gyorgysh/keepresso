@@ -144,6 +144,14 @@ private final class FakeDisplaySleeper: DisplaySleepCommanding, @unchecked Senda
     func sleepNow() { sleepNowCallCount += 1 }
 }
 
+/// Read on the main actor from ``ClosedDisplayController/tick()`` only, like
+/// ``FakeDisplaySleeper``.
+private final class FakeDisplayPower: DisplayPowerReading, @unchecked Sendable {
+    var asleep: Bool?
+    init(asleep: Bool? = true) { self.asleep = asleep }
+    func builtInIsAsleep() -> Bool? { asleep }
+}
+
 @MainActor
 @Test func lidTickDoesNothingWhenModeOff() async {
     let sleepControl = FakeSleepControl(initial: false)
@@ -252,5 +260,170 @@ private final class FakeDisplaySleeper: DisplaySleepCommanding, @unchecked Senda
     controller.tick() // reopen
     lid.closed = true
     controller.tick() // close #2
+    #expect(sleeper.sleepNowCallCount == 2)
+}
+
+// MARK: - Holding the panel dark through an outside wake
+
+/// The panel gets lit from outside (a notification, a keypress on a paired
+/// keyboard) while the lid stays shut: put it back to sleep instead of leaving
+/// it on the lock screen inside the closed lid.
+@MainActor
+@Test func lidTickResleepsPanelWokenInsideClosedLid() async {
+    let sleepControl = FakeSleepControl(initial: true)
+    let lid = FakeLidState(closed: false)
+    let externalDisplay = FakeDisplayMonitor(hasExternalDisplay: false)
+    let sleeper = FakeDisplaySleeper()
+    let power = FakeDisplayPower(asleep: true)
+    var clock = Date(timeIntervalSince1970: 0)
+    let controller = ClosedDisplayController(
+        control: sleepControl,
+        lid: lid,
+        externalDisplay: externalDisplay,
+        displaySleeper: sleeper,
+        displayPower: power,
+        now: { clock }
+    )
+    await controller.refresh()
+
+    lid.closed = true
+    controller.tick() // the closing edge
+    #expect(sleeper.sleepNowCallCount == 1)
+
+    // Panel asleep and lid still shut: nothing more to do, however long it runs.
+    clock += 600
+    controller.tick()
+    #expect(sleeper.sleepNowCallCount == 1)
+
+    // Something lights it back up.
+    power.asleep = false
+    controller.tick()
+    #expect(sleeper.sleepNowCallCount == 2)
+}
+
+/// A panel that reads lit right after a `displaysleepnow` is still on its way
+/// down, not woken: don't fire again until the grace period is over.
+@MainActor
+@Test func lidTickGivesThePanelTimeToGoDark() async {
+    let sleepControl = FakeSleepControl(initial: true)
+    let lid = FakeLidState(closed: false)
+    let externalDisplay = FakeDisplayMonitor(hasExternalDisplay: false)
+    let sleeper = FakeDisplaySleeper()
+    let power = FakeDisplayPower(asleep: false)
+    var clock = Date(timeIntervalSince1970: 0)
+    let controller = ClosedDisplayController(
+        control: sleepControl,
+        lid: lid,
+        externalDisplay: externalDisplay,
+        displaySleeper: sleeper,
+        displayPower: power,
+        now: { clock }
+    )
+    await controller.refresh()
+
+    lid.closed = true
+    controller.tick()
+    #expect(sleeper.sleepNowCallCount == 1)
+
+    clock += 1
+    controller.tick()
+    clock += 1
+    controller.tick()
+    #expect(sleeper.sleepNowCallCount == 1)
+
+    clock += ClosedDisplayController.resleepGrace
+    controller.tick()
+    #expect(sleeper.sleepNowCallCount == 2)
+}
+
+/// An unreadable panel state must not turn the re-sleep into a `pmset` every
+/// few seconds for as long as the lid is shut.
+@MainActor
+@Test func lidTickDoesNotResleepOnAnUnreadablePanel() async {
+    let sleepControl = FakeSleepControl(initial: true)
+    let lid = FakeLidState(closed: false)
+    let externalDisplay = FakeDisplayMonitor(hasExternalDisplay: false)
+    let sleeper = FakeDisplaySleeper()
+    let power = FakeDisplayPower(asleep: nil)
+    var clock = Date(timeIntervalSince1970: 0)
+    let controller = ClosedDisplayController(
+        control: sleepControl,
+        lid: lid,
+        externalDisplay: externalDisplay,
+        displaySleeper: sleeper,
+        displayPower: power,
+        now: { clock }
+    )
+    await controller.refresh()
+
+    lid.closed = true
+    controller.tick()
+    for _ in 0..<10 {
+        clock += 60
+        controller.tick()
+    }
+    #expect(sleeper.sleepNowCallCount == 1)
+}
+
+/// The re-sleep is scoped the same way the first one is: with an external
+/// display attached, `displaysleepnow` would blank the monitor the user is
+/// actually looking at.
+@MainActor
+@Test func lidTickDoesNotResleepWithAnExternalDisplay() async {
+    let sleepControl = FakeSleepControl(initial: true)
+    let lid = FakeLidState(closed: true)
+    let externalDisplay = FakeDisplayMonitor(hasExternalDisplay: true)
+    let sleeper = FakeDisplaySleeper()
+    let power = FakeDisplayPower(asleep: false)
+    var clock = Date(timeIntervalSince1970: 0)
+    let controller = ClosedDisplayController(
+        control: sleepControl,
+        lid: lid,
+        externalDisplay: externalDisplay,
+        displaySleeper: sleeper,
+        displayPower: power,
+        now: { clock }
+    )
+    await controller.refresh()
+
+    for _ in 0..<10 {
+        clock += 60
+        controller.tick()
+    }
+    #expect(sleeper.sleepNowCallCount == 0)
+}
+
+/// A nil lid read mid-stretch must not restart the fire-once edge, and must not
+/// stop the re-sleep once a good read comes back.
+@MainActor
+@Test func lidTickResleepsAfterATransientNilLidRead() async {
+    let sleepControl = FakeSleepControl(initial: true)
+    let lid = FakeLidState(closed: false)
+    let externalDisplay = FakeDisplayMonitor(hasExternalDisplay: false)
+    let sleeper = FakeDisplaySleeper()
+    let power = FakeDisplayPower(asleep: true)
+    var clock = Date(timeIntervalSince1970: 0)
+    let controller = ClosedDisplayController(
+        control: sleepControl,
+        lid: lid,
+        externalDisplay: externalDisplay,
+        displaySleeper: sleeper,
+        displayPower: power,
+        now: { clock }
+    )
+    await controller.refresh()
+
+    lid.closed = true
+    controller.tick()
+    #expect(sleeper.sleepNowCallCount == 1)
+
+    lid.closed = nil
+    clock += 30
+    power.asleep = false
+    controller.tick()
+    #expect(sleeper.sleepNowCallCount == 1)
+
+    lid.closed = true
+    controller.tick()
     #expect(sleeper.sleepNowCallCount == 2)
 }
