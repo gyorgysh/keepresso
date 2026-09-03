@@ -164,6 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         disk: model.disk,
         closedDisplay: model.closedDisplay,
         thermalGuard: model.thermalGuard,
+        gameFrontmost: { [weak self] in self?.model.gameFrontmostForActivityPoke() ?? false },
         onThermalEffects: { [weak self] in self?.model.handleThermalEffects($0) },
         onTick: { [weak self] in
             self?.model.syncWidgetState()

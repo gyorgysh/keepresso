@@ -163,6 +163,8 @@
 "On AC power" = "Am Netzstrom";
 "On battery" = "Im Akkubetrieb";
 "On session end" = "Bei Sitzungsende";
+"Only after %d min idle, never while a game is frontmost." = "Nur nach %d Min. Leerlauf, nie bei einem Spiel im Vordergrund.";
+"Only after idle" = "Nur nach Leerlauf";
 "Only while brewing" = "Nur während des Brühens";
 "Open Login Items" = "Anmeldeobjekte öffnen";
 "Open Settings" = "Einstellungen öffnen";
@@ -373,6 +375,7 @@
 "Save current rules as…" = "Aktuelle Regeln sichern als…";
 "A recurring notification every interval while a session runs, so a Mac left awake keeps reminding you." = "Eine wiederkehrende Mitteilung in jedem Intervall während einer Sitzung, damit ein wach gelassener Mac dich weiter erinnert.";
 "A one-time notification once a session has run this long, in case you forget the Mac is awake." = "Eine einmalige Mitteilung, sobald eine Sitzung so lange gelaufen ist, falls du vergisst, dass der Mac wach ist.";
+"Wait" = "Wartezeit";
 "Watch" = "Überwachen";
 "Keep awake while downloads are in progress in this folder." = "Wach halten, solange in diesem Ordner Downloads laufen.";
 "Keep Awake" = "Wach halten";

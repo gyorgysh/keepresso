@@ -13,6 +13,10 @@ Theme: More coding agents watched, steadier restores.
   now recognises Kimi Code, Qwen Code, Muse Code, and Devin CLI. Devin CLI
   detection suggested by @CheerChen (#17).
 
+- **Keep me active can wait for real idleness.** A new Only after idle
+  switch holds the presence poke until you have been idle 1 to 30 minutes
+  (3 by default), and never pokes while a game is frontmost.
+
 ### Fixed
 
 - **Keyboard Cleaner restores keys reliably** after unlocking or closing the

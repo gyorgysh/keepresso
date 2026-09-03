@@ -163,6 +163,8 @@
 "On AC power" = "On AC power";
 "On battery" = "On battery";
 "On session end" = "On session end";
+"Only after %d min idle, never while a game is frontmost." = "Only after %d min idle, never while a game is frontmost.";
+"Only after idle" = "Only after idle";
 "Only while brewing" = "Only while brewing";
 "Open Login Items" = "Open Login Items";
 "Open Settings" = "Open Settings";
@@ -373,6 +375,7 @@
 "Save current rules as…" = "Save current rules as…";
 "A recurring notification every interval while a session runs, so a Mac left awake keeps reminding you." = "A recurring notification every interval while a session runs, so a Mac left awake keeps reminding you.";
 "A one-time notification once a session has run this long, in case you forget the Mac is awake." = "A one-time notification once a session has run this long, in case you forget the Mac is awake.";
+"Wait" = "Wait";
 "Watch" = "Watch";
 "Keep awake while downloads are in progress in this folder." = "Keep awake while downloads are in progress in this folder.";
 "Keep Awake" = "Keep Awake";

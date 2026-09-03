@@ -415,6 +415,20 @@ private struct GeneralTab: View {
                                 .buttonStyle(.link)
                         }
                     }
+                    Toggle("Only after idle", isOn: Binding(
+                        get: { model.activityPokeIdleMinutes != nil },
+                        set: { model.activityPokeIdleMinutes = $0 ? 3 : nil }
+                    ))
+                    if model.activityPokeIdleMinutes != nil {
+                        Picker("Wait", selection: Binding(
+                            get: { model.activityPokeIdleMinutes ?? 3 },
+                            set: { model.activityPokeIdleMinutes = $0 }
+                        )) {
+                            ForEach(Self.pokeIdleMinuteChoices, id: \.self) { minutes in
+                                Text(L("%d min", minutes)).tag(minutes)
+                            }
+                        }
+                    }
                 }
             } header: {
                 sectionHeader("Presence", info: L("Keeping the Mac awake stops it sleeping, but that does not keep you active in other software. Meeting and chat apps, remote desktop and VDI, cloud gaming, and many other tools still apply their own idle timeout: they mark you away, disconnect, or end the session. This reports activity so you stay present. The default method needs no extra permission. Some software only notices a real key or mouse, so you can pick F15, Shift, a specified key, or a posted mouse move. Those need Accessibility, requested only when you choose them, never at launch. F15 is the usual pick (most keyboards lack it, so nothing is typed). Shift is invisible. A specified key or mouse move covers software that only watches those. A letter or number will type into the front app. It only steps in once you've been idle a few seconds, so it never types or nudges while you're using the Mac. Off by default."))
@@ -563,22 +577,29 @@ private struct GeneralTab: View {
         }
     }
 
+    /// Idle waits offered by the "Only after idle" keep-active mode.
+    private static let pokeIdleMinuteChoices = [1, 2, 3, 4, 5, 10, 15, 20, 30]
+
     private var presenceFooter: String {
         guard model.simulateUserActivity else {
             return L("Reports activity so you stay present in apps that have their own idle timeout.")
         }
-        switch model.activitySimulationMethod {
+        let base = switch model.activitySimulationMethod {
         case .powerWarp:
-            return L("Prompt-free. Some apps ignore this and need a key or mouse method.")
+            L("Prompt-free. Some apps ignore this and need a key or mouse method.")
         case .f15:
-            return L("Posts F15 every 60 s. A common pick for software that watches the keyboard.")
+            L("Posts F15 every 60 s. A common pick for software that watches the keyboard.")
         case .shift:
-            return L("Taps Shift every 60 s. Invisible, and nothing is typed.")
+            L("Taps Shift every 60 s. Invisible, and nothing is typed.")
         case .specifiedKey:
-            return L("Taps the recorded key every 60 s. Prefer a function key or modifier.")
+            L("Taps the recorded key every 60 s. Prefer a function key or modifier.")
         case .mouseMove:
-            return L("Posts a 1-pixel mouse move every 60 s. For software that watches the pointer.")
+            L("Posts a 1-pixel mouse move every 60 s. For software that watches the pointer.")
         }
+        if let minutes = model.activityPokeIdleMinutes {
+            return base + " " + L("Only after %d min idle, never while a game is frontmost.", minutes)
+        }
+        return base
     }
 
     /// The fan boost strength a fresh "Boost fans first" toggle starts at.

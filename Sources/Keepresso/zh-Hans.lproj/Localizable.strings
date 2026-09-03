@@ -163,6 +163,8 @@
 "On AC power" = "接通电源时";
 "On battery" = "使用电池时";
 "On session end" = "会话结束时";
+"Only after %d min idle, never while a game is frontmost." = "仅在空闲 %d 分钟后，游戏在前台时从不执行。";
+"Only after idle" = "仅在空闲后";
 "Only while brewing" = "仅在保持唤醒会话期间";
 "Open Login Items" = "打开登录项";
 "Open Settings" = "打开设置";
@@ -373,6 +375,7 @@
 "Save current rules as…" = "将当前规则另存为…";
 "A recurring notification every interval while a session runs, so a Mac left awake keeps reminding you." = "会话运行期间每隔一段时间发送一次重复通知，让被保持唤醒的 Mac 持续提醒你。";
 "A one-time notification once a session has run this long, in case you forget the Mac is awake." = "当会话运行达到此时长时发送一次性通知，以防你忘记 Mac 仍处于唤醒状态。";
+"Wait" = "等待";
 "Watch" = "监视";
 "Keep awake while downloads are in progress in this folder." = "在此文件夹有下载进行时保持唤醒。";
 "Keep Awake" = "保持唤醒";

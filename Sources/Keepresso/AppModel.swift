@@ -377,6 +377,23 @@ final class AppModel {
         set { updateOptions { $0.activitySimulationKeyCode = newValue } }
     }
 
+    /// Idle-only keep-active mode: poke only after this many idle minutes,
+    /// never while a game is frontmost. `nil` (the default) keeps the
+    /// always-on seconds-scale behavior.
+    var activityPokeIdleMinutes: Int? {
+        get { session.options.activityPokeIdleMinutes }
+        set { updateOptions { $0.activityPokeIdleMinutes = newValue } }
+    }
+
+    /// Live game-frontmost reading for the keep-active idle-only mode.
+    /// Guarded so the workspace sweep only runs while the mode is on; the
+    /// wrapped read is live (no grace linger), so suppression lifts the
+    /// moment the game leaves the front.
+    func gameFrontmostForActivityPoke() -> Bool {
+        guard session.options.activityPokeIdleMinutes != nil else { return false }
+        return gamingWatcher.wrappedIsSatisfied
+    }
+
     /// Live Accessibility trust, refreshed when Preferences appears and while
     /// polling after a prompt or a jump to System Settings.
     var accessibilityTrusted = false

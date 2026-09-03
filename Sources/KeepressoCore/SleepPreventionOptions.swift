@@ -56,6 +56,13 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
     /// and the poke then falls back to ``ActivityPokeKind/powerWarp``.
     public var activitySimulationKeyCode: Int?
 
+    /// Idle-only keep-active mode. When set, the poke only fires once the
+    /// user has been idle this many minutes, and never while a game is
+    /// frontmost (a game already reports them as present to everything
+    /// watching). `nil` (the default) keeps the always-on behavior: poke
+    /// once past the few-seconds activity threshold.
+    public var activityPokeIdleMinutes: Int?
+
     public init(
         preventSystemSleep: Bool = true,
         preventDisplaySleep: Bool = false,
@@ -64,7 +71,8 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
         dimFloor: Double = 0,
         simulateUserActivity: Bool = false,
         activitySimulationMethod: ActivitySimulationMethod = .powerWarp,
-        activitySimulationKeyCode: Int? = nil
+        activitySimulationKeyCode: Int? = nil,
+        activityPokeIdleMinutes: Int? = nil
     ) {
         self.preventSystemSleep = preventSystemSleep
         self.preventDisplaySleep = preventDisplaySleep
@@ -74,6 +82,7 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
         self.simulateUserActivity = simulateUserActivity
         self.activitySimulationMethod = activitySimulationMethod
         self.activitySimulationKeyCode = activitySimulationKeyCode
+        self.activityPokeIdleMinutes = activityPokeIdleMinutes
     }
 
     /// The poke to perform for the current method. A specified key with no
@@ -104,6 +113,7 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
         case preventSystemSleep, preventDisplaySleep, allowScreenSaverAfter
         case dimDisplayAfter, dimFloor, simulateUserActivity
         case activitySimulationMethod, activitySimulationKeyCode
+        case activityPokeIdleMinutes
     }
 
     /// Forgiving decoder: each field falls back to its default when absent, so a
@@ -120,5 +130,6 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
         activitySimulationMethod = try c.decodeIfPresent(
             ActivitySimulationMethod.self, forKey: .activitySimulationMethod) ?? .powerWarp
         activitySimulationKeyCode = try c.decodeIfPresent(Int.self, forKey: .activitySimulationKeyCode)
+        activityPokeIdleMinutes = try c.decodeIfPresent(Int.self, forKey: .activityPokeIdleMinutes)
     }
 }

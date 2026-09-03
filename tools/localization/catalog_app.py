@@ -181,6 +181,8 @@ _MED = {
     "On AC power": {"hu": "Hálózati tápon", "es": "Con corriente CA", "fr": "Sur secteur", "de": "Am Netzstrom", "zh-Hans": "接通电源时"},
     "On battery": {"hu": "Akkumulátorról", "es": "Con batería", "fr": "Sur batterie", "de": "Im Akkubetrieb", "zh-Hans": "使用电池时"},
     "On session end": {"hu": "Munkamenet végén", "es": "Al terminar la sesión", "fr": "À la fin de la session", "de": "Bei Sitzungsende", "zh-Hans": "会话结束时"},
+    "Only after %d min idle, never while a game is frontmost.": {"hu": "Csak %d perc tétlenség után, játék előtérben soha.", "es": "Solo tras %d min de inactividad, nunca con un juego en primer plano.", "fr": "Seulement après %d min d’inactivité, jamais quand un jeu est au premier plan.", "de": "Nur nach %d Min. Leerlauf, nie bei einem Spiel im Vordergrund.", "zh-Hans": "仅在空闲 %d 分钟后，游戏在前台时从不执行。"},
+    "Only after idle": {"hu": "Csak tétlenség után", "es": "Solo tras inactividad", "fr": "Seulement après inactivité", "de": "Nur nach Leerlauf", "zh-Hans": "仅在空闲后"},
     "Only while brewing": {"hu": "Csak főzés közben", "es": "Solo mientras está en marcha", "fr": "Uniquement pendant l’infusion", "de": "Nur während des Brühens", "zh-Hans": "仅在保持唤醒会话期间"},
     "Open Login Items": {"hu": "Bejelentkezési elemek megnyitása", "es": "Abrir Ítems de inicio", "fr": "Ouvrir Ouverture au démarrage", "de": "Anmeldeobjekte öffnen", "zh-Hans": "打开登录项"},
     "Open Settings": {"hu": "Beállítások megnyitása", "es": "Abrir Ajustes", "fr": "Ouvrir Réglages", "de": "Einstellungen öffnen", "zh-Hans": "打开设置"},
@@ -446,6 +448,7 @@ _EXTRA = {
     "A one-time notification once a session has run this long, in case you forget the Mac is awake.": {"hu": "Egyszeri értesítés, ha egy munkamenet már ennyi ideje fut, arra az esetre, ha elfelejtené, hogy a Mac ébren van.", "es": "Una notificación única cuando una sesión ha durado este tiempo, por si olvidas que el Mac está despierto.", "fr": "Une notification unique lorsqu’une session a duré ce temps, au cas où vous oublieriez que le Mac est éveillé.", "de": "Eine einmalige Mitteilung, sobald eine Sitzung so lange gelaufen ist, falls du vergisst, dass der Mac wach ist.", "zh-Hans": "当会话运行达到此时长时发送一次性通知，以防你忘记 Mac 仍处于唤醒状态。"},
 
     # AppModel dialogs + notifications
+    "Wait": {"hu": "Várakozás", "es": "Espera", "fr": "Attente", "de": "Wartezeit", "zh-Hans": "等待"},
     "Watch": {"hu": "Figyelés", "es": "Vigilar", "fr": "Surveiller", "de": "Überwachen", "zh-Hans": "监视"},
     "Keep awake while downloads are in progress in this folder.": {"hu": "Ébren tartás, amíg letöltések vannak folyamatban ebben a mappában.", "es": "Mantener despierto mientras haya descargas en curso en esta carpeta.", "fr": "Garder éveillé tant que des téléchargements sont en cours dans ce dossier.", "de": "Wach halten, solange in diesem Ordner Downloads laufen.", "zh-Hans": "在此文件夹有下载进行时保持唤醒。"},
     "Keep Awake": {"hu": "Ébren tartás", "es": "Mantener despierto", "fr": "Garder éveillé", "de": "Wach halten", "zh-Hans": "保持唤醒"},

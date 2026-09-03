@@ -163,6 +163,8 @@
 "On AC power" = "Hálózati tápon";
 "On battery" = "Akkumulátorról";
 "On session end" = "Munkamenet végén";
+"Only after %d min idle, never while a game is frontmost." = "Csak %d perc tétlenség után, játék előtérben soha.";
+"Only after idle" = "Csak tétlenség után";
 "Only while brewing" = "Csak főzés közben";
 "Open Login Items" = "Bejelentkezési elemek megnyitása";
 "Open Settings" = "Beállítások megnyitása";
@@ -373,6 +375,7 @@
 "Save current rules as…" = "Jelenlegi szabályok mentése mint…";
 "A recurring notification every interval while a session runs, so a Mac left awake keeps reminding you." = "Ismétlődő értesítés minden intervallumban, amíg egy munkamenet fut, így egy ébren hagyott Mac folyamatosan emlékezteti.";
 "A one-time notification once a session has run this long, in case you forget the Mac is awake." = "Egyszeri értesítés, ha egy munkamenet már ennyi ideje fut, arra az esetre, ha elfelejtené, hogy a Mac ébren van.";
+"Wait" = "Várakozás";
 "Watch" = "Figyelés";
 "Keep awake while downloads are in progress in this folder." = "Ébren tartás, amíg letöltések vannak folyamatban ebben a mappában.";
 "Keep Awake" = "Ébren tartás";

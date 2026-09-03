@@ -588,7 +588,8 @@ public final class SessionController {
         systemIdleSeconds: TimeInterval? = nil,
         battery: BatteryReading = .unknown,
         thermal: ThermalReading = .unknown,
-        display: DisplayReading = .unknown
+        display: DisplayReading = .unknown,
+        gameFrontmost: Bool = false
     ) {
         let instant = now ?? self.now()
 
@@ -777,7 +778,7 @@ public final class SessionController {
 
         maybeRemind(at: instant)
         maybeNotifyEndingSoon(at: instant)
-        maybePokeActivity(at: instant, systemIdleSeconds: systemIdleSeconds)
+        maybePokeActivity(at: instant, systemIdleSeconds: systemIdleSeconds, gameFrontmost: gameFrontmost)
         maybeDim(systemIdleSeconds: systemIdleSeconds, display: effectiveDisplay)
         flushPendingEndAction(at: instant)
     }
@@ -968,10 +969,27 @@ public final class SessionController {
     /// Skipped while they are actually providing input (real input already
     /// counts, and a key tap or nudge then is the jitter to avoid). Once idle
     /// past ``activityIdleThreshold`` it pokes, then repeats on the method's
-    /// interval. No-op unless active and the option is on.
-    private func maybePokeActivity(at instant: Date, systemIdleSeconds: TimeInterval?) {
+    /// interval. With the idle-only mode on (``SleepPreventionOptions/
+    /// activityPokeIdleMinutes``) the bar rises to that many idle minutes
+    /// and a frontmost game suppresses the poke too. No-op unless active
+    /// and the option is on.
+    private func maybePokeActivity(at instant: Date, systemIdleSeconds: TimeInterval?, gameFrontmost: Bool) {
         guard isActive, options.simulateUserActivity else { return }
-        if let idle = systemIdleSeconds, idle < Self.activityIdleThreshold {
+        let idleOnlyMinutes = options.activityPokeIdleMinutes.flatMap { $0 > 0 ? $0 : nil }
+        if let minutes = idleOnlyMinutes {
+            // Idle-only mode: a frontmost game already reports the user as
+            // present to everything watching, so there is nothing to fake.
+            // Re-arm so the poke fires promptly once the game quits.
+            if gameFrontmost {
+                lastActivityPokeAt = nil
+                return
+            }
+            let needed = TimeInterval(minutes * 60)
+            if let idle = systemIdleSeconds, idle < needed {
+                lastActivityPokeAt = nil
+                return
+            }
+        } else if let idle = systemIdleSeconds, idle < Self.activityIdleThreshold {
             // Actively in use: nothing to fake. Arm the next poke to fire
             // promptly once they step away rather than a full interval later.
             lastActivityPokeAt = nil

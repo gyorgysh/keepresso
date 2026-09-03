@@ -163,6 +163,8 @@
 "On AC power" = "Elektrik gücündeyken";
 "On battery" = "Pil gücündeyken";
 "On session end" = "Oturum sona erdiğinde";
+"Only after %d min idle, never while a game is frontmost." = "Yalnızca %d dakika boştayken, oyun ön plandayken asla.";
+"Only after idle" = "Yalnızca boşta kaldıktan sonra";
 "Only while brewing" = "Yalnızca demlenirken";
 "Open Login Items" = "Oturum Açma Öğelerini Aç";
 "Open Settings" = "Ayarları Aç";
@@ -373,6 +375,7 @@
 "Save current rules as…" = "Geçerli kuralları farklı kaydet…";
 "A recurring notification every interval while a session runs, so a Mac left awake keeps reminding you." = "Bir oturum çalışırken her aralıkta tekrarlayan bir bildirim gönderilir, böylece uyanık bırakılan bir Mac sizi hatırlatmaya devam eder.";
 "A one-time notification once a session has run this long, in case you forget the Mac is awake." = "Mac'in uyanık olduğunu unutmanız ihtimaline karşı, bir oturum bu kadar süre çalıştığında tek seferlik bir bildirim gönderilir.";
+"Wait" = "Bekleme";
 "Watch" = "İzle";
 "Keep awake while downloads are in progress in this folder." = "Bu klasörde indirmeler devam ederken uyanık tutun.";
 "Keep Awake" = "Uyanık Tut";

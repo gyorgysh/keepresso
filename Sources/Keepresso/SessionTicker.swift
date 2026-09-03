@@ -23,6 +23,10 @@ final class SessionTicker {
     /// Tells a clamshell Mac driving a monitor apart from a lid shut over
     /// nothing: only the latter has no display left worth holding awake.
     private let externalDisplay: DisplayMonitoring
+    /// Live game-frontmost reading for the keep-active idle-only mode.
+    /// `nil` (the default) passes false, so the workspace sweep only runs
+    /// when the host wires it, which it does only while the mode is on.
+    private let gameFrontmost: (() -> Bool)?
     private var thermalArming = ThermalArming()
     /// Runs after each reconcile, e.g. to mirror session state to the widget.
     private let onTick: (() -> Void)?
@@ -36,6 +40,7 @@ final class SessionTicker {
         thermalGuard: ThermalGuardController? = nil,
         lid: LidStateReading = IORegistryLidState(),
         externalDisplay: DisplayMonitoring = CoreGraphicsDisplayMonitor(),
+        gameFrontmost: (() -> Bool)? = nil,
         onThermalEffects: (([ThermalEffect]) -> Void)? = nil,
         onTick: (() -> Void)? = nil
     ) {
@@ -46,6 +51,7 @@ final class SessionTicker {
         self.thermalGuard = thermalGuard
         self.lid = lid
         self.externalDisplay = externalDisplay
+        self.gameFrontmost = gameFrontmost
         self.onThermalEffects = onThermalEffects
         self.onTick = onTick
     }
@@ -115,7 +121,8 @@ final class SessionTicker {
                         systemIdleSeconds: session.consumesIdleReading ? Self.systemIdleSeconds() : nil,
                         battery: battery,
                         thermal: thermal,
-                        display: display
+                        display: display,
+                        gameFrontmost: self?.gameFrontmost?() ?? false
                     )
                 }
                 disk?.tick(now: Date())
