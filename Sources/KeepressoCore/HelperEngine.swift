@@ -732,7 +732,15 @@ public final class HelperEngine: @unchecked Sendable {
             return false
         }
         let ok = keyboard.apply(original)
-        if ok { state.set(.keyboardLock, value: nil) }
+        if ok {
+            state.set(.keyboardLock, value: nil)
+        } else {
+            // Keep the final holder until restoration lands. Otherwise a
+            // failed explicit Unlock makes the later XPC-disconnect cleanup a
+            // no-op, leaving Return/Space remapped until another daemon
+            // launch happens to retry the marker.
+            keyboardHolders.insert(client)
+        }
         return ok
     }
 

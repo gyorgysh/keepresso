@@ -702,6 +702,29 @@ private final class FakeEngineKeyboard: KeyboardRemapping, @unchecked Sendable {
     #expect(engine.isIdle)
 }
 
+@Test func keyboardLockFailedReleaseRetriesWhenTheClientDisconnects() {
+    let keyboard = FakeEngineKeyboard()
+    let state = FakeRestoreState()
+    let original = keyboard.current
+    let engine = HelperEngine(
+        runner: FakeRunner(),
+        state: state,
+        keyboard: keyboard
+    )
+
+    #expect(engine.setKeyboardLock(client: 1, holding: true))
+    keyboard.applySucceeds = false
+    #expect(!engine.setKeyboardLock(client: 1, holding: false))
+    #expect(state.markers().contains(.keyboardLock))
+    #expect(!engine.isIdle)
+
+    keyboard.applySucceeds = true
+    engine.clientDisconnected(1)
+    #expect(keyboard.applied.last == original)
+    #expect(state.markers().isEmpty)
+    #expect(engine.isIdle)
+}
+
 @Test func keyboardLockUnreadableOriginalDoesNotApplyOrRecordDebt() {
     let keyboard = FakeEngineKeyboard()
     keyboard.readSucceeds = false
