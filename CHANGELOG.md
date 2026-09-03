@@ -3,28 +3,25 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
-## [Unreleased]
+## [1.22.0] - 2026-09-03
+
+Theme: More coding agents watched, steadier restores.
 
 ### Added
 
-- **Kimi Code is detected while it works.** Recognises the `kimi` CLI and uses
-  request/response log and session-state writes scoped to the working directory
-  as direct activity evidence, including installations moved with
-  `KIMI_CODE_HOME`.
+- **More coding agents are detected while they work.** The AI-agent condition
+  now recognises Kimi Code, Qwen Code, Muse Code, and Devin CLI.
 
-- **Qwen Code is detected in its bundled runtime.** Recognises the persistent
-  `node …/qwen-code/lib/cli*.js` process tree and uses fresh per-project JSONL
-  transcript writes as direct evidence that the harness is working.
+### Fixed
 
-- **Muse Code is detected while it works.** The AI-agent condition recognises
-  the `muse` CLI and its versioned `muse-bin-*` process, and treats fresh
-  writes to the session event log (including subagents) as evidence of work.
-  The long-lived `session-message` helper is ignored.
+- **Keyboard Cleaner restores keys reliably** after unlocking or closing the
+  app.
 
-- **Devin CLI is detected while it works.** Matches `devin` and `devin-cli`.
-  Fresh writes to `sessions.db` (and its WAL) or `transcripts/*.json` count
-  as work. A standalone `devin acp` host is evidence-only. The ACP child of
-  the TUI folds into that session.
+- **System controls recover more reliably** after the app or its helper
+  restarts.
+
+- **Automation and wake scheduling handle failures more safely**, avoiding
+  stale jobs that could keep the Mac awake unexpectedly.
 
 ## [1.21.0] - 2026-08-25
 
