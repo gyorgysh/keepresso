@@ -343,9 +343,14 @@ public final class ClosedDisplayAutoController {
         case .cancelled:
             lastError = nil
             await Task.detached { launcher.removeFlag() }.value
+            // Same reason as `release()`: if the backend could not let go,
+            // stay latched so a later tick retries instead of leaving
+            // `disablesleep` on with nothing tracking it.
+            isHolding = launcher.isFlagPresent()
         case .failed(let message):
             lastError = message
             await Task.detached { launcher.removeFlag() }.value
+            isHolding = launcher.isFlagPresent()
         }
         return result
     }

@@ -65,11 +65,18 @@ enum FileExclusiveLock {
         let path = directory.appendingPathComponent(name, isDirectory: false).path
         let fd = open(path, O_CREAT | O_RDWR, 0o644)
         guard fd >= 0 else { return body() }
-        flock(fd, LOCK_EX)
-        defer {
-            flock(fd, LOCK_UN)
-            close(fd)
+        defer { close(fd) }
+        // A signal can interrupt the wait (EINTR); retry rather than run the
+        // body unlocked, which would silently defeat the compare-and-swap.
+        var locked = false
+        while true {
+            if flock(fd, LOCK_EX) == 0 {
+                locked = true
+                break
+            }
+            if errno != EINTR { break }
         }
+        defer { if locked { flock(fd, LOCK_UN) } }
         return body()
     }
 }

@@ -166,10 +166,16 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
 }
 
 /// The GUI session's uid, or nil when nobody is sitting at the console.
+///
+/// At the login window (a logout, a lock, or a fast user switch away from the
+/// desk) `SCDynamicStoreCopyConsoleUser` reports the name "loginwindow" with
+/// uid 0. That is not a console user: reporting it as one would make every
+/// peer fail the uid match and cut the still-running app off from the daemon
+/// mid-session.
 private func consoleUserID() -> uid_t? {
     var uid: uid_t = 0
     guard let name = SCDynamicStoreCopyConsoleUser(nil, &uid, nil) as String?,
-          !name.isEmpty
+          !name.isEmpty, name != "loginwindow", uid != 0
     else { return nil }
     return uid
 }

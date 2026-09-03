@@ -228,10 +228,19 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     /// Keyboard Cleaner remap hold. Kept for the life of a wipe so a daemon
     /// restart re-applies the disable table, and an app death restores keys.
     private var wantsKeyboardLock = false
+    /// The five holds this client can keep, each with its own generation.
+    private enum HoldKind: Hashable { case sleep, awdl, fan, priority, keyboard }
     /// Bumped on every release and at the start of a reassert so an
     /// in-flight `set*Hold(true)` from a previous interrupt cannot re-take
-    /// a hold the app already released.
-    private var holdGeneration = 0
+    /// a hold the app already released. Counted **per kind**: releasing the
+    /// AWDL hold must not make an in-flight sleep reassert look stale and
+    /// send a compensating release for a hold the app still wants.
+    private var holdGeneration: [HoldKind: Int] = [:]
+
+    /// Call with ``lock`` held.
+    private func bumpGeneration(_ kind: HoldKind) {
+        holdGeneration[kind, default: 0] += 1
+    }
 
     /// How long a call may wait on the daemon before counting as failed.
     /// Generous enough for launchd to spawn it on first contact.
@@ -269,7 +278,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
             if !ok {
                 lock.lock()
                 wantsSleepHold = false
-                holdGeneration += 1
+                bumpGeneration(.sleep)
                 lock.unlock()
             }
             return ok
@@ -281,7 +290,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         if ok {
             lock.lock()
             wantsSleepHold = false
-            holdGeneration += 1
+            bumpGeneration(.sleep)
             lock.unlock()
         }
         return ok
@@ -296,7 +305,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
             if !ok {
                 lock.lock()
                 wantsAWDLHold = false
-                holdGeneration += 1
+                bumpGeneration(.awdl)
                 lock.unlock()
             }
             return ok
@@ -305,7 +314,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         if ok {
             lock.lock()
             wantsAWDLHold = false
-            holdGeneration += 1
+            bumpGeneration(.awdl)
             lock.unlock()
         }
         return ok
@@ -320,7 +329,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
             if !ok {
                 lock.lock()
                 wantsFanHold = nil
-                holdGeneration += 1
+                bumpGeneration(.fan)
                 lock.unlock()
             }
             return ok
@@ -329,7 +338,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         if ok {
             lock.lock()
             wantsFanHold = nil
-            holdGeneration += 1
+            bumpGeneration(.fan)
             lock.unlock()
         }
         return ok
@@ -344,7 +353,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
             if !ok {
                 lock.lock()
                 wantsPriorityHold = nil
-                holdGeneration += 1
+                bumpGeneration(.priority)
                 lock.unlock()
             }
             return ok
@@ -353,7 +362,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         if ok {
             lock.lock()
             wantsPriorityHold = nil
-            holdGeneration += 1
+            bumpGeneration(.priority)
             lock.unlock()
         }
         return ok
@@ -401,7 +410,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
             if !ok {
                 lock.lock()
                 wantsKeyboardLock = false
-                holdGeneration += 1
+                bumpGeneration(.keyboard)
                 lock.unlock()
             }
             return ok
@@ -410,7 +419,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         if ok {
             lock.lock()
             wantsKeyboardLock = false
-            holdGeneration += 1
+            bumpGeneration(.keyboard)
             lock.unlock()
         }
         return ok
@@ -514,8 +523,13 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     /// relaunched daemon, without blocking whoever's runloop we're on.
     private func reassertHolds() {
         lock.lock()
-        holdGeneration += 1
-        let gen = holdGeneration
+        // One generation per kind: a release of one hold must not make the
+        // in-flight reassert of another look stale.
+        var gen: [HoldKind: Int] = [:]
+        for kind in [HoldKind.sleep, .awdl, .fan, .priority, .keyboard] {
+            bumpGeneration(kind)
+            gen[kind] = holdGeneration[kind]
+        }
         let sleep = wantsSleepHold
         let awdl = wantsAWDLHold
         let fan = wantsFanHold
@@ -530,51 +544,62 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         stale?.invalidate()
         guard sleep || awdl || fan != nil || priority != nil || keyboard,
               let proxy = proxyForAsyncUse() else { return }
-        if sleep, holdStillWanted(generation: gen, { wantsSleepHold }) {
+        if sleep, holdStillWanted(kind: .sleep, generation: gen, { wantsSleepHold }) {
             proxy.setSleepHold(true) { [weak self] _ in
-                guard let self, !self.holdStillWanted(generation: gen, { self.wantsSleepHold })
+                guard let self,
+                      !self.holdStillWanted(kind: .sleep, generation: gen, { self.wantsSleepHold })
                 else { return }
                 proxy.setSleepHold(false) { _ in }
             }
         }
-        if awdl, holdStillWanted(generation: gen, { wantsAWDLHold }) {
+        if awdl, holdStillWanted(kind: .awdl, generation: gen, { wantsAWDLHold }) {
             proxy.setAWDLHold(true) { [weak self] _ in
-                guard let self, !self.holdStillWanted(generation: gen, { self.wantsAWDLHold })
+                guard let self,
+                      !self.holdStillWanted(kind: .awdl, generation: gen, { self.wantsAWDLHold })
                 else { return }
                 proxy.setAWDLHold(false) { _ in }
             }
         }
-        if let fan, holdStillWanted(generation: gen, { wantsFanHold != nil }) {
+        if let fan, holdStillWanted(kind: .fan, generation: gen, { wantsFanHold != nil }) {
             proxy.setFanHold(true, percent: fan) { [weak self] _ in
-                guard let self, !self.holdStillWanted(generation: gen, { self.wantsFanHold != nil })
+                guard let self,
+                      !self.holdStillWanted(
+                          kind: .fan, generation: gen, { self.wantsFanHold != nil })
                 else { return }
                 proxy.setFanHold(false, percent: fan) { _ in }
             }
         }
-        if let priority, holdStillWanted(generation: gen, { wantsPriorityHold != nil }) {
+        if let priority,
+           holdStillWanted(kind: .priority, generation: gen, { wantsPriorityHold != nil }) {
             proxy.setPriorityHold(true, pid: priority) { [weak self] _ in
                 guard let self,
-                      !self.holdStillWanted(generation: gen, { self.wantsPriorityHold != nil })
+                      !self.holdStillWanted(
+                          kind: .priority, generation: gen, { self.wantsPriorityHold != nil })
                 else { return }
                 proxy.setPriorityHold(false, pid: priority) { _ in }
             }
         }
-        if keyboard, holdStillWanted(generation: gen, { wantsKeyboardLock }) {
+        if keyboard, holdStillWanted(kind: .keyboard, generation: gen, { wantsKeyboardLock }) {
             proxy.setKeyboardLock(true) { [weak self] _ in
-                guard let self, !self.holdStillWanted(generation: gen, { self.wantsKeyboardLock })
+                guard let self,
+                      !self.holdStillWanted(
+                          kind: .keyboard, generation: gen, { self.wantsKeyboardLock })
                 else { return }
                 proxy.setKeyboardLock(false) { _ in }
             }
         }
     }
 
-    /// True when this reassert generation is still current and `check` agrees
-    /// we want the hold. A concurrent release bumps `holdGeneration` so an
-    /// in-flight re-take is skipped or undone instead of sticking.
-    private func holdStillWanted(generation: Int, _ check: () -> Bool) -> Bool {
+    /// True when this reassert generation for `kind` is still current and
+    /// `check` agrees we want the hold. A concurrent release of that same
+    /// hold bumps its generation, so an in-flight re-take is skipped or
+    /// undone instead of sticking.
+    private func holdStillWanted(
+        kind: HoldKind, generation: [HoldKind: Int], _ check: () -> Bool
+    ) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        return holdGeneration == generation && check()
+        return holdGeneration[kind] == generation[kind] && check()
     }
 }
 

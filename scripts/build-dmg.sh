@@ -97,9 +97,12 @@ info "Building DMG"
 STAGE="$BUILD_DIR/dmg"
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
-cp -R "$APP_PATH" "$STAGE/"
-ln -s /Applications "$STAGE/Applications"
+# ditto, not cp -R: it preserves the extended attributes a signed bundle
+# carries, so the copy still passes codesign --verify.
+ditto "$APP_PATH" "$STAGE/$APP_NAME.app"
 if command -v create-dmg >/dev/null 2>&1; then
+  # No Applications symlink in the stage: --app-drop-link makes its own, and
+  # a pre-existing one collides with it.
   create-dmg \
     --volname "$APP_NAME" \
     --app-drop-link 480 200 \
@@ -107,6 +110,7 @@ if command -v create-dmg >/dev/null 2>&1; then
     --window-size 640 400 \
     "$DMG_PATH" "$STAGE"
 else
+  ln -s /Applications "$STAGE/Applications"
   hdiutil create -volname "$APP_NAME" -srcfolder "$STAGE" -ov -format UDZO "$DMG_PATH"
 fi
 
