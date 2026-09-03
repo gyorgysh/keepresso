@@ -23,8 +23,9 @@ Theme: the lid stays dark, and more coding agents watched.
   the display to sleep once and then left it alone. A notification, a keypress
   on a paired keyboard, or another app asking for the display could wake it
   again, and the lock screen then sat lit under the shut lid until you opened
-  it. The panel now goes back to sleep for as long as the lid stays shut with
-  no external display attached.
+  it. The panel now goes back to sleep for as long as the lid stays shut, and
+  its brightness is held at zero underneath that, so a panel that wakes anyway
+  is dark rather than lit. External displays and keyboards are untouched.
 
 - **Keyboard Cleaner could leave Return and Space remapped.** A failed unlock
   cleared the record of what to put back, so the keys stayed locked until the

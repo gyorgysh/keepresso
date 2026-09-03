@@ -188,27 +188,52 @@ private final class FakeBrightness: BrightnessControlling {
 }
 
 @MainActor
-@Test func dimStandsDownWithTheLidShutAndRestoresTheLevel() {
+@Test func lidShutWithNoExternalTakesOverFromTheIdleDim() {
     let clock = Clock()
     let brightness = FakeBrightness(level: 0.6)
     let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
     controller.start(options: SleepPreventionOptions(
-        preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 60, dimFloor: 0))
+        preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 60, dimFloor: 0.2))
     controller.reconcile(systemIdleSeconds: 90)
-    #expect(brightness.level == 0)      // dimmed while the lid is open
+    #expect(brightness.level == 0.2)    // idle dim while the lid is open
 
-    // Shutting the lid stands the dim down and puts the level back, so the
-    // panel is at the user's brightness the moment the lid opens again.
+    // Lid shuts with no external. ClosedDisplayController sleeps the panel;
+    // this is the layer underneath it, so a panel woken inside the shut lid is
+    // dark instead of sitting lit on the lock screen.
     controller.reconcile(systemIdleSeconds: 120, display: .lidShutNoExternal)
-    #expect(brightness.level == 0.6)
-
-    // Still idle, still shut: nothing dims it again.
-    controller.reconcile(systemIdleSeconds: 180, display: .lidShutNoExternal)
-    #expect(brightness.level == 0.6)
-
-    // Lid reopens while still idle: dim re-applies from a clean pre-dim capture.
-    controller.reconcile(systemIdleSeconds: 200, display: .usable)
     #expect(brightness.level == 0)
+
+    // Still shut: held at 0 with no 1 Hz rewrite.
+    let writes = brightness.setLevels.count
+    controller.reconcile(systemIdleSeconds: 180, display: .lidShutNoExternal)
+    #expect(brightness.level == 0)
+    #expect(brightness.setLevels.count == writes)
+
+    // Lid reopens while still idle: back to the dim floor, not left dark.
+    controller.reconcile(systemIdleSeconds: 200, display: .usable)
+    #expect(brightness.level == 0.2)
+
+    // Activity: back to the level the user set.
+    controller.reconcile(systemIdleSeconds: 0, display: .usable)
+    #expect(brightness.level == 0.6)
+}
+
+/// The common path: no idle dim configured at all, the lid just shuts.
+@MainActor
+@Test func lidShutWithNoExternalDarkensThePanelAndKeyboard() {
+    let clock = Clock()
+    let brightness = FakeBrightness(level: 0.7, keyboardLevel: 0.4)
+    let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    controller.reconcile(display: .usable)  // seed the open-lid restore targets
+
+    controller.reconcile(display: .lidShutNoExternal)
+    #expect(brightness.level == 0)
+    #expect(brightness.keyboardLevel == 0)
+
+    controller.reconcile(display: .usable)
+    #expect(brightness.level == 0.7)
+    #expect(brightness.keyboardLevel == 0.4)
 }
 
 @MainActor

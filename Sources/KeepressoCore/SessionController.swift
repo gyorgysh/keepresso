@@ -785,12 +785,17 @@ public final class SessionController {
 
     /// Panel and keyboard brightness for the current display situation.
     ///
-    /// - **Clamshell** (lid shut with an external, prevent-display-sleep on):
-    ///   force the built-in panel and keyboard backlight to 0 while the display
-    ///   assertion keeps the external awake. Restore targets come from the last
-    ///   open-lid sample (not a live read after macOS has already zeroed them).
-    /// - **Lid shut, no external**: restore anything we held and leave the
-    ///   panel alone (the display assertion is already dropped).
+    /// - **Lid shut** (either external layout, prevent-display-sleep on): force
+    ///   the built-in panel and keyboard backlight to 0. A shut lid means the
+    ///   built-in should emit nothing, and macOS offers no way to sleep one
+    ///   display: `displaysleepnow` takes every display down, so with an
+    ///   external attached brightness is the only lever there is. With no
+    ///   external, ``ClosedDisplayController`` sleeps the panel outright and
+    ///   this is the layer underneath it, so a panel woken inside the lid is
+    ///   already dark before the re-sleep lands. External displays and
+    ///   keyboards are untouched either way: this seam only addresses the
+    ///   built-in. Restore targets come from the last open-lid sample (not a
+    ///   live read after macOS has already zeroed them).
     /// - **Lid open**: remember levels for a later clamshell stretch, then
     ///   optional "dim, don't sleep" after idle.
     ///
@@ -805,9 +810,12 @@ public final class SessionController {
             noteOpenBrightnessLevels()
         }
 
-        // Clamshell: external stays under the display assertion; built-in panel
-        // and keyboard go dark. Runs before idle dim so the two don't fight.
-        if canTouch, display == .lidShutWithExternal {
+        // Lid shut: the built-in panel and keyboard go dark, whether or not an
+        // external is attached. With an external the assertion keeps that
+        // monitor awake and this is the only way to darken the built-in; with
+        // no external the panel is being slept as well and this is the layer
+        // underneath. Runs before idle dim so the two don't fight.
+        if canTouch, display == .lidShutWithExternal || display == .lidShutNoExternal {
             forceClamshellDark()
             return
         }
@@ -815,9 +823,6 @@ public final class SessionController {
         restoreKeyboardBrightness()
 
         guard canTouch,
-              // Same rule as the display assertion: with the lid shut and no
-              // external monitor there is no panel worth dimming.
-              display != .lidShutNoExternal,
               let threshold = options.dimDisplayAfter,
               brightness.isSupported
         else { restorePanelBrightness(); return }
