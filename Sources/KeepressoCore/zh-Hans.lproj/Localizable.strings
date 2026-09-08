@@ -201,6 +201,13 @@
 "Steam is downloading" = "Steam 正在下载";
 "Microphone in use by %@" = "麦克风正被 %@ 使用";
 "Microphone in use by app" = "麦克风正被 App 使用";
+"Brightness control is unavailable, turning the display off instead." = "亮度控制不可用，将改为关闭显示器。";
+"Keepresso never touches the display." = "Keepresso 不会改动显示器。";
+"Leave the display alone" = "不改动显示器";
+"Stay on at 0% brightness" = "以 0% 亮度保持开启";
+"The display sleeps when the lid shuts. A remote session sees a sleeping display." = "合盖时显示器进入睡眠。远程会话看到的是处于睡眠状态的显示器。";
+"The panel goes dark but stays powered, so a remote session stays live." = "面板变暗但保持通电，因此远程会话保持活跃。";
+"Turn off the display" = "关闭显示器";
 "Wi-Fi radio" = "Wi-Fi 无线电";
 "Wi-Fi is on." = "Wi-Fi 已开启。";
 "Wi-Fi is off." = "Wi-Fi 已关闭。";

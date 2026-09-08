@@ -201,6 +201,13 @@
 "Steam is downloading" = "Steam está descargando";
 "Microphone in use by %@" = "Micrófono en uso por %@";
 "Microphone in use by app" = "Micrófono en uso por app";
+"Brightness control is unavailable, turning the display off instead." = "El control de brillo no está disponible, se apagará la pantalla en su lugar.";
+"Keepresso never touches the display." = "Keepresso nunca toca la pantalla.";
+"Leave the display alone" = "No tocar la pantalla";
+"Stay on at 0% brightness" = "Seguir encendida con brillo al 0%";
+"The display sleeps when the lid shuts. A remote session sees a sleeping display." = "La pantalla se suspende al cerrarse la tapa. Una sesión remota ve una pantalla en suspensión.";
+"The panel goes dark but stays powered, so a remote session stays live." = "El panel se oscurece pero sigue encendido, así la sesión remota sigue activa.";
+"Turn off the display" = "Apagar la pantalla";
 "Wi-Fi radio" = "Radio Wi-Fi";
 "Wi-Fi is on." = "La red Wi-Fi está activada.";
 "Wi-Fi is off." = "La red Wi-Fi está desactivada.";

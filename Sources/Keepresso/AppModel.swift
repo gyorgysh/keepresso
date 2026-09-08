@@ -136,7 +136,8 @@ final class AppModel {
                 helper: helperClient,
                 fallback: PMSetSleepControl(),
                 helperInstalled: helperInstalled
-            )
+            ),
+            brightness: brightnessBackend
         )
         self.closedDisplayAuto = ClosedDisplayAutoController(
             launcher: RoutedSleepWatchdog(
@@ -207,6 +208,7 @@ final class AppModel {
         self.awdl.autoWithGaming = loaded.awdlAutoWithGaming
         self.gamingWatcher.grace = loaded.awdlGraceSeconds
         self.closedDisplayAuto.onlyWhileBrewing = loaded.closedDisplayOnlyWhileBrewing
+        self.closedDisplay.policy = loaded.closedLidDisplayPolicy
         self.controllerPoker.enabled = loaded.controllerPokeWhileGaming
         self.gamePriority.autoWithGaming = loaded.gamePriorityBoost
         // Decision log → outbound hooks + disk. After every stored property
@@ -1652,6 +1654,7 @@ final class AppModel {
         virtualDisplay.config = newSettings.virtualDisplay
         awdl.autoWithGaming = newSettings.awdlAutoWithGaming
         closedDisplayAuto.onlyWhileBrewing = newSettings.closedDisplayOnlyWhileBrewing
+        closedDisplay.policy = newSettings.closedLidDisplayPolicy
         controllerPoker.enabled = newSettings.controllerPokeWhileGaming
         gamePriority.autoWithGaming = newSettings.gamePriorityBoost
         if !newSettings.closedDisplayOnlyWhileBrewing {
@@ -2692,6 +2695,24 @@ final class AppModel {
             }
         }
     }
+
+    // MARK: - Display policy (lid-shut panel behavior)
+
+    /// What the watchdog does with the panel while the lid is shut.
+    /// Persisted. `displayOff` preserves the long-standing behavior.
+    var closedLidDisplayPolicy: ClosedLidDisplayPolicy {
+        get { settings.closedLidDisplayPolicy }
+        set {
+            settings.closedLidDisplayPolicy = newValue
+            closedDisplay.policy = newValue
+            persist()
+        }
+    }
+
+    /// Why the watchdog last held off without sleeping (leave-alone notice or
+    /// the brightness-unavailable fallback), for the menu to show. `nil`
+    /// while the policy is working as configured.
+    var displayDarkeningReason: String? { closedDisplay.lastDecisionReason }
 
     /// Any error message from the automation's last engage attempt.
     var closedDisplayAutoError: String? { closedDisplayAuto.lastError }

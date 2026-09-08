@@ -282,6 +282,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // screen dark. A no-op when nothing was dimmed, so it's safe even on the
         // yield-to-peer path below (nothing is dimmed that early).
         model.session.restoreDisplayBrightness()
+        // Same for the lid-shut zero-brightness policy, which holds its saved
+        // level in the watchdog rather than the session. A no-op unless the
+        // lid is shut under that policy right now.
+        model.closedDisplay.restoreDisplayBrightness()
         // A duplicate handing over to the copy that stays up must not write
         // "stopped" into the shared widget state: that copy owns it and may be
         // keeping the Mac awake right now.

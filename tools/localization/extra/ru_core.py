@@ -238,3 +238,14 @@ CORE.update({
     "Microphone in use by %@": "Микрофон используется приложением %@",
     "Microphone in use by app": "Микрофон используется приложением",
 })
+
+# 1.23 strings
+CORE.update({
+    "Brightness control is unavailable, turning the display off instead.": "Управление яркостью недоступно, вместо этого дисплей выключается.",
+    "Keepresso never touches the display.": "Keepresso никак не влияет на дисплей.",
+    "Leave the display alone": "Не трогать дисплей",
+    "Stay on at 0% brightness": "Оставить включённым при яркости 0%",
+    "The display sleeps when the lid shuts. A remote session sees a sleeping display.": "Дисплей засыпает при закрытии крышки. Удалённый сеанс видит спящий дисплей.",
+    "The panel goes dark but stays powered, so a remote session stays live.": "Панель гаснет, но остаётся под питанием, поэтому удалённый сеанс остаётся активным.",
+    "Turn off the display": "Выключить дисплей",
+})

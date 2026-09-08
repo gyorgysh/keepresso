@@ -550,6 +550,7 @@ private struct GeneralTab: View {
         .animation(.snappy(duration: 0.25), value: model.thermalSafety)
         .animation(.snappy(duration: 0.25), value: model.fanDryRun.phase)
         .animation(.snappy(duration: 0.25), value: model.closedDisplayError)
+        .animation(.snappy(duration: 0.25), value: model.closedLidDisplayPolicy)
         .animation(.snappy(duration: 0.25), value: model.closedDisplayAutoError)
         .animation(.snappy(duration: 0.25), value: model.simulateUserActivity)
         .animation(.snappy(duration: 0.25), value: model.activitySimulationMethod)
@@ -764,6 +765,24 @@ private struct GeneralTab: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
+            if model.machineHasBattery && model.closedDisplayEnabled {
+                Picker(L("If the lid shuts"), selection: Binding(
+                    get: { model.closedLidDisplayPolicy },
+                    set: { model.closedLidDisplayPolicy = $0 }
+                )) {
+                    ForEach(ClosedLidDisplayPolicy.allCases, id: \.self) { policy in
+                        Text(policy.label).tag(policy)
+                    }
+                }
+                Text(model.closedLidDisplayPolicy.explanation)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let reason = model.displayDarkeningReason {
+                    Label(reason, systemImage: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
             Toggle("Only while brewing", isOn: Binding(
                 get: { model.closedDisplayOnlyWhileBrewing },
                 set: { model.closedDisplayOnlyWhileBrewing = $0 }
@@ -781,7 +800,7 @@ private struct GeneralTab: View {
             }
         } header: {
             model.machineHasBattery
-                ? sectionHeader("Closed-display mode", info: L("Normally a MacBook sleeps the moment you shut the lid unless a display is attached. This keeps it running with the lid shut and nothing plugged in, on power or battery. The screen itself still turns off when the lid closes (unless an external display is attached), so it isn't lighting up uselessly inside the closed lid. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off: closed and on battery, the Mac can still drain over time, so don't leave it on in a bag. \u{201C}Only while brewing\u{201D} ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for \u{201C}Only while brewing\u{201D}."))
+                ? sectionHeader("Closed-display mode", info: L("Normally a MacBook sleeps the moment you shut the lid unless a display is attached. This keeps it running with the lid shut and nothing plugged in, on power or battery. What the screen itself does when the lid closes is your choice below (\u{201C}If the lid shuts\u{201D}): turn it off, keep it powered at zero brightness so a remote session stays live, or leave it alone. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off: closed and on battery, the Mac can still drain over time, so don't leave it on in a bag. \u{201C}Only while brewing\u{201D} ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for \u{201C}Only while brewing\u{201D}."))
                 : sectionHeader("Disable sleep", info: L("Stops the Mac from sleeping at all, even with no session running. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off, even if Keepresso quits. The display still sleeps as usual. \u{201C}Only while brewing\u{201D} ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for \u{201C}Only while brewing\u{201D}."))
         } footer: {
             model.machineHasBattery

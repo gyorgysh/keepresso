@@ -201,6 +201,13 @@
 "Steam is downloading" = "Steam télécharge";
 "Microphone in use by %@" = "Microphone utilisé par %@";
 "Microphone in use by app" = "Microphone utilisé par une app";
+"Brightness control is unavailable, turning the display off instead." = "Le contrôle de la luminosité est indisponible, l'écran est éteint à la place.";
+"Keepresso never touches the display." = "Keepresso ne touche jamais à l'écran.";
+"Leave the display alone" = "Laisser l'écran tel quel";
+"Stay on at 0% brightness" = "Rester allumé à 0 % de luminosité";
+"The display sleeps when the lid shuts. A remote session sees a sleeping display." = "L'écran se met en veille à la fermeture du capot. Une session distante voit un écran en veille.";
+"The panel goes dark but stays powered, so a remote session stays live." = "La dalle reste alimentée mais sombre, pour qu'une session distante reste active.";
+"Turn off the display" = "Éteindre l'écran";
 "Wi-Fi radio" = "Radio Wi-Fi";
 "Wi-Fi is on." = "Le Wi-Fi est activé.";
 "Wi-Fi is off." = "Le Wi-Fi est désactivé.";

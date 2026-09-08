@@ -54,6 +54,18 @@ public final class ClosedDisplayController {
     private let externalDisplay: DisplayMonitoring
     private let displaySleeper: DisplaySleepCommanding
     private let displayPower: DisplayPowerReading
+    private let brightness: BrightnessControlling
+
+    /// What the watchdog should do with the panel while the lid is shut.
+    /// `displayOff` (the default) preserves the long-standing behavior. Set
+    /// from persisted settings by the host; read on every ``tick()``.
+    public var policy: ClosedLidDisplayPolicy = .displayOff
+    /// Why the last ``tick()`` held off without sleeping: the
+    /// brightness-unavailable fallback, for the menu to show. `nil` while the
+    /// policy is working as configured (nothing worth reporting) or the mode
+    /// is off. The leave-alone policy needs no reason: the picker's own
+    /// caption already says what it does.
+    public private(set) var lastDecisionReason: String?
 
     /// Whether the last ``tick()`` already wanted the panel asleep (lid closed
     /// with no external display), so the sleep command fires once per
@@ -63,6 +75,18 @@ public final class ClosedDisplayController {
     /// again inside the closed lid is put back to sleep without firing `pmset`
     /// every second while the panel is on its way down.
     private var lastPanelSleepAt: Date?
+    /// The brightness saved when the lid shut under the zero-brightness
+    /// policy, restored when the lid reopens. `nil` outside that stretch.
+    /// Never macOS's post-close zero (see ``noteOpenBrightnessLevel()``).
+    private var savedBrightness: Double?
+    /// Last panel level observed while the lid was open. The first shut tick
+    /// is too late to sample: macOS has often already darkened the panel, so
+    /// a live read would capture 0 and a restore would leave it dark after
+    /// reopening (see GitHub #13).
+    private var lastOpenBrightness: Double?
+    /// When the panel was last zeroed, so a brightness raised from outside is
+    /// put back to zero without writing the private API every second.
+    private var lastDimAt: Date?
     /// When ``isEnabled`` was last read from the system. Menu opens reuse a
     /// fresh-enough cache instead of shelling `pmset -g` every time.
     private var lastRefreshedAt: Date?
@@ -82,6 +106,7 @@ public final class ClosedDisplayController {
         externalDisplay: DisplayMonitoring = CoreGraphicsDisplayMonitor(),
         displaySleeper: DisplaySleepCommanding = PMSetDisplaySleeper(),
         displayPower: DisplayPowerReading = CoreGraphicsDisplayPower(),
+        brightness: BrightnessControlling = NullBrightness(),
         now: @escaping () -> Date = Date.init
     ) {
         self.control = control
@@ -89,45 +114,69 @@ public final class ClosedDisplayController {
         self.externalDisplay = externalDisplay
         self.displaySleeper = displaySleeper
         self.displayPower = displayPower
+        self.brightness = brightness
         self.now = now
     }
 
-    /// Keep the display dark for as long as the lid is shut with no external
-    /// display attached, while lid-closed mode is on.
+    /// Enforce the lid-shut display policy while lid-closed mode is on.
     ///
-    /// Two things to do. The edges *into* that state get a `displaysleepnow`:
-    /// the lid closing, and the external display being unplugged with the lid
-    /// already shut (which otherwise leaves the internal panel lit inside the
-    /// closed lid). After that the panel has to be held dark, because a single
-    /// `displaysleepnow` does not stick: a notification, a Bluetooth keypress,
-    /// or any app taking a display assertion lights the panel back up, and
-    /// with sleep disabled it then stays lit on the lock screen inside the
-    /// shut lid until the lid is opened. So while the state holds, a panel
-    /// that reads awake is put back to sleep.
+    /// Under `displayOff` the edges *into* the shut state (the lid closing,
+    /// and the external display being unplugged with the lid already shut)
+    /// get a `displaysleepnow`, and a panel lit from outside while the lid
+    /// stays shut is put back to sleep. Under `zeroBrightness` the shut edge
+    /// saves the brightness and zeroes the panel (the framebuffer stays live
+    /// for remote sessions), and reopening restores what was saved.
     ///
     /// With an external display attached nothing fires: `displaysleepnow`
     /// would also blank that monitor, breaking a legitimate
-    /// clamshell-with-monitor setup. macOS auto-wakes the panel when the lid
-    /// reopens, so there's nothing to do on that edge. Safe to call every
-    /// second.
+    /// clamshell-with-monitor setup. Safe to call every second.
     public func tick() {
-        // Only reset the edge flag when the mode is actually off. A transient
+        // Only reset the edge flags when the mode is actually off. A transient
         // nil lid read (AppleClamshellState occasionally returns nil) must not
-        // clear it: doing so would re-fire `displaysleepnow` on the next good
+        // clear them: doing so would re-fire `displaysleepnow` on the next good
         // read even though the panel is already asleep, spawning spurious pmset
         // processes during a nil-read flutter.
         guard isEnabled == true else {
             wantedPanelAsleep = false
             lastPanelSleepAt = nil
+            restoreBrightness()
+            lastDecisionReason = nil
             return
         }
+        // A policy switch away from zero-brightness must not leak a saved
+        // level: hand it back the first tick under the new policy.
+        if policy != .zeroBrightness { restoreBrightness() }
         guard let closed = lid.isClosed() else { return }
-        let wantsPanelAsleep = closed && !externalDisplay.current.hasExternalDisplay
-        defer { wantedPanelAsleep = wantsPanelAsleep }
-        guard wantsPanelAsleep else {
+        switch DisplayPolicyDecision.decide(
+            policy: policy,
+            lidClosed: closed,
+            hasExternalDisplay: externalDisplay.current.hasExternalDisplay
+        ) {
+        case .hold:
+            wantedPanelAsleep = false
             lastPanelSleepAt = nil
-            return
+            // Lid open: keep a restore target for the next shut stretch (see
+            // ``lastOpenBrightness``). Reopened or external attached under
+            // zero-brightness: hand back the saved level, a no-op when
+            // nothing is saved.
+            if !closed { noteOpenBrightnessLevel() }
+            restoreBrightness()
+            lastDecisionReason = nil
+        case .sleepPanel:
+            lastDecisionReason = nil
+            tickSleep()
+        case .holdDim:
+            wantedPanelAsleep = false
+            lastPanelSleepAt = nil
+            tickDim()
         }
+    }
+
+    /// One tick of the display-off policy (the decision already gated that
+    /// the lid is shut with no external display). The latch keeps the sleep
+    /// command to once per transition plus re-sleeps of outside wakes.
+    private func tickSleep() {
+        defer { wantedPanelAsleep = true }
         guard wantedPanelAsleep else {
             sleepPanel()
             return
@@ -145,6 +194,88 @@ public final class ClosedDisplayController {
     private func sleepPanel() {
         displaySleeper.sleepNow()
         lastPanelSleepAt = now()
+    }
+
+    /// One tick of the zero-brightness policy, with the lid shut and no
+    /// external display (the decision already gated that).
+    private func tickDim() {
+        guard brightness.isSupported else {
+            // No brightness control on this Mac: fall back to sleeping the
+            // panel rather than leaving it lit inside the shut lid, and say so.
+            lastDecisionReason = L("Brightness control is unavailable, turning the display off instead.")
+            tickSleep()
+            return
+        }
+        lastDecisionReason = nil
+        if savedBrightness == nil {
+            // The shut edge: zero only once a restore target exists. Prefer a
+            // live lit reading, else the last open-lid sample, never macOS's
+            // post-close zero. Without either, retry next tick rather than
+            // zeroing a level that could never be handed back.
+            guard let target = litBrightnessTarget() else { return }
+            savedBrightness = target
+            brightness.setBrightness(0)
+            lastDimAt = now()
+            return
+        }
+        // Already inside the shut stretch. Re-zero a level raised from
+        // outside, but only past the grace period and only on a reading that
+        // actually says so.
+        guard let current = brightness.currentBrightness(),
+              current > Self.litThreshold,
+              let lastDimAt,
+              now().timeIntervalSince(lastDimAt) >= Self.resleepGrace else { return }
+        brightness.setBrightness(0)
+        self.lastDimAt = now()
+    }
+
+    /// A level worth remembering or treating as lit. At or below this the
+    /// panel reads as dark (macOS's own post-close zero included).
+    private static let litThreshold = 0.02
+
+    /// Remember the open-lid panel level for the next shut stretch. Skips a
+    /// dark reading: only a lit level is a real user preference. Called on
+    /// lid-open ticks, before any force can darken the panel.
+    private func noteOpenBrightnessLevel() {
+        guard let current = brightness.currentBrightness(),
+              current > Self.litThreshold else { return }
+        lastOpenBrightness = current
+    }
+
+    /// The level to save as the restore target: a live lit reading first,
+    /// else the last open-lid sample. `nil` when neither exists.
+    private func litBrightnessTarget() -> Double? {
+        if let current = brightness.currentBrightness(), current > Self.litThreshold {
+            return current
+        }
+        return lastOpenBrightness
+    }
+
+    /// Hand back a saved brightness when the zero-brightness stretch ends
+    /// (lid reopened, external attached, policy switched, mode off, quit).
+    /// Only restores when the panel still reads dark: anything else is a live
+    /// value somebody else set on purpose, and clobbering it would fight
+    /// them. An unreadable panel keeps its target for a retry next tick
+    /// rather than dropping it and stranding the panel.
+    private func restoreBrightness() {
+        guard let saved = savedBrightness else {
+            lastDimAt = nil
+            return
+        }
+        guard let current = brightness.currentBrightness() else { return }
+        savedBrightness = nil
+        lastDimAt = nil
+        guard current <= Self.litThreshold else { return }
+        brightness.setBrightness(saved)
+    }
+
+    /// Hand back a saved brightness without ending anything, for app
+    /// termination where the per-second tick won't run again. Mirrors
+    /// ``SessionController/restoreDisplayBrightness``: brightness persists
+    /// across exit, so quitting mid-stretch would otherwise leave the panel
+    /// at zero. Idempotent and a no-op when nothing is saved.
+    public func restoreDisplayBrightness() {
+        restoreBrightness()
     }
 
     /// Re-read the current system setting. The read shells out to `pmset -g`,

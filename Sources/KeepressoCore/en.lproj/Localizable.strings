@@ -201,6 +201,13 @@
 "Steam is downloading" = "Steam is downloading";
 "Microphone in use by %@" = "Microphone in use by %@";
 "Microphone in use by app" = "Microphone in use by app";
+"Brightness control is unavailable, turning the display off instead." = "Brightness control is unavailable, turning the display off instead.";
+"Keepresso never touches the display." = "Keepresso never touches the display.";
+"Leave the display alone" = "Leave the display alone";
+"Stay on at 0% brightness" = "Stay on at 0% brightness";
+"The display sleeps when the lid shuts. A remote session sees a sleeping display." = "The display sleeps when the lid shuts. A remote session sees a sleeping display.";
+"The panel goes dark but stays powered, so a remote session stays live." = "The panel goes dark but stays powered, so a remote session stays live.";
+"Turn off the display" = "Turn off the display";
 "Wi-Fi radio" = "Wi-Fi radio";
 "Wi-Fi is on." = "Wi-Fi is on.";
 "Wi-Fi is off." = "Wi-Fi is off.";

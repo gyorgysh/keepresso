@@ -244,3 +244,14 @@ CORE.update({
     "Microphone in use by %@": "%@ 正在使用麥克風",
     "Microphone in use by app": "App 正在使用麥克風",
 })
+
+# 1.23 strings
+CORE.update({
+    "Brightness control is unavailable, turning the display off instead.": "無法控制亮度，因此改為關閉螢幕。",
+    "Keepresso never touches the display.": "Keepresso 不會碰觸螢幕。",
+    "Leave the display alone": "讓螢幕維持原狀",
+    "Stay on at 0% brightness": "以 0% 亮度保持開啟",
+    "The display sleeps when the lid shuts. A remote session sees a sleeping display.": "闔蓋時螢幕會進入睡眠。遠端工作階段會看到睡眠中的螢幕。",
+    "The panel goes dark but stays powered, so a remote session stays live.": "面板變暗但保持供電，因此遠端工作階段會保持連線。",
+    "Turn off the display": "關閉螢幕",
+})

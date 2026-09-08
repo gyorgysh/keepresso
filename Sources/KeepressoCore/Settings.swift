@@ -70,6 +70,10 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     /// turned off (see ``ClosedDisplayAutoController/onlyWhileBrewing``).
     /// Off by default.
     public var closedDisplayOnlyWhileBrewing: Bool
+    /// What the closed-display watchdog does with the panel while the lid is
+    /// shut (see ``ClosedLidDisplayPolicy``). `displayOff` by default, which
+    /// preserves the long-standing behavior.
+    public var closedLidDisplayPolicy: ClosedLidDisplayPolicy
     /// A system-wide keyboard shortcut that toggles keep-awake, or `nil` (the
     /// default) for none.
     public var hotKey: HotKeyShortcut?
@@ -130,6 +134,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         awdlNotifications: Bool = false,
         awdlGraceSeconds: TimeInterval = 60,
         closedDisplayOnlyWhileBrewing: Bool = false,
+        closedLidDisplayPolicy: ClosedLidDisplayPolicy = .displayOff,
         hotKey: HotKeyShortcut? = nil,
         startOnLaunch: Bool = false,
         presets: [Preset] = Preset.builtIns,
@@ -165,6 +170,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.awdlNotifications = awdlNotifications
         self.awdlGraceSeconds = awdlGraceSeconds
         self.closedDisplayOnlyWhileBrewing = closedDisplayOnlyWhileBrewing
+        self.closedLidDisplayPolicy = closedLidDisplayPolicy
         self.hotKey = hotKey
         self.startOnLaunch = startOnLaunch
         self.presets = presets
@@ -262,6 +268,12 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         awdlNotifications = try c.decodeIfPresent(Bool.self, forKey: .awdlNotifications) ?? false
         awdlGraceSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .awdlGraceSeconds) ?? 60
         closedDisplayOnlyWhileBrewing = try c.decodeIfPresent(Bool.self, forKey: .closedDisplayOnlyWhileBrewing) ?? false
+        // Decoded as a raw string, not the enum: a value persisted by an older
+        // build (like the branch-only `keepDark`) must fall back to the
+        // default, never throw. A throw here discards the entire blob and the
+        // user loses every setting, not just this one.
+        let policyRaw = try c.decodeIfPresent(String.self, forKey: .closedLidDisplayPolicy)
+        closedLidDisplayPolicy = policyRaw.flatMap(ClosedLidDisplayPolicy.init(rawValue:)) ?? .displayOff
         hotKey = try c.decodeIfPresent(HotKeyShortcut.self, forKey: .hotKey)
         startOnLaunch = try c.decodeIfPresent(Bool.self, forKey: .startOnLaunch) ?? false
         presets = try c.decodeIfPresent([Preset].self, forKey: .presets) ?? Preset.builtIns

@@ -236,3 +236,14 @@ CORE.update({
     "Microphone in use by %@": "%@ がマイクを使用中",
     "Microphone in use by app": "App がマイクを使用中",
 })
+
+# 1.23 strings
+CORE.update({
+    "Brightness control is unavailable, turning the display off instead.": "輝度の制御ができないため、代わりにディスプレイをオフにします。",
+    "Keepresso never touches the display.": "Keepresso はディスプレイに何もしません。",
+    "Leave the display alone": "ディスプレイに何もしない",
+    "Stay on at 0% brightness": "輝度0%でオンのままにする",
+    "The display sleeps when the lid shuts. A remote session sees a sleeping display.": "蓋を閉じるとディスプレイはスリープします。リモートセッションからはスリープ中のディスプレイとして見えます。",
+    "The panel goes dark but stays powered, so a remote session stays live.": "ディスプレイは暗くなりますが通電したままになるため、リモートセッションは維持されます。",
+    "Turn off the display": "ディスプレイをオフにする",
+})

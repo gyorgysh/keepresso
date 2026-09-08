@@ -201,6 +201,13 @@
 "Steam is downloading" = "Steam letölt";
 "Microphone in use by %@" = "Mikrofon használatban: %@";
 "Microphone in use by app" = "Mikrofon használatban egy alkalmazásnál";
+"Brightness control is unavailable, turning the display off instead." = "A fényerőszabályozás nem érhető el, ezért ehelyett kikapcsolja a kijelzőt.";
+"Keepresso never touches the display." = "A Keepresso soha nem nyúl a kijelzőhöz.";
+"Leave the display alone" = "A kijelző békén hagyása";
+"Stay on at 0% brightness" = "Bekapcsolva marad 0% fényerőn";
+"The display sleeps when the lid shuts. A remote session sees a sleeping display." = "A kijelző alvó állapotba kerül, amikor a fedél becsukódik. A távoli munkamenet alvó kijelzőt lát.";
+"The panel goes dark but stays powered, so a remote session stays live." = "A panel elsötétül, de bekapcsolva marad, így a távoli munkamenet aktív marad.";
+"Turn off the display" = "A kijelző kikapcsolása";
 "Wi-Fi radio" = "Wi-Fi rádió";
 "Wi-Fi is on." = "A Wi-Fi be van kapcsolva.";
 "Wi-Fi is off." = "A Wi-Fi ki van kapcsolva.";

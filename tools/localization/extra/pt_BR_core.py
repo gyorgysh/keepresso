@@ -237,3 +237,14 @@ CORE.update({
     "Microphone in use by %@": "Microfone em uso por %@",
     "Microphone in use by app": "Microfone em uso pelo app",
 })
+
+# 1.23 strings
+CORE.update({
+    "Brightness control is unavailable, turning the display off instead.": "O controle de brilho está indisponível, desligando a tela em vez disso.",
+    "Keepresso never touches the display.": "O Keepresso não altera a tela.",
+    "Leave the display alone": "Não alterar a tela",
+    "Stay on at 0% brightness": "Manter ligada com brilho de 0%",
+    "The display sleeps when the lid shuts. A remote session sees a sleeping display.": "A tela entra em suspensão quando a tampa fecha. Uma sessão remota vê uma tela em suspensão.",
+    "The panel goes dark but stays powered, so a remote session stays live.": "A tela escurece, mas continua ligada, então uma sessão remota continua ativa.",
+    "Turn off the display": "Desligar a tela",
+})

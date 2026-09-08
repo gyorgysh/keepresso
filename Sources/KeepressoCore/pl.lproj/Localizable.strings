@@ -201,6 +201,13 @@
 "Steam is downloading" = "Steam pobiera";
 "Microphone in use by %@" = "Mikrofon używany przez %@";
 "Microphone in use by app" = "Mikrofon używany przez aplikację";
+"Brightness control is unavailable, turning the display off instead." = "Sterowanie jasnością jest niedostępne, więc zamiast tego wyświetlacz zostanie wyłączony.";
+"Keepresso never touches the display." = "Keepresso nie dotyka wyświetlacza.";
+"Leave the display alone" = "Zostaw wyświetlacz bez zmian";
+"Stay on at 0% brightness" = "Pozostaw włączony przy jasności 0%";
+"The display sleeps when the lid shuts. A remote session sees a sleeping display." = "Wyświetlacz usypia po zamknięciu pokrywy. Sesja zdalna widzi uśpiony wyświetlacz.";
+"The panel goes dark but stays powered, so a remote session stays live." = "Wyświetlacz gaśnie, ale pozostaje zasilany, więc sesja zdalna pozostaje aktywna.";
+"Turn off the display" = "Wyłącz wyświetlacz";
 "Wi-Fi radio" = "Moduł Wi-Fi";
 "Wi-Fi is on." = "Wi-Fi jest włączone.";
 "Wi-Fi is off." = "Wi-Fi jest wyłączone.";

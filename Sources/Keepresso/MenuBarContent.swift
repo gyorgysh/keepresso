@@ -224,6 +224,7 @@ struct MenuBarContent: View {
         .animation(.snappy(duration: 0.25), value: model.triggersEnabled)
         .animation(.snappy(duration: 0.25), value: model.triggersPaused)
         .animation(.snappy(duration: 0.25), value: model.closedDisplayEnabled)
+        .animation(.snappy(duration: 0.25), value: model.closedLidDisplayPolicy)
         .animation(.snappy(duration: 0.25), value: model.batteryAutoPauseEnabled)
         .animation(.snappy(duration: 0.25), value: model.closedDisplayError)
         .animation(.snappy(duration: 0.25), value: model.helperAttention)
@@ -284,6 +285,27 @@ struct MenuBarContent: View {
                 .font(type.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+        if model.machineHasBattery && model.closedDisplayEnabled {
+            Picker(L("If the lid shuts"), selection: Binding(
+                get: { model.closedLidDisplayPolicy },
+                set: { model.closedLidDisplayPolicy = $0 }
+            )) {
+                ForEach(ClosedLidDisplayPolicy.allCases, id: \.self) { policy in
+                    Text(policy.label).tag(policy)
+                }
+            }
+            .pickerStyle(.menu)
+            Text(model.closedLidDisplayPolicy.explanation)
+                .font(type.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let reason = model.displayDarkeningReason {
+                Text(reason)
+                    .font(type.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         if let error = model.closedDisplayError {
             Text(error)

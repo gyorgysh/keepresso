@@ -270,3 +270,15 @@ _V118_CORE = {
     "Microphone in use by app": {"hu": "Mikrofon használatban egy alkalmazásnál", "es": "Micrófono en uso por app", "fr": "Microphone utilisé par une app", "de": "Mikrofon in Benutzung von App", "zh-Hans": "麦克风正被 App 使用"},
 }
 CORE.update(_V118_CORE)
+
+# 1.23: lid-shut display policy options and notices
+_V123_CORE = {
+    "Brightness control is unavailable, turning the display off instead.": {"hu": "A fényerőszabályozás nem érhető el, ezért ehelyett kikapcsolja a kijelzőt.", "es": "El control de brillo no está disponible, se apagará la pantalla en su lugar.", "fr": "Le contrôle de la luminosité est indisponible, l'écran est éteint à la place.", "de": "Helligkeitssteuerung nicht verfügbar, das Display wird stattdessen ausgeschaltet.", "zh-Hans": "亮度控制不可用，将改为关闭显示器。"},
+    "Keepresso never touches the display.": {"hu": "A Keepresso soha nem nyúl a kijelzőhöz.", "es": "Keepresso nunca toca la pantalla.", "fr": "Keepresso ne touche jamais à l'écran.", "de": "Keepresso ändert nichts am Display.", "zh-Hans": "Keepresso 不会改动显示器。"},
+    "Leave the display alone": {"hu": "A kijelző békén hagyása", "es": "No tocar la pantalla", "fr": "Laisser l'écran tel quel", "de": "Display unverändert lassen", "zh-Hans": "不改动显示器"},
+    "Stay on at 0% brightness": {"hu": "Bekapcsolva marad 0% fényerőn", "es": "Seguir encendida con brillo al 0%", "fr": "Rester allumé à 0 % de luminosité", "de": "Bei 0 % Helligkeit eingeschaltet lassen", "zh-Hans": "以 0% 亮度保持开启"},
+    "The display sleeps when the lid shuts. A remote session sees a sleeping display.": {"hu": "A kijelző alvó állapotba kerül, amikor a fedél becsukódik. A távoli munkamenet alvó kijelzőt lát.", "es": "La pantalla se suspende al cerrarse la tapa. Una sesión remota ve una pantalla en suspensión.", "fr": "L'écran se met en veille à la fermeture du capot. Une session distante voit un écran en veille.", "de": "Das Display geht beim Schließen des Deckels in den Ruhezustand. Eine Remote-Sitzung sieht ein ruhendes Display.", "zh-Hans": "合盖时显示器进入睡眠。远程会话看到的是处于睡眠状态的显示器。"},
+    "The panel goes dark but stays powered, so a remote session stays live.": {"hu": "A panel elsötétül, de bekapcsolva marad, így a távoli munkamenet aktív marad.", "es": "El panel se oscurece pero sigue encendido, así la sesión remota sigue activa.", "fr": "La dalle reste alimentée mais sombre, pour qu'une session distante reste active.", "de": "Das Panel bleibt dunkel, aber mit Strom versorgt, sodass eine Remote-Sitzung aktiv bleibt.", "zh-Hans": "面板变暗但保持通电，因此远程会话保持活跃。"},
+    "Turn off the display": {"hu": "A kijelző kikapcsolása", "es": "Apagar la pantalla", "fr": "Éteindre l'écran", "de": "Display ausschalten", "zh-Hans": "关闭显示器"},
+}
+CORE.update(_V123_CORE)

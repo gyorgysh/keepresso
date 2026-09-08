@@ -241,3 +241,14 @@ CORE.update({
     "Microphone in use by %@": "%@ tarafından mikrofon kullanılıyor",
     "Microphone in use by app": "Uygulama tarafından mikrofon kullanılıyor",
 })
+
+# 1.23 strings
+CORE.update({
+    "Brightness control is unavailable, turning the display off instead.": "Parlaklık denetimi kullanılamıyor, bunun yerine ekran kapatılıyor.",
+    "Keepresso never touches the display.": "Keepresso ekrana hiç dokunmaz.",
+    "Leave the display alone": "Ekranı olduğu gibi bırak",
+    "Stay on at 0% brightness": "%0 parlaklıkta açık kal",
+    "The display sleeps when the lid shuts. A remote session sees a sleeping display.": "Kapak kapanınca ekran uyur. Uzak oturum uyuyan bir ekran görür.",
+    "The panel goes dark but stays powered, so a remote session stays live.": "Panel kararır ama gücü açık kalır, böylece uzak oturum etkin kalır.",
+    "Turn off the display": "Ekranı kapat",
+})
