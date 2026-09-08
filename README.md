@@ -185,11 +185,12 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   `keepresso://start?until=18:00`, `stop`, or `toggle`.
 - 💻 **Closed-display mode.** Keep running with the **lid shut** and no external
   display, on power or battery, for an always-on Mac or one you carry mid-task.
-  The screen itself turns off when the lid closes, so it's not sitting lit
-  inside a closed lid. An optional **"Only while brewing"** mode ties it to the
-  session instead of leaving it on globally: on when a keep-awake session
-  starts, off when it ends (or the app quits, even after a crash), with the
-  password asked once per app run, or never with the administrator helper.
+  What the screen itself does is your choice: turn it off, keep it powered at
+  zero brightness so a remote session stays live, or leave it alone. An optional
+  **"Only while brewing"** mode ties it to the session instead of leaving it on
+  globally: on when a keep-awake session starts, off when it ends (or the app
+  quits, even after a crash), with the password asked once per app run, or
+  never with the administrator helper.
 - 🔑 **One password, ever.** An optional **administrator helper**, a small
   system service installed from Preferences > General (or the welcome screen),
   handles the privileged switches for Keepresso: closed-display mode, the

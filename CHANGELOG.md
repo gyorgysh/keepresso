@@ -3,6 +3,21 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [1.23.0] - 2026-09-08
+
+Theme: you choose what the display does when the lid shuts.
+
+### Added
+
+- **Closed-display mode now asks what the screen should do.** A new "If the
+  lid shuts" choice in the menu and in Preferences offers three behaviors:
+  turn the display off (the default, as before), keep it powered at zero
+  brightness so a remote desktop session stays live while the panel looks
+  off, or leave the display alone entirely. The saved brightness comes back
+  when the lid reopens, including when quitting mid-stretch. Motivated by the
+  remote-desktop conflict reported by @Michael8021 (#18); lid-shut
+  virtual-display automation from @danielthb's #14 follows next.
+
 ## [1.22.0] - 2026-09-03
 
 Theme: the lid stays dark, and more coding agents watched.
