@@ -32,6 +32,13 @@ Theme: macOS 27, and a calmer administrator helper.
   prompt you cancelled, or a pause you switched off yourself, still stands
   until the session or the game ends.
 
+- **A cancelled download no longer holds the Mac awake forever.** The
+  download rule used to fire on the mere presence of a partial file, but a
+  cancelled, paused, or interrupted download leaves its partial behind for
+  good, so the rule kept claiming something was downloading days later. A
+  marker now counts only while it is still being written to; a transfer that
+  stalls and resumes re-arms the rule on its own.
+
 - **A copy running from Xcode leaves the installed one alone.** A development
   build no longer takes over the installed app's update record or its bundle
   bookmark. A stale copy that macOS refuses to delete from the Trash is
