@@ -235,9 +235,18 @@ public final class AWDLWatchdogController {
     /// stops what it started, never a manual run).
     private var autoStarted = false
 
-    /// Set when an auto start was cancelled or failed, so the once-per-session
-    /// prompt doesn't re-appear every tick; cleared when the gaming bout ends.
-    private var autoHeldOff = false
+    /// Why auto mode is standing down, so the once-per-session prompt doesn't
+    /// re-appear every tick. Cleared when the gaming bout ends.
+    private enum AutoHoldOff {
+        case none
+        /// A start that failed on its own (a helper that was not answering).
+        /// Worth trying again once the helper is healthy, see ``retryEngage()``.
+        case failure
+        /// The user cancelled the prompt or turned the watchdog off mid-bout.
+        /// Their answer stands for the rest of the bout.
+        case user
+    }
+    private var autoHoldOff: AutoHoldOff = .none
 
     /// Whether the root helper was already spawned this app run. Once it's up,
     /// activating and deactivating is flag-file-only: no more prompts.
@@ -344,13 +353,15 @@ public final class AWDLWatchdogController {
     /// Hold auto mode off until the current game (and its grace) has fully ended,
     /// so a manual override isn't immediately re-paused by the next auto tick.
     /// ``autoTick(gamingActive:)`` clears it once it next sees no game.
-    public func holdAutoOff() { autoHeldOff = true }
+    public func holdAutoOff() { autoHoldOff = .user }
 
     /// Let the next auto tick try starting again. For after an external fix
     /// (the helper daemon's registration was repaired); without this a failed
-    /// start stays held off until the current game ends.
+    /// start stays held off until the current game ends. A cancelled prompt or
+    /// a manual off is left alone: recovering the helper is not permission to
+    /// undo what the user chose.
     public func retryEngage() {
-        autoHeldOff = false
+        if autoHoldOff == .failure { autoHoldOff = .none }
     }
 
     /// Stop only an auto-started run; a manual run is left alone. For when auto
@@ -366,15 +377,17 @@ public final class AWDLWatchdogController {
     public func autoTick(gamingActive: Bool) async {
         guard autoWithGaming else { return }
         if gamingActive {
-            guard !isRunning, !isBusy, !autoHeldOff else { return }
+            guard !isRunning, !isBusy, autoHoldOff == .none else { return }
             switch await start() {
             case .started:
                 autoStarted = true
-            case .cancelled, .failed:
-                autoHeldOff = true
+            case .cancelled:
+                autoHoldOff = .user
+            case .failed:
+                autoHoldOff = .failure
             }
         } else {
-            autoHeldOff = false
+            autoHoldOff = .none
             if autoStarted {
                 await stop()
             }

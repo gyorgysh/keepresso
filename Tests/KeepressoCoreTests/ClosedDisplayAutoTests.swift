@@ -189,6 +189,31 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
 }
 
 @MainActor
+@Test func retryEngageLeavesACancelledPromptAlone() async {
+    // The user dismissed the password dialog. A helper check that later comes
+    // back healthy must not turn that "no" into a fresh prompt mid-session.
+    let launcher = FakeSleepWatchdogLauncher()
+    launcher.result = .cancelled
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+    controller.onlyWhileBrewing = true
+
+    await controller.autoTick(brewing: true)
+    #expect(!controller.isHolding)
+    #expect(launcher.startCalls == 1)
+
+    launcher.result = .applied
+    controller.retryEngage()
+    await controller.autoTick(brewing: true)
+    #expect(!controller.isHolding)
+    #expect(launcher.startCalls == 1) // no second prompt
+
+    // The session ending clears it, as it always did.
+    await controller.autoTick(brewing: false)
+    await controller.autoTick(brewing: true)
+    #expect(controller.isHolding)
+}
+
+@MainActor
 @Test func retryEngageLetsAFailedEngageTryAgainMidSession() async {
     // A failed engage normally holds off until the session ends; after an
     // external fix (the helper daemon was repaired) retryEngage lets the next

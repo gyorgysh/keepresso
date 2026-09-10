@@ -234,9 +234,18 @@ public final class ClosedDisplayAutoController {
     /// and mirrors it in.
     public var onlyWhileBrewing = false
 
-    /// Set when an engage was cancelled or failed, so the prompt doesn't
-    /// re-appear every tick; cleared when the current session ends.
-    private var heldOff = false
+    /// Why auto mode is standing down, so the prompt doesn't re-appear every
+    /// tick. Cleared when the current session ends.
+    private enum HoldOff {
+        case none
+        /// An engage that failed on its own (a helper that was not answering).
+        /// Worth trying again once the helper is healthy, see ``retryEngage()``.
+        case failure
+        /// The user cancelled the password prompt. Their answer stands for the
+        /// rest of the session.
+        case user
+    }
+    private var holdOff: HoldOff = .none
 
     /// Whether the root helper was already spawned this app run. Once it's up,
     /// engaging and releasing is flag-file-only: no more prompts.
@@ -287,9 +296,10 @@ public final class ClosedDisplayAutoController {
 
     /// Let the next tick try engaging again. For after an external fix (the
     /// helper daemon's registration was repaired); without this a failed
-    /// engage stays held off until the session ends.
+    /// engage stays held off until the session ends. A cancelled prompt is
+    /// left alone: recovering the helper is not permission to ask again.
     public func retryEngage() {
-        heldOff = false
+        if holdOff == .failure { holdOff = .none }
     }
 
     /// The once-a-second pulse. Engages while a session is active (one prompt
@@ -298,15 +308,17 @@ public final class ClosedDisplayAutoController {
     public func autoTick(brewing: Bool) async {
         guard onlyWhileBrewing else { return }
         if brewing {
-            guard !isHolding, !isBusy, !heldOff else { return }
+            guard !isHolding, !isBusy, holdOff == .none else { return }
             switch await engage() {
             case .applied:
                 break
-            case .cancelled, .failed:
-                heldOff = true
+            case .cancelled:
+                holdOff = .user
+            case .failed:
+                holdOff = .failure
             }
         } else {
-            heldOff = false
+            holdOff = .none
             if isHolding {
                 await release()
             }

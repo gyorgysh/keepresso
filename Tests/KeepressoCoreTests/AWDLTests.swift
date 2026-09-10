@@ -192,6 +192,42 @@ private final class FakeAWDLReader: AWDLStateReading, @unchecked Sendable {
 }
 
 @MainActor
+@Test func retryEngageLeavesAManualOffAndACancelledPromptAlone() async {
+    // A repaired helper is not permission to undo the user's answer. Only a
+    // start that failed on its own is retried.
+    let launcher = FakeWatchdogLauncher()
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+    controller.autoWithGaming = true
+
+    await controller.autoTick(gamingActive: true) // game running: auto pauses
+    await controller.stop()                       // user turns the pause off...
+    controller.holdAutoOff()                      // ...which holds auto off
+
+    controller.retryEngage()                      // a helper check comes back healthy
+    await controller.autoTick(gamingActive: true)
+    #expect(!controller.isRunning)                // still the user's choice
+
+    // The bout ending clears it, as it always did.
+    await controller.autoTick(gamingActive: false)
+    await controller.autoTick(gamingActive: true)
+    #expect(controller.isRunning)
+
+    // A cancelled prompt holds off the same way: no second prompt this bout.
+    let cancelling = FakeWatchdogLauncher()
+    cancelling.result = .cancelled
+    let second = AWDLWatchdogController(launcher: cancelling, reader: FakeAWDLReader(up: true), appPID: 1)
+    second.autoWithGaming = true
+
+    await second.autoTick(gamingActive: true)
+    #expect(cancelling.startCalls == 1)
+    cancelling.result = .started
+    second.retryEngage()
+    await second.autoTick(gamingActive: true)
+    #expect(!second.isRunning)
+    #expect(cancelling.startCalls == 1)
+}
+
+@MainActor
 @Test func stopIfAutoLeavesAManualRunAlone() async {
     let launcher = FakeWatchdogLauncher()
     let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)

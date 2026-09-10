@@ -24,7 +24,7 @@ private final class OverlappingHelper: NSObject, @unchecked Sendable {
     }
 
     func waitForSlowCall() -> Bool {
-        slowCallStarted.wait(timeout: .now() + 3) == .success
+        slowCallStarted.wait(timeout: .now() + 10) == .success
     }
 
     func finishSlowCall() {
@@ -41,7 +41,7 @@ private final class AnonymousHelperListener: NSObject, NSXPCListenerDelegate, @u
     let disconnected = DispatchSemaphore(value: 0)
 
     func waitForDisconnect() -> Bool {
-        disconnected.wait(timeout: .now() + 3) == .success
+        disconnected.wait(timeout: .now() + 10) == .success
     }
     private let lock = NSLock()
     private var connections: [NSXPCConnection] = []
@@ -66,38 +66,75 @@ private final class AnonymousHelperListener: NSObject, NSXPCListenerDelegate, @u
     }
 }
 
-@Test func completedHelperPingDoesNotCancelAnOverlappingWrite() async {
+/// One blocking helper call, running on a thread of its own.
+///
+/// Not `Task.detached`: that borrows a thread from the cooperative pool, which
+/// is only as wide as the machine has cores. On a two or three core CI runner,
+/// with the rest of the suite running in parallel, a blocked call can hold the
+/// pool long enough that the overlapping call never starts and the test fails
+/// for the wrong reason. A global queue grows threads on demand.
+private final class BackgroundCall: @unchecked Sendable {
+    private let finished = DispatchSemaphore(value: 0)
+    private let lock = NSLock()
+    private var result = false
+
+    init(_ work: @escaping @Sendable () -> Bool) {
+        DispatchQueue.global().async { [self] in
+            let ok = work()
+            lock.lock()
+            result = ok
+            lock.unlock()
+            finished.signal()
+        }
+    }
+
+    /// The call's result, or nil when it hadn't returned in time.
+    func value(timeout: TimeInterval = 10) -> Bool? {
+        guard finished.wait(timeout: .now() + timeout) == .success else { return nil }
+        lock.lock()
+        defer { lock.unlock() }
+        return result
+    }
+}
+
+// A generous client timeout: these tests are about the order calls finish in,
+// not about how long one waits. The regression they guard fails fast (the
+// error handler answers the moment a connection is cancelled underneath).
+private let testCallTimeout: TimeInterval = 30
+
+@Test func completedHelperPingDoesNotCancelAnOverlappingWrite() {
     let delegate = AnonymousHelperListener()
     let listener = NSXPCListener.anonymous()
     listener.delegate = delegate
     listener.resume()
     defer { listener.invalidate(); delegate.stop() }
     let endpoint = listener.endpoint
-    let client = XPCHelperClient(timeout: 5, connectionFactory: { NSXPCConnection(listenerEndpoint: endpoint) })
-    let slow = Task.detached { client.setSleepDisabled(true) }
-    let started = await Task.detached {
-        delegate.helper.waitForSlowCall()
-    }.value
+    let client = XPCHelperClient(
+        timeout: testCallTimeout, connectionFactory: { NSXPCConnection(listenerEndpoint: endpoint) }
+    )
+    let slow = BackgroundCall { client.setSleepDisabled(true) }
+    let started = delegate.helper.waitForSlowCall()
     #expect(started)
-    guard started else { _ = await slow.value; return }
-    let ping = await Task.detached { client.ping() }.value
-    #expect(ping)
+    guard started else { _ = slow.value(); return }
+    #expect(client.ping())
     // ping() has returned, including its connection-release housekeeping.
     // The other reply must still be deliverable on the shared connection.
     delegate.helper.finishSlowCall()
-    #expect(await slow.value)
+    #expect(slow.value() == true)
 }
 
-@Test func releasingTheLastHelperHoldDisconnectsForDaemonRetirement() async {
+@Test func releasingTheLastHelperHoldDisconnectsForDaemonRetirement() {
     let delegate = AnonymousHelperListener()
     let listener = NSXPCListener.anonymous()
     listener.delegate = delegate
     listener.resume()
     defer { listener.invalidate(); delegate.stop() }
     let endpoint = listener.endpoint
-    let client = XPCHelperClient(timeout: 5, connectionFactory: { NSXPCConnection(listenerEndpoint: endpoint) })
-    #expect(await Task.detached { client.setSleepHold(true) }.value)
-    #expect(await Task.detached { client.setSleepHold(false) }.value)
+    let client = XPCHelperClient(
+        timeout: testCallTimeout, connectionFactory: { NSXPCConnection(listenerEndpoint: endpoint) }
+    )
+    #expect(client.setSleepHold(true))
+    #expect(client.setSleepHold(false))
     // No further ping should be needed to let the old daemon retire.
-    #expect(await Task.detached { delegate.waitForDisconnect() }.value)
+    #expect(delegate.waitForDisconnect())
 }

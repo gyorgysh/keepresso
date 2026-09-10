@@ -28,7 +28,9 @@ Theme: macOS 27, and a calmer administrator helper.
 
 - **Closed-display mode and the AWDL pause come back with the helper.** Either
   one that failed to engage while the helper was away stayed off for the rest
-  of the session. Both retry as soon as the helper answers again.
+  of the session. Both retry as soon as the helper answers again. A password
+  prompt you cancelled, or a pause you switched off yourself, still stands
+  until the session or the game ends.
 
 - **A copy running from Xcode leaves the installed one alone.** A development
   build no longer takes over the installed app's update record or its bundle
