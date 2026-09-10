@@ -353,9 +353,14 @@ final class HelperManager {
     }
 
     /// One ping, for callers watching a recovery (the attention window's
-    /// approval step, where the status alone can't signal success).
+    /// approval step, where the status alone can't signal success). Any
+    /// answered version counts: right after an update the pre-update image
+    /// answers with an older protocol while it waits to retire, and that is
+    /// still a live daemon, never a reason to keep a reinstall prompt up.
     func daemonResponds() async -> Bool {
-        await pings()
+        let version = await pingedVersion()
+        if version != nil { daemonProtocolVersion = version }
+        return version != nil
     }
 
     /// This app's slice of BTM's records, or nil where the dump is

@@ -248,21 +248,31 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     /// How long a call may wait on the daemon before counting as failed.
     /// Generous enough for launchd to spawn it on first contact.
     private let timeout: TimeInterval
-    private var connectionFactory: @Sendable () -> NSXPCConnection = {
-        NSXPCConnection(machServiceName: HelperService.machServiceLabel, options: .privileged)
-    }
-    private var verifiesDaemonSignature = true
+    private let connectionFactory: @Sendable () -> NSXPCConnection
+    private let verifiesDaemonSignature: Bool
 
     // An anonymous, in-process endpoint lets tests exercise overlapping calls
     // without registering a privileged daemon or changing machine settings.
     convenience init(timeout: TimeInterval, connectionFactory: @escaping @Sendable () -> NSXPCConnection) {
-        self.init(timeout: timeout)
-        self.connectionFactory = connectionFactory
-        self.verifiesDaemonSignature = false
+        self.init(timeout: timeout, connectionFactory: connectionFactory, verifiesDaemonSignature: false)
     }
 
     public init(timeout: TimeInterval = 8) {
         self.timeout = timeout
+        self.connectionFactory = {
+            NSXPCConnection(machServiceName: HelperService.machServiceLabel, options: .privileged)
+        }
+        self.verifiesDaemonSignature = true
+    }
+
+    private init(
+        timeout: TimeInterval,
+        connectionFactory: @escaping @Sendable () -> NSXPCConnection,
+        verifiesDaemonSignature: Bool
+    ) {
+        self.timeout = timeout
+        self.connectionFactory = connectionFactory
+        self.verifiesDaemonSignature = verifiesDaemonSignature
     }
 
     public func ping() -> Bool {
@@ -285,6 +295,9 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func setSleepHold(_ holding: Bool) -> Bool {
+        // `call` already releases, but the wanted-hold state below changes
+        // after it returns (clear on success), so release again once the
+        // state is final. The second pass is a no-op when already released.
         defer { releaseConnectionUnlessHeld() }
         if holding {
             lock.lock()
@@ -313,6 +326,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func setAWDLHold(_ holding: Bool) -> Bool {
+        // See setSleepHold: the state change after `call` needs its own release.
         defer { releaseConnectionUnlessHeld() }
         if holding {
             lock.lock()
@@ -338,6 +352,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func setFanHold(_ holding: Bool, percent: Int) -> Bool {
+        // See setSleepHold: the state change after `call` needs its own release.
         defer { releaseConnectionUnlessHeld() }
         if holding {
             lock.lock()
@@ -363,6 +378,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func setPriorityHold(_ holding: Bool, pid: Int) -> Bool {
+        // See setSleepHold: the state change after `call` needs its own release.
         defer { releaseConnectionUnlessHeld() }
         if holding {
             lock.lock()
@@ -421,6 +437,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func setKeyboardLock(_ holding: Bool) -> Bool {
+        // See setSleepHold: the state change after `call` needs its own release.
         defer { releaseConnectionUnlessHeld() }
         if holding {
             lock.lock()
@@ -448,8 +465,12 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     /// Fire the version-handshake-and-retire nudge: if the daemon on the other
     /// end predates this app's protocol, or the app itself just updated (the
     /// daemon can't tell; its in-memory image predates the swap either way),
-    /// ask it to exit once nothing is held. Called in the background at app
-    /// launch; best-effort.
+    /// ask it to exit once nothing is held.
+    ///
+    /// Synchronous: blocks up to ``timeout`` plus a 2s delivery grace when a
+    /// retire is sent (longer when no daemon answers). Every caller already
+    /// runs on a detached task; never call this on the main thread.
+    /// Best-effort.
     public func retireStaleDaemon(appUpdated: Bool = false) {
         // Keep the handshake counted as an in-flight call. Otherwise a
         // concurrent health ping can invalidate it before retirement lands.
@@ -512,11 +533,10 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     private func proxy(errorHandler: @escaping @Sendable () -> Void) -> HelperXPCProtocol? {
+        // No log here: a missing daemon (not installed, denied) is the routine
+        // case at launch, and timeouts already log in `call`.
         currentConnection()?
-            .remoteObjectProxyWithErrorHandler { error in
-                NSLog("Keepresso: helper XPC call failed: %@", error.localizedDescription)
-                errorHandler()
-            } as? HelperXPCProtocol
+            .remoteObjectProxyWithErrorHandler { _ in errorHandler() } as? HelperXPCProtocol
     }
 
     private func proxyForAsyncUse() -> HelperXPCProtocol? {
@@ -526,12 +546,16 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
 
     private func currentConnection() -> NSXPCConnection? {
         lock.lock()
-        defer { lock.unlock() }
-        if let connection { return connection }
-        let fresh = connectionFactory()
+        if let connection { lock.unlock(); return connection }
+        lock.unlock()
+        // Build and resume outside the lock: resume can fail fast and dispatch
+        // the invalidation handler synchronously, which also takes the lock.
+        let factory = connectionFactory
+        let verifies = verifiesDaemonSignature
+        let fresh = factory()
         fresh.remoteObjectInterface = NSXPCInterface(with: HelperXPCProtocol.self)
         // Only talk to our own daemon: same team, the helper's identifier.
-        if verifiesDaemonSignature {
+        if verifies {
             fresh.setCodeSigningRequirement(
                 HelperService.peerRequirement(identifier: HelperService.helperCodeSignIdentifier)
             )
@@ -550,6 +574,9 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
             self.lock.unlock()
         }
         fresh.resume()
+        lock.lock()
+        defer { lock.unlock() }
+        if let connection { fresh.invalidate(); return connection }
         connection = fresh
         return fresh
     }

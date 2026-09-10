@@ -131,6 +131,9 @@ private struct SectionTabs: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Preferences sections")
     }
 }
 

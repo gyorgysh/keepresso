@@ -2,7 +2,9 @@ import Foundation
 import Testing
 @testable import KeepressoCore
 
-/// Only these two harmless selectors are used by the anonymous test endpoint.
+/// The three harmless selectors used by the anonymous test endpoint. The
+/// exported object intentionally implements only these; calling any other
+/// HelperXPCProtocol verb would raise.
 private final class OverlappingHelper: NSObject, @unchecked Sendable {
     let slowCallStarted = DispatchSemaphore(value: 0)
     private let lock = NSLock()

@@ -22,7 +22,11 @@ import Testing
     var replies: [Int?] = [nil, nil, 9]
     var delays: [TimeInterval] = []
     let version = await HelperRecoveryProbe.version(
-        ping: { replies.removeFirst() }, wait: { delays.append($0) }
+        ping: {
+            guard !replies.isEmpty else { Issue.record("Pinged more than three times"); return nil }
+            return replies.removeFirst()
+        },
+        wait: { delays.append($0) }
     )
     #expect(version == 9)
     #expect(delays == [1, 3])

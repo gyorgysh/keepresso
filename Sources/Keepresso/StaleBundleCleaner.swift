@@ -29,6 +29,10 @@ enum StaleBundleCleaner {
     /// place, or a banner posted while the app is frontmost (which it is,
     /// during launch) gets silently dropped.
     static func notifyIfSweepNeedsUser() {
+        if let path = unremovableTrashPath,
+           !FileManager.default.fileExists(atPath: path) {
+            unremovableTrashPath = nil
+        }
         guard unremovableTrashPath != nil else { return }
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
@@ -141,6 +145,9 @@ enum StaleBundleCleaner {
             unremovableTrashPath = path
             return result
         }
+        if case .removed(let path) = result, path == unremovableTrashPath {
+            unremovableTrashPath = nil
+        }
         if let bookmark = try? bundleURL.bookmarkData() {
             defaults.set(bookmark, forKey: bookmarkKey)
         }
@@ -182,6 +189,7 @@ enum StaleBundleCleaner {
             do {
                 try FileManager.default.removeItem(at: url)
                 NSLog("Keepresso: deleted stale copy at %@", path)
+                if path == unremovableTrashPath { unremovableTrashPath = nil }
             } catch let error as NSError {
                 // The Trash is TCC-protected: unless the user granted Full
                 // Disk Access, the delete fails with Cocoa 513, and there is

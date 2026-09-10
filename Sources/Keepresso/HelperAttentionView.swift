@@ -180,6 +180,7 @@ struct HelperAttentionView: View {
                 Button("Later") { closeWindow() }
                 Spacer()
                 Button("Refresh") { model.verifyHelper() }
+                    .disabled(model.helper.isChecking)
                 Button("Reinstall Helper") { model.reinstallHelper() }
                     .keyboardShortcut(.defaultAction)
             }

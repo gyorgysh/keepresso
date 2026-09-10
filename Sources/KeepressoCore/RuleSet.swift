@@ -444,7 +444,7 @@ public struct TriggerFactory {
             return NetworkThroughputTrigger(thresholdKilobytesPerSecond: kb, reader: throughput)
         case .downloadInFolder(let url):
             return GracePeriodTrigger(
-                wrapping: DownloadInFolderTrigger(folder: url, scanner: downloads),
+                wrapping: DownloadInFolderTrigger(folder: url, scanner: downloads, now: now),
                 grace: DownloadInFolderTrigger.releaseGrace,
                 now: now
             )

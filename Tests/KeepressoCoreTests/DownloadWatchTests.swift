@@ -3,12 +3,12 @@ import Foundation
 @testable import KeepressoCore
 
 private final class FakeDownloadScanner: DownloadFolderScanning {
-    var present: Bool
+    var newestWrite: Date?
     private(set) var scanCount = 0
-    init(present: Bool) { self.present = present }
-    func hasPartialDownloads(in folder: URL) -> Bool {
+    init(newestWrite: Date?) { self.newestWrite = newestWrite }
+    func newestPartialDownloadWrite(in folder: URL) -> Date? {
         scanCount += 1
-        return present
+        return newestWrite
     }
 }
 
@@ -23,13 +23,15 @@ private final class FakeDownloadScanner: DownloadFolderScanning {
 
 @MainActor
 @Test func downloadTriggerReflectsTheLastScanAndReadsPurely() {
-    let scanner = FakeDownloadScanner(present: true)
-    let trigger = DownloadInFolderTrigger(folder: URL(fileURLWithPath: "/tmp/Downloads"), scanner: scanner)
+    var clock = Date(timeIntervalSinceReferenceDate: 0)
+    let scanner = FakeDownloadScanner(newestWrite: clock)
+    let trigger = DownloadInFolderTrigger(
+        folder: URL(fileURLWithPath: "/tmp/Downloads"), scanner: scanner, now: { clock })
 
     #expect(!trigger.isSatisfied()) // nothing scanned yet
     trigger.tick()
     #expect(trigger.isSatisfied())
-    scanner.present = false
+    scanner.newestWrite = nil
     trigger.tick()
     #expect(!trigger.isSatisfied())
 
@@ -41,19 +43,47 @@ private final class FakeDownloadScanner: DownloadFolderScanning {
 }
 
 @MainActor
+@Test func downloadTriggerIgnoresAbandonedPartials() {
+    var clock = Date(timeIntervalSinceReferenceDate: 0)
+    let scanner = FakeDownloadScanner(newestWrite: clock)
+    let trigger = DownloadInFolderTrigger(
+        folder: URL(fileURLWithPath: "/tmp/Downloads"), scanner: scanner, now: { clock })
+
+    trigger.tick()
+    #expect(trigger.isSatisfied()) // freshly written marker counts
+
+    // A cancelled download leaves its partial behind: unwritten past the
+    // abandonment window it must no longer hold the Mac awake.
+    clock = clock.addingTimeInterval(DownloadInFolderTrigger.abandonedAfter + 1)
+    trigger.tick()
+    #expect(!trigger.isSatisfied())
+
+    // A stalled transfer that resumes re-arms on the next tick.
+    scanner.newestWrite = clock
+    trigger.tick()
+    #expect(trigger.isSatisfied())
+
+    // A timestamp in the future (clock change, copied-off file) reads as
+    // fresh rather than abandoned.
+    scanner.newestWrite = clock.addingTimeInterval(3600)
+    trigger.tick()
+    #expect(trigger.isSatisfied())
+}
+
+@MainActor
 @Test func downloadRuleLingersForItsGraceBetweenFiles() {
     // Through the factory, a download rule is grace-wrapped so a gap between
     // files in a batch (one partial renamed away before the next appears)
     // doesn't drop the session.
     var clock = Date(timeIntervalSinceReferenceDate: 0)
-    let scanner = FakeDownloadScanner(present: true)
+    let scanner = FakeDownloadScanner(newestWrite: clock)
     let factory = TriggerFactory(downloads: scanner, now: { clock })
     let trigger = factory.makeTrigger(for: .downloadInFolder(URL(fileURLWithPath: "/tmp/Downloads")))
 
     trigger.tick()
     #expect(trigger.isSatisfied()) // a partial is present
 
-    scanner.present = false        // the file finished; none present now
+    scanner.newestWrite = nil        // the file finished; none present now
     trigger.tick()
     #expect(trigger.isSatisfied()) // still held, inside the 30s grace
 

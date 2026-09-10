@@ -62,9 +62,12 @@ final class StatusItemBridge: NSObject {
         // on release so its nested tracking loop cannot swallow that release.
         if event.type == contextMouseUp {
             contextMouseUp = nil
-            if let item = resolveStatusItem(), event.window === item.button?.window {
-                showContextMenu(from: item)
+            guard let item = resolveStatusItem(), event.window === item.button?.window else {
+                // Press on the icon, release elsewhere (or a stray mouse-up
+                // while armed): let the other window have its release.
+                return event
             }
+            showContextMenu(from: item)
             return nil
         }
         let isContextClick = event.type == .rightMouseDown
@@ -178,6 +181,9 @@ struct PanelWindowRegistrar: NSViewRepresentable {
 
     func updateNSView(_ nsView: RegistrationView, context: Context) {
         nsView.register = register
-        register(nsView.window)
+        // viewDidMoveToWindow owns attach/detach; only re-affirm a live
+        // attachment here so a state-driven update while detached can't nil
+        // out a valid panelWindow.
+        if let window = nsView.window { register(window) }
     }
 }
