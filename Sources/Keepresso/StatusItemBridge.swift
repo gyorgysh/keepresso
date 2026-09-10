@@ -10,7 +10,7 @@ import SwiftUI
 /// handler returns the event untouched and a right-click simply opens the
 /// panel, exactly as before this feature.
 @MainActor
-final class StatusItemBridge: NSObject, NSMenuDelegate {
+final class StatusItemBridge: NSObject {
     /// Opens one of the app's window scenes by id. Injected from the always
     /// alive menu-bar label view, because `openWindow` only exists in SwiftUI.
     var openWindow: ((String) -> Void)?
@@ -23,6 +23,7 @@ final class StatusItemBridge: NSObject, NSMenuDelegate {
     private let updater: any Updating
     private var monitor: Any?
     private weak var statusItem: NSStatusItem?
+    private var contextMouseUp: NSEvent.EventType?
 
     init(updater: any Updating) {
         self.updater = updater
@@ -39,7 +40,7 @@ final class StatusItemBridge: NSObject, NSMenuDelegate {
     /// context click, when its window provably exists.
     func install() {
         guard monitor == nil else { return }
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown]) { [weak self] event in
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown, .rightMouseUp, .leftMouseUp]) { [weak self] event in
             // Local monitors always fire on the main thread; assumeIsolated
             // only tells the compiler so, it doesn't hop. The result rides a
             // captured local because NSEvent isn't Sendable and assumeIsolated
@@ -56,21 +57,24 @@ final class StatusItemBridge: NSObject, NSMenuDelegate {
     /// Returns the event for AppKit to deliver as usual, or `nil` to consume
     /// it (a context click on our icon: the panel must not also toggle).
     private func handle(_ event: NSEvent) -> NSEvent? {
+        // Consume the complete gesture. A mouse-up delivered without its
+        // mouse-down can still toggle MenuBarExtra on macOS 27. Show the menu
+        // on release so its nested tracking loop cannot swallow that release.
+        if event.type == contextMouseUp {
+            contextMouseUp = nil
+            if let item = resolveStatusItem(), event.window === item.button?.window {
+                showContextMenu(from: item)
+            }
+            return nil
+        }
         let isContextClick = event.type == .rightMouseDown
             || (event.type == .leftMouseDown && event.modifierFlags.contains(.control))
-        guard isContextClick else {
-            // A missed menuDidClose would leave the swapped-in menu hijacking
-            // left clicks; clear it defensively on the way through.
-            if event.type == .leftMouseDown, let item = statusItem, item.menu != nil,
-               event.window === item.button?.window {
-                item.menu = nil
-            }
-            return event
-        }
-        guard let item = resolveStatusItem(), let button = item.button,
+        guard isContextClick,
+              let item = resolveStatusItem(), let button = item.button,
               event.window === button.window
         else { return event }
-        showContextMenu(from: item)
+        contextMouseUp = event.type == .rightMouseDown ? .rightMouseUp : .leftMouseUp
+        if let panel = panelWindow, panel.isVisible { panel.close() }
         return nil
     }
 
@@ -90,22 +94,17 @@ final class StatusItemBridge: NSObject, NSMenuDelegate {
         return nil
     }
 
-    /// Swap the menu in and click the button so AppKit runs its native status
-    /// item tracking (highlight, screen-edge placement); ``menuDidClose(_:)``
-    /// swaps it back out so the next left click opens the panel again.
+    /// Present the menu directly. Sending performClick to SwiftUI's button
+    /// can invoke its panel action as well as menu tracking on macOS 27.
     private func showContextMenu(from item: NSStatusItem) {
+        guard let button = item.button else { return }
         if let panel = panelWindow, panel.isVisible { panel.close() }
         let menu = buildMenu()
-        menu.delegate = self
-        item.menu = menu
-        item.button?.performClick(nil)
-    }
-
-    func menuDidClose(_ menu: NSMenu) {
-        // Next runloop turn: clearing during the callback glitches tracking.
-        DispatchQueue.main.async { [weak self] in
-            self?.statusItem?.menu = nil
-        }
+        button.highlight(true)
+        defer { button.highlight(false) }
+        menu.popUp(positioning: nil,
+                   at: NSPoint(x: button.bounds.minX, y: button.bounds.minY),
+                   in: button)
     }
 
     /// Rebuilt on every open, so "Check for Updates…" reflects the updater's
@@ -157,22 +156,28 @@ final class StatusItemBridge: NSObject, NSMenuDelegate {
     @objc private func quit() { NSApp.terminate(nil) }
 }
 
-/// Hands the panel's `NSWindow` to the bridge, following the `PanelKeyAssert`
-/// precedent in Theme.swift. On current macOS `MenuBarExtra(.window)` keeps the
-/// panel content (and its window) alive after the first open, so this registers
-/// once and the bridge's weak reference stays current; if the system ever
-/// rebuilds the content, `makeNSView` simply runs again and re-registers.
+/// Tracks the panel's actual window attachment, including delayed attachment
+/// and replacement when SwiftUI rebuilds its MenuBarExtra content.
 struct PanelWindowRegistrar: NSViewRepresentable {
     let register: (NSWindow?) -> Void
 
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async { [weak view] in
-            guard let window = view?.window else { return }
-            register(window)
+    final class RegistrationView: NSView {
+        var register: ((NSWindow?) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            register?(window)
         }
+    }
+
+    func makeNSView(context: Context) -> RegistrationView {
+        let view = RegistrationView()
+        view.register = register
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: RegistrationView, context: Context) {
+        nsView.register = register
+        register(nsView.window)
+    }
 }

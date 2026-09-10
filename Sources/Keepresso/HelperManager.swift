@@ -46,7 +46,7 @@ enum HelperHealth {
 @MainActor
 @Observable
 final class HelperManager {
-    private let service = SMAppService.daemon(plistName: HelperService.plistName)
+    @ObservationIgnored private lazy var service = SMAppService.daemon(plistName: HelperService.plistName)
     private let client: XPCHelperClient
     /// Mirrored status for the Core routing closures (off-main readers).
     let availability = HelperAvailability()
@@ -221,10 +221,9 @@ final class HelperManager {
     /// to the app bundle (typically after an app update followed by a reboot),
     /// launchd then fails every spawn with EX_CONFIG, and every XPC call times
     /// out. `SMAppService.status` can't see this (it stays `.enabled`), so the
-    /// daemon is checked the honest way, a ping, and healed by re-submitting
-    /// the registration, which rewrites the record. The approval is keyed to
-    /// the app's signing identity, so the repair normally needs no new
-    /// password or approval.
+    /// daemon is checked through XPC, with bounded retries for launchd
+    /// startup. A registration retry is best-effort; unregistering is reserved
+    /// for the explicit reinstall action so automatic recovery retains approval.
     @discardableResult
     func verifyAndRepairIfNeeded() async -> HelperHealth {
         if let running = healthCheck { return await running.value }
@@ -238,9 +237,12 @@ final class HelperManager {
     }
 
     private func runHealthCheck() async -> HelperHealth {
+        guard managesDaemon else { return .notApplicable }
+        refresh()
         guard status == .enabled else { return .notApplicable }
-        if let version = await pingedVersion() {
+        if let version = await recoveredVersion() {
             daemonProtocolVersion = version
+            lastError = nil
             if version < HelperService.protocolVersion {
                 // An older daemon image is still serving: the app just
                 // updated and the pre-update process hasn't idled out yet.
@@ -276,25 +278,19 @@ final class HelperManager {
         }
         guard !repairAttempted else { return .broken }
         repairAttempted = true
-        // First try re-submitting the registration in place: no approval can
-        // be lost this way, and it rewrites the record's bundle reference.
-        try? service.register()
-        if await pings() {
-            lastError = nil
-            return .repaired
-        }
-        // Not enough: rebuild the record from scratch. Between the unregister
-        // and the register the mirrored availability deliberately stays as it
-        // was, so a concurrent engage still routes to the (dead) daemon and
-        // fails quietly instead of falling back to a surprise password prompt.
-        try? await service.unregister()
-        try? service.register()
+        // register() may return alreadyRegistered; do not assume it refreshes
+        // BTM's bookmark. Log that result and verify by XPC. Never unregister
+        // automatically: a transient outage must not discard the user's approval.
+        do { try service.register() }
+        catch { NSLog("Keepresso: helper registration retry failed: %@", error.localizedDescription) }
         refresh()
         if status == .requiresApproval {
             pollWhileAwaitingApproval()
             return .needsApproval
         }
-        if await pings() {
+        if let version = await recoveredVersion() {
+            daemonProtocolVersion = version
+            if daemonOutdated { watchDaemonUpdate() }
             lastError = nil
             return .repaired
         }
@@ -305,6 +301,10 @@ final class HelperManager {
             L("The helper isn't responding. If an old copy of Keepresso is in the Trash, empty the Trash first: macOS keeps disabling the helper while one is there. Then reinstall the helper.")
         }
         return .broken
+    }
+
+    private func recoveredVersion() async -> Int? {
+        await HelperRecoveryProbe.version(ping: { await self.pingedVersion() })
     }
 
     /// Whether a matching daemon answers, off the main actor (a dead daemon

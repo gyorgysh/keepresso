@@ -55,3 +55,31 @@ jobs:
             -scheme Keepresso \
             -destination 'platform=macOS' \
             CODE_SIGNING_ALLOWED=NO
+
+  xcode-27:
+    name: Xcode 27 compatibility
+    # Preview SDK coverage is separate from the stable release toolchain.
+    # Use the image's default Xcode: latest-stable would exclude its beta/RC.
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Record and verify toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+          xcrun --sdk macosx --show-sdk-version
+          xcodebuild -version | head -1 | grep -E '^Xcode 27([.]|$)'
+      - name: Core tests
+        run: swift test
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        run: xcodegen generate
+      - name: Build Keepresso
+        run: |
+          xcodebuild build \
+            -project Keepresso.xcodeproj -scheme Keepresso \
+            -configuration Release -destination 'generic/platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO

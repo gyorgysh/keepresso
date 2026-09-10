@@ -95,7 +95,7 @@ struct HelperAttentionView: View {
         switch stage {
         case .checking: L("Checking the helper")
         case .needsApproval: L("One approval needed")
-        case .broken: L("The helper needs a reinstall")
+        case .broken: L("Keepresso Helper")
         case .allSet: L("All set")
         }
     }
@@ -107,7 +107,7 @@ struct HelperAttentionView: View {
         case .needsApproval:
             L("macOS turned the helper's background switch off, so it needs your approval again: in System Settings, under Login Items & Extensions, find Keepresso in App Background Activity and turn it on. Everything is password-free again right after.")
         case .broken:
-            L("Keepresso repaired the helper's registration, but macOS keeps disabling it. An old copy of Keepresso in the Trash is the usual cause: empty the Trash, then reinstall the helper below. Nothing else about your setup changes.")
+            model.helper.lastError ?? L("The helper couldn't be registered.")
         case .allSet:
             L("The helper is back. Closed-display mode and AWDL pausing work without password prompts again.")
         }
@@ -128,9 +128,7 @@ struct HelperAttentionView: View {
         case .needsApproval:
             statusBadge(icon: "hourglass", text: L("Waiting for the switch in System Settings; this updates by itself."))
         case .broken:
-            if let error = model.helper.lastError {
-                statusBadge(icon: "exclamationmark.triangle", text: error)
-            }
+            EmptyView()
         case .allSet:
             AllSetBadge()
         }
@@ -181,6 +179,7 @@ struct HelperAttentionView: View {
             HStack {
                 Button("Later") { closeWindow() }
                 Spacer()
+                Button("Refresh") { model.verifyHelper() }
                 Button("Reinstall Helper") { model.reinstallHelper() }
                     .keyboardShortcut(.defaultAction)
             }

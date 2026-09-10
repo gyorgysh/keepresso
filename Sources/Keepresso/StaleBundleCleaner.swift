@@ -54,6 +54,7 @@ enum StaleBundleCleaner {
     /// runs only when this looks like the first launch after an update, so
     /// ordinary launches pay nothing for it.
     static func sweepAtStartup(afterUpdate: Bool) {
+        guard AppRelocator.runsFromApplications else { return }
         let result = sweepAndRemember()
         // The copy Sparkle or Homebrew just trashed under our own name,
         // whether or not BTM has a record of it. Runs every launch (one file
@@ -85,6 +86,7 @@ enum StaleBundleCleaner {
     /// trashed copy remains, however it got missed at launch. Blocking file
     /// work; call it off the main actor.
     static func sweepNow() {
+        guard AppRelocator.runsFromApplications else { return }
         _ = sweepAndRemember()
         removeTrashedCopyUnderOwnName()
     }
@@ -105,6 +107,7 @@ enum StaleBundleCleaner {
     /// exists).
     @discardableResult
     static func sweepAndRemember() -> StaleBundleSweepResult {
+        guard AppRelocator.runsFromApplications else { return .nothingToSweep }
         let bundleURL = Bundle.main.bundleURL
         guard let bundleID = Bundle.main.bundleIdentifier else { return .nothingToSweep }
         let defaults = UserDefaults.standard
@@ -134,6 +137,10 @@ enum StaleBundleCleaner {
         case .removalFailed(let path, let message):
             NSLog("Keepresso: couldn't delete stale previous copy at %@: %@", path, message)
         }
+        if case .removalFailed(let path, _) = result {
+            unremovableTrashPath = path
+            return result
+        }
         if let bookmark = try? bundleURL.bookmarkData() {
             defaults.set(bookmark, forKey: bookmarkKey)
         }
@@ -153,6 +160,7 @@ enum StaleBundleCleaner {
     /// swept (the name plus the Trash location is the validation); anything
     /// else unreadable is left alone, loudly.
     static func removeTrashedCopies(at paths: [String]) {
+        guard AppRelocator.runsFromApplications else { return }
         guard let bundleID = Bundle.main.bundleIdentifier else { return }
         let current = Bundle.main.bundleURL.standardizedFileURL
         for path in paths {
@@ -205,6 +213,7 @@ enum UpdateArrival {
     /// one either way. A genuinely first launch reports false: there is no
     /// previous version to clean up after.
     static func checkAndRecord() -> Bool {
+        guard AppRelocator.runsFromApplications else { return false }
         let defaults = UserDefaults.standard
         let previous = defaults.string(forKey: key)
         guard let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String

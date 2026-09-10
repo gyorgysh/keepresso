@@ -18,9 +18,9 @@ struct PreferencesView: View {
     /// for the previous tab tree (drops any leftover view storage).
     @State private var mountGeneration = 0
 
-    /// The Preferences sections. A plain top segmented control rather than a
+    /// The Preferences sections. A plain top tab strip rather than a
     /// `TabView`, which macOS 26 renders as an obtrusive sidebar.
-    private enum Section: String, CaseIterable, Identifiable {
+    fileprivate enum Section: String, CaseIterable, Identifiable {
         case general = "General"
         case triggers = "Triggers"
         case reminder = "Reminder"
@@ -30,33 +30,16 @@ struct PreferencesView: View {
         case activity = "Activity"
 
         var id: String { rawValue }
-        var symbol: String {
-            switch self {
-            case .general: "gearshape"
-            case .triggers: "bolt"
-            case .reminder: "bell"
-            case .automation: "arrow.triangle.branch"
-            case .disk: "externaldrive"
-            case .display: "display"
-            case .activity: "list.bullet.rectangle"
-            }
-        }
     }
 
     var body: some View {
         Group {
             if windowVisible {
                 VStack(spacing: 0) {
-                    Picker("Section", selection: $section) {
-                        ForEach(Section.allCases) { section in
-                            Label(LocalizedStringKey(section.rawValue), systemImage: section.symbol).tag(section)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                    .padding(.bottom, 12)
+                    SectionTabs(selection: $section)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                        .padding(.bottom, 12)
 
                     Divider()
 
@@ -76,7 +59,8 @@ struct PreferencesView: View {
                 Color.clear
             }
         }
-        // 580 fits seven labeled segments; 520 was enough for six.
+        // 580 leaves 540 for the tab strip, which fits every language after
+        // ``SectionTabs`` picks a text size for it.
         .frame(width: 580, height: 560)
         .tint(.keepressoBrew)
         .glassWindowBackground()
@@ -102,6 +86,88 @@ struct PreferencesView: View {
         case .display: DisplayTab(model: model)
         case .activity: ActivityTab(model: model)
         }
+    }
+}
+
+// MARK: - Section tabs
+
+/// The section switcher across the top of the Preferences window.
+///
+/// This was a segmented `Picker`, which fit until macOS 27 started giving
+/// every segment the width of the widest label. Seven equal segments ask for
+/// 655pt in English and 865pt in German against the 540pt this window has, so
+/// the strip ran off both edges with the first and last labels sliced in half.
+///
+/// A plain row of tab buttons sizes each tab to its own label again, and steps
+/// the text down a point at a time until the whole row fits, so no language
+/// runs off the edge. Widest today is Polish at 536pt, on the 12pt step.
+private struct SectionTabs: View {
+    @Binding var selection: PreferencesView.Section
+
+    var body: some View {
+        // First layout that fits wins. The last one is the floor: it also
+        // shrinks its labels, so a language longer than any shipped today
+        // still stays inside the window.
+        ViewThatFits(in: .horizontal) {
+            row(size: 13, padding: 12, minimumScale: 1)
+            row(size: 13, padding: 8, minimumScale: 1)
+            row(size: 12, padding: 6, minimumScale: 1)
+            row(size: 11, padding: 5, minimumScale: 0.8)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func row(size: CGFloat, padding: CGFloat, minimumScale: CGFloat) -> some View {
+        HStack(spacing: 2) {
+            ForEach(PreferencesView.Section.allCases) { section in
+                SectionTab(
+                    section: section,
+                    isSelected: selection == section,
+                    size: size,
+                    padding: padding,
+                    minimumScale: minimumScale
+                ) {
+                    selection = section
+                }
+            }
+        }
+    }
+}
+
+/// One tab in ``SectionTabs``. Selection reads as the brew tint on a soft
+/// plate, the same way a picked row reads in the welcome window, rather than
+/// as a filled capsule: the label keeps its weight either way, so choosing a
+/// tab never changes how wide the row wants to be.
+private struct SectionTab: View {
+    let section: PreferencesView.Section
+    let isSelected: Bool
+    let size: CGFloat
+    let padding: CGFloat
+    let minimumScale: CGFloat
+    let select: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: select) {
+            Text(LocalizedStringKey(section.rawValue))
+                .font(.system(size: size))
+                .lineLimit(1)
+                .minimumScaleFactor(minimumScale)
+                .foregroundStyle(isSelected ? AnyShapeStyle(Color.keepressoBrew) : AnyShapeStyle(.secondary))
+                .padding(.horizontal, padding)
+                .padding(.vertical, 5)
+                .background(plate, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private var plate: Color {
+        if isSelected { return Color.keepressoBrew.opacity(0.14) }
+        return hovering ? Color.primary.opacity(0.06) : .clear
     }
 }
 

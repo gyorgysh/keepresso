@@ -2494,14 +2494,15 @@ final class AppModel {
     /// record behind its back), so the flip is only visible to a ping.
     @ObservationIgnored private var approvalRecoveryWatch: Task<Void, Never>?
 
-    private func watchForApprovalRecovery() {
+    private func watchForHelperRecovery() {
         approvalRecoveryWatch?.cancel()
         approvalRecoveryWatch = Task { [weak self] in
-            // Five minutes of deciding time, one cheap ping per pass.
-            for _ in 0..<150 {
-                try? await Task.sleep(for: .seconds(2))
+            // Keep watching through delayed launchd recovery as well as
+            // approval, so a late success does not leave a reinstall prompt.
+            for _ in 0..<60 {
+                try? await Task.sleep(for: .seconds(5))
                 guard let self, !Task.isCancelled else { return }
-                guard self.helperAttention == .needsApproval else { return }
+                guard self.helperAttention != nil else { return }
                 if await self.helper.daemonResponds() {
                     await self.verifyHelperAndFollowUp()
                     return
@@ -2528,6 +2529,11 @@ final class AppModel {
         switch await helper.verifyAndRepairIfNeeded() {
         case .healthy:
             helperAttention = nil
+            // A failed engage may have raced daemon startup or reconnection.
+            // A successful ping is recovery even without re-registration;
+            // otherwise the automation stays held off for the whole session.
+            closedDisplayAuto.retryEngage()
+            awdl.retryEngage()
         case .notApplicable:
             // Mid-reinstall the status parks at requiresApproval; keep the
             // window on the approval step rather than declaring success.
@@ -2550,7 +2556,7 @@ final class AppModel {
         case .broken:
             helperAttention = .broken
         }
-        if helperAttention == .needsApproval { watchForApprovalRecovery() }
+        if helperAttention != nil { watchForHelperRecovery() }
     }
 
     /// The user closed the attention window; stop pointing at it. The helper's

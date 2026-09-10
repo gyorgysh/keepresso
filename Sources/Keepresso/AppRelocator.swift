@@ -1,4 +1,5 @@
 import AppKit
+import KeepressoCore
 
 /// On first launch from outside an Applications folder (the mounted DMG, the
 /// Downloads folder, a Gatekeeper-translocated path), move Keepresso into
@@ -19,7 +20,9 @@ enum AppRelocator {
     /// stray copy somewhere. The `SMAppService` wrappers check this before
     /// touching Background Task Management at all.
     static var runsFromApplications: Bool {
-        Bundle.main.bundleURL.deletingLastPathComponent().lastPathComponent == "Applications"
+        HelperInstallation.ownsRegistration(
+            bundleURL: Bundle.main.bundleURL, homeURL: FileManager.default.homeDirectoryForCurrentUser
+        )
     }
 
     static func relocateIfNeeded() {
@@ -37,7 +40,7 @@ enum AppRelocator {
         }
 
         // Already in an Applications folder (system or user): nothing to do.
-        if bundleURL.deletingLastPathComponent().lastPathComponent == "Applications" {
+        if runsFromApplications {
             return
         }
 

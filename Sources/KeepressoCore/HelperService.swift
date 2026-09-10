@@ -218,6 +218,9 @@ public protocol PrivilegedHelperCalling: AnyObject, Sendable {
 public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable {
     private let lock = NSLock()
     private var connection: NSXPCConnection?
+    // Health checks, wake-schedule writes, and feature calls can overlap.
+    // A completed ping must not invalidate another call's shared connection.
+    private var callsInFlight = 0
     /// What we currently want held, for re-assertion after an interruption.
     private var wantsSleepHold = false
     private var wantsAWDLHold = false
@@ -245,6 +248,18 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     /// How long a call may wait on the daemon before counting as failed.
     /// Generous enough for launchd to spawn it on first contact.
     private let timeout: TimeInterval
+    private var connectionFactory: @Sendable () -> NSXPCConnection = {
+        NSXPCConnection(machServiceName: HelperService.machServiceLabel, options: .privileged)
+    }
+    private var verifiesDaemonSignature = true
+
+    // An anonymous, in-process endpoint lets tests exercise overlapping calls
+    // without registering a privileged daemon or changing machine settings.
+    convenience init(timeout: TimeInterval, connectionFactory: @escaping @Sendable () -> NSXPCConnection) {
+        self.init(timeout: timeout)
+        self.connectionFactory = connectionFactory
+        self.verifiesDaemonSignature = false
+    }
 
     public init(timeout: TimeInterval = 8) {
         self.timeout = timeout
@@ -270,6 +285,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func setSleepHold(_ holding: Bool) -> Bool {
+        defer { releaseConnectionUnlessHeld() }
         if holding {
             lock.lock()
             wantsSleepHold = true
@@ -297,6 +313,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func setAWDLHold(_ holding: Bool) -> Bool {
+        defer { releaseConnectionUnlessHeld() }
         if holding {
             lock.lock()
             wantsAWDLHold = true
@@ -321,6 +338,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func setFanHold(_ holding: Bool, percent: Int) -> Bool {
+        defer { releaseConnectionUnlessHeld() }
         if holding {
             lock.lock()
             wantsFanHold = percent
@@ -345,6 +363,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func setPriorityHold(_ holding: Bool, pid: Int) -> Bool {
+        defer { releaseConnectionUnlessHeld() }
         if holding {
             lock.lock()
             wantsPriorityHold = pid
@@ -402,6 +421,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func setKeyboardLock(_ holding: Bool) -> Bool {
+        defer { releaseConnectionUnlessHeld() }
         if holding {
             lock.lock()
             wantsKeyboardLock = true
@@ -431,15 +451,18 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     /// ask it to exit once nothing is held. Called in the background at app
     /// launch; best-effort.
     public func retireStaleDaemon(appUpdated: Bool = false) {
-        guard let proxy = proxyForAsyncUse() else { return }
-        proxy.ping { [weak self] version in
-            if version != HelperService.protocolVersion || appUpdated {
+        // Keep the handshake counted as an in-flight call. Otherwise a
+        // concurrent health ping can invalidate it before retirement lands.
+        _ = call { proxy, done in
+            proxy.ping { version in
+                guard version != HelperService.protocolVersion || appUpdated else {
+                    done(true)
+                    return
+                }
                 proxy.terminateWhenIdle()
-            }
-            // The retire message is one-way: give it a beat to land, then
-            // release the connection so the daemon is free to exit.
-            DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
-                self?.releaseConnectionUnlessHeld()
+                // The retirement message is one-way; allow it to be delivered
+                // before relinquishing this call's claim on the connection.
+                DispatchQueue.global().asyncAfter(deadline: .now() + 2) { done(true) }
             }
         }
     }
@@ -450,6 +473,15 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     /// invoked by the connection's error handler, so a missing daemon (not
     /// installed, denied, or crashed) fails cleanly instead of hanging.
     private func call(_ body: (HelperXPCProtocol, @escaping @Sendable (Bool) -> Void) -> Void) -> Bool {
+        lock.lock()
+        callsInFlight += 1
+        lock.unlock()
+        defer {
+            lock.lock()
+            callsInFlight -= 1
+            lock.unlock()
+            releaseConnectionUnlessHeld()
+        }
         let semaphore = DispatchSemaphore(value: 0)
         let outcome = LockedOutcome()
         let done: @Sendable (Bool) -> Void = { ok in
@@ -459,10 +491,9 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         body(proxy, done)
         guard semaphore.wait(timeout: .now() + timeout) == .success else {
             _ = outcome.settle(false)
-            releaseConnectionUnlessHeld()
+            NSLog("Keepresso: helper XPC call timed out after %.0f seconds", timeout)
             return false
         }
-        releaseConnectionUnlessHeld()
         return outcome.value
     }
 
@@ -472,7 +503,7 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     /// launchd only picks up a newly installed binary on a fresh connection.
     private func releaseConnectionUnlessHeld() {
         lock.lock()
-        let held = wantsSleepHold || wantsAWDLHold || wantsFanHold != nil
+        let held = callsInFlight > 0 || wantsSleepHold || wantsAWDLHold || wantsFanHold != nil
             || wantsPriorityHold != nil || wantsKeyboardLock
         let stale = held ? nil : connection
         if !held { connection = nil }
@@ -482,7 +513,10 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
 
     private func proxy(errorHandler: @escaping @Sendable () -> Void) -> HelperXPCProtocol? {
         currentConnection()?
-            .remoteObjectProxyWithErrorHandler { _ in errorHandler() } as? HelperXPCProtocol
+            .remoteObjectProxyWithErrorHandler { error in
+                NSLog("Keepresso: helper XPC call failed: %@", error.localizedDescription)
+                errorHandler()
+            } as? HelperXPCProtocol
     }
 
     private func proxyForAsyncUse() -> HelperXPCProtocol? {
@@ -494,18 +528,20 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         lock.lock()
         defer { lock.unlock() }
         if let connection { return connection }
-        let fresh = NSXPCConnection(
-            machServiceName: HelperService.machServiceLabel,
-            options: .privileged
-        )
+        let fresh = connectionFactory()
         fresh.remoteObjectInterface = NSXPCInterface(with: HelperXPCProtocol.self)
         // Only talk to our own daemon: same team, the helper's identifier.
-        fresh.setCodeSigningRequirement(
-            HelperService.peerRequirement(identifier: HelperService.helperCodeSignIdentifier)
-        )
-        fresh.interruptionHandler = { [weak self] in self?.reassertHolds() }
-        fresh.invalidationHandler = { [weak self] in
-            guard let self else { return }
+        if verifiesDaemonSignature {
+            fresh.setCodeSigningRequirement(
+                HelperService.peerRequirement(identifier: HelperService.helperCodeSignIdentifier)
+            )
+        }
+        fresh.interruptionHandler = { [weak self, weak fresh] in
+            guard let fresh else { return }
+            self?.reassertHolds(from: fresh)
+        }
+        fresh.invalidationHandler = { [weak self, weak fresh] in
+            guard let self, let fresh else { return }
             self.lock.lock()
             // Only drop this connection. Invalidation of an interrupted
             // predecessor must not nil a replacement already created for
@@ -521,15 +557,19 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     /// The daemon went away (killed, updated, crashed) and dropped our
     /// connection-scoped holds with it. Re-take whatever we still want, on the
     /// relaunched daemon, without blocking whoever's runloop we're on.
-    private func reassertHolds() {
+    private func reassertHolds(from interrupted: NSXPCConnection) {
         lock.lock()
+        // A delayed callback from a predecessor must not tear down the
+        // replacement connection or disturb the replacement's live holds.
+        guard connection === interrupted else { lock.unlock(); return }
         // One generation per kind: a release of one hold must not make the
         // in-flight reassert of another look stale.
-        var gen: [HoldKind: Int] = [:]
+        var generations: [HoldKind: Int] = [:]
         for kind in [HoldKind.sleep, .awdl, .fan, .priority, .keyboard] {
             bumpGeneration(kind)
-            gen[kind] = holdGeneration[kind]
+            generations[kind] = holdGeneration[kind]
         }
+        let gen = generations
         let sleep = wantsSleepHold
         let awdl = wantsAWDLHold
         let fan = wantsFanHold
