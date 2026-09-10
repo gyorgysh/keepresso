@@ -3,6 +3,38 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [1.24.0] - 2026-09-11
+
+Theme: macOS 27, and a calmer administrator helper.
+
+### Changed
+
+- **Keepresso is now macOS 27 ready.** Right-clicking the menu-bar icon opens
+  the menu on its own again, without the panel dropping down behind it.
+  Preferences gets its tabs back inside the window too. macOS 27 stretched all
+  seven to the width of the longest section name, so "General" and "Activity"
+  were sliced in half at the edges. Each tab now measures its own label, and
+  the row steps its text down until every language fits.
+
+### Fixed
+
+- **The helper stopped asking for a reinstall it did not need.** A connection
+  that dropped or answered slowly after an update looked like a broken helper.
+  The health check now retries before it gives up, the window names the real
+  error and offers Refresh, and a helper that answers late clears the warning
+  by itself. Keepresso no longer unregisters the helper on its own, which
+  could throw away an approval you had already given. Reinstall Helper still
+  does that when you pick it.
+
+- **Closed-display mode and the AWDL pause come back with the helper.** Either
+  one that failed to engage while the helper was away stayed off for the rest
+  of the session. Both retry as soon as the helper answers again.
+
+- **A copy running from Xcode leaves the installed one alone.** A development
+  build no longer takes over the installed app's update record or its bundle
+  bookmark. A stale copy that macOS refuses to delete from the Trash is
+  remembered for the next attempt instead of being forgotten.
+
 ## [1.23.0] - 2026-09-08
 
 Theme: you choose what the display does when the lid shuts.
