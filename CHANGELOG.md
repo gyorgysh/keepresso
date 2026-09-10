@@ -24,7 +24,9 @@ Theme: macOS 27, and a calmer administrator helper.
   error and offers Refresh, and a helper that answers late clears the warning
   by itself. Keepresso no longer unregisters the helper on its own, which
   could throw away an approval you had already given. Reinstall Helper still
-  does that when you pick it.
+  does that when you pick it. A helper that is just slow to answer (a launchd
+  spawn after an update or reboot) no longer pops the reinstall window at
+  all: the warning appears only if it is still silent a minute later.
 
 - **Closed-display mode and the AWDL pause come back with the helper.** Either
   one that failed to engage while the helper was away stayed off for the rest

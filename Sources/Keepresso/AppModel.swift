@@ -2484,28 +2484,47 @@ final class AppModel {
 
     /// Set when the helper self-heal needs the user (approve again, or
     /// reinstall); the always-alive menu bar label opens the attention window
-    /// on this edge. Cleared once a check comes back healthy or the user
-    /// dismisses the window.
+    /// on this edge. `.broken` surfaces only after a quiet minute of retry,
+    /// so a slow daemon never pops a window. Cleared once a check comes back
+    /// healthy or the user dismisses the window.
     private(set) var helperAttention: HelperAttention?
 
     /// Watches for the approval landing while the attention window shows the
     /// switch-it-on step. The manager polls `SMAppService.status`, but that
     /// status can sit at `.enabled` the whole time (BTM disabled the daemon
     /// record behind its back), so the flip is only visible to a ping.
+    ///
+    /// A fresh `.broken` starts quiet: a slow launchd spawn heals on its own
+    /// within a minute, and that must never pop a reinstall window. Only a
+    /// daemon still dead after the quiet minute escalates to `.broken`, which
+    /// opens the window; a recovery before then clears silently.
     @ObservationIgnored private var approvalRecoveryWatch: Task<Void, Never>?
+    /// Quiet polls before a dead daemon escalates to a visible `.broken`
+    /// (12 × 5s = one minute).
+    private static let helperQuietPolls = 12
 
     private func watchForHelperRecovery() {
         approvalRecoveryWatch?.cancel()
         approvalRecoveryWatch = Task { [weak self] in
             // Keep watching through delayed launchd recovery as well as
             // approval, so a late success does not leave a reinstall prompt.
-            for _ in 0..<60 {
+            var escalated = false
+            for i in 0..<60 {
                 try? await Task.sleep(for: .seconds(5))
                 guard let self, !Task.isCancelled else { return }
-                guard self.helperAttention != nil else { return }
                 if await self.helper.daemonResponds() {
                     await self.verifyHelperAndFollowUp()
                     return
+                }
+                // Visible (.broken, .needsApproval): keep watching for the
+                // recovery that clears it.
+                if self.helperAttention != nil { continue }
+                // Quiet phase: no banner, no window. A dismissal after an
+                // escalation stays dismissed.
+                if escalated { return }
+                if i >= Self.helperQuietPolls {
+                    self.helperAttention = .broken
+                    escalated = true
                 }
             }
         }
@@ -2554,7 +2573,11 @@ final class AppModel {
                 sound: true
             )
         case .broken:
-            helperAttention = .broken
+            // Provisional: the daemon may just be slow (a launchd spawn after
+            // an update or reboot). Watch quietly for a minute and surface the
+            // window only if it is still dead then; a recovery before that
+            // clears silently without ever bothering the user.
+            watchForHelperRecovery()
         }
         if helperAttention != nil { watchForHelperRecovery() }
     }
