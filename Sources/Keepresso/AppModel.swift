@@ -2652,6 +2652,51 @@ final class AppModel {
         }
     }
 
+    /// Give macOS back its normal Sleep command immediately. This is the
+    /// explicit escape hatch surfaced anywhere Keepresso sees the global
+    /// `disablesleep` setting on. It disables session-scoped closed-display
+    /// automation first, releases any connection-scoped hold, waits for the
+    /// polling fallback to finish restoring its snapshot when necessary, then
+    /// clears a remaining persistent override. The ordering matters: clearing
+    /// first could be undone a moment later if that hold had captured `1`.
+    func restoreSystemSleep() {
+        thermalLiftedClosedDisplay = false
+        batteryLiftedClosedDisplay = false
+
+        // The osascript watchdog follows its flag on a two-second poll. Unlike
+        // the XPC helper, deleting that flag acknowledges the request before
+        // the root process has restored its snapshot. Remember this before
+        // turning the feature off so the explicit clear can be ordered after
+        // that restore instead of racing it.
+        let waitForFallbackRelease = closedDisplayAuto.isHolding && !helperInstalled
+
+        if settings.closedDisplayOnlyWhileBrewing {
+            settings.closedDisplayOnlyWhileBrewing = false
+            closedDisplayAuto.onlyWhileBrewing = false
+            persist()
+        }
+        closedDisplayCoordinator.rearmForeignHoldClear()
+
+        let needsAuthDance = !helperInstalled
+        runAfterPossibleAuthPrompt(needsPrompt: needsAuthDance) {
+            await self.closedDisplayAuto.stopIfHolding()
+            if waitForFallbackRelease {
+                try? await Task.sleep(for: .seconds(3))
+            }
+            // Re-read after releasing: when the scoped hold had captured 0,
+            // it has already restored normal sleep and no second password
+            // prompt is needed. A captured/sticky 1 still gets explicitly
+            // cleared because that is what this escape hatch promises.
+            await self.closedDisplay.refresh(force: true)
+            if self.closedDisplay.isEnabled != false {
+                await self.closedDisplay.set(false)
+            }
+            if self.closedDisplay.lastError != nil, self.helperInstalled {
+                self.verifyHelper()
+            }
+        }
+    }
+
     /// Activate, run privileged work that may show the osascript password
     /// sheet, then put the caller's window back in front.
     ///
@@ -2690,36 +2735,54 @@ final class AppModel {
             settings.closedDisplayOnlyWhileBrewing = newValue
             closedDisplayAuto.onlyWhileBrewing = newValue
             persist()
-            // Priming exists to front-load the fallback's password prompt into
-            // this window; with the helper installed no engage ever prompts,
-            // so there is nothing to pre-authorize (and priming through the
-            // daemon would flip the real setting on and off for nothing).
+            // Session-scoped mode must not inherit a previously enabled
+            // persistent `pmset disablesleep` override. That flag is global:
+            // it survives Keepresso quitting and is exactly what makes the
+            // Apple-menu Sleep command disappear after the app is gone.
+            // Clear it before priming the fallback watchdog, so the watchdog
+            // snapshots the normal value (0) and restores that value on stop,
+            // quit, or crash.
             closedDisplayCoordinator.rearmForeignHoldClear()
-            if newValue && !closedDisplayAuto.isAuthorized && !helperInstalled {
-                // A fallback engage may later need a password mid-session; be
-                // able to say so even behind other windows.
-                notifier.requestAuthorization()
-                runAfterPossibleAuthPrompt(needsPrompt: true) {
-                    await self.closedDisplayAuto.prime()
+            if newValue {
+                if !closedDisplayAuto.isAuthorized && !helperInstalled {
+                    // A fallback engage may later need a password mid-session;
+                    // do the cleanup and authorization while the user is here
+                    // answering prompts, not from a background ticker.
+                    notifier.requestAuthorization()
+                }
+                runAfterPossibleAuthPrompt(needsPrompt: !helperInstalled) {
+                    await self.closedDisplay.refresh(force: true)
+                    if self.closedDisplay.isEnabled == true {
+                        _ = await self.closedDisplay.set(false)
+                    }
+                    if !self.closedDisplayAuto.isAuthorized && !self.helperInstalled {
+                        await self.closedDisplayAuto.prime()
+                    }
                     // The user is right here answering prompts, so this is the
                     // one moment a fallback clear may ask for the password.
                     // Priming flips the real setting on and off, so re-read it
                     // before deciding anything.
-                    self.refreshThenEnforceClosedDisplay(allowPrompt: true)
+                    self.refreshThenEnforceClosedDisplay(allowPrompt: !self.helperInstalled)
                 }
-            } else if newValue {
-                refreshThenEnforceClosedDisplay()
             } else {
                 // Turning it off mid-session: release the hold (autoTick won't,
                 // it early-returns once the feature's off), then re-read the
                 // system setting once the helper has had a cycle to apply it.
+                // Also clear any persistent override left by an older run or
+                // by the persistent disclosure. Otherwise disabling this
+                // visible setting can leave SleepDisabled=1 after Keepresso
+                // quits, which removes Sleep from the Apple menu.
                 // Force the read: a menu open moments earlier leaves a fresh
                 // cache that would swallow this one, and autoTick is already
                 // gated off, so nothing else would correct it.
-                Task {
-                    await closedDisplayAuto.stopIfHolding()
+                runAfterPossibleAuthPrompt(needsPrompt: !helperInstalled) {
+                    await self.closedDisplayAuto.stopIfHolding()
                     try? await Task.sleep(for: .seconds(3))
-                    await closedDisplay.refresh(force: true)
+                    await self.closedDisplay.refresh(force: true)
+                    if self.closedDisplay.isEnabled == true {
+                        _ = await self.closedDisplay.set(false)
+                    }
+                    await self.closedDisplay.refresh(force: true)
                 }
             }
         }

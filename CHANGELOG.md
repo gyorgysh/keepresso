@@ -3,6 +3,22 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Changed
+
+- **Closed-display mode is session-scoped from the menu and Setup.** The
+  convenient switch now follows the keep-awake session and releases the system
+  sleep override when the session ends or Keepresso exits. The intentionally
+  persistent form remains available under a warned disclosure in Preferences.
+
+### Fixed
+
+- **System Sleep is always recoverable from Keepresso.** Whenever the global
+  sleep override is active, the menu and Preferences offer a direct Restore
+  System Sleep action. The password-prompt fallback also restores the exact
+  setting it found before each session after a normal release, quit, or crash.
+
 ## [1.24.1] - 2026-09-11
 
 Theme: second batch of macOS 27 updates, and a more compact menu.

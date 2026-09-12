@@ -756,3 +756,6 @@
 "Install a small helper service so closed-display mode, Keyboard Cleaner, the thermal fan boost, AWDL pausing, and DNS flush work without password prompts. macOS will ask you to allow it in System Settings, once. Nothing else changes." = "Telepítsen egy kis segédszolgáltatást, hogy a csukott fedél mód, a Billentyűzettisztító, a hővédelmi ventilátorfokozás, az AWDL szüneteltetése és a DNS ürítése jelszókérés nélkül működjön. A macOS egyszer engedélyt kér hozzá a Rendszerbeállításokban. Semmi más nem változik.";
 "Tools" = "Eszközök";
 "Help" = "Súgó";
+"Restore System Sleep" = "Rendszeralvás visszaállítása";
+"Persistent override" = "Tartós felülbírálás";
+"Keep enabled until I turn it off" = "Maradjon bekapcsolva, amíg ki nem kapcsolom";

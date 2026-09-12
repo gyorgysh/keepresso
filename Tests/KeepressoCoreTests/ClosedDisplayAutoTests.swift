@@ -13,15 +13,19 @@ import Foundation
     // sleep), follow the flag file, and background itself so the admin prompt
     // returns. Unlike the AWDL loop it must be edge-triggered: it writes
     // `disablesleep` only on a flag transition, so it never fights the user's
-    // own manual toggle, and on exit restores sleep only if it disabled it.
+    // own manual toggle, and on release/exit restores the value that was live
+    // before it took the hold.
     #expect(command.contains("kill -0 4242"))
     // The flag path is single-quoted so it stays one literal word to /bin/sh.
     #expect(command.contains("if [ -f '/Users/g/Library/Application Support/Keepresso/sleep-watchdog.flag' ]"))
-    #expect(command.contains("if [ -z \"$SET\" ]; then /usr/bin/pmset -a disablesleep 1"))
-    #expect(command.contains("elif [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0"))
+    #expect(command.contains("PRIOR=$(/usr/bin/pmset -g"))
+    #expect(command.contains("$1 == \"SleepDisabled\""))
+    #expect(command.contains("if [ \"$PRIOR\" != 1 ]; then PRIOR=0; fi"))
+    #expect(command.contains("/usr/bin/pmset -a disablesleep 1; SET=1"))
+    #expect(command.contains("elif [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep \"$PRIOR\""))
     #expect(command.hasSuffix("&"))
     #expect(command.contains("rm -f '/Users/g/Library/Application Support/Keepresso/sleep-watchdog.flag'"))
-    #expect(command.contains("if [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0; fi )"))
+    #expect(command.contains("if [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep \"$PRIOR\"; fi )"))
 }
 
 @Test func sleepWatchdogSingleQuotesAHostileFlagPath() {

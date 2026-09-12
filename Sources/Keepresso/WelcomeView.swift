@@ -26,8 +26,6 @@ struct WelcomeView: View {
     /// Drives the one-time entrance: sections fade up in a quick stagger the
     /// first time the window draws. Skipped entirely under Reduce Motion.
     @State private var revealed = false
-    /// Bumped when the lid-closed switch is clicked while the automation owns it.
-    @State private var lidRowShakes = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// A way someone uses their Mac, mapped to a built-in preset that sets up the
@@ -369,10 +367,8 @@ struct WelcomeView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
         }
-        .animation(.snappy(duration: 0.25), value: model.closedDisplayError)
         .animation(.snappy(duration: 0.25), value: model.closedDisplayAutoError)
         .animation(.snappy(duration: 0.25), value: model.closedDisplayOnlyWhileBrewing)
-        .animation(.snappy(duration: 0.25), value: model.closedDisplayEnabled)
         .entrance(0, revealed: revealed, animated: !reduceMotion)
     }
 
@@ -383,51 +379,33 @@ struct WelcomeView: View {
     /// through the helper above and otherwise with a password prompt (which
     /// the note explains while the dialog is up).
     ///
-    /// The switch itself is sticky (stays on until turned off). A callout
-    /// bubble under it offers **Only while brewing** as an optional tip, so
-    /// people who want session-tied automation can opt in without being
-    /// forced into it.
+    /// Setup offers the session-scoped form directly. The persistent override
+    /// is an advanced choice in Preferences, where its system-wide consequence
+    /// and recovery action have room to stay visible.
     private var closedDisplaySetupRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             setupRow(
                 icon: "laptopcomputer",
                 title: "Keep awake with the lid closed",
-                detail: "Keep running with the lid shut and no external display. Stays on until you switch it off."
+                detail: "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits."
             ) {
                 Toggle("", isOn: Binding(
-                    get: { model.closedDisplayEnabled },
-                    set: { model.setClosedDisplay($0) }
+                    get: { model.closedDisplayOnlyWhileBrewing },
+                    set: { model.closedDisplayOnlyWhileBrewing = $0 }
                 ))
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)
-                // Re-running setup with "only while brewing" already on: the
-                // automation owns the setting, so the row only reports it, and
-                // a click on the dead switch shakes the line that says why.
-                .disabled(model.closedDisplayBusy || model.closedDisplayOnlyWhileBrewing)
-                .overlay {
-                    if model.closedDisplayOnlyWhileBrewing {
-                        Rectangle()
-                            .fill(.clear)
-                            .contentShape(Rectangle())
-                            .onTapGesture { lidRowShakes += 1 }
-                    }
-                }
+                .disabled(model.closedDisplayAutoBusy)
             }
             if model.closedDisplayOnlyWhileBrewing {
                 Text("Follows the session while \u{201C}Only while brewing\u{201D} is on.")
                     .font(type.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .shakes(on: lidRowShakes)
-            } else if model.closedDisplayEnabled, !model.closedDisplayOnlyWhileBrewing {
-                onlyWhileBrewingHint
             }
             if model.closedDisplayAutoBusy && !model.helperInstalled {
                 AdminAuthNote(purpose: L("switch closed-display mode with the session"))
-            }
-            if model.closedDisplayBusy && !model.helperInstalled {
-                AdminAuthNote(purpose: L("keep the Mac awake with the lid closed"))
             }
             if let error = model.closedDisplayAutoError {
                 Label(error, systemImage: "exclamationmark.triangle")
@@ -435,41 +413,7 @@ struct WelcomeView: View {
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let error = model.closedDisplayError {
-                Label(error, systemImage: "exclamationmark.triangle")
-                    .font(type.caption)
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
-    }
-
-    /// Optional tip after sticky lid-closed is on: offer session-tied
-    /// closed-display without turning it on for them. Same glass-card
-    /// callout shape as the gaming and agent tips on the use-case step.
-    private var onlyWhileBrewingHint: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "cup.and.saucer.fill")
-                .font(type.title3)
-                .foregroundStyle(Color.keepressoBrew)
-                .frame(width: 26 * type.scale)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Handle it automatically")
-                    .font(type.callout.weight(.medium))
-                Text("Enable \u{201C}Only while brewing\u{201D} so closed-display follows each keep-awake session (your triggers or a manual brew) and turns off when nothing is holding the Mac awake.")
-                    .font(type.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 8)
-            Button("Enable") {
-                model.closedDisplayOnlyWhileBrewing = true
-            }
-            .controlSize(.small)
-            .disabled(model.closedDisplayAutoBusy)
-        }
-        .padding(8)
-        .glassCard(cornerRadius: 8, tint: Color.keepressoBrew.opacity(0.14))
     }
 
     /// The two safety nets as one switch: pause on low battery, and the

@@ -35,8 +35,6 @@ struct MenuBarContent: View {
     /// (stops Observation-graph growth and TimelineView CPU) and remounts
     /// when the menu opens again.
     @State private var panelVisible = true
-    /// Bumped when the lid-closed row is clicked while the automation owns it.
-    @State private var lidRowShakes = 0
     @State private var showCustomDuration = false
     @State private var showUntilTime = false
     @State private var toolsExpanded = false
@@ -245,41 +243,33 @@ struct MenuBarContent: View {
         }
     }
 
-    /// The middle option toggles (closed-display, only-while-brewing, battery),
-    /// hidden while the panel is collapsed.
+    /// The middle option toggles (session-scoped closed-display and battery),
+    /// hidden while the panel is collapsed. The persistent sleep override is
+    /// intentionally kept in Preferences; the dropdown always offers a clear
+    /// way back when the global setting is live.
     @ViewBuilder
     private var optionToggles: some View {
         Divider()
 
-        // The same pmset switch wears two names: on a laptop it exists to
-        // survive the lid closing, on a desktop (no lid, no battery) it
-        // reads as a hard "never sleep" override.
+        // The convenient path is session-scoped: it takes the global hold only
+        // while a brew is active and releases it on stop, quit, or crash.
         switchRow(model.machineHasBattery ? "Keep awake with lid closed" : "Disable system sleep",
                   isOn: Binding(
-            get: { model.closedDisplayEnabled },
-            set: { model.setClosedDisplay($0) }
+            get: { model.closedDisplayOnlyWhileBrewing },
+            set: { model.closedDisplayOnlyWhileBrewing = $0 }
         ), info: model.machineHasBattery
-            ? L("Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.")
-            : L("Stops the Mac from sleeping at all, even with no session running. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password."),
-                  // While "Only while brewing" is on, the automation owns this
-                  // setting: the switch reports what it did instead of offering
-                  // a manual override the next tick would undo anyway. Clicking
-                  // it shakes the line below, which names what is driving it.
-                  switchLocked: model.closedDisplayOnlyWhileBrewing,
-                  onLockedTap: { lidRowShakes += 1 })
-        .disabled(model.closedDisplayBusy)
-        if model.closedDisplayBusy {
+            ? L("Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.")
+            : L("Turns the sleep override on when a keep-awake session starts and off when it ends or Keepresso quits."))
+        .disabled(model.closedDisplayAutoBusy || model.closedDisplayBusy)
+        if model.closedDisplayAutoBusy && !model.helperInstalled {
             AdminAuthNote(purpose: model.machineHasBattery
-                ? L("keep the Mac awake with the lid closed")
-                : L("disable system sleep"))
+                ? L("switch closed-display mode with the session")
+                : L("switch the sleep override with the session"))
         }
-        if model.closedDisplayOnlyWhileBrewing {
-            Text("Follows the session while \u{201C}Only while brewing\u{201D} is on.")
-                .font(type.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .shakes(on: lidRowShakes)
-        }
+
+        // `SleepDisabled 1` removes Sleep from the Apple menu. Never make the
+        // user hunt through Preferences or Terminal to recover it, whether the
+        // value came from the scoped hold or the advanced persistent override.
         if model.closedDisplayEnabled {
             Text(model.machineHasBattery
                 ? L("Stays awake on battery too; the display turns off when the lid closes. Turn it off before putting it in a bag.")
@@ -287,8 +277,13 @@ struct MenuBarContent: View {
                 .font(type.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            Button("Restore System Sleep") { model.restoreSystemSleep() }
+                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity)
+                .disabled(model.closedDisplayBusy || model.closedDisplayAutoBusy)
         }
-        if model.machineHasBattery && model.closedDisplayEnabled {
+        if model.machineHasBattery
+            && (model.closedDisplayOnlyWhileBrewing || model.closedDisplayEnabled) {
             Picker(L("If the lid shuts"), selection: Binding(
                 get: { model.closedLidDisplayPolicy },
                 set: { model.closedLidDisplayPolicy = $0 }
@@ -316,18 +311,6 @@ struct MenuBarContent: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
 
-        switchRow("Only while brewing", isOn: Binding(
-            get: { model.closedDisplayOnlyWhileBrewing },
-            set: { model.closedDisplayOnlyWhileBrewing = $0 }
-        ), info: model.machineHasBattery
-            ? L("Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.")
-            : L("Turns the sleep override on when a keep-awake session starts and off when it ends or Keepresso quits."))
-        .disabled(model.closedDisplayAutoBusy)
-        if model.closedDisplayAutoBusy && !model.helperInstalled {
-            AdminAuthNote(purpose: model.machineHasBattery
-                ? L("switch closed-display mode with the session")
-                : L("switch the sleep override with the session"))
-        }
         if let error = model.closedDisplayAutoError {
             Text(error)
                 .font(type.caption)

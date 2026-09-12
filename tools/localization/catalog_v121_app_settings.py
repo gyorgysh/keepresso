@@ -122,4 +122,16 @@ APP = {
         "hu": "Súgó", "es": "Ayuda", "fr": "Aide", "de": "Hilfe", "zh-Hans": "帮助",
         "it": "Aiuto", "ja": "ヘルプ", "ko": "도움말", "ru": "Справка", "pt-BR": "Ajuda", "tr": "Yardım", "pl": "Pomoc", "uk": "Довідка", "zh-Hant": "說明",
     },
+    "Restore System Sleep": {
+        "hu": "Rendszeralvás visszaállítása", "es": "Restaurar reposo del sistema", "fr": "Rétablir la mise en veille du système", "de": "Systemruhezustand wiederherstellen", "zh-Hans": "恢复系统睡眠",
+        "it": "Ripristina stop di sistema", "ja": "システムスリープを復元", "ko": "시스템 잠자기 복원", "ru": "Восстановить системный сон", "pt-BR": "Restaurar repouso do sistema", "tr": "Sistem uykusunu geri yükle", "pl": "Przywróć usypianie systemu", "uk": "Відновити системний сон", "zh-Hant": "恢復系統睡眠",
+    },
+    "Persistent override": {
+        "hu": "Tartós felülbírálás", "es": "Anulación persistente", "fr": "Dérogation persistante", "de": "Dauerhafte Außerkraftsetzung", "zh-Hans": "持久覆盖",
+        "it": "Forzatura persistente", "ja": "永続的なオーバーライド", "ko": "지속 재정의", "ru": "Постоянное переопределение", "pt-BR": "Substituição persistente", "tr": "Kalıcı geçersiz kılma", "pl": "Trwałe wymuszenie", "uk": "Постійне перевизначення", "zh-Hant": "持久覆寫",
+    },
+    "Keep enabled until I turn it off": {
+        "hu": "Maradjon bekapcsolva, amíg ki nem kapcsolom", "es": "Mantener activado hasta que lo desactive", "fr": "Garder activé jusqu’à ce que je le désactive", "de": "Aktiviert lassen, bis ich es ausschalte", "zh-Hans": "保持启用，直到我将其关闭",
+        "it": "Mantieni attivo finché non lo disattivo", "ja": "自分でオフにするまで有効にする", "ko": "직접 끌 때까지 활성화 유지", "ru": "Оставлять включённым, пока я не выключу", "pt-BR": "Manter ativado até eu desativar", "tr": "Ben kapatana kadar etkin tut", "pl": "Pozostaw włączone, dopóki go nie wyłączę", "uk": "Залишати ввімкненим, доки я не вимкну", "zh-Hant": "保持啟用，直到我將其關閉",
+    },
 }

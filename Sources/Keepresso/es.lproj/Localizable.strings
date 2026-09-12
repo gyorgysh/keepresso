@@ -756,3 +756,6 @@
 "Install a small helper service so closed-display mode, Keyboard Cleaner, the thermal fan boost, AWDL pausing, and DNS flush work without password prompts. macOS will ask you to allow it in System Settings, once. Nothing else changes." = "Instala un pequeño servicio auxiliar para que el modo con pantalla cerrada, el Limpiador de teclado, el refuerzo térmico de los ventiladores, la pausa de AWDL y el vaciado de DNS funcionen sin solicitudes de contraseña. macOS te pedirá autorizarlo una vez en Ajustes del Sistema. No cambia nada más.";
 "Tools" = "Herramientas";
 "Help" = "Ayuda";
+"Restore System Sleep" = "Restaurar reposo del sistema";
+"Persistent override" = "Anulación persistente";
+"Keep enabled until I turn it off" = "Mantener activado hasta que lo desactive";

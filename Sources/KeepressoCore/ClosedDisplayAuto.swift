@@ -38,7 +38,10 @@ extension SleepWatchdogLaunching {
 /// Real backend: the flag lives in Application Support, and the loop is
 /// spawned as root via `osascript`'s "with administrator privileges" (the same
 /// admin seam ``PMSetSleepControl`` and ``OsascriptAWDLWatchdog`` use),
-/// backgrounded so the prompt returns as soon as the loop is running.
+/// backgrounded so the prompt returns as soon as the loop is running. The
+/// helper snapshots the live `disablesleep` value before its first write and
+/// restores that exact value on release or app exit, so it never clears a
+/// setting another tool already owned.
 public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
     private let flagURL: URL
 
@@ -95,21 +98,27 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
     /// `disablesleep` behind our back, and re-asserting every cycle would fight
     /// the user's own manual toggle (``PMSetSleepControl`` writes the same
     /// setting directly). So it writes only on a flag transition, and on app
-    /// death restores normal sleep only if it was the one that disabled it, so
-    /// a crash or quit mid-session fails safe while a manually enabled global
-    /// setting survives untouched.
+    /// death restores the value that was live before it took the hold. A crash
+    /// or quit mid-session therefore fails safe without overwriting a manually
+    /// enabled global setting.
     static func watchdogCommand(flagPath: String, appPID: Int32) -> String {
         // Single-quote the path so it stays one literal word to /bin/sh (the
         // command runs as root via `do shell script`). See
         // ``OsascriptAWDLWatchdog/shellSingleQuoted(_:)``.
         let flag = OsascriptAWDLWatchdog.shellSingleQuoted(flagPath)
-        return "( SET=; while kill -0 \(appPID) 2>/dev/null; do "
+        // Capture PRIOR on the first off -> on edge, not when the helper starts:
+        // priming starts it with no flag, and another tool may legitimately
+        // change the setting before the first brew. `pmset -g` omits the row
+        // when the value is zero, so anything except an explicit 1 becomes 0.
+        let readPrior = "PRIOR=$(/usr/bin/pmset -g | /usr/bin/awk '$1 == \"SleepDisabled\" { print $2; exit }'); "
+            + "if [ \"$PRIOR\" != 1 ]; then PRIOR=0; fi; "
+        return "( SET=; PRIOR=0; while kill -0 \(appPID) 2>/dev/null; do "
             + "if [ -f \(flag) ]; then "
-            + "if [ -z \"$SET\" ]; then /usr/bin/pmset -a disablesleep 1; SET=1; fi; "
-            + "elif [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0; SET=; fi; "
+            + "if [ -z \"$SET\" ]; then \(readPrior)/usr/bin/pmset -a disablesleep 1; SET=1; fi; "
+            + "elif [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep \"$PRIOR\"; SET=; fi; "
             + "sleep 2; done; "
             + "rm -f \(flag); "
-            + "if [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0; fi ) </dev/null >/dev/null 2>&1 &"
+            + "if [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep \"$PRIOR\"; fi ) </dev/null >/dev/null 2>&1 &"
     }
 
     /// Run a command and return its exit status plus stderr, or `nil` if it

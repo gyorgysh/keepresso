@@ -756,3 +756,6 @@
 "Install a small helper service so closed-display mode, Keyboard Cleaner, the thermal fan boost, AWDL pausing, and DNS flush work without password prompts. macOS will ask you to allow it in System Settings, once. Nothing else changes." = "작은 도우미 서비스를 설치하면 디스플레이 닫힘 모드, 키보드 클리너, 열 관리 팬 부스트, AWDL 일시 정지 및 DNS 플러시가 암호 요청 없이 작동합니다. macOS가 시스템 설정에서 한 번 허용을 요청합니다. 그 외에는 아무것도 바뀌지 않습니다.";
 "Tools" = "도구";
 "Help" = "도움말";
+"Restore System Sleep" = "시스템 잠자기 복원";
+"Persistent override" = "지속 재정의";
+"Keep enabled until I turn it off" = "직접 끌 때까지 활성화 유지";

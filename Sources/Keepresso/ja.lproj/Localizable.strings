@@ -756,3 +756,6 @@
 "Install a small helper service so closed-display mode, Keyboard Cleaner, the thermal fan boost, AWDL pausing, and DNS flush work without password prompts. macOS will ask you to allow it in System Settings, once. Nothing else changes." = "小さなヘルパーサービスをインストールすると、クラムシェルモード、キーボードクリーナー、熱によるファン増速、AWDL の一時停止、DNS フラッシュがパスワードの要求なしで動作します。macOS はシステム設定で一度だけ許可を求めます。ほかには何も変わりません。";
 "Tools" = "ツール";
 "Help" = "ヘルプ";
+"Restore System Sleep" = "システムスリープを復元";
+"Persistent override" = "永続的なオーバーライド";
+"Keep enabled until I turn it off" = "自分でオフにするまで有効にする";
