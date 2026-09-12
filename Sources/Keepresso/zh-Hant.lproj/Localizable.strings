@@ -53,6 +53,8 @@
 "Touch" = "觸碰";
 "Resolution" = "解析度";
 "Startup" = "啟動";
+"Manual session" = "手動工作階段";
+"A manual session keeps the Mac awake for the selected duration even when no trigger condition is met. Starting one pauses triggers until you resume them." = "手動工作階段會在所選時長內讓 Mac 保持喚醒，即使沒有符合任何觸發條件。啟動後，觸發器會暫停，直到你恢復它們。";
 "Gaming" = "遊戲";
 "None" = "無";
 "any" = "任一";

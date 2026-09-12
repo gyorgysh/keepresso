@@ -52,6 +52,8 @@ APP = {
     "Touch": "Atualizar",
     "Resolution": "Resolução",
     "Startup": "Inicialização",
+    "Manual session": "Sessão manual",
+    "A manual session keeps the Mac awake for the selected duration even when no trigger condition is met. Starting one pauses triggers until you resume them.": "Uma sessão manual mantém o Mac ativo pelo período selecionado mesmo quando nenhuma condição de acionamento é atendida. Ao iniciá-la, os acionadores ficam pausados até você retomá-los.",
     "Gaming": "Jogos",
     "None": "Nenhum",
     "any": "qualquer uma",

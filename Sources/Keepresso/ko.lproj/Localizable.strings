@@ -53,6 +53,8 @@
 "Touch" = "터치";
 "Resolution" = "해상도";
 "Startup" = "시작";
+"Manual session" = "수동 세션";
+"A manual session keeps the Mac awake for the selected duration even when no trigger condition is met. Starting one pauses triggers until you resume them." = "수동 세션은 트리거 조건이 충족되지 않아도 선택한 시간 동안 Mac이 잠자기 상태로 전환되지 않게 합니다. 시작하면 다시 재개할 때까지 트리거가 일시 중지됩니다.";
 "Gaming" = "게임";
 "None" = "없음";
 "any" = "임의";

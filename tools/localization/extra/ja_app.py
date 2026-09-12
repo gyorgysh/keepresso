@@ -52,6 +52,8 @@ APP = {
     "Touch": "更新",
     "Resolution": "解像度",
     "Startup": "起動",
+    "Manual session": "手動セッション",
+    "A manual session keeps the Mac awake for the selected duration even when no trigger condition is met. Starting one pauses triggers until you resume them.": "手動セッションは、トリガー条件が満たされていなくても、選択した時間だけMacをスリープさせません。開始すると、再開するまでトリガーは一時停止します。",
     "Gaming": "ゲーム",
     "None": "なし",
     "any": "いずれか",

@@ -53,6 +53,8 @@
 "Touch" = "Aggiorna";
 "Resolution" = "Risoluzione";
 "Startup" = "Avvio";
+"Manual session" = "Sessione manuale";
+"A manual session keeps the Mac awake for the selected duration even when no trigger condition is met. Starting one pauses triggers until you resume them." = "Una sessione manuale mantiene il Mac attivo per la durata selezionata anche quando nessuna condizione di attivazione è soddisfatta. Avviandola, le attivazioni vengono messe in pausa finché non le riprendi.";
 "Gaming" = "Gaming";
 "None" = "Nessuno";
 "any" = "una qualsiasi";

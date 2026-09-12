@@ -42,17 +42,18 @@ struct MenuBarContent: View {
     @State private var toolsExpanded = false
     @State private var helpExpanded = false
 
-    private static let durationOptions: [(label: String, mode: SessionMode)] = [
-        ("Indefinitely", .indefinite),
-        ("15 minutes", .timed(duration: 15 * 60)),
-        ("1 hour", .timed(duration: 60 * 60)),
-        ("4 hours", .timed(duration: 4 * 60 * 60)),
-    ]
+    static var durationOptions: [(label: String, mode: SessionMode)] { [
+        (L("Indefinitely"), .indefinite),
+        (L("15 minutes"), .timed(duration: 15 * 60)),
+        (L("1 hour"), .timed(duration: 60 * 60)),
+        (shortDuration(3 * 60 * 60), .timed(duration: 3 * 60 * 60)),
+        (L("4 hours"), .timed(duration: 4 * 60 * 60)),
+    ] }
 
     /// The menu label for the current mode: a preset's name when it matches,
     /// otherwise the custom duration spelled out ("2 h 30 min").
     static func modeLabel(_ mode: SessionMode) -> String {
-        if let preset = durationOptions.first(where: { $0.mode == mode }) { return L(preset.label) }
+        if let preset = durationOptions.first(where: { $0.mode == mode }) { return preset.label }
         guard let duration = mode.duration else { return L("Indefinitely") }
         return shortDuration(duration)
     }
@@ -123,6 +124,28 @@ struct MenuBarContent: View {
             Divider()
 
             if model.triggersEnabled && !model.triggersPaused {
+                LabeledContent("Keep awake") {
+                    Menu("For") {
+                        ForEach(Array(Self.durationOptions.enumerated()), id: \.offset) { _, option in
+                            Button(option.label) { model.startManualOverride(mode: option.mode) }
+                        }
+                        Divider()
+                        Button("Custom Duration\u{2026}") { showCustomDuration = true }
+                        Button("Until a Time\u{2026}") { showUntilTime = true }
+                    }
+                    .fixedSize()
+                }
+                .popover(isPresented: $showCustomDuration) {
+                    CustomDurationEditor(initial: model.defaultMode.duration ?? 3 * 60 * 60) {
+                        model.startManualOverride(mode: .timed(duration: $0))
+                    }
+                }
+                .popover(isPresented: $showUntilTime) {
+                    UntilTimeEditor(isActive: session.isActive) { hour, minute in
+                        model.startUntil(hour: hour, minute: minute)
+                    }
+                }
+
                 // Pausing means "let my Mac sleep", so live automation
                 // leases come first: the row offers ending them, and only
                 // once none are live does it offer the pause itself.
@@ -159,7 +182,7 @@ struct MenuBarContent: View {
                 LabeledContent("For") {
                     Menu(Self.modeLabel(model.mode)) {
                         ForEach(Array(Self.durationOptions.enumerated()), id: \.offset) { _, option in
-                            Button(L(option.label)) { model.mode = option.mode }
+                            Button(option.label) { model.mode = option.mode }
                         }
                         Divider()
                         Button("Custom Duration\u{2026}") { showCustomDuration = true }
@@ -584,7 +607,7 @@ struct MenuBarContent: View {
     /// Popover behind "Custom Duration…": hour/minute steppers that set the
     /// session duration (used the next time it starts, or restarting a running
     /// session, exactly like picking a preset duration).
-    private struct CustomDurationEditor: View {
+    struct CustomDurationEditor: View {
         @State private var hours: Int
         @State private var minutes: Int
         let apply: (TimeInterval) -> Void

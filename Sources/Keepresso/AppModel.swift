@@ -336,6 +336,16 @@ final class AppModel {
         }
     }
 
+    /// Take manual control from trigger gating and begin a session with an
+    /// explicit duration. This is the menu/Preferences path for requests such
+    /// as "keep awake for three hours regardless of the current triggers."
+    func startManualOverride(mode: SessionMode) {
+        pauseTriggers()
+        settings.defaultMode = mode
+        persist()
+        session.start(mode: mode)
+    }
+
     /// Start (or restart) a session running until the next occurrence of a
     /// wall-clock time. The duration is computed here, at start, so it always
     /// lands on the chosen time; the choice is deliberately not persisted as
@@ -442,6 +452,16 @@ final class AppModel {
     }
 
     // MARK: - Session mode (manual sessions)
+
+    /// The saved duration for the next manual session. Preferences edits this
+    /// without changing the deadline of a session that is already running.
+    var defaultMode: SessionMode {
+        get { settings.defaultMode }
+        set {
+            settings.defaultMode = newValue
+            persist()
+        }
+    }
 
     /// The chosen duration. While idle it reflects the saved default (so the
     /// picker shows it before activating); while active it restarts the session.
