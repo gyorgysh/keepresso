@@ -3,6 +3,55 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [1.25.0] - 2026-09-14
+
+Theme: scheduled wakes land on time, and the app stops tripping over corrupt input.
+
+### Changed
+
+- **Scheduled wakes fire at the time you picked, even on DST days.** The
+  repeat slot was computed from elapsed seconds, which disagree with
+  wall-clock time by an hour on transition days. Slots now resolve through
+  the calendar, and impossible dates like February 31 are rejected instead
+  of sliding silently into March. Rapid schedule edits also coalesce into
+  one privileged apply instead of racing each other.
+
+- **Locking the keyboard no longer freezes the app.** The lock and its
+  password prompt run off the main thread, so the app stays responsive
+  while the dialog is up. An Unlock pressed during a slow restore is queued
+  and serviced after, instead of being dropped.
+
+- **Updates cannot leave you with no installed copy.** The new version
+  stages beside the old one and swaps atomically; if staging fails, the app
+  launches the working install you already had instead of running from the
+  disk image.
+
+- **The widget stops claiming you are brewing after a crash.** A live
+  session re-checks hourly and flips to idle when the app is gone; a timed
+  session still refreshes exactly at its end.
+
+- **Codex detection follows CODEX_HOME.** Hooks installed under a custom
+  Codex home while detection watched the default directory; both read the
+  same root now.
+
+- **The Wi-Fi helper tells a dead connection from a hotel portal.** No
+  route shows the generic offline copy; DNS and refused errors keep the
+  portal copy and the login button.
+
+### Fixed
+
+- **AI-agent triggers no longer hang the app.** Any live agent rule wedged
+  the activity monitor on its first background refresh and froze the menu a
+  second later. Refreshes run clean now.
+
+- **A corrupt import can no longer crash the menu on open.** Absurd grace
+  intervals and reminder times are bounded at decode; every duration label
+  saturates instead of trapping.
+
+- **A refused shortcut no longer kills your hotkey.** When the system gives
+  the combination to another app, the previous shortcut is put back and the
+  refusal is logged.
+
 ## [1.24.1] - 2026-09-11
 
 Theme: second batch of macOS 27 updates, and a more compact menu.
