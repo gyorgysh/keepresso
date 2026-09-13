@@ -919,6 +919,61 @@ private final class StubGate: TriggerEvaluating {
 }
 
 @MainActor
+@Test func manualSessionResumesWhenPluggedInAfterBatteryPause() {
+    let (controller, fake, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.start()
+    #expect(controller.isActive)
+
+    controller.reconcile(battery: .discharging(15))
+    #expect(controller.isActive == false)
+    #expect(controller.pausedByBattery)
+    #expect(fake.held.isEmpty)
+
+    // Plugging in lifts the pause, and the paused manual session comes back
+    // on its own: the menu promises this, and nothing else restarts it.
+    controller.reconcile(battery: .onAC)
+    #expect(controller.pausedByBattery == false)
+    #expect(controller.isActive)
+    #expect(fake.held == [.system])
+}
+
+@MainActor
+@Test func manualSessionResumesWhenBatteryRecoversAboveMargin() {
+    let (controller, fake, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.start()
+
+    controller.reconcile(battery: .discharging(15))
+    #expect(controller.isActive == false)
+
+    controller.reconcile(battery: .discharging(22)) // inside the margin: still held
+    #expect(controller.isActive == false)
+
+    controller.reconcile(battery: .discharging(23)) // clears cutoff + margin: resume
+    #expect(controller.isActive)
+    #expect(fake.held == [.system])
+}
+
+@MainActor
+@Test func manualStopDuringBatteryPauseCancelsAutoResume() {
+    let (controller, fake, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.start()
+
+    controller.reconcile(battery: .discharging(15))
+    #expect(controller.pausedByBattery)
+
+    // The user stopped it while paused: that explicit stop wins, plugging in
+    // must not restart brewing behind their back.
+    controller.stop()
+    controller.reconcile(battery: .onAC)
+    #expect(controller.pausedByBattery == false)
+    #expect(controller.isActive == false)
+    #expect(fake.held.isEmpty)
+}
+
+@MainActor
 @Test func batteryThresholdIgnoredWhenNoReadingSupplied() {
     let (controller, fake, _) = makeController()
     controller.pauseBelowBatteryPercent = 20
@@ -986,11 +1041,12 @@ private final class StubGate: TriggerEvaluating {
     #expect(controller.pausedByThermal)
     #expect(fake.held.isEmpty)
 
-    // Recovery releases the latch; the session does not restart on its own
-    // (it was a manual session, the user starts it again).
+    // Recovery releases the latch and the paused manual session resumes on
+    // its own, mirroring the battery pause (the menu promises this).
     controller.reconcile(thermal: .clear)
     #expect(controller.pausedByThermal == false)
-    #expect(controller.isActive == false)
+    #expect(controller.isActive)
+    #expect(fake.held == [.system])
 }
 
 @MainActor

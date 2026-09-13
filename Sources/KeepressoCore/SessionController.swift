@@ -257,6 +257,19 @@ public final class SessionController {
     /// The thermal twin of ``batteryRefusedStarts``.
     public private(set) var thermalRefusedStarts = 0
 
+    /// A manual session a safety pause (battery or thermal) force-stopped,
+    /// remembered so ``reconcile`` restarts it when the pause lifts. Only
+    /// manual sessions need this: trigger-gated and lease-held sessions
+    /// reactivate through the gate and lease demand on the next tick, and
+    /// recording them would fight that ownership. Any explicit `start` or
+    /// `stop` clears it, so user intent always wins over the remembered pause.
+    private var safetyPausedManual: (
+        mode: SessionMode,
+        options: SleepPreventionOptions,
+        startedAt: Date?,
+        reason: String
+    )?
+
     /// Set when ``reconcile(now:systemIdleSeconds:battery:thermal:)`` wanted
     /// power assertions that the backend did not hold afterwards (an
     /// `IOPMAssertionCreateWithName` failure). Cleared once the held set
@@ -350,6 +363,8 @@ public final class SessionController {
         // A manual start takes ownership: lease expiry no longer ends the
         // session, and the timed cap applies again.
         leaseHeld = false
+        // Fresh user intent supersedes anything a safety pause remembered.
+        safetyPausedManual = nil
         let restarted = isActive
         if let options { self.options = options }
         self.mode = mode
@@ -433,6 +448,10 @@ public final class SessionController {
         remindersFired = 0
         endingSoonFired = false
         lastActivityPokeAt = nil
+        // An explicit stop cancels a pending auto-resume: the user ended it,
+        // so a later pause lift must not restart brewing behind their back.
+        // The safety-pause paths re-record below, after this teardown.
+        safetyPausedManual = nil
         // Drop the lid latch so the next start fails open until the host
         // supplies a real display reading (avoids holding a stale shut
         // verdict across open-then-start before the next ticker sample).
@@ -450,6 +469,58 @@ public final class SessionController {
         case .safetyPause:
             performEndEffects(notice: notice, scheduleAction: false)
         }
+    }
+
+    /// Force-stop for a safety pause (battery or thermal), remembering a
+    /// manual session so the pause lifting restarts it. Trigger-gated and
+    /// lease-held sessions reactivate through the gate and lease demand, so
+    /// only a session the manual toggle owns is recorded; anything else would
+    /// fight that ownership on resume.
+    private func safetyStop(
+        reason: String,
+        effects: StopEffects,
+        notice: (title: String, body: String)?,
+        resumeReason: String
+    ) {
+        let manualOwned = triggerGate == nil && !leaseHeld
+        let snapshot = (mode: mode, options: options, startedAt: startedAt, reason: resumeReason)
+        stop(reason: reason, effects: effects, notice: notice)
+        if manualOwned { safetyPausedManual = snapshot }
+    }
+
+    /// Restart a manual session a safety pause stopped, now that the pause
+    /// has lifted. Mirrors what ``start(mode:options:cause:)`` sets, but logs
+    /// the resume truthfully instead of as a fresh manual start, and keeps
+    /// the original `startedAt` so a timed session's remaining time stays
+    /// honest (an overdue deadline ends on the next tick, as it should).
+    private func resumeSafetyPausedSession(
+        _ paused: (
+            mode: SessionMode,
+            options: SleepPreventionOptions,
+            startedAt: Date?,
+            reason: String
+        ),
+        at instant: Date
+    ) {
+        safetyPausedManual = nil
+        cancelPendingEndAction()
+        leaseHeld = false
+        mode = paused.mode
+        options = paused.options
+        startedAt = paused.startedAt ?? instant
+        isActive = true
+        remindersFired = 0
+        lastActivityPokeAt = nil
+        armEndingSoon(remaining: paused.mode.duration.map {
+            $0 - instant.timeIntervalSince(startedAt ?? instant)
+        })
+        log.record(
+            began: true,
+            reason: paused.reason,
+            kind: .sessionStarted,
+            batteryPercent: lastBatteryPercent,
+            at: instant
+        )
     }
 
     /// Notify (and optionally schedule the end action) when a session ends on
@@ -642,13 +713,14 @@ public final class SessionController {
                 // lifts, arbitrarily later.
                 cancelPendingEndAction()
                 if isActive {
-                    stop(
+                    safetyStop(
                         reason: L("Paused, battery below %d%%", threshold),
                         effects: .safetyPause(kind: .batteryPaused),
                         notice: (
                             title: L("Paused on low battery"),
                             body: L("Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge.", percent)
-                        )
+                        ),
+                        resumeReason: L("Resumed, battery recovered")
                     )
                 }
                 return
@@ -677,13 +749,14 @@ public final class SessionController {
                     // Same rule as the battery latch above.
                     cancelPendingEndAction()
                     if isActive {
-                        stop(
+                        safetyStop(
                             reason: L("Paused, the Mac is running hot"),
                             effects: .safetyPause(kind: .thermalPaused),
                             notice: (
                                 title: L("Paused on high temperature"),
                                 body: L("Keepresso stopped the keep-awake session so the Mac can cool down. It resumes when temperatures recover.")
-                            )
+                            ),
+                            resumeReason: L("Resumed, temperature recovered")
                         )
                     }
                 }
@@ -753,6 +826,13 @@ public final class SessionController {
             // A safety pause never reaches this point (the latches above
             // early-return), so activating on lease demand is always safe.
             beginLeaseSession(at: instant)
+        } else if !isActive, triggerGate == nil, let paused = safetyPausedManual {
+            // The pause lifted on a manual session with nothing else to
+            // restart it: no gate (which would have reactivated above) and no
+            // leases (which won the branch above). Bring back what the pause
+            // stopped. Either latch still holding returned early, so reaching
+            // here means the pause genuinely lifted.
+            resumeSafetyPausedSession(paused, at: instant)
         } else if isActive, leaseHeld, !leaseDemand {
             stop(
                 reason: L("Automation lease ended"),
@@ -1117,6 +1197,8 @@ public final class SessionController {
     /// demand is leases, with the log attributed to the first live lease.
     private func beginLeaseSession(at instant: Date) {
         cancelPendingEndAction()
+        // The lease owns the session from here, not a remembered manual one.
+        safetyPausedManual = nil
         isActive = true
         startedAt = instant
         remindersFired = 0
