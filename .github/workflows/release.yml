@@ -24,10 +24,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # A tag that disagrees with project.yml would publish a DMG named for
       # the old version under the new release, breaking the cask and appcast
-      # URLs. Fail before anything is built or signed.
+      # URLs. Fail before anything is built or signed. The check script also
+      # requires every version/build literal in project.yml to agree, so a
+      # drifted widget/helper literal cannot ship silently.
       - name: Verify tag matches project version
         run: |
-          MARKETING=$(awk -F'"' '/MARKETING_VERSION:/ {print $2; exit}' project.yml)
+          read -r MARKETING _ < <(bash scripts/check-versions.sh)
           if [ "$MARKETING" != "${GITHUB_REF_NAME#v}" ]; then
             echo "::error::tag ${GITHUB_REF_NAME} does not match project.yml MARKETING_VERSION ${MARKETING}; bump project.yml before tagging"
             exit 1

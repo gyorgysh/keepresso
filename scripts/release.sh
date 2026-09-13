@@ -41,7 +41,8 @@ die()  { printf '\033[1;31mError:\033[0m %s\n' "$1" >&2; exit 1; }
 
 command -v gh >/dev/null 2>&1 || die "gh CLI not found (brew install gh; gh auth login)"
 
-VERSION="$(awk -F'"' '/MARKETING_VERSION:/ {print $2; exit}' project.yml)"
+read -r VERSION _ < <("$SCRIPT_DIR/check-versions.sh") \
+  || die "project.yml version literals disagree (see above)"
 [ -n "$VERSION" ] || die "Couldn't read MARKETING_VERSION from project.yml"
 TAG="v$VERSION"
 DMG_PATH="$DIST_DIR/Keepresso-$VERSION.dmg"
