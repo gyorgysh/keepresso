@@ -759,6 +759,70 @@ private final class FakeEngineKeyboard: KeyboardRemapping, @unchecked Sendable {
     #expect(state.markers().isEmpty)
 }
 
+@Test func staleMarkerAloneNeverTriggersAnInLifeWrite() {
+    // A leftover marker with no holders (a previous life, settled at the
+    // next launch) must not turn an unrelated connection teardown into a
+    // privileged write.
+    let runner = FakeRunner()
+    let fans = FakeFanControl()
+    let state = FakeRestoreState(values: [.sleepDisabled: "1", .awdlDown: "", .fanForced: ""])
+    let engine = HelperEngine(runner: runner, state: state, fans: fans)
+    engine.clientDisconnected(99) // held nothing
+    #expect(runner.commands.isEmpty)
+    #expect(fans.restoreCalls == 0)
+    #expect(state.markers() == [.sleepDisabled, .awdlDown, .fanForced])
+}
+
+@Test func failedSleepRestoreRetriesOnTheNextNoOpRelease() {
+    let runner = FakeRunner()
+    let state = FakeRestoreState()
+    let engine = HelperEngine(runner: runner, state: state, sleepDisabledReader: { false })
+
+    #expect(engine.setSleepHold(client: 1, holding: true))
+    runner.failNext = true
+    #expect(!engine.setSleepHold(client: 1, holding: false)) // restore fails, debt kept
+    #expect(state.value(for: .sleepDisabled) == "0")
+
+    // An unrelated teardown retries the known-fresh debt and settles it.
+    engine.clientDisconnected(99)
+    #expect(runner.commands == [sleepOn, sleepOff, sleepOff])
+    #expect(state.markers().isEmpty)
+
+    // Settled: further teardowns are quiet again.
+    engine.clientDisconnected(100)
+    #expect(runner.commands == [sleepOn, sleepOff, sleepOff])
+}
+
+@Test func failedAWDLRestoreRetriesOnTheNextNoOpRelease() {
+    let runner = FakeRunner()
+    let state = FakeRestoreState()
+    let engine = HelperEngine(runner: runner, state: state)
+
+    #expect(engine.setAWDLHold(client: 1, holding: true))
+    runner.failNext = true
+    #expect(!engine.setAWDLHold(client: 1, holding: false))
+    #expect(state.markers() == [.awdlDown])
+
+    engine.clientDisconnected(99)
+    #expect(runner.commands.last == awdlUp)
+    #expect(state.markers().isEmpty)
+}
+
+@Test func explicitSetSleepDisabledSupersedesARestoreDebt() {
+    // A stale marker recording prior "1", then the user turns the toggle
+    // off: the next no-op release must not re-enable disablesleep behind
+    // their back. The marker is re-based to the chosen value instead.
+    let runner = FakeRunner()
+    let state = FakeRestoreState(values: [.sleepDisabled: "1"])
+    let engine = HelperEngine(runner: runner, state: state)
+
+    #expect(engine.setSleepDisabled(false))
+    #expect(state.value(for: .sleepDisabled) == "0")
+
+    engine.clientDisconnected(99)
+    #expect(runner.commands == [sleepOff]) // only the explicit set, no retry write
+}
+
 @Test func restoreAtLaunchLeavesCorruptKeyboardMarkerUntouched() {
     let keyboard = FakeEngineKeyboard()
     let original = keyboard.current
