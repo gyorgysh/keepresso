@@ -62,11 +62,18 @@ enum AppRelocator {
             // double-clicking a newer DMG expects to end up on the new version,
             // not silently back on the old one. Keep an equal-or-newer install.
             if (buildNumber(of: dest) ?? 0) < (buildNumber(of: bundleURL) ?? 0) {
+                // Stage the copy first, then swap it in: removing the installed
+                // copy up front left nothing to fall back to when the copy
+                // failed. `replaceItemAt` leaves the original in place on
+                // failure, and the staging copy lives on the same volume.
+                let staging = dest.deletingLastPathComponent()
+                    .appendingPathComponent(".\(dest.lastPathComponent).staging-\(UUID().uuidString)")
                 do {
-                    try fm.removeItem(at: dest)
-                    try fm.copyItem(at: bundleURL, to: dest)
+                    try fm.copyItem(at: bundleURL, to: staging)
+                    _ = try fm.replaceItemAt(dest, withItemAt: staging)
                 } catch {
-                    // Best-effort: fall through and launch whatever is installed.
+                    try? fm.removeItem(at: staging)
+                    return // best-effort: keep running from the current location
                 }
             }
         } else {
@@ -79,9 +86,17 @@ enum AppRelocator {
 
         // Launch the /Applications copy, then terminate. No running instance
         // exists (checked above), so this starts it rather than duplicating it.
+        // If the handover fails, stay up rather than quitting with nothing
+        // running.
         isRelocating = true
-        NSWorkspace.shared.openApplication(at: dest, configuration: NSWorkspace.OpenConfiguration()) { _, _ in
-            DispatchQueue.main.async { NSApp.terminate(nil) }
+        NSWorkspace.shared.openApplication(at: dest, configuration: NSWorkspace.OpenConfiguration()) { app, error in
+            DispatchQueue.main.async {
+                guard app != nil, error == nil else {
+                    isRelocating = false
+                    return
+                }
+                NSApp.terminate(nil)
+            }
         }
     }
 

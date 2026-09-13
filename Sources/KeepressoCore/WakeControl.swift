@@ -255,6 +255,7 @@ public struct WakeClient {
             return failure(2, "could not reach the Keepresso app. Is it installed?")
         }
         let deadline = instant.addingTimeInterval(LeaseClient.ackTimeout)
+        var polls = 0
         while true {
             if let snapshot = readStatus(), isPidAlive(snapshot.pid),
                snapshot.lastWakeRequestId == request.requestId,
@@ -262,7 +263,11 @@ public struct WakeClient {
                    .flatMap(AutomationWakeOutcome.init(rawValue:)) {
                 return render(outcome, request: request)
             }
-            guard now() < deadline else { break }
+            // Bound the loop by iterations, not just the wall clock: a
+            // backwards clock jump landing mid-wait would otherwise keep
+            // `now() < deadline` true for hours.
+            guard now() < deadline, polls < LeaseClient.maxAckPolls else { break }
+            polls += 1
             sleep(LeaseClient.ackInterval)
         }
         _ = claimRequest(request.requestId)

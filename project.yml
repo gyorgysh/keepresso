@@ -193,6 +193,14 @@ targets:
       properties:
         CFBundleName: keepresso-helper
         CFBundleIdentifier: sh.gyorgy.keepresso.helper
+        # Keep in lockstep with the app and widget versions on every release
+        # bump (the release scripts read the app's, the first in this file).
+        # Literals, not $(MARKETING_VERSION): this plist is embedded as an
+        # __info_plist section, where build-setting expansion is not something
+        # to depend on, and a stale helper version only misleads crash/launchd
+        # and BTM logs.
+        CFBundleShortVersionString: "1.24.1"
+        CFBundleVersion: "39"
     settings:
       base:
         PRODUCT_NAME: keepresso-helper
@@ -232,7 +240,7 @@ targets:
         CFBundleDisplayName: Keepresso
         CFBundleShortVersionString: "1.24.1"
         CFBundleVersion: "39"
-        # Same six localizations as the app; keep in sync with
+        # Same 15 localizations as the app; keep in sync with
         # tools/localization/gen_strings.py.
         CFBundleLocalizations: [en, de, es, fr, it, hu, pt-BR, tr, ru, ja, ko, pl, uk, zh-Hans, zh-Hant]
         NSExtension:

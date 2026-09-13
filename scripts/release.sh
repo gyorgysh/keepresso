@@ -20,8 +20,10 @@
 # release's appcast.xml is always what running copies fetch.
 #
 # Requirements:
-#   - Sparkle tools on PATH or at $SPARKLE_BIN (brew install --cask sparkle puts
-#     them under $(brew --prefix)/Caskroom/sparkle/*/bin).
+#   - Sparkle's generate_appcast: found on PATH or at $SPARKLE_BIN, otherwise
+#     fetched automatically from Sparkle's release tarball (the
+#     `brew install --cask sparkle` route was deprecated and disabled in
+#     September 2026).
 #   - The Sparkle private key already in your Keychain (generate_keys, once).
 #   - gh CLI authenticated (gh auth login).
 #
@@ -50,8 +52,19 @@ GENERATE_APPCAST="${SPARKLE_BIN:-}/generate_appcast"
 if [ ! -x "$GENERATE_APPCAST" ]; then
   GENERATE_APPCAST="$(command -v generate_appcast || true)"
 fi
-if [ ! -x "$GENERATE_APPCAST" ] && command -v brew >/dev/null 2>&1; then
-  GENERATE_APPCAST="$(ls -t "$(brew --prefix)"/Caskroom/sparkle/*/bin/generate_appcast 2>/dev/null | head -1 || true)"
+if [ ! -x "$GENERATE_APPCAST" ]; then
+  # Same pinned tarball and hash as .github/workflows/release.yml.
+  SPARKLE_VERSION=2.9.6
+  SPARKLE_SHA256=52bf9e88cdd972fc0c81501377a880e90d47031bd8ca5462488f843e2609e192
+  SPARKLE_DIR="$(mktemp -d)"
+  trap 'rm -rf "$SPARKLE_DIR"' EXIT
+  info "Downloading Sparkle ${SPARKLE_VERSION} tools"
+  curl -fsSL -o "$SPARKLE_DIR/sparkle.tar.xz" \
+    "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+  echo "$SPARKLE_SHA256  $SPARKLE_DIR/sparkle.tar.xz" | shasum -a 256 -c -
+  mkdir -p "$SPARKLE_DIR/tools"
+  tar -xJf "$SPARKLE_DIR/sparkle.tar.xz" -C "$SPARKLE_DIR/tools"
+  GENERATE_APPCAST="$(find "$SPARKLE_DIR/tools" -path '*/bin/generate_appcast' -type f | head -1)"
 fi
 [ -x "$GENERATE_APPCAST" ] || die "generate_appcast not found — set SPARKLE_BIN to Sparkle's bin/ dir"
 

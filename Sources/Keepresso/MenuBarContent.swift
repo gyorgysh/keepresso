@@ -60,16 +60,26 @@ struct MenuBarContent: View {
     /// A compact duration like "15 min", "1 h", or "2 h 30 min", shared by the
     /// mode label and the quick-stop buttons.
     static func shortDuration(_ duration: TimeInterval) -> String {
-        let totalMinutes = Int((duration / 60).rounded())
+        let totalMinutes = wholeMinutes(duration)
         let hours = totalMinutes / 60, minutes = totalMinutes % 60
         if hours > 0 && minutes > 0 { return L("%d h %d min", hours, minutes) }
         if hours > 0 { return L("%d h", hours) }
         return L("%d min", max(1, minutes))
     }
 
+    /// A duration as finite whole minutes for display, saturating instead of
+    /// trapping on an imported non-finite or absurd value.
+    static func wholeMinutes(_ duration: TimeInterval) -> Int {
+        guard duration.isFinite, duration > 0 else { return 0 }
+        let capped = min(duration, SessionMode.maxTimedMinutes * 60)
+        return Int((capped / 60).rounded())
+    }
+
     /// A compact "M:SS" (or "Ns" under a minute) countdown for a grace window.
     static func graceCountdown(_ seconds: TimeInterval) -> String {
-        let s = Int(seconds.rounded(.up))
+        // Saturate at a day rather than trap: `Int(_:)` faults past Int.max.
+        let capped = seconds.isFinite ? min(max(0, seconds), 86_400) : 0
+        let s = Int(capped.rounded(.up))
         if s >= 60 { return L("%d:%02d", s / 60, s % 60) }
         return L("%ds", s)
     }
@@ -471,7 +481,7 @@ struct MenuBarContent: View {
     /// three, none of them a compound duration (hours and minutes both).
     private var quickStopButtonsFitInline: Bool {
         model.quickStopDurations.count <= 3 && !model.quickStopDurations.contains {
-            let minutes = Int(($0 / 60).rounded())
+            let minutes = Self.wholeMinutes($0)
             return minutes > 60 && minutes % 60 != 0
         }
     }
@@ -489,7 +499,7 @@ struct MenuBarContent: View {
     /// `NSWindow` directly.
     private func open(_ id: String) {
         NSApp.keyWindow?.close()
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         openWindow(id: id)
     }
 
@@ -592,7 +602,7 @@ struct MenuBarContent: View {
         private let type = ScaledType()
 
         init(initial: TimeInterval, apply: @escaping (TimeInterval) -> Void) {
-            let totalMinutes = max(1, Int((initial / 60).rounded()))
+            let totalMinutes = max(1, MenuBarContent.wholeMinutes(initial))
             _hours = State(initialValue: totalMinutes / 60)
             _minutes = State(initialValue: totalMinutes % 60)
             self.apply = apply

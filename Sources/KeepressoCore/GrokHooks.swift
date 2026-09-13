@@ -183,6 +183,11 @@ public enum GrokHooks {
                incoming != current {
                 return
             }
+            // A submit deliberately does NOT inherit the previous turn's id: a
+            // new turn invalidates it, and keeping the stale one would make the
+            // guard above reject the new turn's own (differing) turn-end event,
+            // leaving the session stuck "working". With no id on file the guard
+            // is skipped, so any turn-end may settle the turn.
             let promptId: String?
             if event == "UserPromptSubmit" {
                 promptId = AgentHooks.nonEmpty(payload.promptId)

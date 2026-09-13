@@ -103,7 +103,7 @@ public protocol AgentActivityMonitoring: AnyObject {
 /// must never block on `Process.waitUntilExit()`, so a stale snapshot is
 /// returned immediately and a refresh runs on a detached task when it goes
 /// stale.
-public final class PSAgentActivityMonitor: AgentActivityMonitoring {
+public final class PSAgentActivityMonitor: AgentActivityMonitoring, @unchecked Sendable {
     /// The agent CLIs detected out of the box, matched against the root
     /// command's basename (never as a substring, so `grep claude` or a file
     /// name mentioning an agent can't count as a session), with the resolved
@@ -252,8 +252,13 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// When false, a refresh only parses `ps` into sessions and skips
     /// transcript walks, hook-record reads, cwd lookups, and origin
     /// classification. The trigger factory turns this off when no agent rule
-    /// is live; tests leave it on.
-    public var evidenceEnabled: Bool = true
+    /// is live; tests leave it on. Lock-backed: a refresh reads it from a
+    /// detached task while the trigger factory writes it.
+    public var evidenceEnabled: Bool {
+        get { withLock { evidenceEnabledStorage } }
+        set { withLock { evidenceEnabledStorage = newValue } }
+    }
+    private var evidenceEnabledStorage = true
 
     /// Default hook scan: drop a Codex Desktop working record after ten
     /// minutes unless that chat's rollout file is still inside the evidence

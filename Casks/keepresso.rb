@@ -31,7 +31,9 @@ cask "keepresso" do
   binary "#{appdir}/Keepresso.app/Contents/Helpers/keepresso"
 
   zap trash: [
+    "~/Library/Application Support/Keepresso",
     "~/Library/Caches/sh.gyorgy.keepresso",
+    "~/Library/Group Containers/*.sh.gyorgy.keepresso",
     "~/Library/Preferences/sh.gyorgy.keepresso.plist",
   ]
 end

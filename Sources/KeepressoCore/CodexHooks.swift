@@ -60,8 +60,14 @@ public enum CodexHooks {
         home: String = NSHomeDirectory(),
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> URL {
-        let base = environment["CODEX_HOME"].map { URL(fileURLWithPath: $0) }
-            ?? URL(fileURLWithPath: home).appendingPathComponent(".codex", isDirectory: true)
+        let codexHome = environment["CODEX_HOME"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let base: URL
+        if let codexHome, !codexHome.isEmpty {
+            base = URL(fileURLWithPath: codexHome)
+        } else {
+            base = URL(fileURLWithPath: home).appendingPathComponent(".codex", isDirectory: true)
+        }
         return base.appendingPathComponent("hooks.json")
     }
 

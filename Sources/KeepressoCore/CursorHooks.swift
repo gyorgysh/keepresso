@@ -90,10 +90,12 @@ public enum CursorHooks {
 
         /// The session identity: `conversation_id` on agent hooks, with
         /// `session_id` (which `sessionStart` and `sessionEnd` also carry) as
-        /// the fallback.
+        /// the fallback. A present-but-empty `conversation_id` falls through
+        /// to `session_id` rather than clearing the identity.
         public var identity: String? {
-            let id = conversationId ?? sessionId
-            return (id?.isEmpty ?? true) ? nil : id
+            [conversationId, sessionId]
+                .compactMap { AgentHooks.nonEmpty($0) }
+                .first
         }
 
         /// The session's working directory, for the cwd join fallback.

@@ -350,9 +350,9 @@ private final class FakeKeyboardHelper: PrivilegedHelperCalling, @unchecked Send
     #expect(controller.isLocked)
     #expect(controller.unlockAt == nil)
     now = now.addingTimeInterval(3_600)
-    controller.tick()
+    await controller.tick()
     #expect(controller.isLocked)
-    controller.unlock()
+    await controller.unlock()
     #expect(!controller.isLocked)
 }
 
@@ -363,10 +363,10 @@ private final class FakeKeyboardHelper: PrivilegedHelperCalling, @unchecked Send
     #expect(await controller.lock(duration: 30) == .applied)
     #expect(controller.unlockAt == now.addingTimeInterval(30))
     now = now.addingTimeInterval(29)
-    controller.tick()
+    await controller.tick()
     #expect(controller.isLocked)
     now = now.addingTimeInterval(2)
-    controller.tick()
+    await controller.tick()
     #expect(!controller.isLocked)
     #expect(locker.restoreCalls == 1)
 }
@@ -406,7 +406,7 @@ private final class FakeKeyboardHelper: PrivilegedHelperCalling, @unchecked Send
     let controller = KeyboardLockController(locker: locker)
     #expect(await controller.lock() == .applied)
     remapper.applySucceeds = false
-    controller.unlock()
+    await controller.unlock()
     #expect(controller.isLocked)
     #expect(marker.stored != nil)
 }

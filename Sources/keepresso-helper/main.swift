@@ -54,7 +54,7 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
     }
 
     func fanHoldDropped(reply: @escaping @Sendable (Bool) -> Void) {
-        reply(engine.fanHoldDropped)
+        reply(engine.fanHoldWasDropped())
     }
 
     func setPriorityHold(_ holding: Bool, pid: Int, reply: @escaping @Sendable (Bool) -> Void) {
@@ -103,9 +103,21 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
         // own signature at runtime, never hardcoded). Then the console user's
         // uid: a second local account running the same signed app must not
         // drive machine-wide root verbs.
-        newConnection.setCodeSigningRequirement(
-            HelperService.peerRequirement(identifier: HelperService.appCodeSignIdentifier)
-        )
+        if let requirement = HelperService.anchoredPeerRequirement(
+            identifier: HelperService.appCodeSignIdentifier
+        ) {
+            newConnection.setCodeSigningRequirement(requirement)
+        } else {
+            // Ad-hoc build: there is no Team ID to anchor a requirement to, so
+            // an identifier-only requirement would let any local process claim
+            // the app's identifier and drive root verbs. Accept only a peer
+            // that is the app executable inside this daemon's own bundle.
+            guard let selfPath = HelperPeerPolicy.executablePath(ofPID: getpid()),
+                  let expected = HelperPeerPolicy.bundledAppExecutablePath(for: selfPath),
+                  let peerPath = HelperPeerPolicy.executablePath(ofPID: newConnection.processIdentifier),
+                  URL(fileURLWithPath: peerPath).standardizedFileURL.path == expected
+            else { return false }
+        }
         guard let peerUID = HelperPeerPolicy.uid(ofPID: newConnection.processIdentifier),
               HelperPeerPolicy.shouldAccept(peerUID: peerUID, consoleUID: consoleUserID())
         else { return false }

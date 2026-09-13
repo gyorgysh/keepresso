@@ -922,9 +922,17 @@ final class AppModel {
         return config
     }
 
+    @ObservationIgnored private var wakeApplyTask: Task<Void, Never>?
+    @ObservationIgnored private var wakeApplyPending = false
+
     /// Push settings to the helper (or clear). Installing needs the helper;
     /// clearing is attempted when it answers so a disable after reinstall
     /// still drops system schedules.
+    ///
+    /// Applies are serialized through one in-flight task and coalesced: rapid
+    /// changes (clear then re-enable, a manual edit racing an automation
+    /// re-arm) must reach the daemon in order, and a pass always reads the
+    /// latest desired config, so a stale apply cannot win the race.
     func applyWakeScheduleToSystem() {
         // A one-shot whose moment has passed can never install again (pmset
         // refuses past dates); drop it so later applies don't fail on it
@@ -941,51 +949,80 @@ final class AppModel {
         // never installed anything: the system schedules belong to the user
         // or another tool, not to us.
         guard config.isActive || wakeSchedulesInstalledByKeepresso else { return }
+        wakeApplyPending = true
+        if wakeApplyTask == nil {
+            runWakeApplyLoop()
+        }
+    }
+
+    private func runWakeApplyLoop() {
+        let client = helperClient
+        wakeApplyTask = Task.detached { [weak self] in
+            while true {
+                let shouldContinue = await MainActor.run { [weak self] () -> Bool in
+                    guard let self else { return false }
+                    if self.wakeApplyPending {
+                        self.wakeApplyPending = false
+                        return true
+                    }
+                    self.wakeApplyTask = nil
+                    return false
+                }
+                guard shouldContinue, let self else { return }
+                await self.performWakeApply(client: client)
+            }
+        }
+    }
+
+    /// One apply pass, reading the desired config at execution time. The
+    /// blocking handshake and XPC call run off the main actor.
+    private func performWakeApply(client: PrivilegedHelperCalling) async {
+        // A one-shot that passed while this pass was queued can never install.
+        if let date = settings.wakeSchedule?.oneShot, date <= Date() {
+            settings.wakeSchedule?.oneShot = nil
+            persist()
+        }
+        let config = effectiveWakeConfig()
         // A pre-update daemon still answering the handshake means "updating",
         // not "missing": no failure notification, re-apply once the new
         // daemon serves.
         let helperUpdating = wakeHelperGate == .helperUpdating
-        let client = helperClient
-        Task.detached { [weak self] in
-            guard client.ping() else {
-                await MainActor.run { [weak self] in
-                    guard let self else { return }
-                    self.refreshSystemWakeState()
-                    guard config.isActive else { return }
-                    if helperUpdating {
-                        self.reapplyWakeScheduleWhenHelperReady()
-                    } else {
-                        self.notifier.notify(
-                            title: L("Wake schedule not installed"),
-                            body: L("Installing a wake schedule needs the administrator helper (Preferences ▸ General)."),
-                            sound: false
-                        )
-                    }
-                }
-                return
-            }
+        let reachable: Bool = await Task.detached { client.ping() }.value
+        if reachable {
             let parts = config.pmsetArguments
-            let ok = client.applyWakeSchedule(
-                oneShot: parts.oneShot,
-                repeatDays: parts.repeatDays,
-                repeatTime: parts.repeatTime
-            )
-            await MainActor.run { [weak self] in
-                guard let self else { return }
-                if config.isActive {
-                    self.wakeSchedulesInstalledByKeepresso = true
-                } else if ok {
-                    self.wakeSchedulesInstalledByKeepresso = false
-                }
-                self.refreshSystemWakeState()
-                if !ok {
-                    self.notifier.notify(
-                        title: L("Wake schedule not installed"),
-                        body: L("The administrator helper could not update the system wake schedule."),
-                        sound: false
-                    )
-                }
+            let ok: Bool = await Task.detached {
+                client.applyWakeSchedule(
+                    oneShot: parts.oneShot,
+                    repeatDays: parts.repeatDays,
+                    repeatTime: parts.repeatTime
+                )
+            }.value
+            if config.isActive {
+                wakeSchedulesInstalledByKeepresso = true
+            } else if ok {
+                wakeSchedulesInstalledByKeepresso = false
             }
+            lastArmedEffectiveOneShot = config.oneShot
+            refreshSystemWakeState()
+            if !ok {
+                notifier.notify(
+                    title: L("Wake schedule not installed"),
+                    body: L("The administrator helper could not update the system wake schedule."),
+                    sound: false
+                )
+            }
+            return
+        }
+        refreshSystemWakeState()
+        guard config.isActive else { return }
+        if helperUpdating {
+            reapplyWakeScheduleWhenHelperReady()
+        } else {
+            notifier.notify(
+                title: L("Wake schedule not installed"),
+                body: L("Installing a wake schedule needs the administrator helper (Preferences ▸ General)."),
+                sound: false
+            )
         }
     }
 
@@ -1360,7 +1397,7 @@ final class AppModel {
             let ok = client.setFanHold(percent != nil, percent: percent ?? 0)
             guard !ok, percent != nil else { return }
             await MainActor.run { [weak self] in
-                guard let self else { return }
+                guard let self, self.fanBoostActivePercent == percent else { return }
                 self.fanBoostActivePercent = nil
                 self.notifier.notify(
                     title: L("Fans not boosted"),
@@ -1454,7 +1491,7 @@ final class AppModel {
     func showKeyboardLockOverlay() {
         keyboardLockOverlay?.close()
         let overlay = KeyboardLockOverlay(controller: keyboardLock) { [weak self] in
-            self?.unlockKeyboardFromOverlay()
+            Task { await self?.unlockKeyboardFromOverlay() }
         }
         overlay.show()
         keyboardLockOverlay = overlay
@@ -1463,8 +1500,8 @@ final class AppModel {
     /// Unlock from the overlay or the settings window. Overlay stays up if
     /// restore did not land, so a cancelled password prompt does not uncover
     /// a still-remapped keyboard.
-    func unlockKeyboardFromOverlay() {
-        keyboardLock.unlock()
+    func unlockKeyboardFromOverlay() async {
+        await keyboardLock.unlock()
         guard !keyboardLock.isLocked else { return }
         dismissKeyboardLockOverlay()
         resumeHotKeyAfterKeyboardLock()
@@ -1560,10 +1597,17 @@ final class AppModel {
     /// and rebuild the live engine.
     func applyPreset(_ preset: Preset) {
         settings.ruleSet = preset.ruleSet
-        settings.triggersEnabled = true
-        triggersPaused = false
-        applyTriggerGate()
-        persist()
+        if settings.triggersEnabled {
+            triggersPaused = false
+            applyTriggerGate()
+            persist()
+        } else {
+            // Route through the setter so a manual session is stopped silently
+            // before gating takes over. Setting the flag directly would let the
+            // next reconcile end it with natural-end effects (notification,
+            // configured sleep/lock action) the user never asked for.
+            triggersEnabled = true
+        }
     }
 
     /// Save the current rule set under a new name.
@@ -1653,6 +1697,7 @@ final class AppModel {
         disk.config = newSettings.diskKeepAlive
         virtualDisplay.config = newSettings.virtualDisplay
         awdl.autoWithGaming = newSettings.awdlAutoWithGaming
+        gamingWatcher.grace = newSettings.awdlGraceSeconds
         closedDisplayAuto.onlyWhileBrewing = newSettings.closedDisplayOnlyWhileBrewing
         closedDisplay.policy = newSettings.closedLidDisplayPolicy
         controllerPoker.enabled = newSettings.controllerPokeWhileGaming
@@ -2665,12 +2710,12 @@ final class AppModel {
     ) {
         let window = needsPrompt ? NSApp.keyWindow : nil
         if needsPrompt {
-            NSApp.activate(ignoringOtherApps: true)
+            NSApp.activate()
         }
         Task {
             await operation()
             guard needsPrompt else { return }
-            NSApp.activate(ignoringOtherApps: true)
+            NSApp.activate()
             window?.makeKeyAndOrderFront(nil)
             // Auth sheets can leave an LSUIElement app half-active; same repair
             // used when a window first opens.
@@ -2779,7 +2824,7 @@ final class AppModel {
             // ``setClosedDisplay(_:)``), and say what's happening in a
             // notification, since the dialog itself is easy to miss and names
             // "osascript", not Keepresso.
-            NSApp.activate(ignoringOtherApps: true)
+            NSApp.activate()
             notifier.notify(
                 title: L("Keepresso needs your password"),
                 body: L("Enter your administrator password to switch closed-display mode on for this session."),
@@ -2933,17 +2978,22 @@ final class AppModel {
 
     /// Flush the DNS cache through the helper daemon. Returns false when the
     /// helper is missing or the call fails, so the window can copy the sudo
-    /// command instead of prompting.
-    func flushDNS() -> Bool {
+    /// command instead of prompting. Both XPC calls can block for their whole
+    /// timeout when the daemon is registered but not spawning, so they run off
+    /// the main actor: `AppModel` is `@MainActor`.
+    func flushDNS() async -> Bool {
         guard helperInstalled else { return false }
-        // Live handshake: the cached `daemonProtocolVersion` stays nil until
-        // a verify run, so an early Wi-Fi assistant flush must not treat a
-        // ready protocol-9 daemon as too old.
-        guard let version = helperClient.pingVersion(),
-              version >= HelperService.flushDNSMinProtocol else {
-            return false
-        }
-        return helperClient.flushDNS()
+        let client = helperClient
+        return await Task.detached {
+            // Live handshake: the cached `daemonProtocolVersion` stays nil until
+            // a verify run, so an early Wi-Fi assistant flush must not treat a
+            // ready protocol-9 daemon as too old.
+            guard let version = client.pingVersion(),
+                  version >= HelperService.flushDNSMinProtocol else {
+                return false
+            }
+            return client.flushDNS()
+        }.value
     }
 
     /// Lock the keyboard for Keyboard Cleaner. If the helper is not
@@ -2956,11 +3006,11 @@ final class AppModel {
         let needsPrompt = !helperCanLockSilently
         let window = needsPrompt ? NSApp.keyWindow : nil
         if needsPrompt {
-            NSApp.activate(ignoringOtherApps: true)
+            NSApp.activate()
         }
         let result = await keyboardLock.lock(duration: duration)
         if needsPrompt {
-            NSApp.activate(ignoringOtherApps: true)
+            NSApp.activate()
             window?.makeKeyAndOrderFront(nil)
             WindowPlacement.repairIfWedged(window, attempts: 3)
         }

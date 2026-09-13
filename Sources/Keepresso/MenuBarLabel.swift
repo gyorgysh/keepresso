@@ -56,7 +56,11 @@ struct MenuBarLabel: View {
 
     /// "12:03" for under an hour, "1:02:03" once it reaches an hour.
     static func format(_ interval: TimeInterval?) -> String {
-        let total = max(0, Int((interval ?? 0).rounded()))
+        let raw = interval ?? 0
+        // Saturate rather than trap: `Int(_:)` faults on a value past Int.max,
+        // and this formats whatever duration a settings blob produced.
+        let capped = raw.isFinite ? min(max(0, raw), SessionMode.maxTimedMinutes * 60) : 0
+        let total = Int(capped.rounded())
         let hours = total / 3600
         let minutes = (total % 3600) / 60
         let seconds = total % 60

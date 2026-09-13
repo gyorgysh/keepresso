@@ -238,10 +238,12 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         options = try c.decodeIfPresent(SleepPreventionOptions.self, forKey: .options) ?? .default
-        defaultMode = try c.decodeIfPresent(SessionMode.self, forKey: .defaultMode) ?? .indefinite
+        defaultMode = Self.sanitizedMode(
+            try c.decodeIfPresent(SessionMode.self, forKey: .defaultMode) ?? .indefinite)
         triggersEnabled = try c.decodeIfPresent(Bool.self, forKey: .triggersEnabled) ?? false
         ruleSet = try c.decodeIfPresent(RuleSet.self, forKey: .ruleSet) ?? .empty
-        reminderAfter = try c.decodeIfPresent(TimeInterval.self, forKey: .reminderAfter)
+        reminderAfter = Self.normalizedPositiveInterval(
+            try c.decodeIfPresent(TimeInterval.self, forKey: .reminderAfter))
         reminderRepeats = try c.decodeIfPresent(Bool.self, forKey: .reminderRepeats) ?? false
         reminderSound = try c.decodeIfPresent(Bool.self, forKey: .reminderSound) ?? true
         notifyOnEnd = try c.decodeIfPresent(Bool.self, forKey: .notifyOnEnd) ?? false
@@ -266,7 +268,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         glassClarity = min(max(try c.decodeIfPresent(Int.self, forKey: .glassClarity) ?? 50, 0), 100)
         awdlAutoWithGaming = try c.decodeIfPresent(Bool.self, forKey: .awdlAutoWithGaming) ?? false
         awdlNotifications = try c.decodeIfPresent(Bool.self, forKey: .awdlNotifications) ?? false
-        awdlGraceSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .awdlGraceSeconds) ?? 60
+        awdlGraceSeconds = Self.normalizedPositiveInterval(
+            try c.decodeIfPresent(TimeInterval.self, forKey: .awdlGraceSeconds) ?? 60) ?? 60
         closedDisplayOnlyWhileBrewing = try c.decodeIfPresent(Bool.self, forKey: .closedDisplayOnlyWhileBrewing) ?? false
         // Decoded as a raw string, not the enum: a value persisted by an older
         // build (like the branch-only `keepDark`) must fall back to the
@@ -274,7 +277,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         // user loses every setting, not just this one.
         let policyRaw = try c.decodeIfPresent(String.self, forKey: .closedLidDisplayPolicy)
         closedLidDisplayPolicy = policyRaw.flatMap(ClosedLidDisplayPolicy.init(rawValue:)) ?? .displayOff
-        hotKey = try c.decodeIfPresent(HotKeyShortcut.self, forKey: .hotKey)
+        hotKey = Self.sanitizedHotKey(try c.decodeIfPresent(HotKeyShortcut.self, forKey: .hotKey))
         startOnLaunch = try c.decodeIfPresent(Bool.self, forKey: .startOnLaunch) ?? false
         presets = try c.decodeIfPresent([Preset].self, forKey: .presets) ?? Preset.builtIns
         // Settings saved before seeding was tracked (1.2.x and earlier) had
@@ -300,11 +303,15 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     public static let maxQuickStopDurations = 4
 
     /// Sanitize a quick-stop duration list from any source (the editor, an
-    /// imported blob, a hand-edited file): drop non-positive entries, dedupe,
-    /// sort ascending, and cap at ``maxQuickStopDurations``.
+    /// imported blob, a hand-edited file): drop non-positive and non-finite
+    /// entries, dedupe, sort ascending, and cap at ``maxQuickStopDurations``.
     public static func normalizedQuickStopDurations(_ raw: [TimeInterval]) -> [TimeInterval] {
+        let maxSeconds = SessionMode.maxTimedMinutes * 60
         var seen = Set<TimeInterval>()
-        let cleaned = raw.filter { $0 > 0 && seen.insert($0).inserted }
+        let cleaned = raw
+            .filter { $0.isFinite && $0 > 0 }
+            .map { min($0, maxSeconds) }
+            .filter { seen.insert($0).inserted }
         return Array(cleaned.sorted().prefix(maxQuickStopDurations))
     }
 
@@ -317,11 +324,35 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         min(max(raw, batteryPausePercentRange.lowerBound), batteryPausePercentRange.upperBound)
     }
 
-    /// An ending-soon lead time from any source: positive, or `nil` (off).
-    /// A zero or negative lead would show the feature enabled while the
-    /// notice can never fire.
+    /// An ending-soon lead time from any source: positive and finite, or `nil`
+    /// (off). A zero or negative lead would show the feature enabled while the
+    /// notice can never fire, and an absurd one would be rounded to a `Double`
+    /// too large for the duration formatter.
     static func normalizedEndingSoonNotice(_ raw: TimeInterval?) -> TimeInterval? {
-        raw.flatMap { $0 > 0 ? $0 : nil }
+        normalizedPositiveInterval(raw).map { min($0, SessionMode.maxTimedMinutes * 60) }
+    }
+
+    /// A positive, finite interval or `nil`: shared guard for decoded
+    /// durations that are later converted to `Int` for display.
+    static func normalizedPositiveInterval(_ raw: TimeInterval?) -> TimeInterval? {
+        raw.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+    }
+
+    /// A decoded timed mode with its duration bounded to a real session
+    /// length; an unusable duration falls back to indefinite.
+    static func sanitizedMode(_ mode: SessionMode) -> SessionMode {
+        guard case .timed(let duration) = mode else { return mode }
+        guard duration.isFinite, duration > 0 else { return .indefinite }
+        return .timed(duration: min(duration, SessionMode.maxTimedMinutes * 60))
+    }
+
+    /// A decoded hotkey whose key code and modifier flags fit the Carbon/AppKit
+    /// conversions the app performs; out-of-range values are dropped rather
+    /// than trapping later.
+    static func sanitizedHotKey(_ raw: HotKeyShortcut?) -> HotKeyShortcut? {
+        guard let raw, raw.keyCode >= 0, raw.keyCode <= Int(UInt16.max),
+              raw.modifierFlags >= 0 else { return nil }
+        return raw
     }
 
     /// First-launch defaults: keep system awake, no triggers.

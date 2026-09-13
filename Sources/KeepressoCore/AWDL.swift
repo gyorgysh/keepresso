@@ -39,7 +39,7 @@ public final class IfconfigAWDLReader: AWDLStateReading {
         process.arguments = arguments
         let pipe = Pipe()
         process.standardOutput = pipe
-        process.standardError = Pipe()
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
@@ -190,7 +190,7 @@ public final class OsascriptAWDLWatchdog: AWDLWatchdogLaunching {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = arguments
-        process.standardOutput = Pipe()
+        process.standardOutput = FileHandle.nullDevice
         let errPipe = Pipe()
         process.standardError = errPipe
         do {

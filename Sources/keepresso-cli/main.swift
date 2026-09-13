@@ -111,7 +111,8 @@ func runStatus(json: Bool) -> Never {
     guard let snapshot = StatusFile.read() else {
         fail("no status recorded yet. Launch the Keepresso app once.", code: 2)
     }
-    let appRunning = kill(snapshot.pid, 0) == 0 || errno == EPERM
+    // Pid 0 would make `kill(0, 0)` check the caller's own process group.
+    let appRunning = snapshot.pid > 1 && (kill(snapshot.pid, 0) == 0 || errno == EPERM)
 
     if json {
         let encoder = JSONEncoder()

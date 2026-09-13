@@ -115,7 +115,7 @@ private struct MenuBarLabelView: View {
                 // relaunched copy, the one fresh installs actually keep,
                 // would never show it.
                 guard !AppRelocator.isRelocating else { return }
-                NSApp.activate(ignoringOtherApps: true)
+                NSApp.activate()
                 openWindow(id: KeepressoApp.welcomeWindowID)
             }
             // The helper self-heal got stuck on a step only the user can do:
@@ -123,7 +123,7 @@ private struct MenuBarLabelView: View {
             // view, so the edge is caught no matter what else is open.
             .onChange(of: model.helperAttention) { _, attention in
                 guard attention != nil else { return }
-                NSApp.activate(ignoringOtherApps: true)
+                NSApp.activate()
                 openWindow(id: KeepressoApp.helperWindowID)
             }
     }
@@ -266,7 +266,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { [weak model] _ in
-            model?.handleSystemWake()
+            // `queue: .main` guarantees the main thread; assert that to the
+            // compiler rather than letting the call warn as implicitly async.
+            MainActor.assumeIsolated { model?.handleSystemWake() }
         }
         // The Control Center toggle: consume a command that may have launched
         // us, then keep listening while running.
@@ -291,7 +293,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // keeping the Mac awake right now.
         if yieldingToPeer { return }
         // Unlock before we go so a quit mid-wipe does not leave keys dead.
-        model.unlockKeyboardFromOverlay()
+        // Deliberately the synchronous prompt-free restore: termination cannot
+        // await a detached task, and a password dialog during quit would be
+        // unusable.
+        model.keyboardLock.restoreIfNeeded()
         // The session dies with this process; don't leave the widgets lying.
         model.writeWidgetStateStopped()
     }

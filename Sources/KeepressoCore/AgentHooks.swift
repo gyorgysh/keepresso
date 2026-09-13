@@ -448,10 +448,19 @@ public enum AgentHooks {
         args.reserveCapacity(Int(argc))
         for _ in 0..<Int(argc) {
             guard offset < length else { break }
-            let start = buffer + offset
+            let startIndex = offset
             while offset < length, buffer[offset] != 0 { offset += 1 }
-            let value = String(cString: start)
-            if !value.isEmpty { args.append(value) }
+            let count = offset - startIndex
+            if count > 0 {
+                let value = String(
+                    decoding: UnsafeRawBufferPointer(start: buffer + startIndex, count: count),
+                    as: UTF8.self
+                )
+                if !value.isEmpty { args.append(value) }
+            }
+            // An unterminated trailing argument: stop rather than reading past
+            // the buffer with `String(cString:)`.
+            guard offset < length else { break }
             offset += 1
         }
         return args.isEmpty ? nil : args.joined(separator: " ")

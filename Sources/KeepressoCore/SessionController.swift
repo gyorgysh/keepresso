@@ -990,7 +990,10 @@ public final class SessionController {
                 return
             }
             let needed = TimeInterval(minutes * 60)
-            if let idle = systemIdleSeconds, idle < needed {
+            // No idle reading means "not known to be idle": hold the poke
+            // rather than firing one on an out-of-band reconcile (lease
+            // doorbell, start, URL command) while the user may be typing.
+            guard let idle = systemIdleSeconds, idle >= needed else {
                 lastActivityPokeAt = nil
                 return
             }
@@ -1066,6 +1069,11 @@ public final class SessionController {
     /// "2 hours, 15 minutes". `DateComponentsFormatter` follows the app's
     /// language and each language's plural rules, so no per-unit strings table.
     static func humanDuration(_ seconds: TimeInterval) -> String {
+        // Defensive: imported settings can carry huge or non-finite
+        // durations, and `Int(_:)` traps outside its range.
+        guard seconds.isFinite, seconds > 0,
+              seconds < Double(Int.max / 2)
+        else { return "" }
         let total = Int(seconds.rounded())
         let formatter = DateComponentsFormatter()
         formatter.unitsStyle = .full

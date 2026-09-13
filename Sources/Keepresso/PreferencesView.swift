@@ -604,7 +604,7 @@ private struct GeneralTab: View {
             }
             Section {
                 Button("Show Welcome Screen\u{2026}") {
-                    NSApp.activate(ignoringOtherApps: true)
+                    NSApp.activate()
                     openWindow(id: KeepressoApp.welcomeWindowID)
                 }
             } header: {

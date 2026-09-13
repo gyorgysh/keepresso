@@ -17,7 +17,13 @@ enum StaleBundleCleaner {
     /// touch. Only the user can fix it (tested live: the Trash's TCC
     /// protection blocks the app, the root helper, and Finder scripting
     /// alike), so the launch path tells them via ``notifyIfSweepNeedsUser()``.
-    private(set) static var unremovableTrashPath: String?
+    /// Lock-backed: detached sweeps write it while the main actor reads it.
+    static private(set) var unremovableTrashPath: String? {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return unremovableTrashPathStorage }
+        set { stateLock.lock(); defer { stateLock.unlock() }; unremovableTrashPathStorage = newValue }
+    }
+    private static let stateLock = NSLock()
+    private static var unremovableTrashPathStorage: String?
 
     /// Stable notification identifier: repeat launches update one notice
     /// instead of stacking them, and the notification delegate recognizes a

@@ -118,7 +118,7 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = arguments
-        process.standardOutput = Pipe()
+        process.standardOutput = FileHandle.nullDevice
         let errPipe = Pipe()
         process.standardError = errPipe
         do {

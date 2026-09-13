@@ -202,7 +202,16 @@ public final class HelperEngine: @unchecked Sendable {
     static let maxFanFailures = 5
     /// Set once ``fanTick()`` gave up on a hold, so the state is inspectable
     /// (and the app can tell "boost silently ended" from "still boosting").
+    /// Read through ``fanHoldWasDropped()``: mutations happen under the lock,
+    /// and XPC reads arrive on arbitrary queues.
     public private(set) var fanHoldDropped = false
+
+    /// Locked read of ``fanHoldDropped`` for XPC callers.
+    public func fanHoldWasDropped() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return fanHoldDropped
+    }
 
     /// Reads the current global `disablesleep` value. A separate seam because
     /// ``HelperCommandRunning`` only reports exit status; the sleep hold needs
@@ -231,7 +240,7 @@ public final class HelperEngine: @unchecked Sendable {
         process.arguments = ["-g"]
         let pipe = Pipe()
         process.standardOutput = pipe
-        process.standardError = Pipe()
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
@@ -582,7 +591,13 @@ public final class HelperEngine: @unchecked Sendable {
         let before = !sleepHolders.isEmpty
         if holding { sleepHolders.insert(client) } else { sleepHolders.remove(client) }
         let after = !sleepHolders.isEmpty
-        guard before != after else { return true }
+        // A covered release with no holders left must still fall through when a
+        // restore debt is on file: that means an earlier release failed, and a
+        // bare `return true` here would report success without ever retrying
+        // the restore, leaving `disablesleep` stuck until the next daemon life.
+        guard before != after || (!after && state.value(for: .sleepDisabled) != nil) else {
+            return true
+        }
         if after {
             // Preserve an existing restore debt's recorded prior: after a
             // failed release the live `disablesleep` is still 1, and
@@ -627,7 +642,12 @@ public final class HelperEngine: @unchecked Sendable {
         let before = !awdlHolders.isEmpty
         if holding { awdlHolders.insert(client) } else { awdlHolders.remove(client) }
         let after = !awdlHolders.isEmpty
-        guard before != after else { return true }
+        // Same retry rule as sleep: a live `.awdlDown` marker with no holders
+        // is a failed release, and the retry must reach `ifconfig awdl0 up`
+        // instead of reporting a success that never happened.
+        guard before != after || (!after && state.markers().contains(.awdlDown)) else {
+            return true
+        }
         if after {
             // Debt-by-attempt: mark before the write. `awdlTick` retries a
             // failed down while the holder stays; still verify the marker
@@ -663,7 +683,13 @@ public final class HelperEngine: @unchecked Sendable {
         let before = fanHolders.values.max()
         mutate()
         let after = fanHolders.values.max()
-        guard before != after else { return true }
+        // A live `.fanForced` marker with no holders left means an earlier
+        // restore failed; retry it rather than reporting a release that never
+        // landed. With holders present (`after != nil`) the marker is the
+        // active hold's debt, and no restore is wanted.
+        guard before != after || (after == nil && state.markers().contains(.fanForced)) else {
+            return true
+        }
         if let target = after {
             fanFailureStreak = 0
             fanHoldDropped = false

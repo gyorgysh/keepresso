@@ -109,20 +109,22 @@ private final class FakeBrightness: BrightnessControlling {
     var options = SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true)
     options.activityPokeIdleMinutes = 3
     controller.start(options: options)
-    #expect(activity.pokeCount == 1) // start reconciles with no idle info: fail open
+    // Start's reconcile has no idle info: hold the poke until a real reading
+    // proves the user stepped away (a nil reading must not fake activity).
+    #expect(activity.pokeCount == 0)
 
     // Two idle minutes: still waiting, even across the poke interval.
     clock.advance(120)
     controller.reconcile(systemIdleSeconds: 120)
-    #expect(activity.pokeCount == 1)
+    #expect(activity.pokeCount == 0)
 
     // Past three idle minutes: pokes promptly, then repeats on the interval.
     clock.advance(70)
     controller.reconcile(systemIdleSeconds: 190)
-    #expect(activity.pokeCount == 2)
+    #expect(activity.pokeCount == 1)
     clock.advance(SessionController.activityPokeInterval)
     controller.reconcile(systemIdleSeconds: 220)
-    #expect(activity.pokeCount == 3)
+    #expect(activity.pokeCount == 2)
 }
 
 @MainActor
@@ -133,16 +135,16 @@ private final class FakeBrightness: BrightnessControlling {
     var options = SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true)
     options.activityPokeIdleMinutes = 3
     controller.start(options: options)
-    #expect(activity.pokeCount == 1)
+    #expect(activity.pokeCount == 0) // nil idle at start: wait for a reading
 
     // Idle past the wait but gaming: suppressed, and re-armed.
     clock.advance(300)
     controller.reconcile(systemIdleSeconds: 300, gameFrontmost: true)
-    #expect(activity.pokeCount == 1)
+    #expect(activity.pokeCount == 0)
 
     // Game quits: fires promptly instead of a full interval later.
     controller.reconcile(systemIdleSeconds: 301, gameFrontmost: false)
-    #expect(activity.pokeCount == 2)
+    #expect(activity.pokeCount == 1)
 }
 
 @MainActor

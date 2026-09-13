@@ -387,7 +387,15 @@ public enum CLIRequest: Equatable, Sendable {
         components.day = day
         components.hour = hour
         components.minute = minute
-        return calendar.date(from: components)
+        guard let date = calendar.date(from: components) else { return nil }
+        // `date(from:)` normalizes out-of-range components instead of failing,
+        // so "2026-02-31" would silently schedule a March wake. Require the
+        // calendar to read back exactly what was requested.
+        let readBack = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        guard readBack.year == year, readBack.month == month, readBack.day == day,
+              readBack.hour == hour, readBack.minute == minute
+        else { return nil }
+        return date
     }
 
     /// HH:MM, 24-hour, the same shape ``URLCommand`` accepts in `until=`.

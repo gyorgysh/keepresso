@@ -269,7 +269,7 @@ struct WindowPlacement: NSViewRepresentable {
             guard let window = view.window else { return }
             if floating { window.level = .floating }
             window.center()
-            NSApp.activate(ignoringOtherApps: true)
+            NSApp.activate()
             window.makeKeyAndOrderFront(nil)
             Self.repairIfWedged(window, attempts: 3)
         }
@@ -301,7 +301,7 @@ struct WindowPlacement: NSViewRepresentable {
             let trulyActive = NSRunningApplication.current.isActive
             if NSApp.isActive && !trulyActive {
                 NSApp.deactivate()
-                NSApp.activate(ignoringOtherApps: true)
+                NSApp.activate()
                 window.makeKeyAndOrderFront(nil)
                 repairIfWedged(window, attempts: attempts - 1)
             } else if trulyActive && !window.isKeyWindow && NSApp.keyWindow == nil {

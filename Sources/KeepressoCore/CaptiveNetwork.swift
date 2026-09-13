@@ -501,7 +501,9 @@ public final class SystemCaptiveProbe: CaptiveProbing, @unchecked Sendable {
                     box.settle(.failed)
                 }
             } else if error != nil {
-                box.settle(.timeout)
+                // Any other transport failure (DNS, refused, offline) is a
+                // failure, not a timeout: the UI names the two differently.
+                box.settle(.failed)
             } else {
                 box.settle(.failed)
             }
@@ -605,7 +607,7 @@ public final class SystemCaptiveProbe: CaptiveProbing, @unchecked Sendable {
         process.arguments = arguments
         let pipe = Pipe()
         process.standardOutput = pipe
-        process.standardError = Pipe()
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
             let data = pipe.fileHandleForReading.readDataToEndOfFile()

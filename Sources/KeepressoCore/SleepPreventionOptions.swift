@@ -123,13 +123,23 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         preventSystemSleep = try c.decodeIfPresent(Bool.self, forKey: .preventSystemSleep) ?? true
         preventDisplaySleep = try c.decodeIfPresent(Bool.self, forKey: .preventDisplaySleep) ?? false
-        allowScreenSaverAfter = try c.decodeIfPresent(TimeInterval.self, forKey: .allowScreenSaverAfter)
-        dimDisplayAfter = try c.decodeIfPresent(TimeInterval.self, forKey: .dimDisplayAfter)
-        dimFloor = try c.decodeIfPresent(Double.self, forKey: .dimFloor) ?? 0
+        allowScreenSaverAfter = Self.sanitizedInterval(
+            try c.decodeIfPresent(TimeInterval.self, forKey: .allowScreenSaverAfter))
+        dimDisplayAfter = Self.sanitizedInterval(
+            try c.decodeIfPresent(TimeInterval.self, forKey: .dimDisplayAfter))
+        dimFloor = min(max(try c.decodeIfPresent(Double.self, forKey: .dimFloor) ?? 0, 0), 1)
         simulateUserActivity = try c.decodeIfPresent(Bool.self, forKey: .simulateUserActivity) ?? false
         activitySimulationMethod = try c.decodeIfPresent(
             ActivitySimulationMethod.self, forKey: .activitySimulationMethod) ?? .powerWarp
         activitySimulationKeyCode = try c.decodeIfPresent(Int.self, forKey: .activitySimulationKeyCode)
         activityPokeIdleMinutes = try c.decodeIfPresent(Int.self, forKey: .activityPokeIdleMinutes)
+            .map { min(max($0, 0), 24 * 60) }
+    }
+
+    /// A decoded idle threshold: finite, positive, and bounded to a real
+    /// session length (an imported `1e308` would otherwise trap in display
+    /// conversions downstream).
+    private static func sanitizedInterval(_ raw: TimeInterval?) -> TimeInterval? {
+        raw.flatMap { $0.isFinite && $0 > 0 ? min($0, SessionMode.maxTimedMinutes * 60) : nil }
     }
 }

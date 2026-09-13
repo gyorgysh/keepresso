@@ -85,8 +85,18 @@ struct SessionProvider: TimelineProvider {
             state.endsAt = nil
         }
         let entry = SessionEntry(date: .now, state: state)
-        let policy: TimelineReloadPolicy =
-            state.isActive ? state.endsAt.map { .after($0) } ?? .never : .never
+        // An active indefinite session has no end to schedule, but the app can
+        // still die without writing the "off" state; re-check periodically so
+        // `keepressoAppIsRunning()` can flip it rather than rendering
+        // "Brewing" forever.
+        let policy: TimelineReloadPolicy
+        if state.isActive, let endsAt = state.endsAt {
+            policy = .after(endsAt)
+        } else if state.isActive {
+            policy = .after(.now.addingTimeInterval(15 * 60))
+        } else {
+            policy = .never
+        }
         completion(Timeline(entries: [entry], policy: policy))
     }
 }
