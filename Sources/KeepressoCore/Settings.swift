@@ -146,10 +146,10 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         controllerPokeWhileGaming: Bool = false
     ) {
         self.options = options
-        self.defaultMode = defaultMode
+        self.defaultMode = Self.sanitizedMode(defaultMode)
         self.triggersEnabled = triggersEnabled
         self.ruleSet = ruleSet
-        self.reminderAfter = reminderAfter
+        self.reminderAfter = Self.normalizedPositiveInterval(reminderAfter)
         self.reminderRepeats = reminderRepeats
         self.reminderSound = reminderSound
         self.notifyOnEnd = notifyOnEnd
@@ -168,10 +168,10 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.glassClarity = min(max(glassClarity, 0), 100)
         self.awdlAutoWithGaming = awdlAutoWithGaming
         self.awdlNotifications = awdlNotifications
-        self.awdlGraceSeconds = awdlGraceSeconds
+        self.awdlGraceSeconds = Self.normalizedPositiveInterval(awdlGraceSeconds) ?? 60
         self.closedDisplayOnlyWhileBrewing = closedDisplayOnlyWhileBrewing
         self.closedLidDisplayPolicy = closedLidDisplayPolicy
-        self.hotKey = hotKey
+        self.hotKey = Self.sanitizedHotKey(hotKey)
         self.startOnLaunch = startOnLaunch
         self.presets = presets
         self.seededPresetIDs = seededPresetIDs
@@ -333,9 +333,12 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     }
 
     /// A positive, finite interval or `nil`: shared guard for decoded
-    /// durations that are later converted to `Int` for display.
+    /// durations that are later converted to `Int` for display. Capped at a
+    /// real session length (like every sibling sanitizer) and floored at one
+    /// second: the value is also a divisor (`elapsed / reminderAfter`), and a
+    /// denormal like `1e-300` would make that ratio trap `Int(_:)`.
     static func normalizedPositiveInterval(_ raw: TimeInterval?) -> TimeInterval? {
-        raw.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+        raw.flatMap { $0.isFinite && $0 > 0 ? min(max($0, 1), SessionMode.maxTimedMinutes * 60) : nil }
     }
 
     /// A decoded timed mode with its duration bounded to a real session
@@ -346,11 +349,21 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         return .timed(duration: min(duration, SessionMode.maxTimedMinutes * 60))
     }
 
+    /// Whole seconds for UI display that never traps: `Int(_:)` aborts on
+    /// NaN, infinity, and out-of-range magnitudes (including huge decoded
+    /// grace intervals), so clamp first. Negative or unreadable values read
+    /// as zero.
+    public static func displaySeconds(_ seconds: TimeInterval) -> Int {
+        guard seconds.isFinite, seconds > 0 else { return 0 }
+        return Int(min(seconds.rounded(), Double(Int.max / 2)))
+    }
+
     /// A decoded hotkey whose key code and modifier flags fit the Carbon/AppKit
     /// conversions the app performs; out-of-range values are dropped rather
-    /// than trapping later.
-    static func sanitizedHotKey(_ raw: HotKeyShortcut?) -> HotKeyShortcut? {
-        guard let raw, raw.keyCode >= 0, raw.keyCode <= Int(UInt16.max),
+    /// than trapping later. The bound is the `RegisterEventHotKey` parameter
+    /// width (`UInt32`), matching the check in `GlobalHotKeyManager.update`.
+    public static func sanitizedHotKey(_ raw: HotKeyShortcut?) -> HotKeyShortcut? {
+        guard let raw, raw.keyCode >= 0, raw.keyCode <= Int(UInt32.max),
               raw.modifierFlags >= 0 else { return nil }
         return raw
     }

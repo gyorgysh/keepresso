@@ -177,3 +177,55 @@ import Foundation
     )
     #expect(!off.automationLeasesEnabled)
 }
+
+@Test func positiveIntervalHasACapAndAFloor() throws {
+    // `reminderAfter` is also a divisor (`elapsed / reminderAfter`): a
+    // denormal like 1e-300 would trap `Int(_:)` on the 1 Hz reconcile path,
+    // and an absurd value would never fire. Both are cleaned on decode.
+    let tiny = try JSONDecoder().decode(
+        KeepressoSettings.self,
+        from: Data(#"{ "reminderAfter": 1e-300 }"#.utf8))
+    #expect(tiny.reminderAfter == 1)
+
+    let huge = try JSONDecoder().decode(
+        KeepressoSettings.self,
+        from: Data(#"{ "reminderAfter": 1e300, "awdlGraceSeconds": 1e300 }"#.utf8))
+    let cap = SessionMode.maxTimedMinutes * 60
+    #expect(huge.reminderAfter == cap)
+    #expect(huge.awdlGraceSeconds == cap)
+
+    // The programmatic init applies the same cleanup as the decoder.
+    #expect(KeepressoSettings(reminderAfter: 0.001).reminderAfter == 1)
+    #expect(KeepressoSettings(awdlGraceSeconds: -5).awdlGraceSeconds == 60)
+
+    // Sane values pass through untouched.
+    let fine = try JSONDecoder().decode(
+        KeepressoSettings.self,
+        from: Data(#"{ "reminderAfter": 1800, "awdlGraceSeconds": 90 }"#.utf8))
+    #expect(fine.reminderAfter == 1800)
+    #expect(fine.awdlGraceSeconds == 90)
+}
+
+@Test func hotKeySanitizedOnBothInitPaths() throws {
+    // A corrupt imported shortcut is dropped rather than trapping the
+    // Carbon conversion later, on decode and on programmatic init alike.
+    let bad = try JSONDecoder().decode(
+        KeepressoSettings.self,
+        from: Data(#"{ "hotKey": { "keyCode": -1, "modifierFlags": 1048576 } }"#.utf8))
+    #expect(bad.hotKey == nil)
+    #expect(KeepressoSettings(hotKey: HotKeyShortcut(keyCode: -1, modifierFlags: 0)).hotKey == nil)
+
+    // The bound is the RegisterEventHotKey parameter width (UInt32).
+    let wide = HotKeyShortcut(keyCode: Int(UInt32.max), modifierFlags: 1_048_576)
+    #expect(KeepressoSettings(hotKey: wide).hotKey == wide)
+    let fine = HotKeyShortcut(keyCode: 40, modifierFlags: 1_048_576)
+    #expect(KeepressoSettings(hotKey: fine).hotKey == fine)
+}
+
+@Test func displaySecondsNeverTraps() {
+    #expect(KeepressoSettings.displaySeconds(90.4) == 90)
+    #expect(KeepressoSettings.displaySeconds(-3) == 0)
+    #expect(KeepressoSettings.displaySeconds(.nan) == 0)
+    #expect(KeepressoSettings.displaySeconds(.infinity) == 0)
+    #expect(KeepressoSettings.displaySeconds(1e308) > Int.max / 4)
+}

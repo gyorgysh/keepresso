@@ -102,6 +102,36 @@ private final class FakeBrightness: BrightnessControlling {
 // MARK: - Idle-only keep-active mode
 
 @MainActor
+@Test func keepActiveNilIdleHoldsThePokeCadence() {
+    // An out-of-band reconcile with no idle reading (lease doorbell, start)
+    // must neither poke nor re-arm: re-arming would make the next tick poke
+    // immediately, bypassing the interval under a heartbeating agent.
+    let clock = Clock()
+    let activity = FakeActivity()
+    let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
+    var options = SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true)
+    options.activityPokeIdleMinutes = 3
+    controller.start(options: options)
+
+    // Idle past the wait: first poke, arming the interval.
+    clock.advance(200)
+    controller.reconcile(systemIdleSeconds: 200)
+    #expect(activity.pokeCount == 1)
+
+    // A nil-idle reconcile halfway through the interval changes nothing.
+    clock.advance(SessionController.activityPokeInterval / 2)
+    controller.reconcile(systemIdleSeconds: nil)
+    clock.advance(SessionController.activityPokeInterval / 2 - 1)
+    controller.reconcile(systemIdleSeconds: 400)
+    #expect(activity.pokeCount == 1) // interval not yet elapsed: still held
+
+    // Once the full interval elapses, the poke fires again.
+    clock.advance(2)
+    controller.reconcile(systemIdleSeconds: 402)
+    #expect(activity.pokeCount == 2)
+}
+
+@MainActor
 @Test func keepActiveIdleOnlyModeWaitsForTheConfiguredMinutes() {
     let clock = Clock()
     let activity = FakeActivity()

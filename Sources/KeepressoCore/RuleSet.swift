@@ -1,5 +1,14 @@
 import Foundation
 
+/// A decoded linger window in seconds: finite, non-negative, and capped at a
+/// real session length, so a corrupt imported blob can neither trap the
+/// `Int(_:)` in a rule label nor linger effectively forever. Zero means no
+/// grace.
+fileprivate func sanitizedGrace(_ raw: TimeInterval) -> TimeInterval {
+    guard raw.isFinite, raw > 0 else { return 0 }
+    return min(raw, SessionMode.maxTimedMinutes * 60)
+}
+
 /// A serializable description of a single trigger condition.
 ///
 /// Triggers themselves are live objects bound to system monitors, so they can't
@@ -148,12 +157,23 @@ public struct AppRule: Codable, Equatable, Hashable, Sendable {
         self.grace = grace
     }
 
+    /// Forgiving decoder: a corrupt or absurd imported grace must never trap
+    /// the `Int(_:)` in ``label`` or linger effectively forever.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        bundleID = try c.decodeIfPresent(String.self, forKey: .bundleID) ?? ""
+        bundlePath = try c.decodeIfPresent(String.self, forKey: .bundlePath)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        match = try c.decodeIfPresent(AppMatch.self, forKey: .match) ?? .running
+        grace = sanitizedGrace(try c.decodeIfPresent(TimeInterval.self, forKey: .grace) ?? 0)
+    }
+
     public var label: String {
         // A bundle id reads as machine noise in the UI, so prefer the friendly
         // name when we have it; keep the "App " prefix only as the bare-id fallback.
         let subject = name ?? L("App %@", bundleID)
         let base = "\(subject) \(match.label)"
-        return grace > 0 ? L("%@ (+%ds)", base, Int(grace)) : base
+        return grace > 0 ? L("%@ (+%ds)", base, KeepressoSettings.displaySeconds(grace)) : base
     }
 }
 
@@ -181,18 +201,20 @@ public struct AgentRule: Codable, Equatable, Hashable, Sendable {
     }
 
     /// Forgiving decoder: older saves without the waiting flag keep the
-    /// default (false).
+    /// default (false), and a corrupt imported grace is sanitized rather
+    /// than trapping the `Int(_:)` in ``label``.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        grace = try c.decodeIfPresent(TimeInterval.self, forKey: .grace)
-            ?? AgentActivityTrigger.defaultGrace
+        grace = sanitizedGrace(
+            try c.decodeIfPresent(TimeInterval.self, forKey: .grace)
+                ?? AgentActivityTrigger.defaultGrace)
         countWaitingAsWorking = try c.decodeIfPresent(Bool.self, forKey: .countWaitingAsWorking) ?? false
     }
 
     public var label: String {
         let base = L("AI agent working")
         var parts: [String] = []
-        if grace > 0 { parts.append(L("+%ds", Int(grace))) }
+        if grace > 0 { parts.append(L("+%ds", KeepressoSettings.displaySeconds(grace))) }
         if countWaitingAsWorking { parts.append(L("waiting counts")) }
         return parts.isEmpty ? base : L("%@ (%@)", base, parts.joined(separator: ", "))
     }

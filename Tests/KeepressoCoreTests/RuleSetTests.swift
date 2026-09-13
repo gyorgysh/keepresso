@@ -321,6 +321,25 @@ private final class ConstWorkspace: WorkspaceMonitoring {
 
 // MARK: - Forgiving decode (unknown rule types)
 
+@Test func absurdImportedGraceIsCappedAndLabelSafe() throws {
+    // A hand-edited or imported blob with an absurd grace must decode to a
+    // bounded value, and rendering its label must never trap `Int(_:)`.
+    let appJSON = #"{ "bundleID": "com.example.App", "grace": 1e308 }"#
+    let appRule = try JSONDecoder().decode(AppRule.self, from: Data(appJSON.utf8))
+    #expect(appRule.grace == SessionMode.maxTimedMinutes * 60)
+    _ = appRule.label
+
+    let agentJSON = #"{ "grace": 1e308 }"#
+    let agentRule = try JSONDecoder().decode(AgentRule.self, from: Data(agentJSON.utf8))
+    #expect(agentRule.grace == SessionMode.maxTimedMinutes * 60)
+    _ = agentRule.label
+
+    // Non-finite and negative graces mean no grace, not a crash.
+    let negative = try JSONDecoder().decode(AppRule.self, from: Data(#"{ "bundleID": "x", "grace": -5 }"#.utf8))
+    #expect(negative.grace == 0)
+    _ = negative.label
+}
+
 @Test func ruleSetDropsUnknownRuleInsteadOfWipingEverything() throws {
     // A newer build's rule case (reached via a downgrade, or a set exported from
     // a newer version and imported) must drop only that rule, not throw the

@@ -993,8 +993,11 @@ public final class SessionController {
             // No idle reading means "not known to be idle": hold the poke
             // rather than firing one on an out-of-band reconcile (lease
             // doorbell, start, URL command) while the user may be typing.
+            // The arm is left alone so the hold neither fires now nor resets
+            // the cadence: clearing it here would make every nil-idle
+            // reconcile re-arm, and the next tick would poke immediately,
+            // bypassing `pokeInterval` under a heartbeating agent.
             guard let idle = systemIdleSeconds, idle >= needed else {
-                lastActivityPokeAt = nil
                 return
             }
         } else if let idle = systemIdleSeconds, idle < Self.activityIdleThreshold {
@@ -1015,8 +1018,12 @@ public final class SessionController {
     /// interval (and never floods if several intervals elapse between ticks, e.g.
     /// across a sleep). No-op when reminders are off.
     private func maybeRemind(at instant: Date) {
-        guard isActive, let after = reminderAfter, after > 0, let startedAt else { return }
-        let intervalsPassed = Int(instant.timeIntervalSince(startedAt) / after)
+        guard isActive, let after = reminderAfter, after > 0, after.isFinite, let startedAt else { return }
+        // Clamp before converting: a directly assigned (unsanitized)
+        // `reminderAfter` near zero would make this ratio trap `Int(_:)`.
+        let ratio = instant.timeIntervalSince(startedAt) / after
+        guard ratio.isFinite, ratio >= 0 else { return }
+        let intervalsPassed = Int(min(ratio, Double(Int.max / 2)))
         guard intervalsPassed >= 1 else { return }
         // Recurring tracks every interval; one-shot caps at the first.
         let target = reminderRepeats ? intervalsPassed : 1

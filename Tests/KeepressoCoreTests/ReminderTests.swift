@@ -414,6 +414,22 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
 }
 
 @MainActor
+@Test func denormalReminderAfterDoesNotTrap() {
+    // A directly assigned (unsanitized) denormal must not trap `Int(_:)` on
+    // the reconcile path: the ratio clamps, the reminder fires once, and a
+    // later reconcile does not duplicate it.
+    let (controller, reminder, clock) = makeController()
+    controller.reminderAfter = 1e-300
+    controller.start()
+    clock.advance(60)
+    controller.reconcile()
+    #expect(reminder.notices.count == 1)
+    clock.advance(60)
+    controller.reconcile()
+    #expect(reminder.notices.count == 1)
+}
+
+@MainActor
 @Test func stopInDoesNotResetTheReminderCounter() {
     let (controller, reminder, clock) = makeController()
     controller.reminderAfter = 30 * 60
