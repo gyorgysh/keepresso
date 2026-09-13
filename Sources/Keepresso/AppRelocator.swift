@@ -72,8 +72,11 @@ enum AppRelocator {
                     try fm.copyItem(at: bundleURL, to: staging)
                     _ = try fm.replaceItemAt(dest, withItemAt: staging)
                 } catch {
+                    // Staging leaves the installed copy in place, so fall
+                    // through and launch it: an older working install beats
+                    // running from the mounted DMG or Downloads (where helper
+                    // registration is skipped and ejecting the disk kills us).
                     try? fm.removeItem(at: staging)
-                    return // best-effort: keep running from the current location
                 }
             }
         } else {

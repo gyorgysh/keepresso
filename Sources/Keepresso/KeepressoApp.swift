@@ -115,7 +115,7 @@ private struct MenuBarLabelView: View {
                 // relaunched copy, the one fresh installs actually keep,
                 // would never show it.
                 guard !AppRelocator.isRelocating else { return }
-                NSApp.activate()
+                NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: KeepressoApp.welcomeWindowID)
             }
             // The helper self-heal got stuck on a step only the user can do:
@@ -123,7 +123,7 @@ private struct MenuBarLabelView: View {
             // view, so the edge is caught no matter what else is open.
             .onChange(of: model.helperAttention) { _, attention in
                 guard attention != nil else { return }
-                NSApp.activate()
+                NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: KeepressoApp.helperWindowID)
             }
     }

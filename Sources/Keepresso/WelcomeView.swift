@@ -659,7 +659,7 @@ struct WelcomeView: View {
             }
             Spacer(minLength: 8)
             Button("Set Up\u{2026}") {
-                NSApp.activate()
+                NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: KeepressoApp.streamingWindowID)
             }
         }

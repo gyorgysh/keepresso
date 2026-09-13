@@ -499,7 +499,7 @@ struct MenuBarContent: View {
     /// `NSWindow` directly.
     private func open(_ id: String) {
         NSApp.keyWindow?.close()
-        NSApp.activate()
+        NSApp.activate(ignoringOtherApps: true)
         openWindow(id: id)
     }
 

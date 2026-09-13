@@ -945,10 +945,10 @@ final class AppModel {
         // Record what we're arming so the automation re-arm can tell when the
         // effective one-shot has actually moved.
         lastArmedEffectiveOneShot = config.oneShot
-        // Leave pmset alone when there is nothing to install and Keepresso
-        // never installed anything: the system schedules belong to the user
-        // or another tool, not to us.
-        guard config.isActive || wakeSchedulesInstalledByKeepresso else { return }
+        // Always enqueue: the guard below lives with the execution-time config
+        // read in `performWakeApply`, so a schedule cancelled (or re-enabled)
+        // between enqueue and execution cannot install a stale config or skip
+        // a fresh one.
         wakeApplyPending = true
         if wakeApplyTask == nil {
             runWakeApplyLoop()
@@ -983,6 +983,12 @@ final class AppModel {
             persist()
         }
         let config = effectiveWakeConfig()
+        // Leave pmset alone when there is nothing to install and Keepresso
+        // never installed anything: the system schedules belong to the user
+        // or another tool, not to us. Checked here, against the same config
+        // the pass applies, so enqueue-time and execution-time cannot
+        // disagree in either direction.
+        guard config.isActive || wakeSchedulesInstalledByKeepresso else { return }
         // A pre-update daemon still answering the handshake means "updating",
         // not "missing": no failure notification, re-apply once the new
         // daemon serves.
@@ -1465,16 +1471,20 @@ final class AppModel {
     var hotKey: HotKeyShortcut? {
         get { settings.hotKey }
         set {
-            settings.hotKey = newValue
+            settings.hotKey = KeepressoSettings.sanitizedHotKey(newValue)
             persist()
             registerHotKey()
         }
     }
 
     /// (Re)register the global hotkey from the saved shortcut. Called at launch
-    /// and whenever the shortcut changes.
+    /// and whenever the shortcut changes. A refusal is logged, not surfaced:
+    /// the manager keeps the previous shortcut working.
     func registerHotKey() {
-        hotKeyManager.update(to: settings.hotKey) { [weak self] in self?.toggleManual() }
+        let ok = hotKeyManager.update(to: settings.hotKey) { [weak self] in self?.toggleManual() }
+        if !ok {
+            NSLog("Keepresso: global shortcut refused, kept the previous one")
+        }
     }
 
     /// The Keyboard Cleaner overlay is up: a global toggle must not fire from
@@ -2710,12 +2720,12 @@ final class AppModel {
     ) {
         let window = needsPrompt ? NSApp.keyWindow : nil
         if needsPrompt {
-            NSApp.activate()
+            NSApp.activate(ignoringOtherApps: true)
         }
         Task {
             await operation()
             guard needsPrompt else { return }
-            NSApp.activate()
+            NSApp.activate(ignoringOtherApps: true)
             window?.makeKeyAndOrderFront(nil)
             // Auth sheets can leave an LSUIElement app half-active; same repair
             // used when a window first opens.
@@ -2824,7 +2834,7 @@ final class AppModel {
             // ``setClosedDisplay(_:)``), and say what's happening in a
             // notification, since the dialog itself is easy to miss and names
             // "osascript", not Keepresso.
-            NSApp.activate()
+            NSApp.activate(ignoringOtherApps: true)
             notifier.notify(
                 title: L("Keepresso needs your password"),
                 body: L("Enter your administrator password to switch closed-display mode on for this session."),
@@ -3006,11 +3016,11 @@ final class AppModel {
         let needsPrompt = !helperCanLockSilently
         let window = needsPrompt ? NSApp.keyWindow : nil
         if needsPrompt {
-            NSApp.activate()
+            NSApp.activate(ignoringOtherApps: true)
         }
         let result = await keyboardLock.lock(duration: duration)
         if needsPrompt {
-            NSApp.activate()
+            NSApp.activate(ignoringOtherApps: true)
             window?.makeKeyAndOrderFront(nil)
             WindowPlacement.repairIfWedged(window, attempts: 3)
         }
@@ -3265,7 +3275,7 @@ final class AppModel {
         if settings.awdlAutoWithGaming {
             if gamingWatcher.wrappedIsSatisfied { return .pausedForGame }
             if let remaining = gamingWatcher.graceRemaining {
-                return .resumingAfterGame(seconds: Int(remaining.rounded(.up)))
+                return .resumingAfterGame(seconds: KeepressoSettings.displaySeconds(remaining))
             }
         }
         return .pausedManually

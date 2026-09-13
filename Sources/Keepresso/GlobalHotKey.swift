@@ -21,11 +21,18 @@ final class GlobalHotKeyManager {
     /// modifier-less system hotkey would swallow a bare key everywhere. Returns
     /// false when the system refused the registration (usually another app owns
     /// the combination); the caller can log or surface that.
+    /// The currently registered shortcut, so a refused replacement can put
+    /// the previous one back instead of leaving no hotkey at all.
+    private var currentShortcut: HotKeyShortcut?
+
     @discardableResult
     func update(to shortcut: HotKeyShortcut?, onPress: @escaping () -> Void) -> Bool {
         self.onPress = onPress
-        unregister()
-        guard let shortcut else { return true }
+        guard let shortcut else {
+            unregister()
+            currentShortcut = nil
+            return true
+        }
         guard shortcut.keyCode >= 0, shortcut.keyCode <= Int(UInt32.max) else { return false }
         let carbonModifiers = shortcut.carbonModifiers
         guard carbonModifiers != 0 else { return false }
@@ -36,16 +43,40 @@ final class GlobalHotKeyManager {
         }
         let id = EventHotKeyID(signature: Self.signature, id: 1)
         var ref: EventHotKeyRef?
+        // Unregister first: Carbon refuses a duplicate of our fixed id.
+        unregister()
         let status = RegisterEventHotKey(
             UInt32(shortcut.keyCode), carbonModifiers, id,
             GetApplicationEventTarget(), 0, &ref
         )
         guard status == noErr, let ref else {
             NSLog("Keepresso: could not register global shortcut (status %d)", status)
+            // The system refused the new combination (usually another app
+            // owns it): put the previous one back so the toggle keeps
+            // working instead of silently dying.
+            if let previous = currentShortcut {
+                restore(previous)
+            }
             return false
         }
         hotKeyRef = ref
+        currentShortcut = shortcut
         return true
+    }
+
+    /// Best-effort re-registration of `shortcut`, logging when even that fails.
+    private func restore(_ shortcut: HotKeyShortcut) {
+        var ref: EventHotKeyRef?
+        let status = RegisterEventHotKey(
+            UInt32(shortcut.keyCode), shortcut.carbonModifiers,
+            EventHotKeyID(signature: Self.signature, id: 1),
+            GetApplicationEventTarget(), 0, &ref
+        )
+        guard status == noErr, let ref else {
+            NSLog("Keepresso: could not restore previous global shortcut (status %d)", status)
+            return
+        }
+        hotKeyRef = ref
     }
 
     fileprivate func fire() { onPress?() }

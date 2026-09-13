@@ -151,7 +151,7 @@ final class StatusItemBridge: NSObject {
     /// the menu showed): activate first, or the LSUIElement agent's new window
     /// comes up behind and drawn inactive.
     private func open(_ id: String) {
-        NSApp.activate()
+        NSApp.activate(ignoringOtherApps: true)
         openWindow?(id)
     }
 

@@ -275,7 +275,7 @@ private struct ActivityTab: View {
     }
 
     private func formatHeld(_ seconds: TimeInterval) -> String {
-        let total = Int(seconds.rounded())
+        let total = KeepressoSettings.displaySeconds(seconds)
         let h = total / 3600
         let m = (total % 3600) / 60
         if h > 0 { return L("%dh %dm", h, m) }
@@ -604,7 +604,7 @@ private struct GeneralTab: View {
             }
             Section {
                 Button("Show Welcome Screen\u{2026}") {
-                    NSApp.activate()
+                    NSApp.activate(ignoringOtherApps: true)
                     openWindow(id: KeepressoApp.welcomeWindowID)
                 }
             } header: {
