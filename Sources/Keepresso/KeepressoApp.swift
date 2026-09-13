@@ -277,6 +277,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.syncWidgetState()
     }
 
+    /// Set once a quit decision is in flight so a second ask (logout
+    /// escalation, an impatient second Cmd-Q) quits instead of stacking
+    /// another modal.
+    private var quitTerminationPending = false
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // A duplicate handing over quits silently, and an answer already in
+        // flight must not stack a second modal: both just quit.
+        guard !yieldingToPeer, !quitTerminationPending else { return .terminateNow }
+        quitTerminationPending = true
+        Task { @MainActor [weak self] in
+            guard let self else {
+                NSApp.reply(toApplicationShouldTerminate: true)
+                return
+            }
+            let coverage = await self.model.quitSleepCoverage()
+            if coverage != .none {
+                let device = MachineIdentity.deviceName(
+                    modelIdentifier: MachineIdentity.currentModelIdentifier())
+                let qualifier = MachineIdentity.powerQualifier(
+                    IOKitPowerSourceMonitor().current)
+                switch QuitSleepModal().ask(
+                    coverage: coverage, device: device, qualifier: qualifier
+                ) {
+                case .turnOffAndQuit:
+                    await self.model.clearSleepOverrideForQuit()
+                    NSApp.reply(toApplicationShouldTerminate: true)
+                case .quitAnyway, .stopBrewingAndQuit:
+                    NSApp.reply(toApplicationShouldTerminate: true)
+                case .cancel:
+                    self.quitTerminationPending = false
+                    NSApp.reply(toApplicationShouldTerminate: false)
+                }
+            } else {
+                NSApp.reply(toApplicationShouldTerminate: true)
+            }
+        }
+        return .terminateLater
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         // "Dim, don't sleep" lowers the built-in panel's brightness, a persistent
         // display setting the OS won't restore on exit the way it releases power

@@ -222,6 +222,30 @@ import Foundation
     #expect(KeepressoSettings(hotKey: fine).hotKey == fine)
 }
 
+@Test func freshInstallDefaultsOnlyTouchUnsaved() {
+    // A first launch (nothing persisted) starts session-scoped; anything
+    // saved, including an explicit off, passes through untouched.
+    let fresh = KeepressoSettings.default.withFreshInstallDefaults(hasStoredSettings: false)
+    #expect(fresh.closedDisplayOnlyWhileBrewing)
+
+    var savedOff = KeepressoSettings.default
+    savedOff.closedDisplayOnlyWhileBrewing = false
+    #expect(savedOff.withFreshInstallDefaults(hasStoredSettings: true) == savedOff)
+
+    // Everything else passes through on a fresh install too.
+    #expect(fresh.reminderAfter == KeepressoSettings.default.reminderAfter)
+    #expect(fresh.options == KeepressoSettings.default.options)
+}
+
+@Test func storeKnowsWhetherAnythingWasPersisted() {
+    let defaults = UserDefaults(suiteName: "keepresso.tests.firstlaunch")!
+    defaults.removePersistentDomain(forName: "keepresso.tests.firstlaunch")
+    let store = UserDefaultsSettingsStore(defaults: defaults, key: "k")
+    #expect(!store.hasStoredSettings)
+    store.save(KeepressoSettings.default)
+    #expect(store.hasStoredSettings)
+}
+
 @Test func displaySecondsNeverTraps() {
     #expect(KeepressoSettings.displaySeconds(90.4) == 90)
     #expect(KeepressoSettings.displaySeconds(-3) == 0)

@@ -398,6 +398,9 @@ public protocol SettingsStore: AnyObject {
     func load() -> KeepressoSettings
     /// Persist settings; failures are swallowed (a lost write is non-fatal).
     func save(_ settings: KeepressoSettings)
+    /// Whether a blob was ever persisted, so first launch (nothing saved
+    /// yet) can take different defaults without migrating anyone.
+    var hasStoredSettings: Bool { get }
 }
 
 /// Real store backed by `UserDefaults`, encoding settings as JSON under a single
@@ -425,5 +428,24 @@ public final class UserDefaultsSettingsStore: SettingsStore {
     public func save(_ settings: KeepressoSettings) {
         guard let data = try? JSONEncoder().encode(settings) else { return }
         defaults.set(data, forKey: key)
+    }
+
+    public var hasStoredSettings: Bool {
+        defaults.data(forKey: key) != nil
+    }
+}
+
+// MARK: - Fresh-install defaults
+
+extension KeepressoSettings {
+    /// Session-scoped closed-display for first launch only: nothing
+    /// persisted yet means a fresh install, which starts safe. Anything
+    /// saved (even a corrupt blob) passes through untouched, so existing
+    /// installs keep whatever they had, including off.
+    public func withFreshInstallDefaults(hasStoredSettings: Bool) -> KeepressoSettings {
+        guard !hasStoredSettings else { return self }
+        var copy = self
+        copy.closedDisplayOnlyWhileBrewing = true
+        return copy
     }
 }

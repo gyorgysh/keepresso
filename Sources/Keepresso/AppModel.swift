@@ -163,6 +163,13 @@ final class AppModel {
             )
         )
         var loaded = store.load()
+            .withFreshInstallDefaults(hasStoredSettings: store.hasStoredSettings)
+        if !store.hasStoredSettings {
+            // Fresh install: persist the first-launch defaults now, before
+            // anything reads them back. Existing blobs are never rewritten
+            // here, corrupt or not.
+            store.save(loaded)
+        }
         loaded.seedNewBuiltInPresets() // new built-ins reach existing users once
         loaded.refreshBuiltInPresets() // and changed ones stay current
         self.settings = loaded
@@ -2698,12 +2705,50 @@ final class AppModel {
         // safety lift/restore paths only call here with the helper installed.
         let needsAuthDance = !helperInstalled
         runAfterPossibleAuthPrompt(needsPrompt: needsAuthDance) {
-            await self.closedDisplay.set(on)
+            let result = await self.closedDisplay.set(on)
+            // Remember a live persistent override flipped on this run: it is
+            // the only case where quitting orphans a setting, and the quit
+            // modal asks about exactly that. Cleared on any successful off.
+            if case .applied = result {
+                self.persistentSleepSetByUs = on
+            }
             // A failure through the installed helper points at a stale daemon
             // registration: check and repair it (dedupes, once per run).
             if self.closedDisplay.lastError != nil, self.helperInstalled {
                 self.verifyHelper()
             }
+        }
+    }
+
+    /// Whether this process turned the persistent sleep override on and it
+    /// has not been turned back off since. Run-local by design: a standing
+    /// choice from an earlier run is disclosed in Preferences and stays
+    /// silent at quit, and anything foreign is never ours to question.
+    @ObservationIgnored private var persistentSleepSetByUs = false
+
+    /// Live quit-time coverage for the quit modal: fresh pmset read plus
+    /// session state and the run-local ownership flag.
+    func quitSleepCoverage() async -> QuitSleepCheck.Coverage {
+        await closedDisplay.refresh(force: true)
+        return QuitSleepCheck.coverage(
+            brewing: session.isActive,
+            overrideLive: closedDisplay.isEnabled == true,
+            overrideSetThisRun: persistentSleepSetByUs)
+    }
+
+    /// Consent-based clear for the quit modal: release the scoped hold,
+    /// then clear the persistent override when it is still live. The caller
+    /// activated the app for the modal, so a password prompt here answers a
+    /// question the user just asked. Always returns promptly; a failure is
+    /// recorded on the controller and logged, never stranded into.
+    func clearSleepOverrideForQuit() async {
+        await closedDisplayAuto.stopIfHolding()
+        await closedDisplay.refresh(force: true)
+        guard closedDisplay.isEnabled == true else { return }
+        let result = await closedDisplay.set(false)
+        persistentSleepSetByUs = false
+        if case .failed(let message) = result {
+            NSLog("Keepresso: quit-time sleep restore failed: %@", message)
         }
     }
 

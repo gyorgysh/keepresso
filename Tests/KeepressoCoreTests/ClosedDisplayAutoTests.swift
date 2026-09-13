@@ -399,3 +399,26 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: data)
     #expect(decoded.closedDisplayOnlyWhileBrewing)
 }
+
+// MARK: - Quit modal coverage
+
+@Test func quitModalCoversBrewingAndOursAlone() {
+    typealias Q = QuitSleepCheck
+    #expect(Q.coverage(brewing: false, overrideLive: false, overrideSetThisRun: false) == .none)
+    // Brewing with nothing persistent: the session ends, nothing survives.
+    #expect(Q.coverage(brewing: true, overrideLive: false, overrideSetThisRun: false) == .session)
+    // Our persistent override live: quitting would orphan it unmanaged.
+    #expect(Q.coverage(brewing: false, overrideLive: true, overrideSetThisRun: true) == .overrideLive)
+    #expect(Q.coverage(brewing: true, overrideLive: true, overrideSetThisRun: true) == .sessionAndOverride)
+}
+
+@Test func quitModalStaysSilentForStandingAndForeignChoices() {
+    typealias Q = QuitSleepCheck
+    // A persistent override from an earlier run is a disclosed standing
+    // choice, not a fresh accident: no modal.
+    #expect(Q.coverage(brewing: false, overrideLive: true, overrideSetThisRun: false) == .none)
+    // Same while brewing: the session variant shows, with no override line.
+    // A foreign live value lands here too (nothing here set it), and is
+    // likewise never ours to question.
+    #expect(Q.coverage(brewing: true, overrideLive: true, overrideSetThisRun: false) == .session)
+}
