@@ -30,7 +30,13 @@ public final class SessionController {
     /// ``start(mode:options:)`` only hold until the next tick. While gated the
     /// timed-``mode`` cap is ignored, a condition-gated session isn't time-boxed.
     /// Leave `nil` for the classic manual toggle.
-    public var triggerGate: TriggerEvaluating?
+    public var triggerGate: TriggerEvaluating? {
+        didSet {
+            // Triggers own activation from here: a manual session a safety
+            // pause remembered must not resume underneath the gate later.
+            if triggerGate != nil { safetyPausedManual = nil }
+        }
+    }
 
     /// When set, automation leases are one more demand source, considered in
     /// both manual and trigger mode: any live lease keeps the Mac awake, and
@@ -267,6 +273,7 @@ public final class SessionController {
         mode: SessionMode,
         options: SleepPreventionOptions,
         startedAt: Date?,
+        remindersFired: Int,
         reason: String
     )?
 
@@ -483,7 +490,13 @@ public final class SessionController {
         resumeReason: String
     ) {
         let manualOwned = triggerGate == nil && !leaseHeld
-        let snapshot = (mode: mode, options: options, startedAt: startedAt, reason: resumeReason)
+        let snapshot = (
+            mode: mode,
+            options: options,
+            startedAt: startedAt,
+            remindersFired: remindersFired,
+            reason: resumeReason
+        )
         stop(reason: reason, effects: effects, notice: notice)
         if manualOwned { safetyPausedManual = snapshot }
     }
@@ -498,6 +511,7 @@ public final class SessionController {
             mode: SessionMode,
             options: SleepPreventionOptions,
             startedAt: Date?,
+            remindersFired: Int,
             reason: String
         ),
         at instant: Date
@@ -509,7 +523,9 @@ public final class SessionController {
         options = paused.options
         startedAt = paused.startedAt ?? instant
         isActive = true
-        remindersFired = 0
+        // Keep the nudge counter: the pause must not re-fire a one-shot
+        // "still brewing" reminder the session already delivered.
+        remindersFired = paused.remindersFired
         lastActivityPokeAt = nil
         armEndingSoon(remaining: paused.mode.duration.map {
             $0 - instant.timeIntervalSince(startedAt ?? instant)
@@ -772,6 +788,16 @@ public final class SessionController {
             }
         }
 
+        // A lifted safety pause restarts the manual session it stopped ahead
+        // of the chain below, so an overdue timed deadline still ends on
+        // this same tick through the normal expiry path instead of holding
+        // assertions for a tick past it. No gate (it reactivates on its own)
+        // and no leases (they take precedence): with either present, the
+        // remembered session stays out of the way.
+        if triggerGate == nil, !isActive, !leaseDemand, let paused = safetyPausedManual {
+            resumeSafetyPausedSession(paused, at: instant)
+        }
+
         if let triggerGate {
             // Triggers own activation, leases union in; the timed cap doesn't
             // apply. Ownership (`leaseHeld`) tracks what sustains the session
@@ -826,13 +852,6 @@ public final class SessionController {
             // A safety pause never reaches this point (the latches above
             // early-return), so activating on lease demand is always safe.
             beginLeaseSession(at: instant)
-        } else if !isActive, triggerGate == nil, let paused = safetyPausedManual {
-            // The pause lifted on a manual session with nothing else to
-            // restart it: no gate (which would have reactivated above) and no
-            // leases (which won the branch above). Bring back what the pause
-            // stopped. Either latch still holding returned early, so reaching
-            // here means the pause genuinely lifted.
-            resumeSafetyPausedSession(paused, at: instant)
         } else if isActive, leaseHeld, !leaseDemand {
             stop(
                 reason: L("Automation lease ended"),

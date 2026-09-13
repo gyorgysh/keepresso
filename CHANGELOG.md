@@ -7,6 +7,15 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 Theme: scheduled wakes land on time, and the app stops tripping over corrupt input.
 
+### Added
+
+- **Quitting while brewing asks first.** If a session is still running, or
+  the lid-closed sleep override you turned on is still live, a reminder
+  names your Mac and offers to turn it off before quitting, so you never
+  strand a machine awake by accident. Fresh installs also start with
+  closed-display mode scoped to brewing sessions; existing settings are
+  never touched.
+
 ### Changed
 
 - **Scheduled wakes fire at the time you picked, even on DST days.** The
@@ -51,6 +60,12 @@ Theme: scheduled wakes land on time, and the app stops tripping over corrupt inp
 - **A refused shortcut no longer kills your hotkey.** When the system gives
   the combination to another app, the previous shortcut is put back and the
   refusal is logged.
+
+- **Plugging in resumes a battery-paused session.** A low-battery pause
+  stopped manual brewing and never restarted it, so the Mac sat idle after
+  you plugged in. The session now comes back on its own once you plug in
+  or the charge recovers, and heat pauses resume the same way after the
+  Mac cools down. Stopping it yourself while paused still stays stopped.
 
 ## [1.24.1] - 2026-09-11
 

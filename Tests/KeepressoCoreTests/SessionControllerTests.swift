@@ -974,6 +974,45 @@ private final class StubGate: TriggerEvaluating {
 }
 
 @MainActor
+@Test func overdueTimedSessionEndsSameTickOnResume() {
+    let (controller, fake, clock) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.start(mode: .timed(duration: 60))
+
+    controller.reconcile(battery: .discharging(15))
+    #expect(controller.isActive == false)
+
+    // The deadline passes while paused: lifting the pause must end the
+    // session on that same tick, never hold assertions one tick past it.
+    clock.advance(120)
+    controller.reconcile(battery: .onAC)
+    #expect(controller.isActive == false)
+    #expect(fake.held.isEmpty)
+}
+
+@MainActor
+@Test func enablingTriggersDiscardsRememberedManualSession() {
+    let (controller, fake, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.start()
+
+    controller.reconcile(battery: .discharging(15))
+    #expect(controller.pausedByBattery)
+
+    // Triggers take ownership mid-pause but stay unsatisfied: nothing runs.
+    controller.triggerGate = StubGate(false)
+    controller.reconcile(battery: .onAC)
+    #expect(controller.isActive == false)
+
+    // Triggers go away again: the manual session remembered from before the
+    // trigger era must not resume underneath the user's back.
+    controller.triggerGate = nil
+    controller.reconcile(battery: .onAC)
+    #expect(controller.isActive == false)
+    #expect(fake.held.isEmpty)
+}
+
+@MainActor
 @Test func batteryThresholdIgnoredWhenNoReadingSupplied() {
     let (controller, fake, _) = makeController()
     controller.pauseBelowBatteryPercent = 20

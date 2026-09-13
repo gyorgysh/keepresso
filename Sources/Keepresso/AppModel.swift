@@ -2704,12 +2704,15 @@ final class AppModel {
         // prompts, so gate the dance on the helper, not on the caller. The
         // safety lift/restore paths only call here with the helper installed.
         let needsAuthDance = !helperInstalled
+        let ownIntent = userInitiated
         runAfterPossibleAuthPrompt(needsPrompt: needsAuthDance) {
             let result = await self.closedDisplay.set(on)
-            // Remember a live persistent override flipped on this run: it is
-            // the only case where quitting orphans a setting, and the quit
-            // modal asks about exactly that. Cleared on any successful off.
-            if case .applied = result {
+            // Remember a live persistent override the user flipped this run:
+            // it is the only case where quitting orphans a setting, and the
+            // quit modal asks about exactly that. Only the user's own toggles
+            // touch the flag, so a safety lift and restore around a standing
+            // choice never marks it as ours.
+            if ownIntent, case .applied = result {
                 self.persistentSleepSetByUs = on
             }
             // A failure through the installed helper points at a stale daemon
@@ -2726,9 +2729,22 @@ final class AppModel {
     /// silent at quit, and anything foreign is never ours to question.
     @ObservationIgnored private var persistentSleepSetByUs = false
 
+    /// Wait (bounded) for an in-flight sleep write to settle, so quit-time
+    /// coverage reads post-toggle state and the quit-time clear doesn't
+    /// bounce off a busy controller. Caps at ~2s; quitting must stay prompt.
+    /// A still-busy controller after that reads stale, which the acting path
+    /// re-checks before touching anything.
+    private func waitForSleepWriteToSettle() async {
+        for _ in 0..<20 {
+            guard closedDisplay.isBusy else { return }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+    }
+
     /// Live quit-time coverage for the quit modal: fresh pmset read plus
     /// session state and the run-local ownership flag.
     func quitSleepCoverage() async -> QuitSleepCheck.Coverage {
+        await waitForSleepWriteToSettle()
         await closedDisplay.refresh(force: true)
         return QuitSleepCheck.coverage(
             brewing: session.isActive,
@@ -2743,8 +2759,17 @@ final class AppModel {
     /// recorded on the controller and logged, never stranded into.
     func clearSleepOverrideForQuit() async {
         await closedDisplayAuto.stopIfHolding()
+        await waitForSleepWriteToSettle()
         await closedDisplay.refresh(force: true)
         guard closedDisplay.isEnabled == true else { return }
+        // Without the helper, clearing needs an osascript password sheet:
+        // never pop that during quit. The override stays as it was (same as
+        // quitting without the modal), and the scoped hold above is already
+        // released prompt-free.
+        guard helperInstalled else {
+            NSLog("Keepresso: quit-time sleep restore skipped without the helper")
+            return
+        }
         let result = await closedDisplay.set(false)
         persistentSleepSetByUs = false
         if case .failed(let message) = result {

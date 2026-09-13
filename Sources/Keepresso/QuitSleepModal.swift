@@ -23,7 +23,7 @@ struct QuitSleepModalView: View {
         VStack(spacing: 12) {
             SleepArtWebView()
                 .frame(width: 200, height: 140)
-            Text(title)
+            Text(verbatim: title)
                 .font(.headline)
             VStack(alignment: .leading, spacing: 6) {
                 if showsSessionLine {
@@ -62,10 +62,12 @@ struct QuitSleepModalView: View {
         .frame(width: 380)
     }
 
-    private var title: LocalizedStringKey {
+    /// Through `L` (not a bare literal) so the localization gate sees the
+    /// keys: a renamed literal must never silently fall back to English.
+    private var title: String {
         switch coverage {
-        case .session: "Quit while still brewing?"
-        default: "Did you forget to turn it off?"
+        case .session: L("Quit while still brewing?")
+        default: L("Did you forget to turn it off?")
         }
     }
 
