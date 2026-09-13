@@ -55,20 +55,26 @@ public enum CodexHooks {
     /// warns when one layer is declared in both places. The dedicated file is
     /// the quieter neighbour.
     ///
-    /// `CODEX_HOME` moves the whole directory, so it is honoured here.
-    public static func hooksURL(
+    /// The Codex data directory: `CODEX_HOME` moves the whole tree, so it is
+    /// honoured everywhere Codex state is read, not just for hooks.
+    public static func dataRootURL(
         home: String = NSHomeDirectory(),
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> URL {
         let codexHome = environment["CODEX_HOME"]?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let base: URL
         if let codexHome, !codexHome.isEmpty {
-            base = URL(fileURLWithPath: codexHome)
-        } else {
-            base = URL(fileURLWithPath: home).appendingPathComponent(".codex", isDirectory: true)
+            return URL(fileURLWithPath: codexHome)
         }
-        return base.appendingPathComponent("hooks.json")
+        return URL(fileURLWithPath: home).appendingPathComponent(".codex", isDirectory: true)
+    }
+
+    /// `CODEX_HOME` moves the whole directory, so it is honoured here.
+    public static func hooksURL(
+        home: String = NSHomeDirectory(),
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> URL {
+        dataRootURL(home: home, environment: environment).appendingPathComponent("hooks.json")
     }
 
     /// The shell command an installed hook runs.
