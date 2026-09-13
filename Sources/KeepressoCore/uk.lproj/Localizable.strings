@@ -263,3 +263,6 @@
 "iCloud Private Relay" = "Приватний ретранслятор iCloud";
 "Private Relay can hide the portal's redirect, so Safari never shows the login page." = "Приватний ретранслятор може приховати переспрямування порталу, тому Safari не покаже сторінку входу.";
 "iCloud ▸ Private Relay, and turn it off for this network." = "iCloud ▸ Приватний ретранслятор, а потім вимкніть його для цієї мережі.";
+"your %@" = "твій %@";
+"on battery" = "від акумулятора";
+"on battery at %d%%" = "від акумулятора на %d%%";

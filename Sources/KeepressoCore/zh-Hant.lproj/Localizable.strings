@@ -263,3 +263,6 @@
 "iCloud Private Relay" = "iCloud 私密轉送";
 "Private Relay can hide the portal's redirect, so Safari never shows the login page." = "私密轉送可能隱藏入口網站的重新導向，因此 Safari 不會顯示登入頁面。";
 "iCloud ▸ Private Relay, and turn it off for this network." = "iCloud ▸ 私密轉送，然後針對此網路將其關閉。";
+"your %@" = "你的 %@";
+"on battery" = "使用電池時";
+"on battery at %d%%" = "使用電池，電量為 %d%%";

@@ -263,3 +263,6 @@
 "iCloud Private Relay" = "iCloud プライベートリレー";
 "Private Relay can hide the portal's redirect, so Safari never shows the login page." = "プライベートリレーはポータルのリダイレクトを隠すため、Safari にログインページが表示されないことがあります。";
 "iCloud ▸ Private Relay, and turn it off for this network." = "iCloud ▸ プライベートリレーで、このネットワークではオフにしてください。";
+"your %@" = "あなたの %@";
+"on battery" = "バッテリー使用時";
+"on battery at %d%%" = "バッテリー使用時（残量 %d%%）";

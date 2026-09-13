@@ -756,3 +756,12 @@
 "Install a small helper service so closed-display mode, Keyboard Cleaner, the thermal fan boost, AWDL pausing, and DNS flush work without password prompts. macOS will ask you to allow it in System Settings, once. Nothing else changes." = "Installez un petit service d’assistance afin que le mode écran fermé, le nettoyeur de clavier, l’accélération thermique des ventilateurs, la mise en pause d’AWDL et le vidage DNS fonctionnent sans demande de mot de passe. macOS vous demandera de l’autoriser une fois dans Réglages Système. Rien d’autre ne change.";
 "Tools" = "Outils";
 "Help" = "Aide";
+"Did you forget to turn it off?" = "Avez-vous oublié de le désactiver ?";
+"Quit while still brewing?" = "Quitter pendant l’infusion ?";
+"Turn off and quit" = "Désactiver et quitter";
+"Quit anyway" = "Quitter quand même";
+"Stop brewing and quit" = "Arrêter l’infusion et quitter";
+"A keep-awake session is still brewing. Quitting stops it now instead of at its timer." = "Une session est toujours en cours d’infusion. Quitter l’arrête maintenant au lieu d’attendre son minuteur.";
+"%@ would stay awake with the lid shut and nothing managing it." = "%@ resterait éveillé capot fermé sans rien pour le maintenir éveillé.";
+"%@ would stay awake with the lid shut and nothing managing it, %@." = "%@ resterait éveillé capot fermé sans rien pour le maintenir éveillé, %@.";
+"Turn this on and then quit, and Keepresso asks whether to turn it off first." = "Activez ceci puis quittez, et Keepresso demandera ensuite s’il faut d’abord le désactiver.";

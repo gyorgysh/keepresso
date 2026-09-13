@@ -263,3 +263,6 @@
 "iCloud Private Relay" = "Relay privato iCloud";
 "Private Relay can hide the portal's redirect, so Safari never shows the login page." = "Relay privato può nascondere il reindirizzamento del portale, quindi Safari non mostra la pagina di accesso.";
 "iCloud ▸ Private Relay, and turn it off for this network." = "iCloud ▸ Relay privato, quindi disattivalo per questa rete.";
+"your %@" = "il tuo %@";
+"on battery" = "A batteria";
+"on battery at %d%%" = "A batteria al %d%%";

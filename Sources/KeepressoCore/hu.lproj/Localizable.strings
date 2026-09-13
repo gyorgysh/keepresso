@@ -263,3 +263,6 @@
 "iCloud Private Relay" = "iCloud Privát átjátszó";
 "Private Relay can hide the portal's redirect, so Safari never shows the login page." = "A Privát átjátszó elrejtheti a portál átirányítását, ezért a Safari nem jeleníti meg a bejelentkezési oldalt.";
 "iCloud ▸ Private Relay, and turn it off for this network." = "iCloud ▸ Privát átjátszó, majd kapcsolja ki ennél a hálózatnál.";
+"your %@" = "az Ön %@";
+"on battery" = "akkumulátorról";
+"on battery at %d%%" = "akkumulátorról %d%%-nál";

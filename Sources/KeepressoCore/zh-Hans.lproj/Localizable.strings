@@ -263,3 +263,6 @@
 "iCloud Private Relay" = "iCloud 专用代理";
 "Private Relay can hide the portal's redirect, so Safari never shows the login page." = "专用代理可能隐藏门户的重定向，因此 Safari 不会显示登录页面。";
 "iCloud ▸ Private Relay, and turn it off for this network." = "iCloud ▸ 专用代理，然后为此网络将其关闭。";
+"your %@" = "你的 %@";
+"on battery" = "使用电池时";
+"on battery at %d%%" = "使用电池且电量为 %d%% 时";

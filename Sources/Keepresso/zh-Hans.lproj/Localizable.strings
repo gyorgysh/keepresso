@@ -756,3 +756,12 @@
 "Install a small helper service so closed-display mode, Keyboard Cleaner, the thermal fan boost, AWDL pausing, and DNS flush work without password prompts. macOS will ask you to allow it in System Settings, once. Nothing else changes." = "安装一个小型助理服务，让合盖模式、键盘清洁器、散热风扇加速、AWDL 暂停和 DNS 刷新无需弹出密码请求即可使用。macOS 会要求你在系统设置中允许它一次。不会有其他变化。";
 "Tools" = "工具";
 "Help" = "帮助";
+"Did you forget to turn it off?" = "忘记把它关掉了吗？";
+"Quit while still brewing?" = "在仍在运行时退出？";
+"Turn off and quit" = "关闭并退出";
+"Quit anyway" = "仍要退出";
+"Stop brewing and quit" = "停止运行并退出";
+"A keep-awake session is still brewing. Quitting stops it now instead of at its timer." = "一个保持唤醒会话仍在运行中。现在退出会立即停止它，而不是等到计时结束。";
+"%@ would stay awake with the lid shut and nothing managing it." = "%@ 会在合盖且没有任何因素管理时保持唤醒。";
+"%@ would stay awake with the lid shut and nothing managing it, %@." = "%@ 会在合盖且没有任何因素管理时保持唤醒，%@。";
+"Turn this on and then quit, and Keepresso asks whether to turn it off first." = "先开启此项再退出，Keepresso 会询问是否先将其关闭。";

@@ -263,3 +263,6 @@
 "iCloud Private Relay" = "Частный узел iCloud";
 "Private Relay can hide the portal's redirect, so Safari never shows the login page." = "Частный узел может скрыть перенаправление портала, поэтому Safari не покажет страницу входа.";
 "iCloud ▸ Private Relay, and turn it off for this network." = "iCloud ▸ Частный узел, затем отключите его для этой сети.";
+"your %@" = "ваш %@";
+"on battery" = "От аккумулятора";
+"on battery at %d%%" = "От аккумулятора, заряд %d%%";

@@ -756,3 +756,12 @@
 "Install a small helper service so closed-display mode, Keyboard Cleaner, the thermal fan boost, AWDL pausing, and DNS flush work without password prompts. macOS will ask you to allow it in System Settings, once. Nothing else changes." = "Kapalı ekran modunun, Klavye Temizleyici'nin, termal fan hızlandırmanın, AWDL duraklatmanın ve DNS temizlemenin parola istemleri olmadan çalışması için küçük bir yardımcı hizmet yükleyin. macOS, Sistem Ayarları'nda bunu bir kez onaylamanızı ister. Başka hiçbir şey değişmez.";
 "Tools" = "Araçlar";
 "Help" = "Yardım";
+"Did you forget to turn it off?" = "Kapatmayı mı unuttun?";
+"Quit while still brewing?" = "Hâlâ demlenirken çıkılsın mı?";
+"Turn off and quit" = "Kapat ve çık";
+"Quit anyway" = "Yine de çık";
+"Stop brewing and quit" = "Demlemeyi durdur ve çık";
+"A keep-awake session is still brewing. Quitting stops it now instead of at its timer." = "Bir uyanık tutma oturumu hâlâ demleniyor. Çıkmak, zamanlayıcısını beklemek yerine onu şimdi durdurur.";
+"%@ would stay awake with the lid shut and nothing managing it." = "%@, kapak kapalıyken ve onu yöneten hiçbir şey yokken uyanık kalırdı.";
+"%@ would stay awake with the lid shut and nothing managing it, %@." = "%@, kapak kapalıyken ve onu yöneten hiçbir şey yokken uyanık kalırdı, %@.";
+"Turn this on and then quit, and Keepresso asks whether to turn it off first." = "Bunu açıp sonra çık, Keepresso önce kapatıp kapatmayacağını sorar.";
