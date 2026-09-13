@@ -108,18 +108,24 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
         ) {
             newConnection.setCodeSigningRequirement(requirement)
         } else {
-            // Ad-hoc build: there is no Team ID to anchor a requirement to, so
-            // an identifier-only requirement would let any local process claim
-            // the app's identifier and drive root verbs. Accept only a peer
-            // that is the app executable inside this daemon's own bundle.
+            // Ad-hoc build: there is no Team ID to anchor a requirement to,
+            // so an identifier-only requirement would let any local process
+            // claim the app's identifier and drive root verbs. Pin the peer
+            // to the exact app binary inside this daemon's own bundle,
+            // kernel-enforced: unlike a pid-based path lookup this has no
+            // pid-reuse race. Fail closed when the pin cannot be built.
             guard let selfPath = HelperPeerPolicy.executablePath(ofPID: getpid()),
-                  let expected = HelperPeerPolicy.bundledAppExecutablePath(for: selfPath),
-                  let peerPath = HelperPeerPolicy.executablePath(ofPID: newConnection.processIdentifier),
-                  URL(fileURLWithPath: peerPath).standardizedFileURL.path == expected
+                  let appPath = HelperPeerPolicy.bundledAppExecutablePath(for: selfPath),
+                  let requirement = HelperPeerPolicy.pinnedPeerRequirement(
+                      identifier: HelperService.appCodeSignIdentifier,
+                      executablePath: appPath)
             else { return false }
+            newConnection.setCodeSigningRequirement(requirement)
         }
-        guard let peerUID = HelperPeerPolicy.uid(ofPID: newConnection.processIdentifier),
-              HelperPeerPolicy.shouldAccept(peerUID: peerUID, consoleUID: consoleUserID())
+        // The uid comes from the connection itself, not from a pid lookup,
+        // so a recycled pid cannot smuggle a different user past this check.
+        guard HelperPeerPolicy.shouldAccept(
+            peerUID: newConnection.effectiveUserIdentifier, consoleUID: consoleUserID())
         else { return false }
 
         lock.lock()

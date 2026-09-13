@@ -58,9 +58,23 @@ public enum HelperService {
     /// Best available requirement when a caller must have a string: the
     /// anchored one on signed builds, identifier-only on ad-hoc dev builds.
     /// Security-relevant callers should prefer ``anchoredPeerRequirement
-    /// (identifier:)`` and fall back to their own identity check instead.
+    /// (identifier:)`` and, on ad-hoc builds, ``HelperPeerPolicy
+    /// /pinnedPeerRequirement(identifier:executablePath:)`` instead: the
+    /// identifier-only form accepts any local claimant.
     public static func peerRequirement(identifier: String) -> String {
         anchoredPeerRequirement(identifier: identifier) ?? "identifier \"\(identifier)\""
+    }
+
+    /// Requirement pinning the daemon to the helper inside this app's own
+    /// bundle, for ad-hoc builds with no Team ID to anchor to. Nil outside
+    /// an app bundle, where the caller must refuse to connect (fail closed)
+    /// rather than fall back to identifier-only.
+    static func adHocDaemonRequirement() -> String? {
+        guard let selfPath = HelperPeerPolicy.executablePath(ofPID: getpid()),
+              let helperPath = HelperPeerPolicy.bundledHelperExecutablePath(for: selfPath)
+        else { return nil }
+        return HelperPeerPolicy.pinnedPeerRequirement(
+            identifier: HelperService.helperCodeSignIdentifier, executablePath: helperPath)
     }
 
     /// The Team ID from this process's own code signature, or `nil` when
@@ -117,6 +131,62 @@ public enum HelperPeerPolicy {
         var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
         guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
         return String(cString: buffer)
+    }
+
+    /// A peer requirement pinning `identifier` to the exact code currently on
+    /// disk at `executablePath`: that file's designated requirement (for an
+    /// ad-hoc build, `cdhash H"..."`), narrowed to the expected identifier.
+    /// This is the ad-hoc fallback where there is no Team ID to anchor to.
+    /// Enforced by the kernel through `setCodeSigningRequirement`, so unlike
+    /// a pid-based executable-path lookup it has no pid-reuse race: the
+    /// check runs against the peer's actual code, not a path re-resolved
+    /// from a recyclable pid. Nil when the file's requirement is unreadable,
+    /// in which case the caller must refuse the peer (fail closed).
+    public static func pinnedPeerRequirement(identifier: String, executablePath: String) -> String? {
+        guard let designated = designatedRequirementText(executablePath: executablePath) else {
+            return nil
+        }
+        return "identifier \"\(identifier)\" and (\(designated))"
+    }
+
+    /// Designated-requirement text of the executable at `path`, or nil when
+    /// the file is unsigned or unreadable.
+    public static func designatedRequirementText(executablePath: String) -> String? {
+        var staticCode: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(
+            URL(fileURLWithPath: executablePath) as CFURL,
+            [],
+            &staticCode
+        ) == errSecSuccess, let staticCode else { return nil }
+        var requirement: SecRequirement?
+        guard SecCodeCopyDesignatedRequirement(
+            staticCode,
+            [],
+            &requirement
+        ) == errSecSuccess, let requirement else { return nil }
+        var text: CFString?
+        guard SecRequirementCopyString(
+            requirement,
+            [],
+            &text
+        ) == errSecSuccess, let text else { return nil }
+        return text as String
+    }
+
+    /// Where the helper executable lives when `appExecutablePath` is the app
+    /// inside its bundle (`.../Keepresso.app/Contents/MacOS/Keepresso`). The
+    /// app-side counterpart of ``bundledAppExecutablePath(for:)``: lets an
+    /// ad-hoc app pin its daemon to the helper in its own bundle. Nil outside
+    /// an app bundle (e.g. a raw Xcode build), where no pinning is possible.
+    public static func bundledHelperExecutablePath(for appExecutablePath: String) -> String? {
+        let macos = URL(fileURLWithPath: appExecutablePath)
+            .resolvingSymlinksInPath().standardizedFileURL
+            .deletingLastPathComponent()
+        guard macos.lastPathComponent == "MacOS",
+              macos.deletingLastPathComponent().lastPathComponent == "Contents",
+              macos.deletingLastPathComponent().deletingLastPathComponent().pathExtension == "app"
+        else { return nil }
+        return macos.appendingPathComponent("keepresso-helper").standardizedFileURL.path
     }
 
     /// Where the app executable lives when `helperExecutablePath` is the
@@ -587,11 +657,24 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         let verifies = verifiesDaemonSignature
         let fresh = factory()
         fresh.remoteObjectInterface = NSXPCInterface(with: HelperXPCProtocol.self)
-        // Only talk to our own daemon: same team, the helper's identifier.
+        // Only talk to our own daemon: same team and the helper's identifier
+        // on signed builds; on ad-hoc dev builds, the exact helper binary
+        // inside our own bundle. Refuse to connect when neither pins: an
+        // identifier-only requirement would accept any local claimant.
         if verifies {
-            fresh.setCodeSigningRequirement(
-                HelperService.peerRequirement(identifier: HelperService.helperCodeSignIdentifier)
-            )
+            if let anchored = HelperService.anchoredPeerRequirement(
+                identifier: HelperService.helperCodeSignIdentifier
+            ) {
+                fresh.setCodeSigningRequirement(anchored)
+            } else if let pinned = HelperService.adHocDaemonRequirement() {
+                fresh.setCodeSigningRequirement(pinned)
+            } else {
+                fresh.invalidate()
+                lock.lock()
+                defer { lock.unlock() }
+                if let connection { return connection }
+                return nil
+            }
         }
         fresh.interruptionHandler = { [weak self, weak fresh] in
             guard let fresh else { return }
