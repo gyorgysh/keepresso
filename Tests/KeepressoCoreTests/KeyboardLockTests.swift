@@ -10,13 +10,17 @@ private final class FakeRemapper: KeyboardRemapping, @unchecked Sendable {
     var applied: [KeyboardKeyMapping] = []
     var applySucceeds = true
     var readSucceeds = true
+    /// When false, a successful apply still leaves the old mapping live,
+    /// like an unprivileged hidutil that exits 0 without overriding a
+    /// root-installed table.
+    var applyTakesEffect = true
 
     func currentMapping() -> KeyboardKeyMapping? { readSucceeds ? current : nil }
 
     func apply(_ mapping: KeyboardKeyMapping) -> Bool {
         applied.append(mapping)
         guard applySucceeds else { return false }
-        current = mapping
+        if applyTakesEffect { current = mapping }
         return true
     }
 }
@@ -37,6 +41,13 @@ private final class MemoryMarker: KeyboardLockMarking, @unchecked Sendable {
 private final class FakeLocker: KeyboardLocking, @unchecked Sendable {
     var locked = false
     var lockResult: KeyboardLockResult = .applied
+    /// When true, `restoreIfNeeded` blocks until `releaseRestore` so a test
+    /// can press Unlock mid-restore.
+    var hangRestore = false
+    /// When false, the silent restore leaves the lock in place.
+    var restoreUnlocks = true
+    private let restoreSemaphore = DispatchSemaphore(value: 0)
+    private let restoreSignal: (stream: AsyncStream<Void>, continuation: AsyncStream<Void>.Continuation) = AsyncStream.makeStream()
     private(set) var lockCalls = 0
     private(set) var unlockCalls = 0
     private(set) var restoreCalls = 0
@@ -56,8 +67,24 @@ private final class FakeLocker: KeyboardLocking, @unchecked Sendable {
 
     func restoreIfNeeded() {
         restoreCalls += 1
-        if locked { unlock() }
+        restoreSignal.continuation.yield()
+        if hangRestore { restoreSemaphore.wait() }
+        if locked, restoreUnlocks { unlock() }
     }
+
+    /// True once the in-flight restore has started (bounded wait, so a
+    /// regression fails the test instead of hanging the suite).
+    func waitForRestoreStart() async -> Bool {
+        await withTaskGroup(of: Bool.self) { group in
+            group.addTask { for await _ in self.restoreSignal.stream { break }; return true }
+            group.addTask { try? await Task.sleep(for: .seconds(5)); return false }
+            let started = await group.next() ?? false
+            group.cancelAll()
+            return started
+        }
+    }
+
+    func releaseRestore() { restoreSemaphore.signal() }
 }
 
 private final class FakeKeyboardHelper: PrivilegedHelperCalling, @unchecked Sendable {
@@ -396,6 +423,48 @@ private final class FakeKeyboardHelper: PrivilegedHelperCalling, @unchecked Send
     let controller = KeyboardLockController(locker: locker)
     controller.restoreIfNeeded()
     #expect(locker.restoreCalls == 1)
+    #expect(!controller.isLocked)
+}
+
+@Test @MainActor func controllerUnlockKeepsMarkerWhenRestoreIsUnverified() async {
+    // The write reports success but the mapping is still the disabled
+    // table: the marker (the only copy of the user's original) must survive
+    // so relaunch can retry, instead of being cleared on an exit-0 lie.
+    let remapper = FakeRemapper()
+    let marker = MemoryMarker()
+    let locker = KeyboardLocker(remapper: remapper, marker: marker)
+    let controller = KeyboardLockController(locker: locker)
+    #expect(await controller.lock() == .applied)
+    remapper.applyTakesEffect = false
+    await controller.unlock()
+    #expect(controller.isLocked)
+    #expect(marker.stored != nil)
+}
+
+@Test @MainActor func unlockPressedDuringTickRestoreRunsAfterward() async {
+    // A timed lock expires; the silent restore hangs (up to the XPC
+    // timeout) and cannot land it. An Unlock pressed mid-restore is queued
+    // and serviced afterward instead of being dropped.
+    let locker = FakeLocker()
+    locker.hangRestore = true
+    locker.restoreUnlocks = false
+    var now = Date(timeIntervalSince1970: 1_000)
+    let controller = KeyboardLockController(locker: locker, now: { now })
+    #expect(await controller.lock(duration: 30) == .applied)
+    now = now.addingTimeInterval(31)
+
+    let tick = Task { await controller.tick() }
+    guard await locker.waitForRestoreStart() else {
+        locker.releaseRestore()
+        Issue.record("silent restore never went in flight")
+        return
+    }
+    await controller.unlock() // queued behind the in-flight restore
+    locker.releaseRestore()
+    await tick.value
+
+    #expect(locker.restoreCalls == 1)
+    #expect(locker.unlockCalls == 1) // the queued press ran the prompting path
     #expect(!controller.isLocked)
 }
 

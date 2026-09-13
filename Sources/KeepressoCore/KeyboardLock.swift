@@ -357,14 +357,25 @@ public final class KeyboardLocker: KeyboardLocking, @unchecked Sendable {
         }
 
         var restored = false
+        var restoredUnprivileged = false
         if viaHelper {
             restored = helper?.setKeyboardLock(false) ?? false
         }
         if !restored {
             restored = remapper.apply(original)
+            restoredUnprivileged = restored
         }
         if !restored, allowPrompt, let privilegedApply {
             restored = privilegedApply(original) == .applied
+        }
+        if restored, restoredUnprivileged {
+            // Believe the read-back, not the exit status: an unprivileged
+            // `hidutil --set` can exit 0 without overriding a root-installed
+            // mapping (quit-time restore after an osascript lock with no
+            // helper, or a dead helper after a helper lock). An unverified
+            // success keeps the marker so relaunch can retry instead of
+            // discarding the only copy of the user's original mapping.
+            restored = remapper.currentMapping() == original
         }
 
         if restored {
@@ -447,42 +458,75 @@ public final class KeyboardLockController {
         }
     }
 
+    /// An Unlock pressed while a restore is already running. The press is
+    /// remembered and serviced when the in-flight restore finishes, so a
+    /// click during a slow (up to the XPC timeout) tick restore is never
+    /// silently dropped.
+    @ObservationIgnored private var unlockQueued = false
+
     /// Unlock, running the restore off the main actor: the helper XPC call and
     /// the osascript administrator prompt both block, and with the prompt up
     /// the whole app would otherwise freeze until it is answered.
     public func unlock() async {
-        guard isLocked || locker.isLocked else { return }
-        guard !restoreInFlight else { return }
-        restoreInFlight = true
-        isBusy = true
-        await Task.detached { [locker] in locker.unlock() }.value
-        restoreInFlight = false
-        isBusy = false
-        isLocked = locker.isLocked
-        if !isLocked {
-            isGlobal = true
-            unlockAt = nil
+        guard isLocked || locker.isLocked else {
+            unlockQueued = false
+            return
+        }
+        if restoreInFlight {
+            unlockQueued = true
+            return
+        }
+        await drainUnlockQueue()
+    }
+
+    /// Run prompting restores until unlocked or no further press arrived
+    /// mid-restore. Each pass clears the flag first, so the loop ends when
+    /// the user stops clicking; it never spins on a persistently failing
+    /// restore.
+    private func drainUnlockQueue() async {
+        while true {
+            unlockQueued = false
+            restoreInFlight = true
+            isBusy = true
+            await Task.detached { [locker] in locker.unlock() }.value
+            restoreInFlight = false
+            isBusy = false
+            isLocked = locker.isLocked
+            if !isLocked {
+                isGlobal = true
+                unlockAt = nil
+                return
+            }
+            guard unlockQueued else { return }
         }
     }
 
     /// Auto-unlock when a timed lock has elapsed. Restores without a password
     /// prompt: a dialog every tick would be unusable. One silent attempt, then
     /// the overlay stays and Unlock can prompt. Off the main actor for the
-    /// same reason as ``unlock()``.
+    /// same reason as ``unlock()``. Never sets `isBusy`: that flag renders
+    /// the administrator-password note, and this path cannot prompt.
     public func tick() async {
         guard isLocked, let unlockAt, now() >= unlockAt else { return }
-        guard !restoreInFlight else { return }
         // Claim the deadline before yielding, so the one silent attempt stays
         // one attempt even though the restore now runs concurrently.
         self.unlockAt = nil
+        // A restore already running (an Unlock press got there first) doubles
+        // as the silent attempt; never start a second one.
+        guard !restoreInFlight else { return }
         restoreInFlight = true
-        isBusy = true
         await Task.detached { [locker] in locker.restoreIfNeeded() }.value
         restoreInFlight = false
-        isBusy = false
         isLocked = locker.isLocked
         if !isLocked {
             isGlobal = true
+            unlockQueued = false // the queued press is moot: already unlocked
+            return
+        }
+        // An Unlock pressed during the silent restore: service it now, with
+        // a prompt if needed, rather than dropping the click.
+        if unlockQueued {
+            await drainUnlockQueue()
         }
     }
 
