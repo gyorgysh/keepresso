@@ -72,6 +72,7 @@ from catalog_v121_app_settings import APP as V121_APP_SETTINGS
 from catalog_v121_app_windows import APP as V121_APP_WINDOWS
 from catalog_v121_core import CORE as V121_CORE
 from catalog_v122_quit_sleep import APP as V122_QUIT_SLEEP_APP, CORE as V122_QUIT_SLEEP_CORE
+from catalog_v125_battery_resume import CORE as V125_BATTERY_RESUME_CORE
 
 
 def merge_overlay(catalog: dict, lang: str, table: dict, name: str):
@@ -106,6 +107,7 @@ def merge_extra_langs():
     CORE.update(V121_CORE)
     APP.update(V122_QUIT_SLEEP_APP)
     CORE.update(V122_QUIT_SLEEP_CORE)
+    CORE.update(V125_BATTERY_RESUME_CORE)
 
 
 if __name__ == "__main__":

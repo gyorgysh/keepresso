@@ -266,3 +266,5 @@
 "your %@" = "твій %@";
 "on battery" = "від акумулятора";
 "on battery at %d%%" = "від акумулятора на %d%%";
+"Resumed, battery recovered" = "Поновлено, заряд відновлено";
+"Resumed, temperature recovered" = "Поновлено, температура в нормі";

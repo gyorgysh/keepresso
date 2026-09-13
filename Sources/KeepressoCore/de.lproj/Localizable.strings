@@ -266,3 +266,5 @@
 "your %@" = "dein %@";
 "on battery" = "im Akkubetrieb";
 "on battery at %d%%" = "im Akkubetrieb bei %d%%";
+"Resumed, battery recovered" = "Fortgesetzt, Akku erholt";
+"Resumed, temperature recovered" = "Fortgesetzt, Temperatur erholt";

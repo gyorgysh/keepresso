@@ -266,3 +266,5 @@
 "your %@" = "az Ön %@";
 "on battery" = "akkumulátorról";
 "on battery at %d%%" = "akkumulátorról %d%%-nál";
+"Resumed, battery recovered" = "Folytatva, az akkumulátor helyrejött";
+"Resumed, temperature recovered" = "Folytatva, a hőmérséklet helyrejött";

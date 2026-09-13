@@ -266,3 +266,5 @@
 "your %@" = "seu %@";
 "on battery" = "na bateria";
 "on battery at %d%%" = "na bateria com %d%%";
+"Resumed, battery recovered" = "Retomado, bateria recuperada";
+"Resumed, temperature recovered" = "Retomado, temperatura normalizada";

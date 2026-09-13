@@ -266,3 +266,5 @@
 "your %@" = "senin %@";
 "on battery" = "pilde";
 "on battery at %d%%" = "pilde, %d%% seviyesinde";
+"Resumed, battery recovered" = "Devam edildi, pil toparlandı";
+"Resumed, temperature recovered" = "Devam edildi, sıcaklık normale döndü";

@@ -266,3 +266,5 @@
 "your %@" = "你的 %@";
 "on battery" = "使用電池時";
 "on battery at %d%%" = "使用電池，電量為 %d%%";
+"Resumed, battery recovered" = "已恢復，電量已恢復";
+"Resumed, temperature recovered" = "已恢復，溫度已恢復";
