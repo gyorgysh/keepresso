@@ -18,9 +18,10 @@ public enum HelperRecoveryProbe {
     @MainActor
     public static func version(
         ping: () async -> Int?,
-        wait: (TimeInterval) async throws -> Void = { try await Task.sleep(for: .seconds($0)) }
+        wait: (TimeInterval) async throws -> Void = { try await Task.sleep(for: .seconds($0)) },
+        delays: [TimeInterval] = [0.0, 1.0, 3.0]
     ) async -> Int? {
-        for delay in [0.0, 1.0, 3.0] {
+        for delay in delays {
             guard !Task.isCancelled else { return nil }
             if delay > 0 {
                 do { try await wait(delay) } catch is CancellationError { return nil } catch { /* transient sleep failure: still ping */ }
