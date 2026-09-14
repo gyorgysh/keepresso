@@ -2562,8 +2562,16 @@ final class AppModel {
     /// opens the window; a recovery before then clears silently.
     @ObservationIgnored private var approvalRecoveryWatch: Task<Void, Never>?
     /// Quiet polls before a dead daemon escalates to a visible `.broken`
-    /// (12 × 5s = one minute).
-    private static let helperQuietPolls = 12
+    /// (18 × 5s = ninety seconds).
+    ///
+    /// A minute was tuned for a warm relaunch and is short for a cold start:
+    /// straight after a boot or a login, launchd hands the daemon over late
+    /// because everything else on the machine is starting at the same time,
+    /// and the reinstall window would open on a helper that then came up by
+    /// itself seconds later. Waiting longer costs nothing when the helper is
+    /// fine (the watch clears silently on recovery) and only delays the
+    /// prompt when it truly is broken.
+    private static let helperQuietPolls = 18
 
     private func watchForHelperRecovery() {
         approvalRecoveryWatch?.cancel()
