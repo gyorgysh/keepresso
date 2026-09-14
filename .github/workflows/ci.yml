@@ -32,9 +32,16 @@ jobs:
         with:
           xcode-version: latest-stable
       - name: Build & test KeepressoCore
+        # The anonymous-XPC rendezvous tests run in their own step below:
+        # under the thousand-test herd on 3-core runners their background
+        # hop and reply dispatch starve, while in isolation they pass in
+        # milliseconds. Splitting is scheduling, not exclusion: every test
+        # still runs and must pass.
         run: |
           swift build
-          swift test
+          swift test --skip HelperConnectionTests
+      - name: XPC rendezvous tests, separately scheduled
+        run: swift test --filter HelperConnectionTests
 
   app-build:
     name: App build
@@ -72,7 +79,9 @@ jobs:
           xcrun --sdk macosx --show-sdk-version
           xcodebuild -version | head -1 | grep -E '^Xcode 27([.]|$)'
       - name: Core tests
-        run: swift test
+        run: swift test --skip HelperConnectionTests
+      - name: XPC rendezvous tests, separately scheduled
+        run: swift test --filter HelperConnectionTests
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate project
