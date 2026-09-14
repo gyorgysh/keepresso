@@ -25,7 +25,9 @@ jobs:
         with:
           xcode-version: latest-stable
       - name: Core tests
-        run: swift test
+        run: swift test --skip HelperConnectionTests
+      - name: XPC rendezvous tests, separately scheduled
+        run: swift test --filter HelperConnectionTests
       - name: Install tools
         run: brew install xcodegen
 
