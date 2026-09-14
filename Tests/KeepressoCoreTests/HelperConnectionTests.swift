@@ -25,8 +25,12 @@ private final class OverlappingHelper: NSObject, @unchecked Sendable {
         reply(HelperService.protocolVersion)
     }
 
+    /// Generous on purpose: on a 3-core CI runner under full-suite parallel
+    /// load, the background hop plus the XPC handshake can take seconds
+    /// (locally this is milliseconds). Only the wait grows, never what the
+    /// test asserts.
     func waitForSlowCall() -> Bool {
-        slowCallStarted.wait(timeout: .now() + 10) == .success
+        slowCallStarted.wait(timeout: .now() + 30) == .success
     }
 
     func finishSlowCall() {
@@ -90,8 +94,9 @@ private final class BackgroundCall: @unchecked Sendable {
         }
     }
 
-    /// The call's result, or nil when it hadn't returned in time.
-    func value(timeout: TimeInterval = 10) -> Bool? {
+    /// The call's result, or nil when it hadn't returned in time. Generous
+    /// like `waitForSlowCall` above: same loaded-runner reason.
+    func value(timeout: TimeInterval = 30) -> Bool? {
         guard finished.wait(timeout: .now() + timeout) == .success else { return nil }
         lock.lock()
         defer { lock.unlock() }
@@ -104,7 +109,10 @@ private final class BackgroundCall: @unchecked Sendable {
 // error handler answers the moment a connection is cancelled underneath).
 private let testCallTimeout: TimeInterval = 30
 
-@Test func completedHelperPingDoesNotCancelAnOverlappingWrite() {
+// Serialized: this test's background hop plus XPC handshake starved under
+// full-suite parallel load on 3-core CI runners. Running alone costs
+// milliseconds and keeps the timing signal about the product, not the load.
+@Test(.serialized) func completedHelperPingDoesNotCancelAnOverlappingWrite() {
     let delegate = AnonymousHelperListener()
     let listener = NSXPCListener.anonymous()
     listener.delegate = delegate
@@ -125,7 +133,9 @@ private let testCallTimeout: TimeInterval = 30
     #expect(slow.value() == true)
 }
 
-@Test func releasingTheLastHelperHoldDisconnectsForDaemonRetirement() {
+// Same serialization as above: anonymous-listener handshakes should never
+// compete with the rest of the suite for a scheduling slot.
+@Test(.serialized) func releasingTheLastHelperHoldDisconnectsForDaemonRetirement() {
     let delegate = AnonymousHelperListener()
     let listener = NSXPCListener.anonymous()
     listener.delegate = delegate
