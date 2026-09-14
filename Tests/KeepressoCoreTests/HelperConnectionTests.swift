@@ -109,10 +109,7 @@ private final class BackgroundCall: @unchecked Sendable {
 // error handler answers the moment a connection is cancelled underneath).
 private let testCallTimeout: TimeInterval = 30
 
-// Serialized: this test's background hop plus XPC handshake starved under
-// full-suite parallel load on 3-core CI runners. Running alone costs
-// milliseconds and keeps the timing signal about the product, not the load.
-@Test(.serialized) func completedHelperPingDoesNotCancelAnOverlappingWrite() {
+@Test func completedHelperPingDoesNotCancelAnOverlappingWrite() {
     let delegate = AnonymousHelperListener()
     let listener = NSXPCListener.anonymous()
     listener.delegate = delegate
@@ -133,9 +130,7 @@ private let testCallTimeout: TimeInterval = 30
     #expect(slow.value() == true)
 }
 
-// Same serialization as above: anonymous-listener handshakes should never
-// compete with the rest of the suite for a scheduling slot.
-@Test(.serialized) func releasingTheLastHelperHoldDisconnectsForDaemonRetirement() {
+@Test func releasingTheLastHelperHoldDisconnectsForDaemonRetirement() {
     let delegate = AnonymousHelperListener()
     let listener = NSXPCListener.anonymous()
     listener.delegate = delegate
