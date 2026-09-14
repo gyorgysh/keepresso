@@ -78,29 +78,45 @@ private final class AnonymousHelperListener: NSObject, NSXPCListenerDelegate, @u
 /// is only as wide as the machine has cores. On a two or three core CI runner,
 /// with the rest of the suite running in parallel, a blocked call can hold the
 /// pool long enough that the overlapping call never starts and the test fails
-/// for the wrong reason. A global queue grows threads on demand.
+/// for the wrong reason. Not `DispatchQueue.global()` either: under the same
+/// full-suite load the workqueue did not schedule the block for ~20s while
+/// over a thousand sibling tests churned. A dedicated thread starts via
+/// `pthread_create`, immune to pool pressure on either pool.
+private final class BackgroundCallState: @unchecked Sendable {
+    let finished = DispatchSemaphore(value: 0)
+    let lock = NSLock()
+    var result = false
+}
+
 private final class BackgroundCall: @unchecked Sendable {
-    private let finished = DispatchSemaphore(value: 0)
-    private let lock = NSLock()
-    private var result = false
+    private let state: BackgroundCallState
+    private let thread: Thread
 
     init(_ work: @escaping @Sendable () -> Bool) {
-        DispatchQueue.global().async { [self] in
+        // Locals, so the thread takes no `self` capture: `self.thread` is
+        // not set yet and must not be captured during init.
+        let state = BackgroundCallState()
+        let thread = Thread { [state] in
             let ok = work()
-            lock.lock()
-            result = ok
-            lock.unlock()
-            finished.signal()
+            state.lock.lock()
+            state.result = ok
+            state.lock.unlock()
+            state.finished.signal()
         }
+        thread.name = "keepresso-test-helper-call"
+        thread.qualityOfService = .userInitiated
+        self.state = state
+        self.thread = thread
+        thread.start()
     }
 
     /// The call's result, or nil when it hadn't returned in time. Generous
     /// like `waitForSlowCall` above: same loaded-runner reason.
     func value(timeout: TimeInterval = 30) -> Bool? {
-        guard finished.wait(timeout: .now() + timeout) == .success else { return nil }
-        lock.lock()
-        defer { lock.unlock() }
-        return result
+        guard state.finished.wait(timeout: .now() + timeout) == .success else { return nil }
+        state.lock.lock()
+        defer { state.lock.unlock() }
+        return state.result
     }
 }
 
