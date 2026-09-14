@@ -283,9 +283,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var quitTerminationPending = false
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        // A duplicate handing over quits silently, and an answer already in
-        // flight must not stack a second modal: both just quit.
-        guard !yieldingToPeer, !quitTerminationPending else { return .terminateNow }
+        // A duplicate handing over quits silently, a relocate handover quits
+        // into a copy that owns the state (the modal would stall the update),
+        // and an answer already in flight must not stack a second modal.
+        guard !yieldingToPeer, !AppRelocator.isRelocating, !quitTerminationPending else {
+            return .terminateNow
+        }
         quitTerminationPending = true
         Task { @MainActor [weak self] in
             guard let self else {
@@ -337,7 +340,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // await a detached task, and a password dialog during quit would be
         // unusable.
         model.keyboardLock.restoreIfNeeded()
-        // The session dies with this process; don't leave the widgets lying.
+        // A relocate handover quits into a copy that owns the shared state
+        // (an already-running one, or the fresh /Applications copy syncing at
+        // launch): writing "stopped" here would lie over its live state. Any
+        // other quit owns the write: the session dies with this process, so
+        // don't leave the widgets lying.
+        guard !AppRelocator.isRelocating else { return }
         model.writeWidgetStateStopped()
     }
 

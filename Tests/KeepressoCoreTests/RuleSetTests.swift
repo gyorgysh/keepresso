@@ -340,6 +340,15 @@ private final class ConstWorkspace: WorkspaceMonitoring {
     _ = negative.label
 }
 
+@Test func subSecondGraceOmitsDurationSuffixInLabels() {
+    // A fractional grace that rounds to zero whole seconds must omit the
+    // suffix rather than render a nonsense "+0s".
+    let app = AppRule(bundleID: "com.example.App", match: .running, grace: 0.4)
+    #expect(app.label == "App com.example.App is running")
+    let agent = AgentRule(grace: 0.4)
+    #expect(agent.label == "AI agent working")
+}
+
 @Test func ruleSetDropsUnknownRuleInsteadOfWipingEverything() throws {
     // A newer build's rule case (reached via a downgrade, or a set exported from
     // a newer version and imported) must drop only that rule, not throw the

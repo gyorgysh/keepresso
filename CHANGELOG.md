@@ -14,7 +14,8 @@ Theme: scheduled wakes land on time, and the app stops tripping over corrupt inp
   names your Mac and offers to turn it off before quitting, so you never
   strand a machine awake by accident. Fresh installs also start with
   closed-display mode scoped to brewing sessions; existing settings are
-  never touched.
+  never touched. Thanks to @alvst for the submission in PR #21 that
+  started this.
 
 ### Changed
 

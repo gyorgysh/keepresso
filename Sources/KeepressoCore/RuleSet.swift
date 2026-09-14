@@ -173,7 +173,10 @@ public struct AppRule: Codable, Equatable, Hashable, Sendable {
         // name when we have it; keep the "App " prefix only as the bare-id fallback.
         let subject = name ?? L("App %@", bundleID)
         let base = "\(subject) \(match.label)"
-        return grace > 0 ? L("%@ (+%ds)", base, KeepressoSettings.displaySeconds(grace)) : base
+        // Omit the suffix when the grace rounds to zero whole seconds: a
+        // fractional imported grace would otherwise render a nonsense "+0s".
+        let graceSeconds = KeepressoSettings.displaySeconds(grace)
+        return graceSeconds > 0 ? L("%@ (+%ds)", base, graceSeconds) : base
     }
 }
 
@@ -214,7 +217,8 @@ public struct AgentRule: Codable, Equatable, Hashable, Sendable {
     public var label: String {
         let base = L("AI agent working")
         var parts: [String] = []
-        if grace > 0 { parts.append(L("+%ds", KeepressoSettings.displaySeconds(grace))) }
+        let graceSeconds = KeepressoSettings.displaySeconds(grace)
+        if graceSeconds > 0 { parts.append(L("+%ds", graceSeconds)) }
         if countWaitingAsWorking { parts.append(L("waiting counts")) }
         return parts.isEmpty ? base : L("%@ (%@)", base, parts.joined(separator: ", "))
     }

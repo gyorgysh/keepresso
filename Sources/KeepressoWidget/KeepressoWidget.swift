@@ -85,10 +85,6 @@ struct SessionProvider: TimelineProvider {
             state.endsAt = nil
         }
         let entry = SessionEntry(date: .now, state: state)
-        // An active indefinite session has no end to schedule, but the app can
-        // still die without writing the "off" state; re-check periodically so
-        // `keepressoAppIsRunning()` can flip it rather than rendering
-        // "Brewing" forever.
         // The app can die without writing the "off" state, so a live session
         // re-checks periodically and lets `keepressoAppIsRunning()` flip it
         // rather than rendering "Brewing" forever. Hourly, not sooner: this

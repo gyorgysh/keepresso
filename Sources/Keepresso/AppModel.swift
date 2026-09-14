@@ -2746,9 +2746,14 @@ final class AppModel {
     func quitSleepCoverage() async -> QuitSleepCheck.Coverage {
         await waitForSleepWriteToSettle()
         await closedDisplay.refresh(force: true)
+        // The quit-time clear needs the helper (no password sheet pops during
+        // quit), so an override that cannot be cleared is not modal-worthy:
+        // offering "Turn off and quit" for it would promise what the acting
+        // path refuses.
+        let clearableOverride = closedDisplay.isEnabled == true && helperInstalled
         return QuitSleepCheck.coverage(
             brewing: session.isActive,
-            overrideLive: closedDisplay.isEnabled == true,
+            overrideLive: clearableOverride,
             overrideSetThisRun: persistentSleepSetByUs)
     }
 
