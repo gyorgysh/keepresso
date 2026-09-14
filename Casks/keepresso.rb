@@ -11,7 +11,7 @@
 # The `livecheck` block lets `brew livecheck` notice new GitHub releases.
 cask "keepresso" do
   version "1.25.0"
-  sha256 "7a8bc968d7ca095a909cb999d6772f8dae5548c3a91d8cc249ff5ad120c972b3"
+  sha256 "9799185d5e4d67e6f1e11dc41035f8d259342d2281824aae82d0cc02f854a0bd"
 
   url "https://github.com/gyorgysh/keepresso/releases/download/v#{version}/Keepresso-#{version}.dmg"
   name "Keepresso"
