@@ -357,25 +357,24 @@ public final class KeyboardLocker: KeyboardLocking, @unchecked Sendable {
         }
 
         var restored = false
-        var restoredUnprivileged = false
         if viaHelper {
             restored = helper?.setKeyboardLock(false) ?? false
         }
         if !restored {
             restored = remapper.apply(original)
-            restoredUnprivileged = restored
+            if restored {
+                // Believe the read-back, not the exit status: an unprivileged
+                // `hidutil --set` can exit 0 without overriding a
+                // root-installed mapping (quit-time restore after an
+                // osascript lock with no helper, or a dead helper after a
+                // helper lock). Verified here, before the privileged
+                // fallback below, so an unverified success still reaches the
+                // prompt that can actually undo a root mapping.
+                restored = remapper.currentMapping() == original
+            }
         }
         if !restored, allowPrompt, let privilegedApply {
             restored = privilegedApply(original) == .applied
-        }
-        if restored, restoredUnprivileged {
-            // Believe the read-back, not the exit status: an unprivileged
-            // `hidutil --set` can exit 0 without overriding a root-installed
-            // mapping (quit-time restore after an osascript lock with no
-            // helper, or a dead helper after a helper lock). An unverified
-            // success keeps the marker so relaunch can retry instead of
-            // discarding the only copy of the user's original mapping.
-            restored = remapper.currentMapping() == original
         }
 
         if restored {

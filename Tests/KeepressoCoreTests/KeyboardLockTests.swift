@@ -232,6 +232,38 @@ private final class FakeKeyboardHelper: PrivilegedHelperCalling, @unchecked Send
     #expect(marker.stored == original)
 }
 
+@Test func unverifiedUnprivilegedRestoreFallsBackToThePrompt() {
+    // An unprivileged `hidutil --set` exits 0 without overriding the
+    // root-installed table. The read-back catches the lie, and the
+    // privileged prompt (the only thing that can undo a root mapping) still
+    // gets its turn instead of being skipped by the fake success.
+    let remapper = FakeRemapper()
+    let marker = MemoryMarker()
+    let original = remapper.current
+    var privilegedRestores = 0
+    let locker = KeyboardLocker(
+        remapper: remapper,
+        marker: marker,
+        privilegedApply: { mapping in
+            if mapping == .disabledKeyboard {
+                remapper.current = mapping
+                return .applied
+            }
+            privilegedRestores += 1
+            remapper.current = mapping
+            return .applied
+        }
+    )
+
+    #expect(locker.lock() == .applied)
+    remapper.applyTakesEffect = false
+    locker.unlock()
+    #expect(privilegedRestores == 1)
+    #expect(!locker.isLocked)
+    #expect(marker.stored == nil)
+    #expect(remapper.current == original)
+}
+
 @Test func failedLaunchRestoreKeepsTheMarkerAndStaysLocked() {
     let remapper = FakeRemapper()
     remapper.applySucceeds = false
