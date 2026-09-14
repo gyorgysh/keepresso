@@ -402,23 +402,24 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
 
 // MARK: - Quit modal coverage
 
-@Test func quitModalCoversBrewingAndOursAlone() {
+@Test func quitModalCoversWhatQuittingWouldOrphan() {
     typealias Q = QuitSleepCheck
-    #expect(Q.coverage(brewing: false, overrideLive: false, overrideSetThisRun: false) == .none)
+    #expect(Q.coverage(brewing: false, overrideLive: false) == .none)
     // Brewing with nothing persistent: the session ends, nothing survives.
-    #expect(Q.coverage(brewing: true, overrideLive: false, overrideSetThisRun: false) == .session)
-    // Our persistent override live: quitting would orphan it unmanaged.
-    #expect(Q.coverage(brewing: false, overrideLive: true, overrideSetThisRun: true) == .overrideLive)
-    #expect(Q.coverage(brewing: true, overrideLive: true, overrideSetThisRun: true) == .sessionAndOverride)
+    #expect(Q.coverage(brewing: true, overrideLive: false) == .session)
+    // A persistent override live: quitting would orphan it unmanaged. The
+    // run that set it does not matter, a setting left on days ago is
+    // exactly what gets forgotten.
+    #expect(Q.coverage(brewing: false, overrideLive: true) == .overrideLive)
+    #expect(Q.coverage(brewing: true, overrideLive: true) == .sessionAndOverride)
 }
 
-@Test func quitModalStaysSilentForStandingAndForeignChoices() {
+@Test func quitModalTreatsAScopedHoldAsNothingToAskAbout() {
     typealias Q = QuitSleepCheck
-    // A persistent override from an earlier run is a disclosed standing
-    // choice, not a fresh accident: no modal.
-    #expect(Q.coverage(brewing: false, overrideLive: true, overrideSetThisRun: false) == .none)
-    // Same while brewing: the session variant shows, with no override line.
-    // A foreign live value lands here too (nothing here set it), and is
-    // likewise never ours to question.
-    #expect(Q.coverage(brewing: true, overrideLive: true, overrideSetThisRun: false) == .session)
+    // "Only while brewing" holds `disablesleep` too, but it self-cleans on
+    // exit, so the host passes `overrideLive: false` for it: the session
+    // variant shows, with no override line, and a quit with no session at
+    // all stays silent.
+    #expect(Q.coverage(brewing: true, overrideLive: false) == .session)
+    #expect(Q.coverage(brewing: false, overrideLive: false) == .none)
 }

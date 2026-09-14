@@ -756,6 +756,11 @@
 "Install a small helper service so closed-display mode, Keyboard Cleaner, the thermal fan boost, AWDL pausing, and DNS flush work without password prompts. macOS will ask you to allow it in System Settings, once. Nothing else changes." = "Telepítsen egy kis segédszolgáltatást, hogy a csukott fedél mód, a Billentyűzettisztító, a hővédelmi ventilátorfokozás, az AWDL szüneteltetése és a DNS ürítése jelszókérés nélkül működjön. A macOS egyszer engedélyt kér hozzá a Rendszerbeállításokban. Semmi más nem változik.";
 "Tools" = "Eszközök";
 "Help" = "Súgó";
+"Keepresso could not switch it off, so it stayed running instead of quitting." = "A Keepresso nem tudta kikapcsolni, ezért kilépés helyett tovább futott.";
+"Enter your administrator password to switch the sleep override off before Keepresso quits." = "Adja meg a rendszergazdai jelszavát az alvásfelülbírálás kikapcsolásához, mielőtt a Keepresso kilép.";
+"Enter your administrator password to switch closed-display mode off before Keepresso quits." = "Adja meg a rendszergazdai jelszavát a csukott fedél mód kikapcsolásához, mielőtt a Keepresso kilép.";
+"Keep running with the lid shut and no external display." = "Csukott fedéllel és külső kijelző nélkül is működésben tartja.";
+"Closed-display mode is on for this session. Quitting ends it, so the lid can sleep %@ again." = "A csukott fedél mód be van kapcsolva ebben a munkamenetben. A kilépés kikapcsolja, így %@ újra elalhat csukott fedéllel.";
 "Did you forget to turn it off?" = "Elfelejtette kikapcsolni?";
 "Quit while still brewing?" = "Kilépés főzés közben?";
 "Turn off and quit" = "Kikapcsolás és kilépés";

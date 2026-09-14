@@ -756,6 +756,11 @@
 "Install a small helper service so closed-display mode, Keyboard Cleaner, the thermal fan boost, AWDL pausing, and DNS flush work without password prompts. macOS will ask you to allow it in System Settings, once. Nothing else changes." = "Install a small helper service so closed-display mode, Keyboard Cleaner, the thermal fan boost, AWDL pausing, and DNS flush work without password prompts. macOS will ask you to allow it in System Settings, once. Nothing else changes.";
 "Tools" = "Tools";
 "Help" = "Help";
+"Keepresso could not switch it off, so it stayed running instead of quitting." = "Keepresso could not switch it off, so it stayed running instead of quitting.";
+"Enter your administrator password to switch the sleep override off before Keepresso quits." = "Enter your administrator password to switch the sleep override off before Keepresso quits.";
+"Enter your administrator password to switch closed-display mode off before Keepresso quits." = "Enter your administrator password to switch closed-display mode off before Keepresso quits.";
+"Keep running with the lid shut and no external display." = "Keep running with the lid shut and no external display.";
+"Closed-display mode is on for this session. Quitting ends it, so the lid can sleep %@ again." = "Closed-display mode is on for this session. Quitting ends it, so the lid can sleep %@ again.";
 "Did you forget to turn it off?" = "Did you forget to turn it off?";
 "Quit while still brewing?" = "Quit while still brewing?";
 "Turn off and quit" = "Turn off and quit";

@@ -208,31 +208,27 @@ public enum BatteryPauseClosedDisplay {
 /// What the quit modal should cover, decided from live state. Pure so the
 /// matrix is unit-testable; the host gathers the inputs.
 ///
-/// Only a persistent override flipped on *this run* can trigger the override
-/// variant: a standing choice from an earlier run is disclosed in Preferences
-/// and stays silent, and anything foreign is never ours to question. A scoped
-/// hold alone never triggers: both backends self-clean when the app dies
-/// (the fallback loop restores on exit, the daemon releases on teardown),
-/// so there is no orphaned decision to ask about.
+/// `overrideLive` means the sleep override is on *and* quitting would orphan
+/// it: a persistent latch, whichever run set it. A scoped hold never counts,
+/// because both backends self-clean when the app dies (the fallback loop
+/// restores on exit, the daemon releases on teardown), so there is no
+/// orphaned decision to ask about. The host reads that distinction from
+/// ``ClosedDisplayAutoController/isHolding``, not from who flipped the
+/// switch: a setting left on days ago is precisely what gets forgotten.
 public enum QuitSleepCheck {
     public enum Coverage: Equatable, Sendable {
         /// Nothing live that quitting orphans: quit silently.
         case none
         /// A session is brewing but nothing persists past quit.
         case session
-        /// Our persistent override is live and would survive quit unmanaged.
+        /// A persistent override is live and would survive quit unmanaged.
         case overrideLive
         /// Both: the session ends and the override would survive it.
         case sessionAndOverride
     }
 
-    public static func coverage(
-        brewing: Bool,
-        overrideLive: Bool,
-        overrideSetThisRun: Bool
-    ) -> Coverage {
-        let orphanedOverride = overrideLive && overrideSetThisRun
-        switch (brewing, orphanedOverride) {
+    public static func coverage(brewing: Bool, overrideLive: Bool) -> Coverage {
+        switch (brewing, overrideLive) {
         case (true, true): return .sessionAndOverride
         case (true, false): return .session
         case (false, true): return .overrideLive

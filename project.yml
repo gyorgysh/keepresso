@@ -26,7 +26,6 @@ targets:
         excludes:
           - sh.gyorgy.keepresso.helper.plist
           - AgentSkill
-          - QuitArt
       # The privileged helper's launchd plist. SMAppService.daemon(plistName:)
       # requires it at Contents/Library/LaunchDaemons inside the app bundle.
       - path: Sources/Keepresso/sh.gyorgy.keepresso.helper.plist
@@ -38,11 +37,6 @@ targets:
       # whole directory into their agent's skills folder (see Preferences ▸
       # Automation and docs). Lands at Contents/Resources/AgentSkill.
       - path: Sources/Keepresso/AgentSkill
-        type: folder
-        buildPhase: resources
-      # The quit-modal illustration (animated SVG, shapes only so it needs
-      # no translation). Lands at Contents/Resources/QuitArt.
-      - path: Sources/Keepresso/QuitArt
         type: folder
         buildPhase: resources
     dependencies:

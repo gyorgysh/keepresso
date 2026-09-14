@@ -10,12 +10,16 @@ Theme: scheduled wakes land on time, and the app stops tripping over corrupt inp
 ### Added
 
 - **Quitting while brewing asks first.** If a session is still running, or
-  the lid-closed sleep override you turned on is still live, a reminder
-  names your Mac and offers to turn it off before quitting, so you never
-  strand a machine awake by accident. Fresh installs also start with
-  closed-display mode scoped to brewing sessions; existing settings are
-  never touched. Thanks to @alvst for the submission in PR #21 that
-  started this.
+  the lid-closed sleep override is still switched on, a reminder names your
+  Mac and offers to turn it off before quitting, so you never strand a
+  machine awake by accident. It asks about an override left on any day, not
+  just one flipped in this run, and when the override is only scoped to the
+  session it says so rather than claiming you forgot it. "Turn off and quit"
+  waits for the setting to actually be off before quitting, so a dismissed
+  or mistyped password leaves the app running and tells you why. Fresh
+  installs also start with closed-display mode scoped to brewing sessions;
+  existing settings are never touched. Thanks to @alvst for the submission
+  in PR #21 that started this.
 
 ### Changed
 
@@ -61,6 +65,12 @@ Theme: scheduled wakes land on time, and the app stops tripping over corrupt inp
 - **A refused shortcut no longer kills your hotkey.** When the system gives
   the combination to another app, the previous shortcut is put back and the
   refusal is logged.
+
+- **A cold start no longer asks you to reinstall the helper.** Straight
+  after a boot or a login, launchd hands the daemon over late, and the
+  reinstall window opened on a helper that was seconds from coming up by
+  itself. The handshake now waits out a slow first spawn, and the prompt
+  holds back for ninety seconds instead of one minute.
 
 - **Plugging in resumes a battery-paused session.** A low-battery pause
   stopped manual brewing and never restarted it, so the Mac sat idle after

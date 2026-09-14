@@ -314,6 +314,24 @@ public final class ClosedDisplayController {
         lastRefreshedAt = now()
     }
 
+    /// Blocking re-read, for the one caller that cannot await: quit-time
+    /// coverage is decided inside `applicationShouldTerminate`, which must
+    /// return a reply synchronously. ``isEnabled`` is otherwise only
+    /// refreshed at launch and on menu open, so a lid mode switched on since
+    /// then reads stale (or `nil`) and the quit modal misses it entirely.
+    ///
+    /// One `pmset -g` on the main thread, tens of milliseconds, paid once on
+    /// the way out. Defers to an in-flight ``set(_:)`` exactly like
+    /// ``refresh(force:)``: that write is the authoritative state.
+    public func refreshBlocking() {
+        guard !isBusy else { return }
+        let generation = readGeneration
+        let value = control.isSleepDisabled()
+        guard !isBusy, generation == readGeneration else { return }
+        isEnabled = value
+        lastRefreshedAt = now()
+    }
+
     /// Request the new state. Shows the administrator prompt off the main actor
     /// so the UI doesn't freeze while the user answers, then re-reads the actual
     /// resulting state.

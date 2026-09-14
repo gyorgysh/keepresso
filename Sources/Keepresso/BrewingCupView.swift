@@ -26,10 +26,22 @@ struct BrewingCupView: View {
 
     /// The animated pour level (0 empty, 1 full). Appears in the current
     /// state; only a live `isActive` change plays the pour or the drain.
-    @State private var fill: CGFloat = 0
+    @State private var fill: CGFloat
     /// Steam waits for the pour to finish, so the sequence reads pour first,
     /// then steam, rather than everything at once.
-    @State private var steaming = false
+    @State private var steaming: Bool
+
+    /// Seeded from `isActive` rather than defaulted to empty. `onAppear` also
+    /// sets both, but it runs a frame late, and anything that renders only
+    /// one frame (a window snapshot, a modal opening) caught the empty
+    /// outline cup instead of the brewing one.
+    init(isActive: Bool, pausedLowBattery: Bool = false, scale: CGFloat = 1) {
+        self.isActive = isActive
+        self.pausedLowBattery = pausedLowBattery
+        self.scale = scale
+        _fill = State(initialValue: isActive ? 1 : 0)
+        _steaming = State(initialValue: isActive)
+    }
     /// Whether the host window is actually on screen. `MenuBarExtra(.window)`
     /// keeps this view alive after its panel closes on current macOS, so the
     /// steam `TimelineView` would otherwise keep firing (and a full window

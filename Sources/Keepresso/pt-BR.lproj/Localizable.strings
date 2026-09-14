@@ -756,6 +756,11 @@
 "Install a small helper service so closed-display mode, Keyboard Cleaner, the thermal fan boost, AWDL pausing, and DNS flush work without password prompts. macOS will ask you to allow it in System Settings, once. Nothing else changes." = "Instale um pequeno serviço auxiliar para que o modo com tela fechada, o Limpador de teclado, o reforço térmico das ventoinhas, a pausa de AWDL e a limpeza de DNS funcionem sem solicitações de senha. O macOS pedirá que você o autorize uma vez nos Ajustes do Sistema. Nada mais muda.";
 "Tools" = "Ferramentas";
 "Help" = "Ajuda";
+"Keepresso could not switch it off, so it stayed running instead of quitting." = "O Keepresso não conseguiu desativá-lo, então continuou em execução em vez de sair.";
+"Enter your administrator password to switch the sleep override off before Keepresso quits." = "Digite sua senha de administrador para desativar a desativação da suspensão antes que o Keepresso saia.";
+"Enter your administrator password to switch closed-display mode off before Keepresso quits." = "Digite sua senha de administrador para desativar o modo com tela fechada antes que o Keepresso saia.";
+"Keep running with the lid shut and no external display." = "Continua funcionando com a tampa fechada e sem tela externa.";
+"Closed-display mode is on for this session. Quitting ends it, so the lid can sleep %@ again." = "O modo com tela fechada está ativado nesta sessão. Sair o desativa, para que %@ volte a dormir com a tampa fechada.";
 "Did you forget to turn it off?" = "Esqueceu de desligar?";
 "Quit while still brewing?" = "Sair enquanto ainda está em execução?";
 "Turn off and quit" = "Desligar e sair";

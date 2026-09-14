@@ -2712,17 +2712,8 @@ final class AppModel {
         // prompts, so gate the dance on the helper, not on the caller. The
         // safety lift/restore paths only call here with the helper installed.
         let needsAuthDance = !helperInstalled
-        let ownIntent = userInitiated
         runAfterPossibleAuthPrompt(needsPrompt: needsAuthDance) {
-            let result = await self.closedDisplay.set(on)
-            // Remember a live persistent override the user flipped this run:
-            // it is the only case where quitting orphans a setting, and the
-            // quit modal asks about exactly that. Only the user's own toggles
-            // touch the flag, so a safety lift and restore around a standing
-            // choice never marks it as ours.
-            if ownIntent, case .applied = result {
-                self.persistentSleepSetByUs = on
-            }
+            _ = await self.closedDisplay.set(on)
             // A failure through the installed helper points at a stale daemon
             // registration: check and repair it (dedupes, once per run).
             if self.closedDisplay.lastError != nil, self.helperInstalled {
@@ -2730,12 +2721,6 @@ final class AppModel {
             }
         }
     }
-
-    /// Whether this process turned the persistent sleep override on and it
-    /// has not been turned back off since. Run-local by design: a standing
-    /// choice from an earlier run is disclosed in Preferences and stays
-    /// silent at quit, and anything foreign is never ours to question.
-    @ObservationIgnored private var persistentSleepSetByUs = false
 
     /// Wait (bounded) for an in-flight sleep write to settle, so quit-time
     /// coverage reads post-toggle state and the quit-time clear doesn't
@@ -2749,45 +2734,107 @@ final class AppModel {
         }
     }
 
-    /// Live quit-time coverage for the quit modal: fresh pmset read plus
-    /// session state and the run-local ownership flag.
-    func quitSleepCoverage() async -> QuitSleepCheck.Coverage {
-        await waitForSleepWriteToSettle()
-        await closedDisplay.refresh(force: true)
-        // The quit-time clear needs the helper (no password sheet pops during
-        // quit), so an override that cannot be cleared is not modal-worthy:
-        // offering "Turn off and quit" for it would promise what the acting
-        // path refuses.
-        let clearableOverride = closedDisplay.isEnabled == true && helperInstalled
+    /// Quit-time coverage for the quit modal, from cached state so
+    /// `applicationShouldTerminate` can decide and run the modal inline (see
+    /// ``QuitSleepModal/ask(coverage:device:qualifier:)`` for why it must not
+    /// await first). The cached pmset reading is the ticker's, seconds old at
+    /// worst, and "Turn off and quit" re-reads for real before acting.
+    ///
+    /// Both paths write the same `disablesleep` bit, so "on" alone says
+    /// nothing: what matters is whether quitting orphans it. The scoped hold
+    /// self-cleans on exit, so the automation holding it is never
+    /// modal-worthy. Anything else live is a persistent latch that survives
+    /// quit unmanaged, whichever run set it: that is exactly the "did you
+    /// forget to turn it off" the modal exists for.
+    ///
+    /// The hold is read, not released: releasing here would strip lid
+    /// coverage from a session the user may yet keep by cancelling.
+    func quitSleepCoverageNow() -> QuitSleepCheck.Coverage {
+        // Preview hook: the override variant needs a real persistent
+        // `disablesleep` latch, which costs an administrator prompt to set up
+        // and leaves the Mac awake afterwards. `KEEPRESSO_QUIT_MODAL` forces
+        // a variant so the copy and the art can be checked without any of
+        // that. Reads the environment, so it cannot be set on a shipped app
+        // by accident.
+        if let forced = ProcessInfo.processInfo.environment["KEEPRESSO_QUIT_MODAL"] {
+            switch forced {
+            case "session": return .session
+            case "override": return .overrideLive
+            case "both": return .sessionAndOverride
+            case "none": return .none
+            default: break
+            }
+        }
+        // Read pmset for real, blocking. The cached `isEnabled` is only
+        // refreshed at launch and on menu open, so a lid mode switched on
+        // since then (or never read at all, leaving it nil) would read as
+        // off and the override variant would never show.
+        closedDisplay.refreshBlocking()
         return QuitSleepCheck.coverage(
             brewing: session.isActive,
-            overrideLive: clearableOverride,
-            overrideSetThisRun: persistentSleepSetByUs)
+            overrideLive: closedDisplay.isEnabled == true && !closedDisplayAuto.isHolding)
     }
 
-    /// Consent-based clear for the quit modal: release the scoped hold,
-    /// then clear the persistent override when it is still live. The caller
-    /// activated the app for the modal, so a password prompt here answers a
-    /// question the user just asked. Always returns promptly; a failure is
-    /// recorded on the controller and logged, never stranded into.
-    func clearSleepOverrideForQuit() async {
+    /// Lid mode is live, but the brewing automation is the one holding it, so
+    /// quitting ends it without the user doing anything.
+    ///
+    /// The modal still says so. Nothing is stranded, which is why this is not
+    /// folded into ``QuitSleepCheck/Coverage`` and never gets the "did you
+    /// forget" framing, but quitting does take away lid coverage the user has
+    /// right now, and that is worth a line before it happens.
+    func quitScopedLidMode() -> Bool {
+        closedDisplay.isEnabled == true && closedDisplayAuto.isHolding
+    }
+
+    /// Consent-based clear for the quit modal: release the scoped hold, then
+    /// clear the persistent override when it is still live.
+    ///
+    /// Returns whether the override is actually off afterwards, confirmed by
+    /// re-reading `pmset` rather than trusting the exit status. The caller
+    /// must not quit on `false`: quitting then would strand the very setting
+    /// the user pressed "Turn off and quit" to clear.
+    @discardableResult
+    func clearSleepOverrideForQuit() async -> Bool {
         await closedDisplayAuto.stopIfHolding()
         await waitForSleepWriteToSettle()
         await closedDisplay.refresh(force: true)
-        guard closedDisplay.isEnabled == true else { return }
-        // Without the helper, clearing needs an osascript password sheet:
-        // never pop that during quit. The override stays as it was (same as
-        // quitting without the modal), and the scoped hold above is already
-        // released prompt-free.
-        guard helperInstalled else {
-            NSLog("Keepresso: quit-time sleep restore skipped without the helper")
-            return
+        guard closedDisplay.isEnabled == true else { return true }
+        if !helperInstalled {
+            // Clearing without the helper needs an osascript password sheet.
+            // Never spring one unannounced: the dialog names "osascript", not
+            // Keepresso, so say what it is for first, and activate so it comes
+            // up in front instead of behind everything.
+            NSApp.activate(ignoringOtherApps: true)
+            notifier.notify(
+                title: L("Keepresso needs your password"),
+                body: machineHasBattery
+                    ? L("Enter your administrator password to switch closed-display mode off before Keepresso quits.")
+                    : L("Enter your administrator password to switch the sleep override off before Keepresso quits."),
+                sound: true
+            )
         }
         let result = await closedDisplay.set(false)
-        persistentSleepSetByUs = false
         if case .failed(let message) = result {
             NSLog("Keepresso: quit-time sleep restore failed: %@", message)
         }
+        // Verify against the system, not the result: a dismissed prompt or a
+        // wrong password must not read as success.
+        await closedDisplay.refresh(force: true)
+        let cleared = closedDisplay.isEnabled != true
+        if !cleared {
+            // Every unsuccessful outcome says so, not just `.failed`. macOS
+            // re-prompts a wrong password itself and then gives osascript the
+            // same `-128` it uses for Cancel, so a mistyped password arrives
+            // here as `.cancelled`. Staying silent on that is the one case
+            // where the user most needs telling: they tried to turn it off,
+            // it is still on, and the app did not quit.
+            notifier.notify(
+                title: L("Closed-display mode left on"),
+                body: L("Keepresso could not switch it off, so it stayed running instead of quitting."),
+                sound: false
+            )
+        }
+        return cleared
     }
 
     /// Activate, run privileged work that may show the osascript password

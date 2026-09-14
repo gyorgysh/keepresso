@@ -756,6 +756,11 @@
 "Install a small helper service so closed-display mode, Keyboard Cleaner, the thermal fan boost, AWDL pausing, and DNS flush work without password prompts. macOS will ask you to allow it in System Settings, once. Nothing else changes." = "Установіть невелику службу-помічник, щоб режим закритої кришки, очищення клавіатури, термічне прискорення вентиляторів, призупинення AWDL і очищення DNS працювали без запитів пароля. macOS один раз попросить дозволити її в Системних параметрах. Більше нічого не зміниться.";
 "Tools" = "Інструменти";
 "Help" = "Довідка";
+"Keepresso could not switch it off, so it stayed running instead of quitting." = "Keepresso не вдалося його вимкнути, тому програма залишилася запущеною замість того, щоб вийти.";
+"Enter your administrator password to switch the sleep override off before Keepresso quits." = "Введіть пароль адміністратора, щоб вимкнути блокування сну, перш ніж Keepresso вийде.";
+"Enter your administrator password to switch closed-display mode off before Keepresso quits." = "Введіть пароль адміністратора, щоб вимкнути режим закритої кришки, перш ніж Keepresso вийде.";
+"Keep running with the lid shut and no external display." = "Дозволяє продовжувати роботу із закритою кришкою і без зовнішнього дисплея.";
+"Closed-display mode is on for this session. Quitting ends it, so the lid can sleep %@ again." = "Режим закритої кришки увімкнено для цього сеансу. Вихід вимкне його, тож %@ знову зможе засинати із закритою кришкою.";
 "Did you forget to turn it off?" = "Забув це вимкнути?";
 "Quit while still brewing?" = "Вийти, коли ще заварюється?";
 "Turn off and quit" = "Вимкнути й вийти";

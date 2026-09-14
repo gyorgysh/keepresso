@@ -277,47 +277,76 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.syncWidgetState()
     }
 
-    /// Set once a quit decision is in flight so a second ask (logout
-    /// escalation, an impatient second Cmd-Q) quits instead of stacking
-    /// another modal.
-    private var quitTerminationPending = false
+    /// Set once the user has answered the quit question, so the termination
+    /// they triggered on the way out goes straight through.
+    private var quitConfirmed = false
+    /// The question is on screen. A second Cmd-Q re-focuses it instead of
+    /// stacking another window or quitting behind it.
+    private var quitModal: QuitSleepModal?
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // A duplicate handing over quits silently, a relocate handover quits
-        // into a copy that owns the state (the modal would stall the update),
-        // and an answer already in flight must not stack a second modal.
-        guard !yieldingToPeer, !AppRelocator.isRelocating, !quitTerminationPending else {
+        // into a copy that owns the state, and an answered question quits.
+        guard !yieldingToPeer, !AppRelocator.isRelocating, !quitConfirmed else {
             return .terminateNow
         }
-        quitTerminationPending = true
-        Task { @MainActor [weak self] in
-            guard let self else {
-                NSApp.reply(toApplicationShouldTerminate: true)
-                return
-            }
-            let coverage = await self.model.quitSleepCoverage()
-            if coverage != .none {
-                let device = MachineIdentity.deviceName(
-                    modelIdentifier: MachineIdentity.currentModelIdentifier())
-                let qualifier = MachineIdentity.powerQualifier(
-                    IOKitPowerSourceMonitor().current)
-                switch QuitSleepModal().ask(
-                    coverage: coverage, device: device, qualifier: qualifier
-                ) {
-                case .turnOffAndQuit:
-                    await self.model.clearSleepOverrideForQuit()
-                    NSApp.reply(toApplicationShouldTerminate: true)
-                case .quitAnyway, .stopBrewingAndQuit:
-                    NSApp.reply(toApplicationShouldTerminate: true)
+        // Logging out, restarting or shutting down: never hold the system up
+        // with a dialog it cannot see the point of.
+        if let reason = NSAppleEventManager.shared().currentAppleEvent?
+            .attributeDescriptor(forKeyword: AEKeyword(kAEQuitReason)),
+           reason.enumCodeValue != 0 {
+            return .terminateNow
+        }
+        if let quitModal {
+            quitModal.bringToFront()
+            return .terminateCancel
+        }
+
+        let coverage = model.quitSleepCoverageNow()
+        let scopedLid = model.quitScopedLidMode()
+        guard coverage != .none else { return .terminateNow }
+
+        // Cancel the termination outright and ask afterwards, rather than
+        // holding it open with `.terminateLater`.
+        //
+        // AppKit runs `.terminateLater` in `NSModalPanelRunLoopMode`, which
+        // does not deliver mouse events to an ordinary window, so the buttons
+        // are dead; and a nested `runModal` is no better, because quitting
+        // starts in the menu bar extra and menu tracking owns the event
+        // stream. Both were tried. Cancelling puts the run loop back in its
+        // default mode with no tracking session, where a plain window behaves
+        // like any other, and the answer re-issues `terminate` for real.
+        let modal = QuitSleepModal()
+        quitModal = modal
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let device = MachineIdentity.deviceName(
+                modelIdentifier: MachineIdentity.currentModelIdentifier())
+            let qualifier = MachineIdentity.powerQualifier(IOKitPowerSourceMonitor().current)
+            modal.present(
+                coverage: coverage, device: device, qualifier: qualifier, scopedLid: scopedLid
+            ) { decision in
+                self.quitModal = nil
+                switch decision {
                 case .cancel:
-                    self.quitTerminationPending = false
-                    NSApp.reply(toApplicationShouldTerminate: false)
+                    break
+                case .quitAnyway, .stopBrewingAndQuit:
+                    self.quitConfirmed = true
+                    NSApp.terminate(nil)
+                case .turnOffAndQuit:
+                    Task { @MainActor in
+                        // Only quit once the override is confirmed off. A
+                        // dismissed password prompt or a failed write leaves
+                        // the app running, rather than quitting and stranding
+                        // the setting the user just asked to clear.
+                        guard await self.model.clearSleepOverrideForQuit() else { return }
+                        self.quitConfirmed = true
+                        NSApp.terminate(nil)
+                    }
                 }
-            } else {
-                NSApp.reply(toApplicationShouldTerminate: true)
             }
         }
-        return .terminateLater
+        return .terminateCancel
     }
 
     func applicationWillTerminate(_ notification: Notification) {
