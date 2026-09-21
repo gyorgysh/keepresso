@@ -39,7 +39,6 @@ struct MenuBarContent: View {
     @State private var lidRowShakes = 0
     @State private var showCustomDuration = false
     @State private var showUntilTime = false
-    @State private var toolsExpanded = false
     @State private var helpExpanded = false
 
     static let durationOptions: [(label: String, mode: SessionMode)] = [
@@ -126,127 +125,15 @@ struct MenuBarContent: View {
 
             heldByLine
 
-            if model.triggersEnabled && !model.triggersPaused {
-                triggerSummary
-                    .transition(.opacity)
-            }
-
             Divider()
 
-            if model.triggersEnabled && !model.triggersPaused {
-                LabeledContent("Keep awake") {
-                    Menu("For") {
-                        ForEach(Array(Self.durationOptions.enumerated()), id: \.offset) { _, option in
-                            Button(L(option.label)) { model.startManualOverride(mode: option.mode) }
-                        }
-                        Divider()
-                        Button("Custom Duration\u{2026}") { showCustomDuration = true }
-                        Button("Until a Time\u{2026}") { showUntilTime = true }
-                    }
-                    .fixedSize()
-                }
-                .popover(isPresented: $showCustomDuration) {
-                    CustomDurationEditor(initial: model.defaultMode.duration ?? 3 * 60 * 60) {
-                        model.startManualOverride(mode: .timed(duration: $0))
-                    }
-                }
-                .popover(isPresented: $showUntilTime) {
-                    UntilTimeEditor(isActive: session.isActive) { hour, minute in
-                        model.startUntil(hour: hour, minute: minute)
-                    }
-                }
-
-                // Pausing means "let my Mac sleep", so live automation
-                // leases come first: the row offers ending them, and only
-                // once none are live does it offer the pause itself.
-                if session.liveLeases.isEmpty {
-                    Text("Activation is controlled by triggers.\nEdit them in Preferences.")
-                        .font(type.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Button("Pause Triggers") { model.pauseTriggers() }
-                        .prominentActionStyle()
-                        .frame(maxWidth: .infinity)
-                } else {
-                    Text("Activation is controlled by triggers.\nEnd the automation leases before pausing.")
-                        .font(type.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Button("End Automation Leases") { model.endAutomationLeases() }
-                        .prominentActionStyle()
-                        .frame(maxWidth: .infinity)
-                }
-            } else {
-                if model.triggersEnabled {
-                    Text("Triggers paused. Controlling manually for now.")
-                        .font(type.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                switchRow("Keep awake", isOn: Binding(
-                    get: { session.isActive },
-                    set: { _ in model.toggleManual() }
-                ))
-
-                LabeledContent("For") {
-                    Menu(Self.modeLabel(model.mode)) {
-                        ForEach(Array(Self.durationOptions.enumerated()), id: \.offset) { _, option in
-                            Button(L(option.label)) { model.mode = option.mode }
-                        }
-                        Divider()
-                        Button("Custom Duration\u{2026}") { showCustomDuration = true }
-                        Button("Until a Time\u{2026}") { showUntilTime = true }
-                    }
-                    .fixedSize()
-                }
-                .popover(isPresented: $showCustomDuration) {
-                    CustomDurationEditor(initial: model.mode.duration ?? 60 * 60) {
-                        model.mode = .timed(duration: $0)
-                    }
-                }
-                .popover(isPresented: $showUntilTime) {
-                    UntilTimeEditor(isActive: session.isActive) { hour, minute in
-                        model.startUntil(hour: hour, minute: minute)
-                    }
-                }
-
-                if session.isActive && !model.quickStopDurations.isEmpty {
-                    // The three short defaults share a line with the label;
-                    // four shortcuts, or compound durations ("1 h 30 min",
-                    // wordier in some languages), get the full panel width
-                    // on their own row so the buttons never clip.
-                    if quickStopButtonsFitInline {
-                        LabeledContent("Stop in") { quickStopButtons }
-                    } else {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Stop in")
-                            quickStopButtons
-                        }
-                    }
-                }
-
-                if model.triggersEnabled {
-                    Button("Resume Triggers") { model.resumeTriggers() }
-                        .prominentActionStyle()
-                        .frame(maxWidth: .infinity)
-                }
-            }
-
-            // The option toggles and app entries fold away behind the "Show
-            // less" row, leaving a status-and-controls-only panel; everything
-            // hidden stays reachable via right-click on the icon.
-            if model.menuPanelExpanded {
-                optionToggles
-            }
+            configuredMenuSections
 
             statusStack
 
-            if model.menuPanelExpanded {
-                Divider()
+            Divider()
 
-                appEntries
-            }
+            appEntries
 
             expandToggleRow
         }
@@ -264,6 +151,11 @@ struct MenuBarContent: View {
         .animation(.snappy(duration: 0.25), value: model.closedDisplayError)
         .animation(.snappy(duration: 0.25), value: model.helperAttention)
         .animation(.snappy(duration: 0.25), value: model.menuPanelExpanded)
+        .animation(.snappy(duration: 0.25), value: model.showManualSessionInMenu)
+        .animation(.snappy(duration: 0.25), value: model.showTriggerControlsInMenu)
+        .animation(.snappy(duration: 0.25), value: model.showQuickSettingsInMenu)
+        .animation(.snappy(duration: 0.25), value: model.showToolsInMenu)
+        .animation(.snappy(duration: 0.25), value: model.menuSectionOrder)
         .glassPanelBackground()
         .tint(.keepressoBrew)
         // Cascades to every text that sets no font of its own (toggles,
@@ -278,12 +170,165 @@ struct MenuBarContent: View {
         }
     }
 
-    /// The middle option toggles (closed-display, only-while-brewing, battery),
-    /// hidden while the panel is collapsed.
-    @ViewBuilder
-    private var optionToggles: some View {
-        Divider()
+    /// Enabled sections in saved order; compact mode shows the first two.
+    private var displayedMenuSections: [MenuBarSection] {
+        let enabled = Set(model.menuSectionOrder.filter { section in
+            switch section {
+            case .manualSession:
+                model.showManualSessionInMenu
+            case .triggers:
+                model.showTriggerControlsInMenu
+            case .quickSettings:
+                model.showQuickSettingsInMenu
+            case .toolsAndShortcuts:
+                model.showToolsInMenu
+            }
+        })
+        return MenuBarSection.displayedSections(
+            in: model.menuSectionOrder,
+            enabled: enabled,
+            expanded: model.menuPanelExpanded
+        )
+    }
 
+    @ViewBuilder
+    private var configuredMenuSections: some View {
+        ForEach(displayedMenuSections) { section in
+            if section != displayedMenuSections.first { Divider() }
+            configuredMenuSection(section)
+        }
+    }
+
+    @ViewBuilder
+    private func configuredMenuSection(_ section: MenuBarSection) -> some View {
+        switch section {
+        case .manualSession:
+            manualSessionControls
+        case .triggers:
+            triggerControls
+        case .quickSettings:
+            quickSettings
+        case .toolsAndShortcuts:
+            toolsControls
+        }
+    }
+
+    @ViewBuilder
+    private var triggerControls: some View {
+        switchRow("Activate by triggers", isOn: Binding(
+            get: { model.triggersEnabled },
+            set: { model.triggersEnabled = $0 }
+        ))
+
+        if model.triggersEnabled && !model.triggersPaused {
+            triggerSummary
+                .transition(.opacity)
+
+            // End live leases before pausing trigger control.
+            if session.liveLeases.isEmpty {
+                Text("Activation is controlled by triggers.\nEdit them in Preferences.")
+                    .font(type.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Pause Triggers") { model.pauseTriggers() }
+                    .prominentActionStyle()
+                    .frame(maxWidth: .infinity)
+            } else {
+                Text("Activation is controlled by triggers.\nEnd the automation leases before pausing.")
+                    .font(type.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("End Automation Leases") { model.endAutomationLeases() }
+                    .prominentActionStyle()
+                    .frame(maxWidth: .infinity)
+            }
+        } else if model.triggersEnabled {
+            Text("No active triggers. Resume to use automatic rules.")
+                .font(type.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Resume Triggers") { model.resumeTriggers() }
+                .prominentActionStyle()
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private var manualSessionControls: some View {
+        if model.triggersEnabled && !model.triggersPaused {
+            LabeledContent("Keep awake") {
+                Menu("For") {
+                    ForEach(Array(Self.durationOptions.enumerated()), id: \.offset) { _, option in
+                        Button(L(option.label)) { model.startManualOverride(mode: option.mode) }
+                    }
+                    Divider()
+                    Button("Custom Duration\u{2026}") { showCustomDuration = true }
+                    Button("Until a Time\u{2026}") { showUntilTime = true }
+                }
+                .fixedSize()
+            }
+            .popover(isPresented: $showCustomDuration) {
+                CustomDurationEditor(initial: model.defaultMode.duration ?? 3 * 60 * 60) {
+                    model.startManualOverride(mode: .timed(duration: $0))
+                }
+            }
+            .popover(isPresented: $showUntilTime) {
+                UntilTimeEditor(isActive: session.isActive) { hour, minute in
+                    model.startUntil(hour: hour, minute: minute)
+                }
+            }
+        } else {
+            switchRow("Keep awake", isOn: Binding(
+                get: { session.isActive },
+                set: { _ in model.toggleManual() }
+            ))
+
+            LabeledContent("For") {
+                Menu(Self.modeLabel(model.mode)) {
+                    ForEach(Array(Self.durationOptions.enumerated()), id: \.offset) { _, option in
+                        Button(L(option.label)) { model.mode = option.mode }
+                    }
+                    Divider()
+                    Button("Custom Duration\u{2026}") { showCustomDuration = true }
+                    Button("Until a Time\u{2026}") { showUntilTime = true }
+                }
+                .fixedSize()
+            }
+            .popover(isPresented: $showCustomDuration) {
+                CustomDurationEditor(initial: model.mode.duration ?? 60 * 60) {
+                    model.mode = .timed(duration: $0)
+                }
+            }
+            .popover(isPresented: $showUntilTime) {
+                UntilTimeEditor(isActive: session.isActive) { hour, minute in
+                    model.startUntil(hour: hour, minute: minute)
+                }
+            }
+
+            if session.isActive && !model.quickStopDurations.isEmpty {
+                // Use a full-width row when compact buttons may clip.
+                if quickStopButtonsFitInline {
+                    LabeledContent("Stop in") { quickStopButtons }
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Stop in")
+                        quickStopButtons
+                    }
+                }
+            }
+
+            // Keep trigger resumption available when its section is hidden.
+            if model.triggersEnabled && !model.showTriggerControlsInMenu {
+                Button("Resume Triggers") { model.resumeTriggers() }
+                    .prominentActionStyle()
+                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    /// The user-selectable closed-display and battery controls.
+    @ViewBuilder
+    private var quickSettings: some View {
         // The same pmset switch wears two names: on a laptop it exists to
         // survive the lid closing, on a desktop (no lid, no battery) it
         // reads as a hard "never sleep" override.
@@ -382,17 +427,13 @@ struct MenuBarContent: View {
         }
     }
 
-    /// The window-opening entries and Quit, hidden while the panel is
-    /// collapsed (they stay reachable via the icon's right-click menu).
-    /// Three rows only: Preferences, a Tools submenu (the four assistant
-    /// windows), and a Help submenu (welcome/about/updates/support).
+    /// Configurable tool shortcuts.
     @ViewBuilder
-    private var appEntries: some View {
-        Button("Preferences…") { open(KeepressoApp.preferencesWindowID) }
-            .keyboardShortcut(",")
-            .buttonStyle(.menuRow)
+    private var toolsControls: some View {
         Button {
-            withAnimation(.snappy(duration: 0.2)) { toolsExpanded.toggle() }
+            withAnimation(.snappy(duration: 0.2)) {
+                model.toolsSectionExpanded.toggle()
+            }
         } label: {
             HStack {
                 Text("Tools")
@@ -400,11 +441,11 @@ struct MenuBarContent: View {
                 Image(systemName: "chevron.right")
                     .font(type.caption2)
                     .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(toolsExpanded ? 90 : 0))
+                    .rotationEffect(.degrees(model.toolsSectionExpanded ? 90 : 0))
             }
         }
         .buttonStyle(.menuRow)
-        if toolsExpanded {
+        if model.toolsSectionExpanded {
             VStack(alignment: .leading, spacing: 0) {
                 Button("Headless Setup…") { open(KeepressoApp.setupWindowID) }
                     .buttonStyle(.menuRow)
@@ -418,33 +459,44 @@ struct MenuBarContent: View {
             .padding(.leading, 12)
             .transition(.opacity.combined(with: .move(edge: .top)))
         }
-        Button {
-            withAnimation(.snappy(duration: 0.2)) { helpExpanded.toggle() }
-        } label: {
-            HStack {
-                Text("Help")
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(type.caption2)
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(helpExpanded ? 90 : 0))
+    }
+
+    /// Preferences and Quit stay visible; Help expands with the panel.
+    @ViewBuilder
+    private var appEntries: some View {
+        Button("Preferences…") { open(KeepressoApp.preferencesWindowID) }
+            .keyboardShortcut(",")
+            .buttonStyle(.menuRow)
+
+        if model.menuPanelExpanded {
+            Button {
+                withAnimation(.snappy(duration: 0.2)) { helpExpanded.toggle() }
+            } label: {
+                HStack {
+                    Text("Help")
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(type.caption2)
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(helpExpanded ? 90 : 0))
+                }
             }
-        }
-        .buttonStyle(.menuRow)
-        if helpExpanded {
-            VStack(alignment: .leading, spacing: 0) {
-                Button("Welcome to Keepresso…") { open(KeepressoApp.welcomeWindowID) }
-                    .buttonStyle(.menuRow)
-                Button("About Keepresso") { open(KeepressoApp.aboutWindowID) }
-                    .buttonStyle(.menuRow)
-                Button("Check for Updates…") { updater.checkForUpdates() }
-                    .disabled(!updater.canCheckForUpdates)
-                    .buttonStyle(.menuRow)
-                Button("Support Keepresso…") { NSWorkspace.shared.open(AppInfo.donate) }
-                    .buttonStyle(.menuRow)
+            .buttonStyle(.menuRow)
+            if helpExpanded {
+                VStack(alignment: .leading, spacing: 0) {
+                    Button("Welcome to Keepresso…") { open(KeepressoApp.welcomeWindowID) }
+                        .buttonStyle(.menuRow)
+                    Button("About Keepresso") { open(KeepressoApp.aboutWindowID) }
+                        .buttonStyle(.menuRow)
+                    Button("Check for Updates…") { updater.checkForUpdates() }
+                        .disabled(!updater.canCheckForUpdates)
+                        .buttonStyle(.menuRow)
+                    Button("Support Keepresso…") { NSWorkspace.shared.open(AppInfo.donate) }
+                        .buttonStyle(.menuRow)
+                }
+                .padding(.leading, 12)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
-            .padding(.leading, 12)
-            .transition(.opacity.combined(with: .move(edge: .top)))
         }
 
         Divider()
@@ -454,8 +506,7 @@ struct MenuBarContent: View {
             .buttonStyle(.menuRow)
     }
 
-    /// The slim "Show less" / "Show more" row that folds the option toggles
-    /// and app entries away, pinned to the panel's bottom in both states.
+    /// Compact mode keeps the first two enabled sections.
     private var expandToggleRow: some View {
         Button {
             model.menuPanelExpanded.toggle()
@@ -471,19 +522,6 @@ struct MenuBarContent: View {
             .foregroundStyle(.secondary)
         }
         .buttonStyle(.menuRow)
-        // Keep the panel's ⌘, and ⌘Q working while their visible carriers are
-        // folded away. As a background, the carriers take no layout slot in
-        // the panel's VStack (a zero-size child would still add its spacing).
-        .background {
-            if !model.menuPanelExpanded {
-                Button("") { open(KeepressoApp.preferencesWindowID) }
-                    .keyboardShortcut(",")
-                    .hidden()
-                Button("") { NSApplication.shared.terminate(nil) }
-                    .keyboardShortcut("q")
-                    .hidden()
-            }
-        }
     }
 
     /// The quick "Stop in" shortcut buttons for the running session.

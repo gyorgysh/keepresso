@@ -344,10 +344,16 @@ Updates, and Quit.
 - **Quick toggle.** Flip **Keep awake** on or off and pick a duration:
   indefinitely, a preset (15 minutes, 1 hour, 4 hours), any custom duration, or
   until a time of day. The cup fills and animates while brewing.
+- **Your menu, your controls.** In Preferences > General > Menu bar, independently
+  show, hide, and arrange **Manual session**, **Triggers**, **Quick settings**
+  (lid and battery), and **Tools & shortcuts**. Manual session and Triggers are
+  shown by default; use any combination and order. Status, Preferences, and
+  Quit always remain available.
 - **Show less.** The disclosure row at the bottom of the panel folds the option
-  toggles and app entries away, leaving just the status and the keep-awake
-  controls. Keepresso remembers the choice, and everything hidden stays
-  reachable from the right-click menu.
+  toggles and help away, leaving the first two enabled menu sections in the
+  user's chosen order, plus status, Preferences, and Quit. Move a section up in
+  Preferences to prioritize it in this compact view. Keepresso remembers the
+  choice.
 - **Keep awake with lid closed.** Toggle it right from the menu before you shut
   the lid or unplug. It flips a system setting (`pmset disablesleep`), so it
   needs administrator rights: silent with the helper installed, one password
@@ -357,8 +363,9 @@ Updates, and Quit.
   on at session start, off at session end or app quit.
 - **Preferences** (⌘,) holds the set-and-forget configuration, in tabs:
   - **General**: what to keep awake, the administrator helper, menu-bar
-    countdown, battery auto-pause, closed-display mode, launch at login,
-    settings backup (export/import), and the welcome screen.
+    section customization and countdown, battery auto-pause, closed-display
+    mode, launch at login, settings backup (export/import), and the welcome
+    screen.
   - **Triggers**: turn on rule-based activation, apply a preset, and build your
     rule set.
   - **Reminder**: a one-time or recurring "still brewing" alert, with a sound,

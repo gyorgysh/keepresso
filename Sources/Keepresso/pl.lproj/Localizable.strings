@@ -26,6 +26,10 @@
 "Battery threshold" = "Próg baterii";
 "Presence" = "Obecność";
 "Menu bar" = "Pasek menu";
+"Move up" = "Przenieś w górę";
+"Move down" = "Przenieś w dół";
+"Use the arrows to arrange the menu sections." = "Użyj strzałek, aby uporządkować sekcje menu.";
+"Show less keeps the first two visible sections." = "Opcja „Pokaż mniej” pozostawia widoczne dwie pierwsze sekcje.";
 "Battery" = "Bateria";
 "Welcome" = "Powitanie";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Utrzymuje działanie Maca przy zamkniętej pokrywie i bez zewnętrznego wyświetlacza. Zmienia to ustawienie systemowe wymagające uprawnień administratora: bezgłośnie z zainstalowanym pomocnikiem administratora (Ustawienia ▸ Ogólne), w przeciwnym razie macOS poprosi o hasło.";
@@ -54,7 +58,11 @@
 "Resolution" = "Rozdzielczość";
 "Startup" = "Uruchamianie";
 "Manual session" = "Sesja ręczna";
+"Quick settings" = "Szybkie ustawienia";
+"Tools & shortcuts" = "Narzędzia i skróty";
 "A manual session keeps the Mac awake for the selected duration even when no trigger condition is met. Starting one pauses triggers until you resume them." = "Sesja ręczna utrzymuje Maca w stanie aktywnym przez wybrany czas, nawet gdy żaden warunek wyzwalacza nie jest spełniony. Jej uruchomienie wstrzymuje wyzwalacze do czasu ich wznowienia.";
+"Choose which sections appear in the menu-bar dropdown. Turn on any combination." = "Wybierz sekcje widoczne w menu na pasku menu. Możesz włączyć dowolną kombinację.";
+"At least one control section must stay visible." = "Co najmniej jedna sekcja sterowania musi pozostać widoczna.";
 "Gaming" = "Gry";
 "None" = "Brak";
 "any" = "dowolny";
@@ -201,7 +209,7 @@
 "The watchdog below should smooth this out; re-run the test with it on to confirm." = "Poniższy strażnik powinien to wygładzić; uruchom test ponownie z włączonym strażnikiem, aby to potwierdzić.";
 "Times & days" = "Godziny i dni";
 "Toggle shortcut" = "Skrót przełączający";
-"Triggers paused. Controlling manually for now." = "Wyzwalacze wstrzymane. Obecnie sterowanie ręczne.";
+"No active triggers. Resume to use automatic rules." = "Brak aktywnych wyzwalaczy. Wznów je, aby używać reguł automatycznych.";
 "Until a Time…" = "Do godziny…";
 "VPN connected" = "Połączono z VPN";
 "View on GitHub" = "Pokaż na GitHub";

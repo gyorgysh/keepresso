@@ -26,6 +26,10 @@
 "Battery threshold" = "Battery threshold";
 "Presence" = "Presence";
 "Menu bar" = "Menu bar";
+"Move up" = "Move up";
+"Move down" = "Move down";
+"Use the arrows to arrange the menu sections." = "Use the arrows to arrange the menu sections.";
+"Show less keeps the first two visible sections." = "Show less keeps the first two visible sections.";
 "Battery" = "Battery";
 "Welcome" = "Welcome";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.";
@@ -54,7 +58,11 @@
 "Resolution" = "Resolution";
 "Startup" = "Startup";
 "Manual session" = "Manual session";
+"Quick settings" = "Quick settings";
+"Tools & shortcuts" = "Tools & shortcuts";
 "A manual session keeps the Mac awake for the selected duration even when no trigger condition is met. Starting one pauses triggers until you resume them." = "A manual session keeps the Mac awake for the selected duration even when no trigger condition is met. Starting one pauses triggers until you resume them.";
+"Choose which sections appear in the menu-bar dropdown. Turn on any combination." = "Choose which sections appear in the menu-bar dropdown. Turn on any combination.";
+"At least one control section must stay visible." = "At least one control section must stay visible.";
 "Gaming" = "Gaming";
 "None" = "None";
 "any" = "any";
@@ -201,7 +209,7 @@
 "The watchdog below should smooth this out; re-run the test with it on to confirm." = "The watchdog below should smooth this out; re-run the test with it on to confirm.";
 "Times & days" = "Times & days";
 "Toggle shortcut" = "Toggle shortcut";
-"Triggers paused. Controlling manually for now." = "Triggers paused. Controlling manually for now.";
+"No active triggers. Resume to use automatic rules." = "No active triggers. Resume to use automatic rules.";
 "Until a Time…" = "Until a Time…";
 "VPN connected" = "VPN connected";
 "View on GitHub" = "View on GitHub";

@@ -26,6 +26,10 @@
 "Battery threshold" = "Umbral de batería";
 "Presence" = "Presencia";
 "Menu bar" = "Barra de menús";
+"Move up" = "Mover arriba";
+"Move down" = "Mover abajo";
+"Use the arrows to arrange the menu sections." = "Usa las flechas para ordenar las secciones del menú.";
+"Show less keeps the first two visible sections." = "Mostrar menos mantiene visibles las dos primeras secciones.";
 "Battery" = "Batería";
 "Welcome" = "Bienvenida";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Mantiene el Mac funcionando con la tapa cerrada y sin pantalla externa. Esto modifica un ajuste del sistema que requiere permisos de administrador: silencioso con el asistente de administrador instalado (Ajustes ▸ General), de lo contrario macOS pide tu contraseña.";
@@ -54,7 +58,11 @@
 "Resolution" = "Resolución";
 "Startup" = "Inicio";
 "Manual session" = "Sesión manual";
+"Quick settings" = "Ajustes rápidos";
+"Tools & shortcuts" = "Herramientas y accesos directos";
 "A manual session keeps the Mac awake for the selected duration even when no trigger condition is met. Starting one pauses triggers until you resume them." = "Una sesión manual mantiene el Mac activo durante el tiempo seleccionado aunque no se cumpla ninguna condición de activación. Al iniciarla, los activadores se pausan hasta que los reanudes.";
+"Choose which sections appear in the menu-bar dropdown. Turn on any combination." = "Elige qué secciones aparecen en el desplegable de la barra de menús. Activa cualquier combinación.";
+"At least one control section must stay visible." = "Al menos una sección de control debe permanecer visible.";
 "Gaming" = "Juegos";
 "None" = "Ninguno";
 "any" = "cualquiera";
@@ -201,7 +209,7 @@
 "The watchdog below should smooth this out; re-run the test with it on to confirm." = "El vigilante de abajo debería suavizarlo; vuelve a ejecutar la prueba con él activado para confirmar.";
 "Times & days" = "Horas y días";
 "Toggle shortcut" = "Atajo de alternancia";
-"Triggers paused. Controlling manually for now." = "Disparadores en pausa. Control manual por ahora.";
+"No active triggers. Resume to use automatic rules." = "No hay disparadores activos. Reanúdalos para usar las reglas automáticas.";
 "Until a Time…" = "Hasta una hora…";
 "VPN connected" = "VPN conectada";
 "View on GitHub" = "Ver en GitHub";

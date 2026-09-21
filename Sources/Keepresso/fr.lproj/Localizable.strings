@@ -26,6 +26,10 @@
 "Battery threshold" = "Seuil de batterie";
 "Presence" = "Présence";
 "Menu bar" = "Barre des menus";
+"Move up" = "Déplacer vers le haut";
+"Move down" = "Déplacer vers le bas";
+"Use the arrows to arrange the menu sections." = "Utilisez les flèches pour organiser les sections du menu.";
+"Show less keeps the first two visible sections." = "Afficher moins conserve les deux premières sections visibles.";
 "Battery" = "Batterie";
 "Welcome" = "Bienvenue";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Garde le Mac actif capot fermé et sans écran externe. Cela modifie un réglage système qui nécessite des droits d'administrateur : silencieux avec l'assistant administrateur installé (Réglages ▸ Général), sinon macOS demande votre mot de passe.";
@@ -54,7 +58,11 @@
 "Resolution" = "Résolution";
 "Startup" = "Démarrage";
 "Manual session" = "Session manuelle";
+"Quick settings" = "Réglages rapides";
+"Tools & shortcuts" = "Outils et raccourcis";
 "A manual session keeps the Mac awake for the selected duration even when no trigger condition is met. Starting one pauses triggers until you resume them." = "Une session manuelle garde le Mac éveillé pendant la durée sélectionnée, même si aucune condition de déclenchement n’est remplie. La démarrer met les déclencheurs en pause jusqu’à ce que vous les repreniez.";
+"Choose which sections appear in the menu-bar dropdown. Turn on any combination." = "Choisissez les sections qui apparaissent dans le menu déroulant de la barre des menus. Activez la combinaison de votre choix.";
+"At least one control section must stay visible." = "Au moins une section de contrôle doit rester visible.";
 "Gaming" = "Jeu";
 "None" = "Aucun";
 "any" = "n’importe laquelle";
@@ -201,7 +209,7 @@
 "The watchdog below should smooth this out; re-run the test with it on to confirm." = "La surveillance ci-dessous devrait lisser cela ; relancez le test activé pour confirmer.";
 "Times & days" = "Heures et jours";
 "Toggle shortcut" = "Raccourci de bascule";
-"Triggers paused. Controlling manually for now." = "Déclencheurs en pause. Contrôle manuel pour l’instant.";
+"No active triggers. Resume to use automatic rules." = "Aucun déclencheur actif. Reprenez-les pour utiliser les règles automatiques.";
 "Until a Time…" = "Jusqu’à une heure…";
 "VPN connected" = "VPN connecté";
 "View on GitHub" = "Voir sur GitHub";

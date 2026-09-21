@@ -26,6 +26,10 @@
 "Battery threshold" = "Soglia batteria";
 "Presence" = "Presenza";
 "Menu bar" = "Barra dei menu";
+"Move up" = "Sposta su";
+"Move down" = "Sposta giù";
+"Use the arrows to arrange the menu sections." = "Usa le frecce per ordinare le sezioni del menu.";
+"Show less keeps the first two visible sections." = "Mostra meno mantiene visibili le prime due sezioni.";
 "Battery" = "Batteria";
 "Welcome" = "Benvenuto";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Mantiene il Mac in funzione con il coperchio chiuso e senza display esterno. Questo cambia un'impostazione di sistema che richiede i privilegi di amministratore: in silenzio con l'assistente amministratore installato (Impostazioni ▸ Generali), altrimenti macOS chiede la password.";
@@ -54,7 +58,11 @@
 "Resolution" = "Risoluzione";
 "Startup" = "Avvio";
 "Manual session" = "Sessione manuale";
+"Quick settings" = "Impostazioni rapide";
+"Tools & shortcuts" = "Strumenti e scorciatoie";
 "A manual session keeps the Mac awake for the selected duration even when no trigger condition is met. Starting one pauses triggers until you resume them." = "Una sessione manuale mantiene il Mac attivo per la durata selezionata anche quando nessuna condizione di attivazione è soddisfatta. Avviandola, le attivazioni vengono messe in pausa finché non le riprendi.";
+"Choose which sections appear in the menu-bar dropdown. Turn on any combination." = "Scegli quali sezioni mostrare nel menu della barra dei menu. Attiva qualsiasi combinazione.";
+"At least one control section must stay visible." = "Almeno una sezione di controllo deve rimanere visibile.";
 "Gaming" = "Gaming";
 "None" = "Nessuno";
 "any" = "una qualsiasi";
@@ -201,7 +209,7 @@
 "The watchdog below should smooth this out; re-run the test with it on to confirm." = "La sorveglianza qui sotto dovrebbe attenuare il problema; riesegui il test con la sorveglianza attiva per conferma.";
 "Times & days" = "Orari e giorni";
 "Toggle shortcut" = "Abbreviazione per attivare/disattivare";
-"Triggers paused. Controlling manually for now." = "Attivatori sospesi. Per ora il controllo è manuale.";
+"No active triggers. Resume to use automatic rules." = "Nessun attivatore attivo. Riprendili per usare le regole automatiche.";
 "Until a Time…" = "Fino a un orario…";
 "VPN connected" = "VPN connessa";
 "View on GitHub" = "Vedi su GitHub";

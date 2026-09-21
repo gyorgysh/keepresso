@@ -26,6 +26,10 @@
 "Battery threshold" = "電量閾值";
 "Presence" = "在線狀態";
 "Menu bar" = "選單列";
+"Move up" = "上移";
+"Move down" = "下移";
+"Use the arrows to arrange the menu sections." = "使用箭頭排列選單區段。";
+"Show less keeps the first two visible sections." = "「顯示較少」會保留前兩個可見區段。";
 "Battery" = "電池";
 "Welcome" = "歡迎";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "即使闔蓋且沒有外接螢幕，也能讓 Mac 持續運作。這會切換一項需要系統管理員權限的系統設定：已安裝系統管理員輔助程式時會靜默執行（偏好設定 ▸ 一般），否則 macOS 會要求輸入密碼。";
@@ -54,7 +58,11 @@
 "Resolution" = "解析度";
 "Startup" = "啟動";
 "Manual session" = "手動工作階段";
+"Quick settings" = "快速設定";
+"Tools & shortcuts" = "工具與快速鍵";
 "A manual session keeps the Mac awake for the selected duration even when no trigger condition is met. Starting one pauses triggers until you resume them." = "手動工作階段會在所選時長內讓 Mac 保持喚醒，即使沒有符合任何觸發條件。啟動後，觸發器會暫停，直到你恢復它們。";
+"Choose which sections appear in the menu-bar dropdown. Turn on any combination." = "選擇要在選單列下拉面板中顯示的區段。可開啟任意組合。";
+"At least one control section must stay visible." = "必須至少保留一個可見的控制區段。";
 "Gaming" = "遊戲";
 "None" = "無";
 "any" = "任一";
@@ -201,7 +209,7 @@
 "The watchdog below should smooth this out; re-run the test with it on to confirm." = "下方的看門狗應可改善此問題；請開啟後重新執行測試以確認。";
 "Times & days" = "時間與日期";
 "Toggle shortcut" = "切換快速鍵";
-"Triggers paused. Controlling manually for now." = "觸發條件已暫停，目前為手動控制。";
+"No active triggers. Resume to use automatic rules." = "沒有作用中的觸發條件。繼續觸發條件以使用自動規則。";
 "Until a Time…" = "直到指定時間…";
 "VPN connected" = "已連接 VPN";
 "View on GitHub" = "在 GitHub 上檢視";

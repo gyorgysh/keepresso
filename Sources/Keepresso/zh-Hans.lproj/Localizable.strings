@@ -26,6 +26,10 @@
 "Battery threshold" = "电量阈值";
 "Presence" = "在线状态";
 "Menu bar" = "菜单栏";
+"Move up" = "上移";
+"Move down" = "下移";
+"Use the arrows to arrange the menu sections." = "使用箭头排列菜单分区。";
+"Show less keeps the first two visible sections." = "“显示更少”会保留前两个可见分区。";
 "Battery" = "电池";
 "Welcome" = "欢迎";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "即使合盖且无外接显示器，也能让 Mac 保持运行。这会切换一项需要管理员权限的系统设置：安装了管理员助理时为静默执行（偏好设置 ▸ 通用），否则 macOS 会索要你的密码。";
@@ -54,7 +58,11 @@
 "Resolution" = "分辨率";
 "Startup" = "启动";
 "Manual session" = "手动会话";
+"Quick settings" = "快速设置";
+"Tools & shortcuts" = "工具与快捷方式";
 "A manual session keeps the Mac awake for the selected duration even when no trigger condition is met. Starting one pauses triggers until you resume them." = "手动会话会在所选时长内让 Mac 保持唤醒，即使没有满足任何触发条件。启动后，触发器会暂停，直到你恢复它们。";
+"Choose which sections appear in the menu-bar dropdown. Turn on any combination." = "选择要在菜单栏下拉面板中显示的区段。可开启任意组合。";
+"At least one control section must stay visible." = "必须至少保留一个可见的控制区段。";
 "Gaming" = "游戏";
 "None" = "无";
 "any" = "任意";
@@ -201,7 +209,7 @@
 "The watchdog below should smooth this out; re-run the test with it on to confirm." = "下方的看守应能改善这一点；开启它后重新运行测试以确认。";
 "Times & days" = "时间与日期";
 "Toggle shortcut" = "切换快捷键";
-"Triggers paused. Controlling manually for now." = "触发条件已暂停。目前为手动控制。";
+"No active triggers. Resume to use automatic rules." = "没有活跃的触发条件。恢复触发条件以使用自动规则。";
 "Until a Time…" = "直到某个时间…";
 "VPN connected" = "已连接 VPN";
 "View on GitHub" = "在 GitHub 上查看";

@@ -1610,6 +1610,69 @@ final class AppModel {
         }
     }
 
+    /// Menu-section visibility, with at least one section required.
+    var showManualSessionInMenu: Bool {
+        get { settings.showManualSessionInMenu }
+        set {
+            guard newValue || settings.showTriggerControlsInMenu
+                || settings.showQuickSettingsInMenu || settings.showToolsInMenu else { return }
+            settings.showManualSessionInMenu = newValue
+            persist()
+        }
+    }
+
+    var showTriggerControlsInMenu: Bool {
+        get { settings.showTriggerControlsInMenu }
+        set {
+            guard newValue || settings.showManualSessionInMenu
+                || settings.showQuickSettingsInMenu || settings.showToolsInMenu else { return }
+            settings.showTriggerControlsInMenu = newValue
+            persist()
+        }
+    }
+
+    var showQuickSettingsInMenu: Bool {
+        get { settings.showQuickSettingsInMenu }
+        set {
+            guard newValue || settings.showManualSessionInMenu
+                || settings.showTriggerControlsInMenu || settings.showToolsInMenu else { return }
+            settings.showQuickSettingsInMenu = newValue
+            persist()
+        }
+    }
+
+    var showToolsInMenu: Bool {
+        get { settings.showToolsInMenu }
+        set {
+            guard newValue || settings.showManualSessionInMenu
+                || settings.showTriggerControlsInMenu || settings.showQuickSettingsInMenu else { return }
+            settings.showToolsInMenu = newValue
+            persist()
+        }
+    }
+
+    var toolsSectionExpanded: Bool {
+        get { settings.toolsSectionExpanded }
+        set {
+            settings.toolsSectionExpanded = newValue
+            persist()
+        }
+    }
+
+    /// Saved display order for the four configurable menu sections.
+    var menuSectionOrder: [MenuBarSection] { settings.menuSectionOrder }
+
+    /// Move and persist a menu section by one position.
+    func moveMenuSection(_ section: MenuBarSection, by offset: Int) {
+        guard let source = settings.menuSectionOrder.firstIndex(of: section) else { return }
+        let destination = source + offset
+        guard settings.menuSectionOrder.indices.contains(destination) else { return }
+        settings.menuSectionOrder.swapAt(source, destination)
+        settings.menuSectionOrder = KeepressoSettings.normalizedMenuSectionOrder(
+            settings.menuSectionOrder)
+        persist()
+    }
+
     /// How see-through the panel and windows are, 0 (frosted default) to 100
     /// (clearest glass). Mirrored into ``GlassClarity`` so every glass
     /// surface updates live while the slider moves.

@@ -26,6 +26,10 @@
 "Battery threshold" = "배터리 임계값";
 "Presence" = "온라인 상태";
 "Menu bar" = "메뉴 막대";
+"Move up" = "위로 이동";
+"Move down" = "아래로 이동";
+"Use the arrows to arrange the menu sections." = "화살표를 사용하여 메뉴 섹션의 순서를 정하세요.";
+"Show less keeps the first two visible sections." = "‘간략히 보기’에서는 표시 중인 첫 두 섹션이 유지됩니다.";
 "Battery" = "배터리";
 "Welcome" = "환영";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "덮개를 닫고 외부 디스플레이가 없어도 Mac이 계속 실행되도록 유지합니다. 이는 관리자 권한이 필요한 시스템 설정을 전환합니다. 관리자 도우미가 설치되어 있으면 조용히 처리되고 (환경설정 ▸ 일반), 그렇지 않으면 macOS가 암호를 요청합니다.";
@@ -54,7 +58,11 @@
 "Resolution" = "해상도";
 "Startup" = "시작";
 "Manual session" = "수동 세션";
+"Quick settings" = "빠른 설정";
+"Tools & shortcuts" = "도구 및 단축키";
 "A manual session keeps the Mac awake for the selected duration even when no trigger condition is met. Starting one pauses triggers until you resume them." = "수동 세션은 트리거 조건이 충족되지 않아도 선택한 시간 동안 Mac이 잠자기 상태로 전환되지 않게 합니다. 시작하면 다시 재개할 때까지 트리거가 일시 중지됩니다.";
+"Choose which sections appear in the menu-bar dropdown. Turn on any combination." = "메뉴 막대 드롭다운에 표시할 섹션을 선택합니다. 원하는 조합을 켤 수 있습니다.";
+"At least one control section must stay visible." = "제어 섹션을 하나 이상 표시해야 합니다.";
 "Gaming" = "게임";
 "None" = "없음";
 "any" = "임의";
@@ -201,7 +209,7 @@
 "The watchdog below should smooth this out; re-run the test with it on to confirm." = "아래 워치독이 이 문제를 완화해 줄 것입니다. 켠 상태로 테스트를 다시 실행하여 확인하십시오.";
 "Times & days" = "시간 및 요일";
 "Toggle shortcut" = "전환 단축키";
-"Triggers paused. Controlling manually for now." = "트리거가 일시 정지되었습니다. 지금은 수동으로 제어합니다.";
+"No active triggers. Resume to use automatic rules." = "활성 트리거가 없습니다. 자동 규칙을 사용하려면 트리거를 재개하세요.";
 "Until a Time…" = "특정 시각까지…";
 "VPN connected" = "VPN 연결됨";
 "View on GitHub" = "GitHub에서 보기";

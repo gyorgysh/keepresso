@@ -358,6 +358,81 @@ private struct GeneralTab: View {
         Self.quickStopOptions.first { !model.quickStopDurations.contains($0) }
     }
 
+    /// Count visible sections so the final one remains enabled.
+    private var visibleMenuSectionCount: Int {
+        [
+            model.showManualSessionInMenu,
+            model.showTriggerControlsInMenu,
+            model.showQuickSettingsInMenu,
+            model.showToolsInMenu,
+        ].filter { $0 }.count
+    }
+
+    private func isLastVisibleMenuSection(_ isVisible: Bool) -> Bool {
+        isVisible && visibleMenuSectionCount == 1
+    }
+
+    private func menuSectionLabel(_ section: MenuBarSection) -> String {
+        switch section {
+        case .manualSession: L("Manual session")
+        case .triggers: L("Triggers")
+        case .quickSettings: L("Quick settings")
+        case .toolsAndShortcuts: L("Tools & shortcuts")
+        }
+    }
+
+    private func menuSectionIsVisible(_ section: MenuBarSection) -> Bool {
+        switch section {
+        case .manualSession: model.showManualSessionInMenu
+        case .triggers: model.showTriggerControlsInMenu
+        case .quickSettings: model.showQuickSettingsInMenu
+        case .toolsAndShortcuts: model.showToolsInMenu
+        }
+    }
+
+    private func setMenuSection(_ section: MenuBarSection, visible: Bool) {
+        switch section {
+        case .manualSession: model.showManualSessionInMenu = visible
+        case .triggers: model.showTriggerControlsInMenu = visible
+        case .quickSettings: model.showQuickSettingsInMenu = visible
+        case .toolsAndShortcuts: model.showToolsInMenu = visible
+        }
+    }
+
+    private func menuSectionVisibilityBinding(_ section: MenuBarSection) -> Binding<Bool> {
+        Binding(
+            get: { menuSectionIsVisible(section) },
+            set: { setMenuSection(section, visible: $0) }
+        )
+    }
+
+    @ViewBuilder
+    private func menuSectionPreferenceRow(_ section: MenuBarSection) -> some View {
+        HStack(spacing: 8) {
+            Toggle(menuSectionLabel(section), isOn: menuSectionVisibilityBinding(section))
+                .disabled(isLastVisibleMenuSection(menuSectionIsVisible(section)))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 2) {
+                Button {
+                    model.moveMenuSection(section, by: -1)
+                } label: {
+                    Label("Move up", systemImage: "chevron.up")
+                        .labelStyle(.iconOnly)
+                }
+                .disabled(section == model.menuSectionOrder.first)
+                Button {
+                    model.moveMenuSection(section, by: 1)
+                } label: {
+                    Label("Move down", systemImage: "chevron.down")
+                        .labelStyle(.iconOnly)
+                }
+                .disabled(section == model.menuSectionOrder.last)
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+        }
+    }
+
     var body: some View {
         Form {
             Section {
@@ -540,17 +615,26 @@ private struct GeneralTab: View {
                     .foregroundStyle(.secondary)
             }
             Section {
+                ForEach(model.menuSectionOrder) { section in
+                    menuSectionPreferenceRow(section)
+                }
                 Toggle("Show countdown in menu bar", isOn: Binding(
                     get: { model.showCountdownInMenuBar },
                     set: { model.showCountdownInMenuBar = $0 }
                 ))
             } header: {
-                Text("Menu bar")
+                sectionHeader("Menu bar", info: L("Choose which sections appear in the menu-bar dropdown. Turn on any combination."))
             } footer: {
-                Text("Shows the remaining time next to the menu-bar icon during a timed session.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Use the arrows to arrange the menu sections.")
+                    Text("Show less keeps the first two visible sections.")
+                    Text("At least one control section must stay visible.")
+                    Text("Shows the remaining time next to the menu-bar icon during a timed session.")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
+            .animation(.snappy(duration: 0.2), value: model.menuSectionOrder)
             Section {
                 ForEach(Array(model.quickStopDurations.enumerated()), id: \.offset) { index, duration in
                     HStack {
