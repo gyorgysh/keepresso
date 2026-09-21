@@ -329,6 +329,7 @@ private struct GeneralTab: View {
     @State private var launchAtLogin = LoginItem.isEnabled
     /// Bumped when the lid-closed row is clicked while the automation owns it.
     @State private var lidRowShakes = 0
+    @State private var showManualDuration = false
     /// The result of the last export/import, shown inline under the buttons.
     @State private var transferNote: TransferNote?
 
@@ -368,6 +369,34 @@ private struct GeneralTab: View {
                 Toggle("Prevent system sleep", isOn: optionBinding(\.preventSystemSleep))
             } header: {
                 sectionHeader("Keep awake", info: L("Two independent switches. Preventing system sleep keeps the Mac itself running: work finishes, downloads complete, and it stays reachable over the network, while the screen is still free to turn off. Preventing display sleep also keeps the screen lit, which is what you want for a dashboard or a video, and what drains a battery fastest. Most setups want system sleep prevented and display sleep left alone."))
+            }
+            Section {
+                Picker("For", selection: Binding(
+                    get: { model.defaultMode },
+                    set: { model.defaultMode = $0 }
+                )) {
+                    ForEach(Array(MenuBarContent.durationOptions.enumerated()), id: \.offset) { _, option in
+                        Text(L(option.label)).tag(option.mode)
+                    }
+                    if !MenuBarContent.durationOptions.contains(where: { $0.mode == model.defaultMode }) {
+                        Text(MenuBarContent.modeLabel(model.defaultMode)).tag(model.defaultMode)
+                    }
+                }
+                Button("Custom Duration\u{2026}") { showManualDuration = true }
+                    .popover(isPresented: $showManualDuration) {
+                        MenuBarContent.CustomDurationEditor(
+                            initial: model.defaultMode.duration ?? 3 * 60 * 60
+                        ) {
+                            model.defaultMode = .timed(duration: $0)
+                        }
+                    }
+                Button(session.isActive && (!model.triggersEnabled || model.triggersPaused)
+                    ? L("Update Session")
+                    : L("Start")) {
+                    model.startManualOverride(mode: model.defaultMode)
+                }
+            } header: {
+                sectionHeader("Manual session", info: L("A manual session keeps the Mac awake for the selected duration even when no trigger condition is met. Starting one pauses triggers until you resume them."))
             }
             Section {
                 Toggle("Launch at login", isOn: Binding(

@@ -343,6 +343,14 @@ final class AppModel {
         }
     }
 
+    /// Start a manual session with an explicit duration, pausing triggers first.
+    func startManualOverride(mode: SessionMode) {
+        pauseTriggers()
+        settings.defaultMode = mode
+        persist()
+        session.start(mode: mode)
+    }
+
     /// Start (or restart) a session running until the next occurrence of a
     /// wall-clock time. The duration is computed here, at start, so it always
     /// lands on the chosen time; the choice is deliberately not persisted as
@@ -449,6 +457,15 @@ final class AppModel {
     }
 
     // MARK: - Session mode (manual sessions)
+
+    /// The saved duration for the next manual session.
+    var defaultMode: SessionMode {
+        get { settings.defaultMode }
+        set {
+            settings.defaultMode = newValue
+            persist()
+        }
+    }
 
     /// The chosen duration. While idle it reflects the saved default (so the
     /// picker shows it before activating); while active it restarts the session.
