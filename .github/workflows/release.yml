@@ -22,6 +22,18 @@ jobs:
     environment: release # add a required reviewer to this environment in repo settings
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # A tag that disagrees with project.yml would publish a DMG named for
+      # the old version under the new release, breaking the cask and appcast
+      # URLs. Fail before anything is built or signed. The check script also
+      # requires every version/build literal in project.yml to agree, so a
+      # drifted widget/helper literal cannot ship silently.
+      - name: Verify tag matches project version
+        run: |
+          read -r MARKETING _ < <(bash scripts/check-versions.sh)
+          if [ "$MARKETING" != "${GITHUB_REF_NAME#v}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match project.yml MARKETING_VERSION ${MARKETING}; bump project.yml before tagging"
+            exit 1
+          fi
       # Pinned to a commit SHA (v1.7.0): this third-party action runs in the
       # same job that later handles the signing cert and Sparkle key, so a
       # moved tag must not be able to swap in new code.
@@ -39,7 +51,9 @@ jobs:
       - name: Localization
         run: python3 tools/localization/check_all.py
       - name: Core tests
-        run: swift test
+        run: swift test --skip HelperConnectionTests
+      - name: XPC rendezvous tests, separately scheduled
+        run: swift test --filter HelperConnectionTests
       - name: Install tools
         run: brew install xcodegen
 
@@ -49,8 +63,8 @@ jobs:
       # tarball instead; a curl download isn't quarantined, so the binary runs.
       - name: Install Sparkle tools
         run: |
-          SPARKLE_VERSION=2.9.6
-          SPARKLE_SHA256=52bf9e88cdd972fc0c81501377a880e90d47031bd8ca5462488f843e2609e192
+          SPARKLE_VERSION=2.10.0
+          SPARKLE_SHA256=c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c
           curl -fsSL -o "$RUNNER_TEMP/sparkle.tar.xz" \
             "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
           # This binary is later run with the EdDSA signing key on disk, so

@@ -303,8 +303,39 @@ final class HelperManager {
         return .broken
     }
 
+    /// Whether the patient handshake schedule was already spent this run.
+    /// Only the first check gets it; every later one uses the short schedule,
+    /// so a genuinely dead daemon still surfaces promptly for the rest of the
+    /// session.
+    @ObservationIgnored private var longProbeUsed = false
+
+    /// Pings at roughly 0, 1, 4, 14, 34, 64, 94 and 124 seconds.
+    ///
+    /// The old ceiling was ~30s, which is not enough for a cold start: after a
+    /// boot or a fresh login, launchd is competing with everything else
+    /// starting at once and the daemon's first spawn routinely lands past
+    /// half a minute. Giving up there told the user to reinstall a helper
+    /// that was about to come up on its own, which is exactly the prompt
+    /// worth not showing. Checks at a minute and a minute and a half cover
+    /// the slow case, and failed pings against a missing daemon return fast
+    /// rather than burning the XPC timeout on each round.
+    private static let patientProbeDelays: [TimeInterval] =
+        [0.0, 1.0, 3.0, 10.0, 20.0, 30.0, 30.0, 30.0]
+
     private func recoveredVersion() async -> Int? {
-        await HelperRecoveryProbe.version(ping: { await self.pingedVersion() })
+        // The first check of any run waits this out, not just the one after an
+        // app update. Both are the same race: an image settling (update) or a
+        // machine still booting (cold start), with launchd yet to hand the
+        // daemon over. Nothing here blocks the UI, it only delays the point at
+        // which we would call the helper broken.
+        if !longProbeUsed {
+            longProbeUsed = true
+            return await HelperRecoveryProbe.version(
+                ping: { await self.pingedVersion() },
+                delays: Self.patientProbeDelays
+            )
+        }
+        return await HelperRecoveryProbe.version(ping: { await self.pingedVersion() })
     }
 
     /// Whether a matching daemon answers, off the main actor (a dead daemon

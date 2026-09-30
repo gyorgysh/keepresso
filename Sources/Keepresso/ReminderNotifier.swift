@@ -50,7 +50,13 @@ final class UserNotificationReminder: NSObject, ReminderNotifying, UNUserNotific
     /// Ask for permission to post alerts. No-op after the first decision; safe
     /// to call whenever the user enables reminders.
     func requestAuthorization() {
-        center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        center.requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if let error {
+                NSLog("Keepresso: notification authorization failed: %@", error.localizedDescription)
+            } else if !granted {
+                NSLog("Keepresso: notification authorization not granted")
+            }
+        }
     }
 
     func notify(title: String, body: String, sound: Bool) {
@@ -61,7 +67,11 @@ final class UserNotificationReminder: NSObject, ReminderNotifying, UNUserNotific
         // A stable identifier means a fresh nudge replaces any prior one rather
         // than stacking up in Notification Center.
         let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
-        center.add(request)
+        center.add(request) { error in
+            if let error {
+                NSLog("Keepresso: notification delivery failed: %@", error.localizedDescription)
+            }
+        }
     }
 
     func cancelPending() {

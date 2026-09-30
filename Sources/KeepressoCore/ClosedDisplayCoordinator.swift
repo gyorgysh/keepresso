@@ -86,7 +86,7 @@ public final class ClosedDisplayCoordinator {
     /// Each read shells out to `pmset -g`, so this stays slow: it is there to
     /// notice a change made behind the app's back (`pmset` by hand, another
     /// tool), not to drive the UI.
-    public static let defaultPollInterval = 30
+    nonisolated public static let defaultPollInterval = 30
 
     private let pollInterval: Int
     private var sawBrewing = false

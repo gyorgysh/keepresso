@@ -3,7 +3,7 @@ import KeepressoCore
 /// Real ``VirtualDisplaying`` backed by the private CoreGraphics API via the
 /// Objective-C ``KPVirtualDisplay`` wrapper. Experimental and off by default.
 @MainActor
-final class CGVirtualDisplayBackend: VirtualDisplaying {
+final class CGVirtualDisplayBackend: @preconcurrency VirtualDisplaying {
     private let display = KPVirtualDisplay()
 
     var isSupported: Bool { KPVirtualDisplay.isSupported() }

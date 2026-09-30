@@ -188,6 +188,16 @@ public final class HelperEngine: @unchecked Sendable {
 
     private var sleepHolders: Set<Int> = []
     private var awdlHolders: Set<Int> = []
+    /// A restore was attempted in this daemon life and failed, so the debt
+    /// marker is known-fresh (not a stale leftover): the next no-op release
+    /// retries it instead of reporting a success that never happened.
+    /// Persisted markers alone never trigger an in-life write; those settle
+    /// at launch (`restoreAtLaunch`). Without this gate, every XPC teardown
+    /// would re-issue a privileged write, and a stale marker could clobber
+    /// an explicit `setSleepDisabled` that already settled the debt.
+    private var sleepRestoreOwed = false
+    private var awdlRestoreOwed = false
+    private var fanRestoreOwed = false
     /// Client → wanted fan boost percent; the effective target is the max.
     private var fanHolders: [Int: Int] = [:]
     /// Client → pid whose CPU priority is raised while a game plays. The
@@ -202,7 +212,16 @@ public final class HelperEngine: @unchecked Sendable {
     static let maxFanFailures = 5
     /// Set once ``fanTick()`` gave up on a hold, so the state is inspectable
     /// (and the app can tell "boost silently ended" from "still boosting").
+    /// Read through ``fanHoldWasDropped()``: mutations happen under the lock,
+    /// and XPC reads arrive on arbitrary queues.
     public private(set) var fanHoldDropped = false
+
+    /// Locked read of ``fanHoldDropped`` for XPC callers.
+    public func fanHoldWasDropped() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return fanHoldDropped
+    }
 
     /// Reads the current global `disablesleep` value. A separate seam because
     /// ``HelperCommandRunning`` only reports exit status; the sleep hold needs
@@ -231,7 +250,7 @@ public final class HelperEngine: @unchecked Sendable {
         process.arguments = ["-g"]
         let pipe = Pipe()
         process.standardOutput = pipe
-        process.standardError = Pipe()
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
@@ -279,8 +298,26 @@ public final class HelperEngine: @unchecked Sendable {
     /// The manual closed-display toggle: a plain persistent set, deliberately
     /// not connection-scoped and not marked for restore (the global toggle is
     /// meant to outlive the app; that matches the old osascript semantics).
+    /// An explicit set supersedes any pending restore debt for the same knob:
+    /// the marker is re-based to the chosen value (so a later release
+    /// restores the user's choice, not a stale prior) and the in-life retry
+    /// flag is cleared.
     public func setSleepDisabled(_ disabled: Bool) -> Bool {
-        runner.run("/usr/bin/pmset", ["-a", "disablesleep", disabled ? "1" : "0"])
+        lock.lock()
+        defer { lock.unlock() }
+        let ok = runner.run("/usr/bin/pmset", ["-a", "disablesleep", disabled ? "1" : "0"])
+        if ok {
+            // Re-base a live debt to the chosen value rather than leaving a
+            // stale prior for a later release to restore over it; with no
+            // hold and no debt, leave no marker behind.
+            if !sleepHolders.isEmpty || state.value(for: .sleepDisabled) != nil {
+                state.set(.sleepDisabled, value: disabled ? "1" : "0")
+            } else {
+                state.set(.sleepDisabled, value: nil)
+            }
+            sleepRestoreOwed = false
+        }
+        return ok
     }
 
     /// Put the Mac to sleep right now. Not a hold: there is nothing to restore
@@ -533,8 +570,11 @@ public final class HelperEngine: @unchecked Sendable {
         fanHoldDropped = true
         // The marker clears only when the restore actually landed, so a crash
         // after a failed restore still settles the debt at the next launch.
+        // A failed surrender also arms the in-life retry for the next
+        // no-op release.
         let ok = fans.restoreAuto()
         state.set(.fanForced, present: !ok)
+        fanRestoreOwed = !ok
     }
 
     /// Whether nothing is held, so an idle daemon may exit (launchd relaunches
@@ -582,7 +622,16 @@ public final class HelperEngine: @unchecked Sendable {
         let before = !sleepHolders.isEmpty
         if holding { sleepHolders.insert(client) } else { sleepHolders.remove(client) }
         let after = !sleepHolders.isEmpty
-        guard before != after else { return true }
+        // A covered release with no holders left must still fall through when
+        // a restore was attempted and failed earlier in this life: a bare
+        // `return true` here would report success without ever retrying the
+        // restore, leaving `disablesleep` stuck until the next daemon life.
+        // Gated on the in-life flag, not the persisted marker, so a stale
+        // leftover (or an explicit `setSleepDisabled` that already settled
+        // the debt) never turns an unrelated teardown into a write.
+        guard before != after || (!after && sleepRestoreOwed) else {
+            return true
+        }
         if after {
             // Preserve an existing restore debt's recorded prior: after a
             // failed release the live `disablesleep` is still 1, and
@@ -611,8 +660,10 @@ public final class HelperEngine: @unchecked Sendable {
         }
         let ok = runner.run("/usr/bin/pmset", ["-a", "disablesleep", recordedSleepRestoreValue()])
         // Debt-by-success: a failed restore keeps the marker (and its value)
-        // for the next daemon launch to settle.
+        // for the next daemon launch to settle, and arms the in-life retry
+        // for the next no-op release.
         if ok { state.set(.sleepDisabled, value: nil) }
+        sleepRestoreOwed = !ok
         return ok
     }
 
@@ -627,7 +678,12 @@ public final class HelperEngine: @unchecked Sendable {
         let before = !awdlHolders.isEmpty
         if holding { awdlHolders.insert(client) } else { awdlHolders.remove(client) }
         let after = !awdlHolders.isEmpty
-        guard before != after else { return true }
+        // Same retry rule as sleep: a restore that failed earlier in this
+        // life retries on the next no-op release instead of reporting a
+        // success that never happened. Stale markers settle at launch.
+        guard before != after || (!after && awdlRestoreOwed) else {
+            return true
+        }
         if after {
             // Debt-by-attempt: mark before the write. `awdlTick` retries a
             // failed down while the holder stays; still verify the marker
@@ -643,8 +699,10 @@ public final class HelperEngine: @unchecked Sendable {
             return ok
         }
         let ok = runner.run("/sbin/ifconfig", ["awdl0", "up"])
-        // Debt-by-success on release: a failed up keeps the marker.
+        // Debt-by-success on release: a failed up keeps the marker and arms
+        // the in-life retry.
         if ok { state.set(.awdlDown, present: false) }
+        awdlRestoreOwed = !ok
         return ok
     }
 
@@ -663,7 +721,14 @@ public final class HelperEngine: @unchecked Sendable {
         let before = fanHolders.values.max()
         mutate()
         let after = fanHolders.values.max()
-        guard before != after else { return true }
+        // A restore that failed earlier in this life retries on the next
+        // no-op release rather than reporting a release that never landed.
+        // With holders present (`after != nil`) the marker is the active
+        // hold's debt, and no restore is wanted. Stale markers settle at
+        // launch.
+        guard before != after || (after == nil && fanRestoreOwed) else {
+            return true
+        }
         if let target = after {
             fanFailureStreak = 0
             fanHoldDropped = false
@@ -672,6 +737,7 @@ public final class HelperEngine: @unchecked Sendable {
         }
         let ok = fans.restoreAuto()
         state.set(.fanForced, present: !ok)
+        fanRestoreOwed = !ok
         return ok
     }
 

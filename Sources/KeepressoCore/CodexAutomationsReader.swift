@@ -71,10 +71,20 @@ public struct CodexAutomationsReader: LocalAutomationReading {
 }
 
 public extension CodexAutomationsReader {
-    /// The real reader over `~/.codex/automations/*/automation.toml`. Failures
-    /// (no Codex, no automations) yield an empty list rather than an error.
-    static func real(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> CodexAutomationsReader {
-        let base = home.appendingPathComponent(".codex/automations", isDirectory: true)
+    /// The real reader over `<CODEX_HOME>/automations/*/automation.toml`, or
+    /// `~/.codex/automations/...` when `CODEX_HOME` is unset. Failures (no
+    /// Codex, no automations) yield an empty list rather than an error.
+    static func real(
+        home: URL = FileManager.default.homeDirectoryForCurrentUser,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> CodexAutomationsReader {
+        let base: URL
+        if let raw = environment["CODEX_HOME"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !raw.isEmpty {
+            base = URL(fileURLWithPath: raw).appendingPathComponent("automations", isDirectory: true)
+        } else {
+            base = home.appendingPathComponent(".codex/automations", isDirectory: true)
+        }
         return CodexAutomationsReader {
             let fm = FileManager.default
             guard let dirs = try? fm.contentsOfDirectory(at: base, includingPropertiesForKeys: nil) else { return [] }

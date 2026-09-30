@@ -52,15 +52,17 @@ struct WindowVisibilityReader: NSViewRepresentable {
         var ignoreOcclusion = false
         private var tokens: [NSObjectProtocol] = []
         private var isVisibleObservation: NSKeyValueObservation?
+        private weak var observedWindow: NSWindow?
         private var last: Bool?
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             clearTokens()
             guard let window else {
-                report(false)
+                probe()
                 return
             }
+            observedWindow = window
             probe()
             // MenuBarExtra panels are often ordered out without closing: key
             // alone misses that path, and occlusionState alone is "not
@@ -89,7 +91,10 @@ struct WindowVisibilityReader: NSViewRepresentable {
         /// Recompute from the live window. Safe to call often: ``report``
         /// drops duplicates.
         func probe() {
-            report(Self.effectivelyVisible(window, ignoreOcclusion: ignoreOcclusion))
+            // An unattached new probe has no window state to publish. During
+            // a detach, the previous window still owns the visibility state.
+            guard let hostWindow = window ?? observedWindow else { return }
+            report(Self.effectivelyVisible(hostWindow, ignoreOcclusion: ignoreOcclusion))
         }
 
         /// Ordered-out panels can still carry `.visible` in occlusionState;
@@ -116,8 +121,15 @@ struct WindowVisibilityReader: NSViewRepresentable {
                 // view can be replaced before the async runs. Dropping the
                 // false publish would leave a retained Window scene with its
                 // heavy body still mounted.
+                // SwiftUI can also replace or temporarily detach a probe
+                // while its window stays visible. Recheck that window before
+                // publishing: a stale detach must not unmount the new tree
+                // and start a continuous hide/remount layout loop.
                 let notify = onChange
-                DispatchQueue.main.async { [weak self] in
+                let hostWindow = window ?? observedWindow
+                let ignoreOcclusion = ignoreOcclusion
+                DispatchQueue.main.async { [weak self, weak hostWindow] in
+                    guard !Self.effectivelyVisible(hostWindow, ignoreOcclusion: ignoreOcclusion) else { return }
                     if let self {
                         guard self.last == false else { return }
                         self.onChange?(false)

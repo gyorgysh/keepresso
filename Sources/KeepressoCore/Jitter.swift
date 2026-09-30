@@ -202,7 +202,7 @@ public final class PingCommandRunner: PingRunning {
         process.arguments = ["-c", String(count), "-i", String(interval), "-n", host]
         let pipe = Pipe()
         process.standardOutput = pipe
-        process.standardError = Pipe()
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
             let data = pipe.fileHandleForReading.readDataToEndOfFile()

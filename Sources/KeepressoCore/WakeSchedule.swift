@@ -52,7 +52,7 @@ public struct WakeScheduleConfig: Codable, Equatable, Sendable {
         )
         startSessionOnWake = try c.decodeIfPresent(Bool.self, forKey: .startSessionOnWake) ?? true
         sessionDurationSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .sessionDurationSeconds)
-            .flatMap { $0 > 0 ? $0 : nil }
+            .flatMap { $0.isFinite && $0 > 0 ? min($0, SessionMode.maxTimedMinutes * 60) : nil }
         presetID = try c.decodeIfPresent(String.self, forKey: .presetID)
     }
 
@@ -202,14 +202,17 @@ public final class PMSetWakeScheduleReader: WakeScheduleReading {
         process.arguments = ["-g", "sched"]
         let pipe = Pipe()
         process.standardOutput = pipe
-        process.standardError = Pipe()
+        process.standardError = FileHandle.nullDevice
+        let data: Data
         do {
             try process.run()
+            // Drain before waiting: a full pipe buffer would otherwise wedge
+            // the child in `write` and this `waitUntilExit` with it.
+            data = pipe.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
         } catch {
             return .empty
         }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
         let text = String(data: data, encoding: .utf8) ?? ""
         return WakeScheduleParser.parse(text)
     }
@@ -244,18 +247,43 @@ public enum WakeAndBrewPolicy {
         // Each candidate slot counts on its own day's letter: the wake day's
         // slot when that day is configured, and the previous day's slot when
         // that day is (a 23:xx slot can wake the Mac just past midnight, on a
-        // day that may not be in the set at all).
+        // day that may not be in the set at all). The slot is built from
+        // calendar components, not `startOfDay + seconds`: `pmset repeat`
+        // schedules by wall-clock time, so on a DST transition day the elapsed
+        // seconds and the local time disagree by an hour.
         let start = calendar.startOfDay(for: date)
-        if config.repeatWeekdays.contains(Self.weekdayLetter(for: date, calendar: calendar)) {
-            let slot = start.addingTimeInterval(TimeInterval(config.repeatSecondsFromMidnight))
+        if config.repeatWeekdays.contains(Self.weekdayLetter(for: date, calendar: calendar)),
+           let slot = slot(
+               onDayOf: start,
+               secondsFromMidnight: config.repeatSecondsFromMidnight,
+               calendar: calendar) {
             if abs(date.timeIntervalSince(slot)) <= matchWindow { return true }
         }
         if let prev = calendar.date(byAdding: .day, value: -1, to: start),
-           config.repeatWeekdays.contains(Self.weekdayLetter(for: prev, calendar: calendar)) {
-            let prevSlot = prev.addingTimeInterval(TimeInterval(config.repeatSecondsFromMidnight))
+           config.repeatWeekdays.contains(Self.weekdayLetter(for: prev, calendar: calendar)),
+           let prevSlot = slot(
+               onDayOf: prev,
+               secondsFromMidnight: config.repeatSecondsFromMidnight,
+               calendar: calendar) {
             if abs(date.timeIntervalSince(prevSlot)) <= matchWindow { return true }
         }
         return false
+    }
+
+    /// The wall-clock slot `secondsFromMidnight` into `day`, resolved through
+    /// the calendar so DST-shifted days land on the time the user picked.
+    /// `nil` for an out-of-day value.
+    private static func slot(
+        onDayOf day: Date,
+        secondsFromMidnight: Int,
+        calendar: Calendar
+    ) -> Date? {
+        guard (0..<86_400).contains(secondsFromMidnight) else { return nil }
+        var components = calendar.dateComponents([.year, .month, .day], from: day)
+        components.hour = secondsFromMidnight / 3600
+        components.minute = (secondsFromMidnight % 3600) / 60
+        components.second = secondsFromMidnight % 60
+        return calendar.date(from: components)
     }
 
     /// Map Calendar weekday (1=Sunday…7=Saturday) to `pmset` letters (U/M/T/W/R/F/S).

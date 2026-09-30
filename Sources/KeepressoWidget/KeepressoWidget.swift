@@ -85,8 +85,20 @@ struct SessionProvider: TimelineProvider {
             state.endsAt = nil
         }
         let entry = SessionEntry(date: .now, state: state)
-        let policy: TimelineReloadPolicy =
-            state.isActive ? state.endsAt.map { .after($0) } ?? .never : .never
+        // The app can die without writing the "off" state, so a live session
+        // re-checks periodically and lets `keepressoAppIsRunning()` flip it
+        // rather than rendering "Brewing" forever. Hourly, not sooner: this
+        // backstop fires only when the app is dead (live changes push their
+        // own reloads), and a 15-minute cadence would burn through WidgetKit's
+        // daily budget overnight. A timed session still refreshes at its end.
+        let policy: TimelineReloadPolicy
+        if state.isActive, let endsAt = state.endsAt {
+            policy = .after(min(endsAt, .now.addingTimeInterval(60 * 60)))
+        } else if state.isActive {
+            policy = .after(.now.addingTimeInterval(60 * 60))
+        } else {
+            policy = .never
+        }
         completion(Timeline(entries: [entry], policy: policy))
     }
 }

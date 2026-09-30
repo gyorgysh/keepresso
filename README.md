@@ -186,13 +186,11 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 - 💻 **Closed-display mode.** Keep running with the **lid shut** and no external
   display, on power or battery, for an always-on Mac or one you carry mid-task.
   What the screen itself does is your choice: turn it off, keep it powered at
-  zero brightness so a remote session stays live, or leave it alone. The
-  menu-bar switch follows the current brew: on when a keep-awake session starts,
-  off when it ends (or the app quits, even after a crash). A clearly warned
-  persistent override remains in Preferences for an intentionally always-on
-  Mac, and **Restore System Sleep** provides a direct escape hatch whenever the
-  global setting is active. Administrator access is requested once per app run,
-  or never after installing the helper.
+  zero brightness so a remote session stays live, or leave it alone. An optional
+  **"Only while brewing"** mode ties it to the session instead of leaving it on
+  globally: on when a keep-awake session starts, off when it ends (or the app
+  quits, even after a crash), with the password asked once per app run, or
+  never with the administrator helper.
 - 🔑 **One password, ever.** An optional **administrator helper**, a small
   system service installed from Preferences > General (or the welcome screen),
   handles the privileged switches for Keepresso: closed-display mode, the
@@ -346,29 +344,45 @@ Updates, and Quit.
 - **Quick toggle.** Flip **Keep awake** on or off and pick a duration:
   indefinitely, a preset (15 minutes, 1 hour, 4 hours), any custom duration, or
   until a time of day. The cup fills and animates while brewing.
-- **Your menu, your controls.** In Preferences > General > Menu bar, independently
-  show, hide, and arrange **Manual session**, **Triggers**, **Quick settings**
-  (lid and battery), and **Tools & shortcuts**. Customization is off by default,
-  preserving the standard menu until you opt in. Safety status,
-  **Restore System Sleep**, Preferences, and Quit remain available.
+- **Customize the menu.** Open **Customize Menu…** in Preferences > General >
+  Menu bar for a live preview beside the editor. Enable **Customize menu
+  sections**, then start with
+  **Minimal**, **Compact**, **Balanced**, **Lid controls**, **Brewing controls**,
+  **Status only**, or **Detailed**, then hide, reorder, pin, or move any of the 39
+  controls between groups. Choose spacing, panel width, status style, group
+  headings and disclosures, trigger and agent detail, and menu-bar text. Session
+  action buttons use the accent color by default, while dropdowns and app links
+  stay neutral. **Appearance > Control style > Clear style** makes the session
+  actions neutral too. All presets keep the standard 280-point width. Settings
+  and tools start collapsed; the session controls adapt to manual and trigger
+  sessions. The two small switch variants add just closed-display mode or
+  Only while brewing to Compact.
+  Status only shows information without session buttons. Preview controls cannot
+  change a session or feature setting.
+  “Show less” can retain pinned controls, the first few groups, or everything.
+  Optional quick controls include manual sessions while triggers are running,
+  display sleep, keep-active, reminders, presets, and end actions.
+  Customization is off by default. Enabling it keeps the standard menu until
+  you choose a profile or edit a layout option. Disabling it restores that menu
+  while retaining your custom layout. Layout changes preserve feature settings
+  and are included in configuration backups. Preferences and Quit remain
+  available by right-click and keyboard shortcut. Active sleep overrides and
+  safety warnings remain visible, with their settings reachable in Preferences.
 - **Show less.** The disclosure row at the bottom of the panel folds the option
-  toggles, tools, and help away in the standard layout. With menu customization
-  enabled, it keeps the first two enabled sections in your chosen order; move a
-  section up in Preferences to prioritize it. Keepresso remembers the choice.
-- **Keep awake with lid closed.** The menu switch enables the safer **Only while
-  brewing** behavior: closed-display mode starts with a keep-awake session and
-  stops at session end or app quit. It flips a system setting
-  (`pmset disablesleep`), so it needs administrator rights: silent with the
-  helper installed, one password ask without it. If Sleep is unavailable in
-  the Apple menu, **Restore System Sleep** is available directly in Keepresso.
-  An advanced persistent override for an intentionally always-on Mac is under
-  Preferences > General, with a warning because it remains active after the
-  session and can drain or heat a closed MacBook in a bag.
+  toggles and app entries away, leaving just the status and the keep-awake
+  controls. Keepresso remembers the choice, and everything hidden stays
+  reachable from the right-click menu.
+- **Keep awake with lid closed.** Toggle it right from the menu before you shut
+  the lid or unplug. It flips a system setting (`pmset disablesleep`), so it
+  needs administrator rights: silent with the helper installed, one password
+  ask without it. Works on power or battery; turn it off when you're done, on
+  battery in a bag it can drain and heat up. Or set it to **"Only while
+  brewing"** in Preferences > General and it follows the session on its own:
+  on at session start, off at session end or app quit.
 - **Preferences** (⌘,) holds the set-and-forget configuration, in tabs:
   - **General**: what to keep awake, the administrator helper, menu-bar
-    section customization and countdown, battery auto-pause, closed-display
-    mode, launch at login, settings backup (export/import), and the welcome
-    screen.
+    countdown, battery auto-pause, closed-display mode, launch at login,
+    settings backup (export/import), and the welcome screen.
   - **Triggers**: turn on rule-based activation, apply a preset, and build your
     rule set.
   - **Reminder**: a one-time or recurring "still brewing" alert, with a sound,

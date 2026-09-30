@@ -103,7 +103,7 @@ public protocol AgentActivityMonitoring: AnyObject {
 /// must never block on `Process.waitUntilExit()`, so a stale snapshot is
 /// returned immediately and a refresh runs on a detached task when it goes
 /// stale.
-public final class PSAgentActivityMonitor: AgentActivityMonitoring {
+public final class PSAgentActivityMonitor: AgentActivityMonitoring, @unchecked Sendable {
     /// The agent CLIs detected out of the box, matched against the root
     /// command's basename (never as a substring, so `grep claude` or a file
     /// name mentioning an agent can't count as a session), with the resolved
@@ -252,8 +252,13 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// When false, a refresh only parses `ps` into sessions and skips
     /// transcript walks, hook-record reads, cwd lookups, and origin
     /// classification. The trigger factory turns this off when no agent rule
-    /// is live; tests leave it on.
-    public var evidenceEnabled: Bool = true
+    /// is live; tests leave it on. Lock-backed: a refresh reads it from a
+    /// detached task while the trigger factory writes it.
+    public var evidenceEnabled: Bool {
+        get { withLock { evidenceEnabledStorage } }
+        set { withLock { evidenceEnabledStorage = newValue } }
+    }
+    private var evidenceEnabledStorage = true
 
     /// Default hook scan: drop a Codex Desktop working record after ten
     /// minutes unless that chat's rollout file is still inside the evidence
@@ -274,7 +279,9 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         ttl: TimeInterval = 3,
         now: @escaping () -> Date = Date.init,
         fetch: @escaping @Sendable () -> String? = SharedPSSnapshot.runPS,
-        evidence: @escaping @Sendable (_ agent: String, _ cwd: String?, _ pid: Int32) -> Date? = PSAgentActivityMonitor.transcriptActivity,
+        evidence: @escaping @Sendable (_ agent: String, _ cwd: String?, _ pid: Int32) -> Date? = {
+            PSAgentActivityMonitor.transcriptActivity(agent: $0, cwd: $1, pid: $2)
+        },
         hookRecords: @escaping @Sendable (_ now: Date) -> [AgentHooks.HookRecord] = { defaultHookRecords(now: $0) },
         classifyOrigin: @escaping @Sendable (_ pid: Int32) -> AgentHooks.HookSessionOrigin? = { AgentHooks.classifyOrigin(abovePid: $0) }
     ) {
@@ -309,7 +316,9 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
                     return
                 }
                 var sessions = Self.sessions(from: Self.parse(raw))
-                let collectEvidence = self.withLock { self.evidenceEnabled }
+                // Read the storage directly: `evidenceEnabled` re-acquires
+                // `lock`, and `NSLock` is not recursive.
+                let collectEvidence = self.withLock { self.evidenceEnabledStorage }
                 if collectEvidence {
                     sessions = self.decorateWithEvidence(sessions)
                 }
@@ -549,7 +558,12 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     /// the "real work" signal: claude, grok, and codex all stream session
     /// files continuously while working. `pid` is ignored except for Grok,
     /// which joins by conversation.
-    @Sendable public static func transcriptActivity(agent: String, cwd: String?, pid: Int32) -> Date? {
+    @Sendable public static func transcriptActivity(
+        agent: String,
+        cwd: String?,
+        pid: Int32,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Date? {
         let home = NSHomeDirectory()
         switch agent {
         case "claude":
@@ -559,21 +573,23 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         case "grok":
             return grokTranscriptWrite(pid: pid, cwd: cwd, home: home)
         case "codex":
-            // ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl: date-keyed, not
-            // cwd-keyed, so the day directories stand in for every session.
-            // POSIX locale + Gregorian calendar, or a non-Gregorian user
-            // calendar (e.g. Buddhist) renders a year no directory matches.
-            // Yesterday is checked too: a rollout file is created at session
-            // start, so a session spanning midnight keeps appending to the
-            // previous day's directory.
+            // <CODEX_HOME>/sessions/YYYY/MM/DD/rollout-*.jsonl: date-keyed,
+            // not cwd-keyed, so the day directories stand in for every
+            // session. POSIX locale + Gregorian calendar, or a non-Gregorian
+            // user calendar (e.g. Buddhist) renders a year no directory
+            // matches. Yesterday is checked too: a rollout file is created at
+            // session start, so a session spanning midnight keeps appending
+            // to the previous day's directory.
             let day = DateFormatter()
             day.locale = Locale(identifier: "en_US_POSIX")
             day.calendar = Calendar(identifier: .gregorian)
             day.dateFormat = "yyyy/MM/dd"
             day.timeZone = .current
             let today = Date()
+            let sessions = CodexHooks.dataRootURL(home: home, environment: environment)
+                .appendingPathComponent("sessions", isDirectory: true).path
             return [today, today.addingTimeInterval(-86_400)]
-                .compactMap { newestModification(in: "\(home)/.codex/sessions/\(day.string(from: $0))") }
+                .compactMap { newestModification(in: "\(sessions)/\(day.string(from: $0))") }
                 .max()
         case "qwen":
             // Qwen Code streams the active conversation under
@@ -872,12 +888,13 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
     }
 
     /// Newest write to the Codex rollout file whose name carries `sessionId`
-    /// (`rollout-<timestamp>-<sessionId>.jsonl` under `~/.codex/sessions/YYYY/MM/DD/`).
+    /// (`rollout-<timestamp>-<sessionId>.jsonl` under `<CODEX_HOME>/sessions/YYYY/MM/DD/`).
     /// Filename match only: we do not parse the JSONL. Today and yesterday are
     /// checked so a session spanning midnight still maps.
     static func codexRolloutWrite(
         forSessionId sessionId: String,
         home: String = NSHomeDirectory(),
+        environment: [String: String] = ProcessInfo.processInfo.environment,
         now: Date = Date()
     ) -> Date? {
         let trimmed = sessionId.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -888,9 +905,11 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring {
         day.dateFormat = "yyyy/MM/dd"
         day.timeZone = .current
         let manager = FileManager.default
+        let sessions = CodexHooks.dataRootURL(home: home, environment: environment)
+            .appendingPathComponent("sessions", isDirectory: true).path
         var newest: Date?
         for date in [now, now.addingTimeInterval(-86_400)] {
-            let dir = "\(home)/.codex/sessions/\(day.string(from: date))"
+            let dir = "\(sessions)/\(day.string(from: date))"
             guard let names = try? manager.contentsOfDirectory(atPath: dir) else { continue }
             for name in names where name.hasPrefix("rollout-") && name.contains(trimmed) {
                 guard let written = (try? manager.attributesOfItem(atPath: "\(dir)/\(name)"))?[.modificationDate] as? Date

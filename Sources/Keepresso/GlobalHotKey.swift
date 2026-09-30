@@ -18,39 +18,83 @@ final class GlobalHotKeyManager {
 
     /// Register `shortcut` (replacing any previous one), invoking `onPress` when
     /// it fires. A `nil` shortcut, or one with no modifiers, just clears it: a
-    /// modifier-less system hotkey would swallow a bare key everywhere.
-    func update(to shortcut: HotKeyShortcut?, onPress: @escaping () -> Void) {
-        self.onPress = onPress
-        unregister()
-        guard let shortcut else { return }
-        let carbonModifiers = shortcut.carbonModifiers
-        guard carbonModifiers != 0 else { return }
+    /// modifier-less system hotkey would swallow a bare key everywhere. Returns
+    /// false when the system refused the registration (usually another app owns
+    /// the combination); the caller can log or surface that.
+    /// The currently registered shortcut, so a refused replacement can put
+    /// the previous one back instead of leaving no hotkey at all.
+    private var currentShortcut: HotKeyShortcut?
 
-        installHandlerIfNeeded()
+    @discardableResult
+    func update(to shortcut: HotKeyShortcut?, onPress: @escaping () -> Void) -> Bool {
+        self.onPress = onPress
+        guard let shortcut else {
+            unregister()
+            currentShortcut = nil
+            return true
+        }
+        guard shortcut.keyCode >= 0, shortcut.keyCode <= Int(UInt32.max) else { return false }
+        let carbonModifiers = shortcut.carbonModifiers
+        guard carbonModifiers != 0 else { return false }
+
+        guard installHandlerIfNeeded() else {
+            NSLog("Keepresso: could not install the hotkey event handler")
+            return false
+        }
         let id = EventHotKeyID(signature: Self.signature, id: 1)
         var ref: EventHotKeyRef?
+        // Unregister first: Carbon refuses a duplicate of our fixed id.
+        unregister()
         let status = RegisterEventHotKey(
             UInt32(shortcut.keyCode), carbonModifiers, id,
             GetApplicationEventTarget(), 0, &ref
         )
-        if status == noErr { hotKeyRef = ref }
+        guard status == noErr, let ref else {
+            NSLog("Keepresso: could not register global shortcut (status %d)", status)
+            // The system refused the new combination (usually another app
+            // owns it): put the previous one back so the toggle keeps
+            // working instead of silently dying.
+            if let previous = currentShortcut {
+                restore(previous)
+            }
+            return false
+        }
+        hotKeyRef = ref
+        currentShortcut = shortcut
+        return true
+    }
+
+    /// Best-effort re-registration of `shortcut`, logging when even that fails.
+    private func restore(_ shortcut: HotKeyShortcut) {
+        var ref: EventHotKeyRef?
+        let status = RegisterEventHotKey(
+            UInt32(shortcut.keyCode), shortcut.carbonModifiers,
+            EventHotKeyID(signature: Self.signature, id: 1),
+            GetApplicationEventTarget(), 0, &ref
+        )
+        guard status == noErr, let ref else {
+            NSLog("Keepresso: could not restore previous global shortcut (status %d)", status)
+            return
+        }
+        hotKeyRef = ref
     }
 
     fileprivate func fire() { onPress?() }
 
-    private func installHandlerIfNeeded() {
-        guard eventHandler == nil else { return }
+    private func installHandlerIfNeeded() -> Bool {
+        guard eventHandler == nil else { return true }
         var spec = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
             eventKind: UInt32(kEventHotKeyPressed)
         )
-        InstallEventHandler(
+        let status = InstallEventHandler(
             GetApplicationEventTarget(),
             hotKeyEventHandler,
             1, &spec,
             Unmanaged.passUnretained(self).toOpaque(),
             &eventHandler
         )
+        return status == noErr
     }
 
     private func unregister() {
@@ -76,8 +120,10 @@ private func hotKeyEventHandler(
 
 extension HotKeyShortcut {
     /// The stored `NSEvent` modifier flags translated to Carbon modifier masks
-    /// (`cmdKey`, `optionKey`, ...) for `RegisterEventHotKey`.
+    /// (`cmdKey`, `optionKey`, ...) for `RegisterEventHotKey`. A negative raw
+    /// value (a corrupt imported shortcut) reads as no modifiers.
     var carbonModifiers: UInt32 {
+        guard modifierFlags >= 0 else { return 0 }
         let flags = NSEvent.ModifierFlags(rawValue: UInt(modifierFlags))
         var carbon: UInt32 = 0
         if flags.contains(.command) { carbon |= UInt32(cmdKey) }
@@ -89,6 +135,7 @@ extension HotKeyShortcut {
 
     /// A menu-style label like "⌃⌥⌘K" for the Preferences recorder row.
     var displayString: String {
+        guard modifierFlags >= 0 else { return "?" }
         let flags = NSEvent.ModifierFlags(rawValue: UInt(modifierFlags))
         var parts = ""
         if flags.contains(.control) { parts += "⌃" }

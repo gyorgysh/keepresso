@@ -240,12 +240,14 @@ public final class CoreMediaActivityMonitor: MediaActivityMonitoring {
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        var size = UInt32(MemoryLayout<CFString?>.size)
-        var out: CFString?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        var out: Unmanaged<CFString>?
         let status = withUnsafeMutablePointer(to: &out) { ptr in
             AudioObjectGetPropertyData(process, &address, 0, nil, &size, ptr)
         }
-        return status == noErr ? out as String? : nil
+        // Core Audio hands back a +1 CFString; take ownership so it is released.
+        guard status == noErr else { return nil }
+        return out?.takeRetainedValue() as String?
     }
 
     private static func processPID(_ process: AudioObjectID) -> pid_t {

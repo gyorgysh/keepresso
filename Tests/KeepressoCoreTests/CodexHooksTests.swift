@@ -52,6 +52,31 @@ private let cli = "/Applications/Keepresso.app/Contents/Helpers/keepresso"
             == "/tmp/ch/hooks.json")
 }
 
+@Test func detectionReadsRolloutsUnderCodexHome() throws {
+    // Hooks install under CODEX_HOME, so detection must read the rollout
+    // files from the same root, or a set CODEX_HOME means hooks install
+    // correctly while detection watches an empty default directory.
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keepresso-codexhome-\(UUID().uuidString)")
+    let day = DateFormatter()
+    day.locale = Locale(identifier: "en_US_POSIX")
+    day.calendar = Calendar(identifier: .gregorian)
+    day.dateFormat = "yyyy/MM/dd"
+    let dir = root.appendingPathComponent("sessions/\(day.string(from: Date()))", isDirectory: true)
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let rollout = dir.appendingPathComponent("rollout-2026-01-01-abc123.jsonl")
+    FileManager.default.createFile(atPath: rollout.path, contents: Data("{}".utf8))
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let env = ["CODEX_HOME": root.path]
+    let written = PSAgentActivityMonitor.codexRolloutWrite(
+        forSessionId: "abc123", home: "/Users/nobody", environment: env)
+    #expect(written != nil)
+    // Without the env override the fixture is invisible.
+    #expect(PSAgentActivityMonitor.codexRolloutWrite(
+        forSessionId: "abc123", home: "/Users/nobody", environment: [:]) == nil)
+}
+
 // MARK: - Merging
 
 @Test func installMergesBesideTheUsersOwnHooksAndIsIdempotent() throws {

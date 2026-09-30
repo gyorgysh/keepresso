@@ -113,13 +113,15 @@ public enum DecisionLogCodec {
     }
 
     /// Decode every well-formed line; skip corrupt lines so a partial write
-    /// never poisons the whole history.
+    /// never poisons the whole history. Splits the raw bytes, so one torn
+    /// multibyte character affects only its own line instead of failing a
+    /// whole-file UTF-8 pass and discarding every event.
     public static func decode(_ data: Data) -> [PersistedSessionEvent] {
-        guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return [] }
+        guard !data.isEmpty else { return [] }
         var events: [PersistedSessionEvent] = []
-        for line in text.split(whereSeparator: \.isNewline) {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard !trimmed.isEmpty, let lineData = trimmed.data(using: .utf8),
+        for rawLine in data.split(separator: 0x0A, omittingEmptySubsequences: false) {
+            let lineData = Data(rawLine)
+            guard !lineData.isEmpty,
                   let event = try? decoder.decode(PersistedSessionEvent.self, from: lineData)
             else { continue }
             events.append(event)

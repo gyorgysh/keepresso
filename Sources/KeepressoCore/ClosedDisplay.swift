@@ -90,6 +90,10 @@ public final class ClosedDisplayController {
     /// When ``isEnabled`` was last read from the system. Menu opens reuse a
     /// fresh-enough cache instead of shelling `pmset -g` every time.
     private var lastRefreshedAt: Date?
+    /// Bumped by every write so an in-flight refresh that started before the
+    /// write cannot land its pre-write reading after it (the `isBusy` check
+    /// alone only covers a refresh that starts while the write is running).
+    private var readGeneration = 0
     private let now: () -> Date
     /// How long a successful read may be trusted for menu-driven refreshes.
     public static let refreshFreshness: TimeInterval = 20
@@ -301,8 +305,29 @@ public final class ClosedDisplayController {
             return
         }
         let control = self.control
+        let generation = readGeneration
         let value = await Task.detached { control.isSleepDisabled() }.value
+        // Drop a read that a concurrent ``set(_:)`` superseded: its pre-write
+        // value must never clobber the state the write just established.
+        guard !isBusy, generation == readGeneration else { return }
+        isEnabled = value
+        lastRefreshedAt = now()
+    }
+
+    /// Blocking re-read, for the one caller that cannot await: quit-time
+    /// coverage is decided inside `applicationShouldTerminate`, which must
+    /// return a reply synchronously. ``isEnabled`` is otherwise only
+    /// refreshed at launch and on menu open, so a lid mode switched on since
+    /// then reads stale (or `nil`) and the quit modal misses it entirely.
+    ///
+    /// One `pmset -g` on the main thread, tens of milliseconds, paid once on
+    /// the way out. Defers to an in-flight ``set(_:)`` exactly like
+    /// ``refresh(force:)``: that write is the authoritative state.
+    public func refreshBlocking() {
         guard !isBusy else { return }
+        let generation = readGeneration
+        let value = control.isSleepDisabled()
+        guard !isBusy, generation == readGeneration else { return }
         isEnabled = value
         lastRefreshedAt = now()
     }
@@ -316,6 +341,7 @@ public final class ClosedDisplayController {
         // two authorization dialogs.
         guard !isBusy else { return .cancelled }
         isBusy = true
+        readGeneration += 1
         defer { isBusy = false }
         let control = self.control
         let result = await Task.detached { control.setSleepDisabled(enabled) }.value
@@ -380,7 +406,7 @@ public final class PMSetSleepControl: SleepSettingControlling {
         process.arguments = arguments
         let pipe = Pipe()
         process.standardOutput = pipe
-        process.standardError = Pipe()
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
@@ -399,7 +425,7 @@ public final class PMSetSleepControl: SleepSettingControlling {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = arguments
-        process.standardOutput = Pipe()
+        process.standardOutput = FileHandle.nullDevice
         let errPipe = Pipe()
         process.standardError = errPipe
         do {

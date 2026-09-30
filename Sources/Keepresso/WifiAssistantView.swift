@@ -88,7 +88,7 @@ struct WifiAssistantView: View {
             HStack(spacing: 8) {
                 Button("Turn Wi-Fi off and on") { cycleWiFi() }
                     .buttonStyle(.bordered)
-                Button("Flush DNS") { flushDNS() }
+                Button("Flush DNS") { Task { await flushDNS() } }
                     .buttonStyle(.bordered)
             }
 
@@ -137,8 +137,8 @@ struct WifiAssistantView: View {
         }
     }
 
-    private func flushDNS() {
-        if model.flushDNS() {
+    private func flushDNS() async {
+        if await model.flushDNS() {
             actionNote = L("DNS cache flushed.")
             model.refreshCaptive()
             return

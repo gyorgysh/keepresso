@@ -7,8 +7,10 @@ app with your own machine's developer identity, which is all you need to run it.
 ## What you need
 
 - macOS 14 (Sonoma) or later
-- **Xcode 16 or later** (the full Xcode app from the App Store, not just the
-  Command Line Tools)
+- **Xcode 26 or later** (the full Xcode app from the App Store, not just the
+  Command Line Tools). The app icon is an Icon Composer `.icon` bundle, which
+  Xcode 26's asset compiler is the first to build, so an older Xcode produces
+  an app without a proper icon.
 - **XcodeGen**, which turns [`project.yml`](../project.yml) into an Xcode project:
 
   ```sh

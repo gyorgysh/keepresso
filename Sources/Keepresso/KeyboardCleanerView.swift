@@ -24,6 +24,17 @@ struct KeyboardCleanerView: View {
                     content
                         .padding(16)
                 }
+                // Inside the visible branch: a closed window's scene stays
+                // alive, and an always-on 4 Hz timer there would wake the main
+                // run loop for nothing.
+                .onReceive(Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()) { _ in
+                    Task {
+                        await lock.tick()
+                        if !lock.isLocked {
+                            model.dismissKeyboardLockOverlay()
+                        }
+                    }
+                }
             } else {
                 Color.clear
             }
@@ -33,13 +44,6 @@ struct KeyboardCleanerView: View {
         .glassWindowBackground()
         .centersAndFrontsWindow()
         .background(WindowVisibilityReader(isVisible: $windowVisible))
-        .onReceive(Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()) { _ in
-            guard windowVisible else { return }
-            lock.tick()
-            if !lock.isLocked {
-                model.dismissKeyboardLockOverlay()
-            }
-        }
         .onChange(of: lock.isLocked) { _, locked in
             if !locked {
                 model.dismissKeyboardLockOverlay()
@@ -89,7 +93,7 @@ struct KeyboardCleanerView: View {
             HStack {
                 Spacer()
                 if lock.isLocked {
-                    Button("Unlock") { model.unlockKeyboardFromOverlay() }
+                    Button("Unlock") { Task { await model.unlockKeyboardFromOverlay() } }
                         .keyboardShortcut(.defaultAction)
                         .controlSize(.large)
                 } else {
@@ -222,15 +226,17 @@ final class KeyboardLockOverlay: NSObject {
     }
 
     private func refresh() {
-        controller.tick()
-        guard controller.isLocked, !windows.isEmpty else {
-            onUnlock()
-            return
-        }
-        let view = overlayView()
-        for window in windows {
-            if let hosting = window.contentView as? NSHostingView<KeyboardLockOverlayView> {
-                hosting.rootView = view
+        Task {
+            await controller.tick()
+            guard controller.isLocked, !windows.isEmpty else {
+                onUnlock()
+                return
+            }
+            let view = overlayView()
+            for window in windows {
+                if let hosting = window.contentView as? NSHostingView<KeyboardLockOverlayView> {
+                    hosting.rootView = view
+                }
             }
         }
     }

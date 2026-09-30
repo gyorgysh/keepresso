@@ -88,7 +88,8 @@ public enum BTMInspection {
         private var dispositionFlags: [String] {
             guard let raw = fields["Disposition"],
                   let open = raw.firstIndex(of: "["),
-                  let close = raw.firstIndex(of: "]")
+                  let close = raw.firstIndex(of: "]"),
+                  open < close
             else { return [] }
             return raw[raw.index(after: open)..<close]
                 .components(separatedBy: ",")
@@ -152,7 +153,7 @@ public struct SFLToolBTMDumper: BTMDumpProviding {
         process.arguments = ["dumpbtm"]
         let stdout = Pipe()
         process.standardOutput = stdout
-        process.standardError = Pipe()
+        process.standardError = FileHandle.nullDevice
         do { try process.run() } catch { return nil }
         let data = stdout.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()

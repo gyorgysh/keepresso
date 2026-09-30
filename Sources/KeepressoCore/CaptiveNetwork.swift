@@ -468,6 +468,17 @@ public final class SystemCaptiveProbe: CaptiveProbing, @unchecked Sendable {
         )
     }
 
+    /// Classify a transport failure from the captive probe: only
+    /// `.notConnectedToInternet` unambiguously means "no connectivity"
+    /// (`.failed`). Any other failure (DNS hijack, refused, RST) is the
+    /// classic captive-portal signature (hotel and airport portals routinely
+    /// fail this way rather than redirecting), so it stays portal-suspicious
+    /// (`.timeout`) for detection and the portal-specific remediation.
+    static func resultForTransportError(_ error: Error?) -> CaptiveHTTPResult {
+        guard let urlError = error as? URLError else { return .timeout }
+        return urlError.code == .notConnectedToInternet ? .failed : .timeout
+    }
+
     /// GET `http://captive.apple.com/hotspot-detect.html`, no redirects.
     public static func probeCaptiveHTTP() -> CaptiveHTTPResult {
         guard let url = URL(string: "http://captive.apple.com/hotspot-detect.html") else {
@@ -501,7 +512,7 @@ public final class SystemCaptiveProbe: CaptiveProbing, @unchecked Sendable {
                     box.settle(.failed)
                 }
             } else if error != nil {
-                box.settle(.timeout)
+                box.settle(Self.resultForTransportError(error))
             } else {
                 box.settle(.failed)
             }
@@ -605,7 +616,7 @@ public final class SystemCaptiveProbe: CaptiveProbing, @unchecked Sendable {
         process.arguments = arguments
         let pipe = Pipe()
         process.standardOutput = pipe
-        process.standardError = Pipe()
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
             let data = pipe.fileHandleForReading.readDataToEndOfFile()

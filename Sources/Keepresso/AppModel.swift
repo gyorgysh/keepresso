@@ -163,6 +163,13 @@ final class AppModel {
             )
         )
         var loaded = store.load()
+            .withFreshInstallDefaults(hasStoredSettings: store.hasStoredSettings)
+        if !store.hasStoredSettings {
+            // Fresh install: persist the first-launch defaults now, before
+            // anything reads them back. Existing blobs are never rewritten
+            // here, corrupt or not.
+            store.save(loaded)
+        }
         loaded.seedNewBuiltInPresets() // new built-ins reach existing users once
         loaded.refreshBuiltInPresets() // and changed ones stay current
         self.settings = loaded
@@ -337,7 +344,7 @@ final class AppModel {
     }
 
     /// Take manual control from trigger gating and begin a session with an
-    /// explicit duration. This is the menu/Preferences path for requests such
+    /// explicit duration. This is the customized menu path for requests such
     /// as "keep awake for three hours regardless of the current triggers."
     func startManualOverride(mode: SessionMode) {
         pauseTriggers()
@@ -453,15 +460,8 @@ final class AppModel {
 
     // MARK: - Session mode (manual sessions)
 
-    /// The saved duration for the next manual session. Preferences edits this
-    /// without changing the deadline of a session that is already running.
-    var defaultMode: SessionMode {
-        get { settings.defaultMode }
-        set {
-            settings.defaultMode = newValue
-            persist()
-        }
-    }
+    /// The saved duration used to seed the custom layout's manual timer.
+    var defaultMode: SessionMode { settings.defaultMode }
 
     /// The chosen duration. While idle it reflects the saved default (so the
     /// picker shows it before activating); while active it restarts the session.
@@ -942,9 +942,17 @@ final class AppModel {
         return config
     }
 
+    @ObservationIgnored private var wakeApplyTask: Task<Void, Never>?
+    @ObservationIgnored private var wakeApplyPending = false
+
     /// Push settings to the helper (or clear). Installing needs the helper;
     /// clearing is attempted when it answers so a disable after reinstall
     /// still drops system schedules.
+    ///
+    /// Applies are serialized through one in-flight task and coalesced: rapid
+    /// changes (clear then re-enable, a manual edit racing an automation
+    /// re-arm) must reach the daemon in order, and a pass always reads the
+    /// latest desired config, so a stale apply cannot win the race.
     func applyWakeScheduleToSystem() {
         // A one-shot whose moment has passed can never install again (pmset
         // refuses past dates); drop it so later applies don't fail on it
@@ -957,55 +965,90 @@ final class AppModel {
         // Record what we're arming so the automation re-arm can tell when the
         // effective one-shot has actually moved.
         lastArmedEffectiveOneShot = config.oneShot
+        // Always enqueue: the guard below lives with the execution-time config
+        // read in `performWakeApply`, so a schedule cancelled (or re-enabled)
+        // between enqueue and execution cannot install a stale config or skip
+        // a fresh one.
+        wakeApplyPending = true
+        if wakeApplyTask == nil {
+            runWakeApplyLoop()
+        }
+    }
+
+    private func runWakeApplyLoop() {
+        let client = helperClient
+        wakeApplyTask = Task.detached { [weak self] in
+            while true {
+                let shouldContinue = await MainActor.run { [weak self] () -> Bool in
+                    guard let self else { return false }
+                    if self.wakeApplyPending {
+                        self.wakeApplyPending = false
+                        return true
+                    }
+                    self.wakeApplyTask = nil
+                    return false
+                }
+                guard shouldContinue, let self else { return }
+                await self.performWakeApply(client: client)
+            }
+        }
+    }
+
+    /// One apply pass, reading the desired config at execution time. The
+    /// blocking handshake and XPC call run off the main actor.
+    private func performWakeApply(client: PrivilegedHelperCalling) async {
+        // A one-shot that passed while this pass was queued can never install.
+        if let date = settings.wakeSchedule?.oneShot, date <= Date() {
+            settings.wakeSchedule?.oneShot = nil
+            persist()
+        }
+        let config = effectiveWakeConfig()
         // Leave pmset alone when there is nothing to install and Keepresso
         // never installed anything: the system schedules belong to the user
-        // or another tool, not to us.
+        // or another tool, not to us. Checked here, against the same config
+        // the pass applies, so enqueue-time and execution-time cannot
+        // disagree in either direction.
         guard config.isActive || wakeSchedulesInstalledByKeepresso else { return }
         // A pre-update daemon still answering the handshake means "updating",
         // not "missing": no failure notification, re-apply once the new
         // daemon serves.
         let helperUpdating = wakeHelperGate == .helperUpdating
-        let client = helperClient
-        Task.detached { [weak self] in
-            guard client.ping() else {
-                await MainActor.run { [weak self] in
-                    guard let self else { return }
-                    self.refreshSystemWakeState()
-                    guard config.isActive else { return }
-                    if helperUpdating {
-                        self.reapplyWakeScheduleWhenHelperReady()
-                    } else {
-                        self.notifier.notify(
-                            title: L("Wake schedule not installed"),
-                            body: L("Installing a wake schedule needs the administrator helper (Preferences ▸ General)."),
-                            sound: false
-                        )
-                    }
-                }
-                return
-            }
+        let reachable: Bool = await Task.detached { client.ping() }.value
+        if reachable {
             let parts = config.pmsetArguments
-            let ok = client.applyWakeSchedule(
-                oneShot: parts.oneShot,
-                repeatDays: parts.repeatDays,
-                repeatTime: parts.repeatTime
-            )
-            await MainActor.run { [weak self] in
-                guard let self else { return }
-                if config.isActive {
-                    self.wakeSchedulesInstalledByKeepresso = true
-                } else if ok {
-                    self.wakeSchedulesInstalledByKeepresso = false
-                }
-                self.refreshSystemWakeState()
-                if !ok {
-                    self.notifier.notify(
-                        title: L("Wake schedule not installed"),
-                        body: L("The administrator helper could not update the system wake schedule."),
-                        sound: false
-                    )
-                }
+            let ok: Bool = await Task.detached {
+                client.applyWakeSchedule(
+                    oneShot: parts.oneShot,
+                    repeatDays: parts.repeatDays,
+                    repeatTime: parts.repeatTime
+                )
+            }.value
+            if config.isActive {
+                wakeSchedulesInstalledByKeepresso = true
+            } else if ok {
+                wakeSchedulesInstalledByKeepresso = false
             }
+            lastArmedEffectiveOneShot = config.oneShot
+            refreshSystemWakeState()
+            if !ok {
+                notifier.notify(
+                    title: L("Wake schedule not installed"),
+                    body: L("The administrator helper could not update the system wake schedule."),
+                    sound: false
+                )
+            }
+            return
+        }
+        refreshSystemWakeState()
+        guard config.isActive else { return }
+        if helperUpdating {
+            reapplyWakeScheduleWhenHelperReady()
+        } else {
+            notifier.notify(
+                title: L("Wake schedule not installed"),
+                body: L("Installing a wake schedule needs the administrator helper (Preferences ▸ General)."),
+                sound: false
+            )
         }
     }
 
@@ -1380,7 +1423,7 @@ final class AppModel {
             let ok = client.setFanHold(percent != nil, percent: percent ?? 0)
             guard !ok, percent != nil else { return }
             await MainActor.run { [weak self] in
-                guard let self else { return }
+                guard let self, self.fanBoostActivePercent == percent else { return }
                 self.fanBoostActivePercent = nil
                 self.notifier.notify(
                     title: L("Fans not boosted"),
@@ -1448,16 +1491,20 @@ final class AppModel {
     var hotKey: HotKeyShortcut? {
         get { settings.hotKey }
         set {
-            settings.hotKey = newValue
+            settings.hotKey = KeepressoSettings.sanitizedHotKey(newValue)
             persist()
             registerHotKey()
         }
     }
 
     /// (Re)register the global hotkey from the saved shortcut. Called at launch
-    /// and whenever the shortcut changes.
+    /// and whenever the shortcut changes. A refusal is logged, not surfaced:
+    /// the manager keeps the previous shortcut working.
     func registerHotKey() {
-        hotKeyManager.update(to: settings.hotKey) { [weak self] in self?.toggleManual() }
+        let ok = hotKeyManager.update(to: settings.hotKey) { [weak self] in self?.toggleManual() }
+        if !ok {
+            NSLog("Keepresso: global shortcut refused, kept the previous one")
+        }
     }
 
     /// The Keyboard Cleaner overlay is up: a global toggle must not fire from
@@ -1474,7 +1521,7 @@ final class AppModel {
     func showKeyboardLockOverlay() {
         keyboardLockOverlay?.close()
         let overlay = KeyboardLockOverlay(controller: keyboardLock) { [weak self] in
-            self?.unlockKeyboardFromOverlay()
+            Task { await self?.unlockKeyboardFromOverlay() }
         }
         overlay.show()
         keyboardLockOverlay = overlay
@@ -1483,8 +1530,8 @@ final class AppModel {
     /// Unlock from the overlay or the settings window. Overlay stays up if
     /// restore did not land, so a cancelled password prompt does not uncover
     /// a still-remapped keyboard.
-    func unlockKeyboardFromOverlay() {
-        keyboardLock.unlock()
+    func unlockKeyboardFromOverlay() async {
+        await keyboardLock.unlock()
         guard !keyboardLock.isLocked else { return }
         dismissKeyboardLockOverlay()
         resumeHotKeyAfterKeyboardLock()
@@ -1569,8 +1616,8 @@ final class AppModel {
         }
     }
 
-    /// The primary menu sections are independently configurable, but the panel
-    /// must always retain at least one way to control keep-awake behavior.
+    /// At least one configurable section stays visible. Preferences remains
+    /// available even in a tools-only layout.
     var showManualSessionInMenu: Bool {
         get { settings.showManualSessionInMenu }
         set {
@@ -1619,6 +1666,29 @@ final class AppModel {
         }
     }
 
+    /// Nil means the standard layout, independent of saved custom choices.
+    var customizedMenuSections: [MenuBarSection]? { settings.customizedMenuSections }
+
+    /// A saved granular layout is used only behind the existing opt-in flag.
+    var advancedMenuLayout: MenuLayout? {
+        settings.customizedMenuLayout
+    }
+
+    var editableMenuLayout: MenuLayout {
+        settings.menuLayout ?? (settings.hasLegacyMenuChoices ? MenuLayout.legacy(settings) : MenuLayout())
+    }
+
+    var usesCustomMenuSections: Bool {
+        settings.menuCustomizationEnabled && (settings.menuLayout != nil || settings.hasLegacyMenuChoices)
+    }
+
+    func updateMenuLayout(_ update: (inout MenuLayout) -> Void) {
+        var layout = editableMenuLayout
+        update(&layout)
+        settings.setMenuLayout(layout)
+        persist()
+    }
+
     /// Saved display order for the four configurable menu sections.
     var menuSectionOrder: [MenuBarSection] { settings.menuSectionOrder }
 
@@ -1655,10 +1725,17 @@ final class AppModel {
     /// and rebuild the live engine.
     func applyPreset(_ preset: Preset) {
         settings.ruleSet = preset.ruleSet
-        settings.triggersEnabled = true
-        triggersPaused = false
-        applyTriggerGate()
-        persist()
+        if settings.triggersEnabled {
+            triggersPaused = false
+            applyTriggerGate()
+            persist()
+        } else {
+            // Route through the setter so a manual session is stopped silently
+            // before gating takes over. Setting the flag directly would let the
+            // next reconcile end it with natural-end effects (notification,
+            // configured sleep/lock action) the user never asked for.
+            triggersEnabled = true
+        }
     }
 
     /// Save the current rule set under a new name.
@@ -1748,6 +1825,7 @@ final class AppModel {
         disk.config = newSettings.diskKeepAlive
         virtualDisplay.config = newSettings.virtualDisplay
         awdl.autoWithGaming = newSettings.awdlAutoWithGaming
+        gamingWatcher.grace = newSettings.awdlGraceSeconds
         closedDisplayAuto.onlyWhileBrewing = newSettings.closedDisplayOnlyWhileBrewing
         closedDisplay.policy = newSettings.closedLidDisplayPolicy
         controllerPoker.enabled = newSettings.controllerPokeWhileGaming
@@ -2595,8 +2673,16 @@ final class AppModel {
     /// opens the window; a recovery before then clears silently.
     @ObservationIgnored private var approvalRecoveryWatch: Task<Void, Never>?
     /// Quiet polls before a dead daemon escalates to a visible `.broken`
-    /// (12 × 5s = one minute).
-    private static let helperQuietPolls = 12
+    /// (18 × 5s = ninety seconds).
+    ///
+    /// A minute was tuned for a warm relaunch and is short for a cold start:
+    /// straight after a boot or a login, launchd hands the daemon over late
+    /// because everything else on the machine is starting at the same time,
+    /// and the reinstall window would open on a helper that then came up by
+    /// itself seconds later. Waiting longer costs nothing when the helper is
+    /// fine (the watch clears silently on recovery) and only delays the
+    /// prompt when it truly is broken.
+    private static let helperQuietPolls = 18
 
     private func watchForHelperRecovery() {
         approvalRecoveryWatch?.cancel()
@@ -2738,7 +2824,7 @@ final class AppModel {
         // safety lift/restore paths only call here with the helper installed.
         let needsAuthDance = !helperInstalled
         runAfterPossibleAuthPrompt(needsPrompt: needsAuthDance) {
-            await self.closedDisplay.set(on)
+            _ = await self.closedDisplay.set(on)
             // A failure through the installed helper points at a stale daemon
             // registration: check and repair it (dedupes, once per run).
             if self.closedDisplay.lastError != nil, self.helperInstalled {
@@ -2747,49 +2833,119 @@ final class AppModel {
         }
     }
 
-    /// Give macOS back its normal Sleep command immediately. This is the
-    /// explicit escape hatch surfaced anywhere Keepresso sees the global
-    /// `disablesleep` setting on. It disables session-scoped closed-display
-    /// automation first, releases any connection-scoped hold, waits for the
-    /// polling fallback to finish restoring its snapshot when necessary, then
-    /// clears a remaining persistent override. The ordering matters: clearing
-    /// first could be undone a moment later if that hold had captured `1`.
-    func restoreSystemSleep() {
-        thermalLiftedClosedDisplay = false
-        batteryLiftedClosedDisplay = false
-
-        // The osascript watchdog follows its flag on a two-second poll. Unlike
-        // the XPC helper, deleting that flag acknowledges the request before
-        // the root process has restored its snapshot. Remember this before
-        // turning the feature off so the explicit clear can be ordered after
-        // that restore instead of racing it.
-        let waitForFallbackRelease = closedDisplayAuto.isHolding && !helperInstalled
-
-        if settings.closedDisplayOnlyWhileBrewing {
-            settings.closedDisplayOnlyWhileBrewing = false
-            closedDisplayAuto.onlyWhileBrewing = false
-            persist()
+    /// Wait (bounded) for an in-flight sleep write to settle, so quit-time
+    /// coverage reads post-toggle state and the quit-time clear doesn't
+    /// bounce off a busy controller. Caps at ~2s; quitting must stay prompt.
+    /// A still-busy controller after that reads stale, which the acting path
+    /// re-checks before touching anything.
+    private func waitForSleepWriteToSettle() async {
+        for _ in 0..<20 {
+            guard closedDisplay.isBusy else { return }
+            try? await Task.sleep(nanoseconds: 100_000_000)
         }
-        closedDisplayCoordinator.rearmForeignHoldClear()
+    }
 
-        let needsAuthDance = !helperInstalled
-        runAfterPossibleAuthPrompt(needsPrompt: needsAuthDance) {
-            await self.closedDisplayAuto.stopIfHolding()
-            if waitForFallbackRelease {
-                try? await Task.sleep(for: .seconds(3))
-            }
-            // Re-read after releasing: when the scoped hold had captured 0,
-            // it has already restored normal sleep and no second password
-            // prompt is needed. A captured/sticky 1 still gets explicitly
-            // cleared because that is what this escape hatch promises.
-            await self.closedDisplay.refresh(force: true)
-            if self.closedDisplay.isEnabled != false {
-                await self.closedDisplay.set(false)
-            }
-            if self.closedDisplay.lastError != nil, self.helperInstalled {
-                self.verifyHelper()
+    /// Quit-time coverage for the quit modal, from cached state so
+    /// `applicationShouldTerminate` can decide and run the modal inline (see
+    /// ``QuitSleepModal/ask(coverage:device:qualifier:)`` for why it must not
+    /// await first). The cached pmset reading is the ticker's, seconds old at
+    /// worst, and "Turn off and quit" re-reads for real before acting.
+    ///
+    /// Both paths write the same `disablesleep` bit, so "on" alone says
+    /// nothing: what matters is whether quitting orphans it. The scoped hold
+    /// self-cleans on exit, so the automation holding it is never
+    /// modal-worthy. Anything else live is a persistent latch that survives
+    /// quit unmanaged, whichever run set it: that is exactly the "did you
+    /// forget to turn it off" the modal exists for.
+    ///
+    /// The hold is read, not released: releasing here would strip lid
+    /// coverage from a session the user may yet keep by cancelling.
+    func quitSleepCoverageNow() -> QuitSleepCheck.Coverage {
+        // Preview hook: the override variant needs a real persistent
+        // `disablesleep` latch, which costs an administrator prompt to set up
+        // and leaves the Mac awake afterwards. `KEEPRESSO_QUIT_MODAL` forces
+        // a variant so the copy and the art can be checked without any of
+        // that. Reads the environment, so it cannot be set on a shipped app
+        // by accident.
+        if let forced = ProcessInfo.processInfo.environment["KEEPRESSO_QUIT_MODAL"] {
+            switch forced {
+            case "session": return .session
+            case "override": return .overrideLive
+            case "both": return .sessionAndOverride
+            case "none": return .none
+            default: break
             }
         }
+        // Read pmset for real, blocking. The cached `isEnabled` is only
+        // refreshed at launch and on menu open, so a lid mode switched on
+        // since then (or never read at all, leaving it nil) would read as
+        // off and the override variant would never show.
+        closedDisplay.refreshBlocking()
+        return QuitSleepCheck.coverage(
+            brewing: session.isActive,
+            overrideLive: closedDisplay.isEnabled == true && !closedDisplayAuto.isHolding)
+    }
+
+    /// Lid mode is live, but the brewing automation is the one holding it, so
+    /// quitting ends it without the user doing anything.
+    ///
+    /// The modal still says so. Nothing is stranded, which is why this is not
+    /// folded into ``QuitSleepCheck/Coverage`` and never gets the "did you
+    /// forget" framing, but quitting does take away lid coverage the user has
+    /// right now, and that is worth a line before it happens.
+    func quitScopedLidMode() -> Bool {
+        closedDisplay.isEnabled == true && closedDisplayAuto.isHolding
+    }
+
+    /// Consent-based clear for the quit modal: release the scoped hold, then
+    /// clear the persistent override when it is still live.
+    ///
+    /// Returns whether the override is actually off afterwards, confirmed by
+    /// re-reading `pmset` rather than trusting the exit status. The caller
+    /// must not quit on `false`: quitting then would strand the very setting
+    /// the user pressed "Turn off and quit" to clear.
+    @discardableResult
+    func clearSleepOverrideForQuit() async -> Bool {
+        await closedDisplayAuto.stopIfHolding()
+        await waitForSleepWriteToSettle()
+        await closedDisplay.refresh(force: true)
+        guard closedDisplay.isEnabled == true else { return true }
+        if !helperInstalled {
+            // Clearing without the helper needs an osascript password sheet.
+            // Never spring one unannounced: the dialog names "osascript", not
+            // Keepresso, so say what it is for first, and activate so it comes
+            // up in front instead of behind everything.
+            NSApp.activate(ignoringOtherApps: true)
+            notifier.notify(
+                title: L("Keepresso needs your password"),
+                body: machineHasBattery
+                    ? L("Enter your administrator password to switch closed-display mode off before Keepresso quits.")
+                    : L("Enter your administrator password to switch the sleep override off before Keepresso quits."),
+                sound: true
+            )
+        }
+        let result = await closedDisplay.set(false)
+        if case .failed(let message) = result {
+            NSLog("Keepresso: quit-time sleep restore failed: %@", message)
+        }
+        // Verify against the system, not the result: a dismissed prompt or a
+        // wrong password must not read as success.
+        await closedDisplay.refresh(force: true)
+        let cleared = closedDisplay.isEnabled != true
+        if !cleared {
+            // Every unsuccessful outcome says so, not just `.failed`. macOS
+            // re-prompts a wrong password itself and then gives osascript the
+            // same `-128` it uses for Cancel, so a mistyped password arrives
+            // here as `.cancelled`. Staying silent on that is the one case
+            // where the user most needs telling: they tried to turn it off,
+            // it is still on, and the app did not quit.
+            notifier.notify(
+                title: L("Closed-display mode left on"),
+                body: L("Keepresso could not switch it off, so it stayed running instead of quitting."),
+                sound: false
+            )
+        }
+        return cleared
     }
 
     /// Activate, run privileged work that may show the osascript password
@@ -2830,54 +2986,36 @@ final class AppModel {
             settings.closedDisplayOnlyWhileBrewing = newValue
             closedDisplayAuto.onlyWhileBrewing = newValue
             persist()
-            // Session-scoped mode must not inherit a previously enabled
-            // persistent `pmset disablesleep` override. That flag is global:
-            // it survives Keepresso quitting and is exactly what makes the
-            // Apple-menu Sleep command disappear after the app is gone.
-            // Clear it before priming the fallback watchdog, so the watchdog
-            // snapshots the normal value (0) and restores that value on stop,
-            // quit, or crash.
+            // Priming exists to front-load the fallback's password prompt into
+            // this window; with the helper installed no engage ever prompts,
+            // so there is nothing to pre-authorize (and priming through the
+            // daemon would flip the real setting on and off for nothing).
             closedDisplayCoordinator.rearmForeignHoldClear()
-            if newValue {
-                if !closedDisplayAuto.isAuthorized && !helperInstalled {
-                    // A fallback engage may later need a password mid-session;
-                    // do the cleanup and authorization while the user is here
-                    // answering prompts, not from a background ticker.
-                    notifier.requestAuthorization()
-                }
-                runAfterPossibleAuthPrompt(needsPrompt: !helperInstalled) {
-                    await self.closedDisplay.refresh(force: true)
-                    if self.closedDisplay.isEnabled == true {
-                        _ = await self.closedDisplay.set(false)
-                    }
-                    if !self.closedDisplayAuto.isAuthorized && !self.helperInstalled {
-                        await self.closedDisplayAuto.prime()
-                    }
+            if newValue && !closedDisplayAuto.isAuthorized && !helperInstalled {
+                // A fallback engage may later need a password mid-session; be
+                // able to say so even behind other windows.
+                notifier.requestAuthorization()
+                runAfterPossibleAuthPrompt(needsPrompt: true) {
+                    await self.closedDisplayAuto.prime()
                     // The user is right here answering prompts, so this is the
                     // one moment a fallback clear may ask for the password.
                     // Priming flips the real setting on and off, so re-read it
                     // before deciding anything.
-                    self.refreshThenEnforceClosedDisplay(allowPrompt: !self.helperInstalled)
+                    self.refreshThenEnforceClosedDisplay(allowPrompt: true)
                 }
+            } else if newValue {
+                refreshThenEnforceClosedDisplay()
             } else {
                 // Turning it off mid-session: release the hold (autoTick won't,
                 // it early-returns once the feature's off), then re-read the
                 // system setting once the helper has had a cycle to apply it.
-                // Also clear any persistent override left by an older run or
-                // by the persistent disclosure. Otherwise disabling this
-                // visible setting can leave SleepDisabled=1 after Keepresso
-                // quits, which removes Sleep from the Apple menu.
                 // Force the read: a menu open moments earlier leaves a fresh
                 // cache that would swallow this one, and autoTick is already
                 // gated off, so nothing else would correct it.
-                runAfterPossibleAuthPrompt(needsPrompt: !helperInstalled) {
-                    await self.closedDisplayAuto.stopIfHolding()
+                Task {
+                    await closedDisplayAuto.stopIfHolding()
                     try? await Task.sleep(for: .seconds(3))
-                    await self.closedDisplay.refresh(force: true)
-                    if self.closedDisplay.isEnabled == true {
-                        _ = await self.closedDisplay.set(false)
-                    }
-                    await self.closedDisplay.refresh(force: true)
+                    await closedDisplay.refresh(force: true)
                 }
             }
         }
@@ -3091,17 +3229,22 @@ final class AppModel {
 
     /// Flush the DNS cache through the helper daemon. Returns false when the
     /// helper is missing or the call fails, so the window can copy the sudo
-    /// command instead of prompting.
-    func flushDNS() -> Bool {
+    /// command instead of prompting. Both XPC calls can block for their whole
+    /// timeout when the daemon is registered but not spawning, so they run off
+    /// the main actor: `AppModel` is `@MainActor`.
+    func flushDNS() async -> Bool {
         guard helperInstalled else { return false }
-        // Live handshake: the cached `daemonProtocolVersion` stays nil until
-        // a verify run, so an early Wi-Fi assistant flush must not treat a
-        // ready protocol-9 daemon as too old.
-        guard let version = helperClient.pingVersion(),
-              version >= HelperService.flushDNSMinProtocol else {
-            return false
-        }
-        return helperClient.flushDNS()
+        let client = helperClient
+        return await Task.detached {
+            // Live handshake: the cached `daemonProtocolVersion` stays nil until
+            // a verify run, so an early Wi-Fi assistant flush must not treat a
+            // ready protocol-9 daemon as too old.
+            guard let version = client.pingVersion(),
+                  version >= HelperService.flushDNSMinProtocol else {
+                return false
+            }
+            return client.flushDNS()
+        }.value
     }
 
     /// Lock the keyboard for Keyboard Cleaner. If the helper is not
@@ -3373,7 +3516,7 @@ final class AppModel {
         if settings.awdlAutoWithGaming {
             if gamingWatcher.wrappedIsSatisfied { return .pausedForGame }
             if let remaining = gamingWatcher.graceRemaining {
-                return .resumingAfterGame(seconds: Int(remaining.rounded(.up)))
+                return .resumingAfterGame(seconds: KeepressoSettings.displaySeconds(remaining))
             }
         }
         return .pausedManually

@@ -102,6 +102,36 @@ private final class FakeBrightness: BrightnessControlling {
 // MARK: - Idle-only keep-active mode
 
 @MainActor
+@Test func keepActiveNilIdleHoldsThePokeCadence() {
+    // An out-of-band reconcile with no idle reading (lease doorbell, start)
+    // must neither poke nor re-arm: re-arming would make the next tick poke
+    // immediately, bypassing the interval under a heartbeating agent.
+    let clock = Clock()
+    let activity = FakeActivity()
+    let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
+    var options = SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true)
+    options.activityPokeIdleMinutes = 3
+    controller.start(options: options)
+
+    // Idle past the wait: first poke, arming the interval.
+    clock.advance(200)
+    controller.reconcile(systemIdleSeconds: 200)
+    #expect(activity.pokeCount == 1)
+
+    // A nil-idle reconcile halfway through the interval changes nothing.
+    clock.advance(SessionController.activityPokeInterval / 2)
+    controller.reconcile(systemIdleSeconds: nil)
+    clock.advance(SessionController.activityPokeInterval / 2 - 1)
+    controller.reconcile(systemIdleSeconds: 400)
+    #expect(activity.pokeCount == 1) // interval not yet elapsed: still held
+
+    // Once the full interval elapses, the poke fires again.
+    clock.advance(2)
+    controller.reconcile(systemIdleSeconds: 402)
+    #expect(activity.pokeCount == 2)
+}
+
+@MainActor
 @Test func keepActiveIdleOnlyModeWaitsForTheConfiguredMinutes() {
     let clock = Clock()
     let activity = FakeActivity()
@@ -109,20 +139,22 @@ private final class FakeBrightness: BrightnessControlling {
     var options = SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true)
     options.activityPokeIdleMinutes = 3
     controller.start(options: options)
-    #expect(activity.pokeCount == 1) // start reconciles with no idle info: fail open
+    // Start's reconcile has no idle info: hold the poke until a real reading
+    // proves the user stepped away (a nil reading must not fake activity).
+    #expect(activity.pokeCount == 0)
 
     // Two idle minutes: still waiting, even across the poke interval.
     clock.advance(120)
     controller.reconcile(systemIdleSeconds: 120)
-    #expect(activity.pokeCount == 1)
+    #expect(activity.pokeCount == 0)
 
     // Past three idle minutes: pokes promptly, then repeats on the interval.
     clock.advance(70)
     controller.reconcile(systemIdleSeconds: 190)
-    #expect(activity.pokeCount == 2)
+    #expect(activity.pokeCount == 1)
     clock.advance(SessionController.activityPokeInterval)
     controller.reconcile(systemIdleSeconds: 220)
-    #expect(activity.pokeCount == 3)
+    #expect(activity.pokeCount == 2)
 }
 
 @MainActor
@@ -133,16 +165,16 @@ private final class FakeBrightness: BrightnessControlling {
     var options = SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true)
     options.activityPokeIdleMinutes = 3
     controller.start(options: options)
-    #expect(activity.pokeCount == 1)
+    #expect(activity.pokeCount == 0) // nil idle at start: wait for a reading
 
     // Idle past the wait but gaming: suppressed, and re-armed.
     clock.advance(300)
     controller.reconcile(systemIdleSeconds: 300, gameFrontmost: true)
-    #expect(activity.pokeCount == 1)
+    #expect(activity.pokeCount == 0)
 
     // Game quits: fires promptly instead of a full interval later.
     controller.reconcile(systemIdleSeconds: 301, gameFrontmost: false)
-    #expect(activity.pokeCount == 2)
+    #expect(activity.pokeCount == 1)
 }
 
 @MainActor
@@ -887,6 +919,100 @@ private final class StubGate: TriggerEvaluating {
 }
 
 @MainActor
+@Test func manualSessionResumesWhenPluggedInAfterBatteryPause() {
+    let (controller, fake, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.start()
+    #expect(controller.isActive)
+
+    controller.reconcile(battery: .discharging(15))
+    #expect(controller.isActive == false)
+    #expect(controller.pausedByBattery)
+    #expect(fake.held.isEmpty)
+
+    // Plugging in lifts the pause, and the paused manual session comes back
+    // on its own: the menu promises this, and nothing else restarts it.
+    controller.reconcile(battery: .onAC)
+    #expect(controller.pausedByBattery == false)
+    #expect(controller.isActive)
+    #expect(fake.held == [.system])
+}
+
+@MainActor
+@Test func manualSessionResumesWhenBatteryRecoversAboveMargin() {
+    let (controller, fake, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.start()
+
+    controller.reconcile(battery: .discharging(15))
+    #expect(controller.isActive == false)
+
+    controller.reconcile(battery: .discharging(22)) // inside the margin: still held
+    #expect(controller.isActive == false)
+
+    controller.reconcile(battery: .discharging(23)) // clears cutoff + margin: resume
+    #expect(controller.isActive)
+    #expect(fake.held == [.system])
+}
+
+@MainActor
+@Test func manualStopDuringBatteryPauseCancelsAutoResume() {
+    let (controller, fake, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.start()
+
+    controller.reconcile(battery: .discharging(15))
+    #expect(controller.pausedByBattery)
+
+    // The user stopped it while paused: that explicit stop wins, plugging in
+    // must not restart brewing behind their back.
+    controller.stop()
+    controller.reconcile(battery: .onAC)
+    #expect(controller.pausedByBattery == false)
+    #expect(controller.isActive == false)
+    #expect(fake.held.isEmpty)
+}
+
+@MainActor
+@Test func overdueTimedSessionEndsSameTickOnResume() {
+    let (controller, fake, clock) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.start(mode: .timed(duration: 60))
+
+    controller.reconcile(battery: .discharging(15))
+    #expect(controller.isActive == false)
+
+    // The deadline passes while paused: lifting the pause must end the
+    // session on that same tick, never hold assertions one tick past it.
+    clock.advance(120)
+    controller.reconcile(battery: .onAC)
+    #expect(controller.isActive == false)
+    #expect(fake.held.isEmpty)
+}
+
+@MainActor
+@Test func enablingTriggersDiscardsRememberedManualSession() {
+    let (controller, fake, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.start()
+
+    controller.reconcile(battery: .discharging(15))
+    #expect(controller.pausedByBattery)
+
+    // Triggers take ownership mid-pause but stay unsatisfied: nothing runs.
+    controller.triggerGate = StubGate(false)
+    controller.reconcile(battery: .onAC)
+    #expect(controller.isActive == false)
+
+    // Triggers go away again: the manual session remembered from before the
+    // trigger era must not resume underneath the user's back.
+    controller.triggerGate = nil
+    controller.reconcile(battery: .onAC)
+    #expect(controller.isActive == false)
+    #expect(fake.held.isEmpty)
+}
+
+@MainActor
 @Test func batteryThresholdIgnoredWhenNoReadingSupplied() {
     let (controller, fake, _) = makeController()
     controller.pauseBelowBatteryPercent = 20
@@ -954,11 +1080,12 @@ private final class StubGate: TriggerEvaluating {
     #expect(controller.pausedByThermal)
     #expect(fake.held.isEmpty)
 
-    // Recovery releases the latch; the session does not restart on its own
-    // (it was a manual session, the user starts it again).
+    // Recovery releases the latch and the paused manual session resumes on
+    // its own, mirroring the battery pause (the menu promises this).
     controller.reconcile(thermal: .clear)
     #expect(controller.pausedByThermal == false)
-    #expect(controller.isActive == false)
+    #expect(controller.isActive)
+    #expect(fake.held == [.system])
 }
 
 @MainActor

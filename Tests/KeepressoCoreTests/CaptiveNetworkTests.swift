@@ -6,6 +6,20 @@ private func check(_ checks: [ReadinessCheck], _ id: String) -> ReadinessCheck {
     checks.first { $0.id == id }!
 }
 
+@Test func transportErrorsStayPortalSuspiciousExceptWhenOffline() {
+    // Hotel and airport portals routinely fail with DNS/refused/RST rather
+    // than redirecting: those stay `.timeout` so detection and the
+    // portal-specific remediation keep firing. Only `.notConnectedToInternet`
+    // unambiguously means offline (`.failed`).
+    #expect(SystemCaptiveProbe.resultForTransportError(URLError(.timedOut)) == .timeout)
+    #expect(SystemCaptiveProbe.resultForTransportError(URLError(.cannotFindHost)) == .timeout)
+    #expect(SystemCaptiveProbe.resultForTransportError(URLError(.dnsLookupFailed)) == .timeout)
+    #expect(SystemCaptiveProbe.resultForTransportError(URLError(.cannotConnectToHost)) == .timeout)
+    #expect(SystemCaptiveProbe.resultForTransportError(URLError(.networkConnectionLost)) == .timeout)
+    #expect(SystemCaptiveProbe.resultForTransportError(URLError(.notConnectedToInternet)) == .failed)
+    #expect(SystemCaptiveProbe.resultForTransportError(nil) == .timeout)
+}
+
 @Test func captiveSuccessIsOk() {
     let snap = CaptiveSnapshot(http: .success, path: .satisfied)
     let c = check(ReadinessCheck.evaluateCaptive(snap), "wifi-captive")

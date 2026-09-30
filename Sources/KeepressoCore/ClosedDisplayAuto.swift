@@ -118,7 +118,7 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = arguments
-        process.standardOutput = Pipe()
+        process.standardOutput = FileHandle.nullDevice
         let errPipe = Pipe()
         process.standardError = errPipe
         do {
@@ -202,6 +202,38 @@ public enum BatteryPauseClosedDisplay {
             return alreadyLifted ? .idle : .skipLiftNeedsHelper
         }
         return alreadyLifted ? .restore : .idle
+    }
+}
+
+/// What the quit modal should cover, decided from live state. Pure so the
+/// matrix is unit-testable; the host gathers the inputs.
+///
+/// `overrideLive` means the sleep override is on *and* quitting would orphan
+/// it: a persistent latch, whichever run set it. A scoped hold never counts,
+/// because both backends self-clean when the app dies (the fallback loop
+/// restores on exit, the daemon releases on teardown), so there is no
+/// orphaned decision to ask about. The host reads that distinction from
+/// ``ClosedDisplayAutoController/isHolding``, not from who flipped the
+/// switch: a setting left on days ago is precisely what gets forgotten.
+public enum QuitSleepCheck {
+    public enum Coverage: Equatable, Sendable {
+        /// Nothing live that quitting orphans: quit silently.
+        case none
+        /// A session is brewing but nothing persists past quit.
+        case session
+        /// A persistent override is live and would survive quit unmanaged.
+        case overrideLive
+        /// Both: the session ends and the override would survive it.
+        case sessionAndOverride
+    }
+
+    public static func coverage(brewing: Bool, overrideLive: Bool) -> Coverage {
+        switch (brewing, overrideLive) {
+        case (true, true): return .sessionAndOverride
+        case (true, false): return .session
+        case (false, true): return .overrideLive
+        case (false, false): return .none
+        }
     }
 }
 

@@ -3,6 +3,122 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [1.26.0] - Unreleased
+
+Theme: make the menu your own, while keeping the familiar default experience.
+
+### Added
+
+- **Customize every menu control without changing the default menu.** A new
+  editor lets you show, hide, move, reorder, pin, and collapse controls and
+  sections. Start with Minimal, Compact, Balanced, Lid controls, Brewing
+  controls, Status only, or Detailed. Every preset starts at the standard
+  width, with settings and tools tucked away. Thanks to @alvst for the menu
+  customization work in PR #26.
+
+- **See layout changes as you edit.** A live preview sits beside the controls
+  and shows expanded and compact layouts, with an option to include inactive
+  controls. Preview buttons cannot change sessions or system settings.
+
+- **Choose the amount of detail.** Customize panel width, spacing, the status
+  header, trigger and agent rows, and menu-bar text. Session actions use subtle
+  accent buttons; Clear style offers neutral controls. Dropdowns and app links
+  stay neutral in both styles.
+
+- **Take manual control while triggers are running.** Start a timed or
+  indefinite manual session from a customized menu, then resume triggers when
+  you want automatic control again.
+
+### Fixed
+
+- **Existing settings keep working.** Customization stays off until enabled,
+  saved choices survive switching back to the standard menu, and import/export
+  preserves rules, presets, and feature settings. Unknown or malformed layout
+  fields fall back without discarding the rest of the configuration.
+
+- **Customized menus remain clickable.** Temporary window-view detachment no
+  longer starts a hide/remount loop. Expanded sections keep a collapse control,
+  and window actions close the menu panel before opening the chosen window.
+
+- **Hidden lid controls still report their state.** Active sleep overrides,
+  authorization prompts, and restore errors remain visible without duplicating
+  information already shown by a visible control.
+
+## [1.25.0] - 2026-09-14
+
+Theme: scheduled wakes land on time, and the app stops tripping over corrupt input.
+
+### Added
+
+- **Quitting while brewing asks first.** If a session is still running, or
+  the lid-closed sleep override is still switched on, a reminder names your
+  Mac and offers to turn it off before quitting, so you never strand a
+  machine awake by accident. It asks about an override left on any day, not
+  just one flipped in this run, and when the override is only scoped to the
+  session it says so rather than claiming you forgot it. "Turn off and quit"
+  waits for the setting to actually be off before quitting, so a dismissed
+  or mistyped password leaves the app running and tells you why. Fresh
+  installs also start with closed-display mode scoped to brewing sessions;
+  existing settings are never touched. Thanks to @alvst for the submission
+  in PR #21 that started this.
+
+### Changed
+
+- **Scheduled wakes fire at the time you picked, even on DST days.** The
+  repeat slot was computed from elapsed seconds, which disagree with
+  wall-clock time by an hour on transition days. Slots now resolve through
+  the calendar, and impossible dates like February 31 are rejected instead
+  of sliding silently into March. Rapid schedule edits also coalesce into
+  one privileged apply instead of racing each other.
+
+- **Locking the keyboard no longer freezes the app.** The lock and its
+  password prompt run off the main thread, so the app stays responsive
+  while the dialog is up. An Unlock pressed during a slow restore is queued
+  and serviced after, instead of being dropped.
+
+- **Updates cannot leave you with no installed copy.** The new version
+  stages beside the old one and swaps atomically; if staging fails, the app
+  launches the working install you already had instead of running from the
+  disk image.
+
+- **The widget stops claiming you are brewing after a crash.** A live
+  session re-checks hourly and flips to idle when the app is gone; a timed
+  session still refreshes exactly at its end.
+
+- **Codex detection follows CODEX_HOME.** Hooks installed under a custom
+  Codex home while detection watched the default directory; both read the
+  same root now.
+
+- **The Wi-Fi helper tells a dead connection from a hotel portal.** No
+  route shows the generic offline copy; DNS and refused errors keep the
+  portal copy and the login button.
+
+### Fixed
+
+- **AI-agent triggers no longer hang the app.** Any live agent rule wedged
+  the activity monitor on its first background refresh and froze the menu a
+  second later. Refreshes run clean now.
+
+- **A corrupt import can no longer crash the menu on open.** Absurd grace
+  intervals and reminder times are bounded at decode; every duration label
+  saturates instead of trapping.
+
+- **A refused shortcut no longer kills your hotkey.** When the system gives
+  the combination to another app, the previous shortcut is put back and the
+  refusal is logged.
+
+- **A cold start no longer asks you to reinstall the helper.** Straight
+  after a boot or a login, launchd hands the daemon over late, and the
+  reinstall window opened on a helper that was seconds from coming up by
+  itself. The handshake now waits out a slow first spawn, and the prompt
+  holds back for ninety seconds instead of one minute.
+
+- **Plugging in resumes a battery-paused session.** A low-battery pause
+  stopped manual brewing and never restarted it, so the Mac sat idle after
+  you plugged in. The session now comes back on its own once you plug in
+  or the charge recovers, and heat pauses resume the same way after the
+  Mac cools down. Stopping it yourself while paused still stays stopped.
+
 ## [1.24.1] - 2026-09-11
 
 Theme: second batch of macOS 27 updates, and a more compact menu.

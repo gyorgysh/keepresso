@@ -252,6 +252,29 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
 }
 
 @MainActor
+@Test func pauseDoesNotRefireOneShotReminderOnResume() {
+    let (controller, reminder, clock) = makeController()
+    controller.reminderAfter = 30 * 60
+    controller.pauseBelowBatteryPercent = 20
+    controller.start()
+
+    clock.advance(31 * 60)
+    controller.reconcile()
+    #expect(reminder.notices.count == 1)
+
+    // A pause and resume around the fired reminder must not deliver it
+    // again: the nudge counter survives the pause with the session. (The
+    // pause posts its own "low battery" notice through the same backend, so
+    // count only the still-brewing nudge.)
+    controller.reconcile(battery: .discharging(15))
+    #expect(controller.isActive == false)
+    controller.reconcile(battery: .onAC)
+    #expect(controller.isActive)
+    controller.reconcile()
+    #expect(reminder.notices.filter { $0.title == "Keepresso is still brewing" }.count == 1)
+}
+
+@MainActor
 @Test func batteryPauseDoesNotRunTheEndAction() {
     let (controller, reminder, endActor, _) = makeEndController()
     controller.endAction = .sleepDisplay
@@ -411,6 +434,22 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
     clock.advance(60 * 60)
     controller.reconcile()
     #expect(reminder.notices.isEmpty)
+}
+
+@MainActor
+@Test func denormalReminderAfterDoesNotTrap() {
+    // A directly assigned (unsanitized) denormal must not trap `Int(_:)` on
+    // the reconcile path: the ratio clamps, the reminder fires once, and a
+    // later reconcile does not duplicate it.
+    let (controller, reminder, clock) = makeController()
+    controller.reminderAfter = 1e-300
+    controller.start()
+    clock.advance(60)
+    controller.reconcile()
+    #expect(reminder.notices.count == 1)
+    clock.advance(60)
+    controller.reconcile()
+    #expect(reminder.notices.count == 1)
 }
 
 @MainActor

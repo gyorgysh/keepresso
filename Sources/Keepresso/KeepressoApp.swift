@@ -54,6 +54,12 @@ struct KeepressoApp: App {
         .windowResizability(.contentSize)
         .handlesExternalEvents(matching: [])
 
+        Window("Customize Menu", id: Self.menuCustomizationWindowID) {
+            MenuCustomizationView(model: appDelegate.model)
+        }
+        .defaultSize(width: 940, height: 800)
+        .handlesExternalEvents(matching: [])
+
         Window("About Keepresso", id: Self.aboutWindowID) {
             AboutView()
         }
@@ -83,6 +89,7 @@ struct KeepressoApp: App {
     static let keyboardCleanerWindowID = "keyboard-cleaner"
     static let wifiAssistantWindowID = "wifi-assistant"
     static let preferencesWindowID = "preferences"
+    static let menuCustomizationWindowID = "menu-customization"
     static let aboutWindowID = "about"
     static let welcomeWindowID = "welcome"
     static let helperWindowID = "helper"
@@ -102,7 +109,8 @@ private struct MenuBarLabelView: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        MenuBarLabel(session: model.session, showCountdown: model.showCountdownInMenuBar)
+        MenuBarLabel(session: model.session, showCountdown: model.showCountdownInMenuBar,
+                     presentation: model.advancedMenuLayout)
             .task {
                 // The context menu's window entries need openWindow, which
                 // only exists inside SwiftUI; this is the app's one always
@@ -266,13 +274,87 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { [weak model] _ in
-            model?.handleSystemWake()
+            // `queue: .main` guarantees the main thread; assert that to the
+            // compiler rather than letting the call warn as implicitly async.
+            MainActor.assumeIsolated { model?.handleSystemWake() }
         }
         // The Control Center toggle: consume a command that may have launched
         // us, then keep listening while running.
         widgetObserver = WidgetCommandObserver { [weak model] in model?.applyPendingWidgetCommand() }
         model.applyPendingWidgetCommand()
         model.syncWidgetState()
+    }
+
+    /// Set once the user has answered the quit question, so the termination
+    /// they triggered on the way out goes straight through.
+    private var quitConfirmed = false
+    /// The question is on screen. A second Cmd-Q re-focuses it instead of
+    /// stacking another window or quitting behind it.
+    private var quitModal: QuitSleepModal?
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // A duplicate handing over quits silently, a relocate handover quits
+        // into a copy that owns the state, and an answered question quits.
+        guard !yieldingToPeer, !AppRelocator.isRelocating, !quitConfirmed else {
+            return .terminateNow
+        }
+        // Logging out, restarting or shutting down: never hold the system up
+        // with a dialog it cannot see the point of.
+        if let reason = NSAppleEventManager.shared().currentAppleEvent?
+            .attributeDescriptor(forKeyword: AEKeyword(kAEQuitReason)),
+           reason.enumCodeValue != 0 {
+            return .terminateNow
+        }
+        if let quitModal {
+            quitModal.bringToFront()
+            return .terminateCancel
+        }
+
+        let coverage = model.quitSleepCoverageNow()
+        let scopedLid = model.quitScopedLidMode()
+        guard coverage != .none else { return .terminateNow }
+
+        // Cancel the termination outright and ask afterwards, rather than
+        // holding it open with `.terminateLater`.
+        //
+        // AppKit runs `.terminateLater` in `NSModalPanelRunLoopMode`, which
+        // does not deliver mouse events to an ordinary window, so the buttons
+        // are dead; and a nested `runModal` is no better, because quitting
+        // starts in the menu bar extra and menu tracking owns the event
+        // stream. Both were tried. Cancelling puts the run loop back in its
+        // default mode with no tracking session, where a plain window behaves
+        // like any other, and the answer re-issues `terminate` for real.
+        let modal = QuitSleepModal()
+        quitModal = modal
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let device = MachineIdentity.deviceName(
+                modelIdentifier: MachineIdentity.currentModelIdentifier())
+            let qualifier = MachineIdentity.powerQualifier(IOKitPowerSourceMonitor().current)
+            modal.present(
+                coverage: coverage, device: device, qualifier: qualifier, scopedLid: scopedLid
+            ) { decision in
+                self.quitModal = nil
+                switch decision {
+                case .cancel:
+                    break
+                case .quitAnyway, .stopBrewingAndQuit:
+                    self.quitConfirmed = true
+                    NSApp.terminate(nil)
+                case .turnOffAndQuit:
+                    Task { @MainActor in
+                        // Only quit once the override is confirmed off. A
+                        // dismissed password prompt or a failed write leaves
+                        // the app running, rather than quitting and stranding
+                        // the setting the user just asked to clear.
+                        guard await self.model.clearSleepOverrideForQuit() else { return }
+                        self.quitConfirmed = true
+                        NSApp.terminate(nil)
+                    }
+                }
+            }
+        }
+        return .terminateCancel
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -291,8 +373,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // keeping the Mac awake right now.
         if yieldingToPeer { return }
         // Unlock before we go so a quit mid-wipe does not leave keys dead.
-        model.unlockKeyboardFromOverlay()
-        // The session dies with this process; don't leave the widgets lying.
+        // Deliberately the synchronous prompt-free restore: termination cannot
+        // await a detached task, and a password dialog during quit would be
+        // unusable.
+        model.keyboardLock.restoreIfNeeded()
+        // A relocate handover quits into a copy that owns the shared state
+        // (an already-running one, or the fresh /Applications copy syncing at
+        // launch): writing "stopped" here would lie over its live state. Any
+        // other quit owns the write: the session dies with this process, so
+        // don't leave the widgets lying.
+        guard !AppRelocator.isRelocating else { return }
         model.writeWidgetStateStopped()
     }
 

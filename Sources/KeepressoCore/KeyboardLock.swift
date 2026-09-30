@@ -125,25 +125,21 @@ public final class HidutilKeyboardRemapper: KeyboardRemapping, @unchecked Sendab
 }
 
 /// Privileged hidutil via osascript's "with administrator privileges". Blocks
-/// until the password dialog is answered. The JSON is read from a temp file so
-/// the AppleScript does not have to quote a 20 KB mapping inline.
+/// until the password dialog is answered. The JSON is embedded in the script
+/// as an AppleScript string literal (escaped), not staged in a user-writable
+/// temp file: a same-user process could otherwise swap that file between the
+/// write and root's read, turning the prompt into arbitrary root `hidutil`.
 public enum OsascriptKeyboardRemapper: Sendable {
     public static func apply(_ mapping: KeyboardKeyMapping) -> KeyboardLockResult {
         let json = mapping.hidutilSetJSON()
-        let file = FileManager.default.temporaryDirectory
-            .appendingPathComponent("keepresso-keyboard-lock-\(UUID().uuidString).json")
-        defer { try? FileManager.default.removeItem(at: file) }
-        do {
-            try Data(json.utf8).write(to: file, options: .atomic)
-        } catch {
-            return .overlayOnly
-        }
-        let path = file.path.replacingOccurrences(of: "\\", with: "\\\\")
+        // Single-line JSON, so escaping backslashes and quotes makes it a safe
+        // AppleScript literal; `quoted form of` then hands it to the shell as
+        // one untouchable argument.
+        let escaped = json
+            .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
         let script = """
-        set p to "\(path)"
-        set j to do shell script "/bin/cat " & quoted form of p
-        do shell script "/usr/bin/hidutil property --set " & quoted form of j with administrator privileges
+        do shell script "/usr/bin/hidutil property --set " & quoted form of "\(escaped)" with administrator privileges
         """
         guard let result = runOsascript(script) else { return .overlayOnly }
         return outcome(status: result.status, stderr: result.stderr)
@@ -366,6 +362,16 @@ public final class KeyboardLocker: KeyboardLocking, @unchecked Sendable {
         }
         if !restored {
             restored = remapper.apply(original)
+            if restored {
+                // Believe the read-back, not the exit status: an unprivileged
+                // `hidutil --set` can exit 0 without overriding a
+                // root-installed mapping (quit-time restore after an
+                // osascript lock with no helper, or a dead helper after a
+                // helper lock). Verified here, before the privileged
+                // fallback below, so an unverified success still reaches the
+                // prompt that can actually undo a root mapping.
+                restored = remapper.currentMapping() == original
+            }
         }
         if !restored, allowPrompt, let privilegedApply {
             restored = privilegedApply(original) == .applied
@@ -415,6 +421,11 @@ public final class KeyboardLockController {
 
     private let locker: KeyboardLocking
     private let now: () -> Date
+    /// True while a restore is running off the main actor. Both ``unlock()``
+    /// and ``tick()`` yield now, so without this the overlay's 4 Hz tick (or a
+    /// second Unlock click) would start concurrent restores: the synchronous
+    /// versions could not overlap.
+    @ObservationIgnored private var restoreInFlight = false
 
     public init(
         locker: KeyboardLocking = KeyboardLocker(),
@@ -446,28 +457,75 @@ public final class KeyboardLockController {
         }
     }
 
-    public func unlock() {
-        guard isLocked || locker.isLocked else { return }
-        locker.unlock()
-        isLocked = locker.isLocked
-        if !isLocked {
-            isGlobal = true
-            unlockAt = nil
+    /// An Unlock pressed while a restore is already running. The press is
+    /// remembered and serviced when the in-flight restore finishes, so a
+    /// click during a slow (up to the XPC timeout) tick restore is never
+    /// silently dropped.
+    @ObservationIgnored private var unlockQueued = false
+
+    /// Unlock, running the restore off the main actor: the helper XPC call and
+    /// the osascript administrator prompt both block, and with the prompt up
+    /// the whole app would otherwise freeze until it is answered.
+    public func unlock() async {
+        guard isLocked || locker.isLocked else {
+            unlockQueued = false
+            return
+        }
+        if restoreInFlight {
+            unlockQueued = true
+            return
+        }
+        await drainUnlockQueue()
+    }
+
+    /// Run prompting restores until unlocked or no further press arrived
+    /// mid-restore. Each pass clears the flag first, so the loop ends when
+    /// the user stops clicking; it never spins on a persistently failing
+    /// restore.
+    private func drainUnlockQueue() async {
+        while true {
+            unlockQueued = false
+            restoreInFlight = true
+            isBusy = true
+            await Task.detached { [locker] in locker.unlock() }.value
+            restoreInFlight = false
             isBusy = false
+            isLocked = locker.isLocked
+            if !isLocked {
+                isGlobal = true
+                unlockAt = nil
+                return
+            }
+            guard unlockQueued else { return }
         }
     }
 
     /// Auto-unlock when a timed lock has elapsed. Restores without a password
     /// prompt: a dialog every tick would be unusable. One silent attempt, then
-    /// the overlay stays and Unlock can prompt.
-    public func tick() {
+    /// the overlay stays and Unlock can prompt. Off the main actor for the
+    /// same reason as ``unlock()``. Never sets `isBusy`: that flag renders
+    /// the administrator-password note, and this path cannot prompt.
+    public func tick() async {
         guard isLocked, let unlockAt, now() >= unlockAt else { return }
-        locker.restoreIfNeeded()
-        isLocked = locker.isLocked
+        // Claim the deadline before yielding, so the one silent attempt stays
+        // one attempt even though the restore now runs concurrently.
         self.unlockAt = nil
+        // A restore already running (an Unlock press got there first) doubles
+        // as the silent attempt; never start a second one.
+        guard !restoreInFlight else { return }
+        restoreInFlight = true
+        await Task.detached { [locker] in locker.restoreIfNeeded() }.value
+        restoreInFlight = false
+        isLocked = locker.isLocked
         if !isLocked {
             isGlobal = true
-            isBusy = false
+            unlockQueued = false // the queued press is moot: already unlocked
+            return
+        }
+        // An Unlock pressed during the silent restore: service it now, with
+        // a prompt if needed, rather than dropping the click.
+        if unlockQueued {
+            await drainUnlockQueue()
         }
     }
 

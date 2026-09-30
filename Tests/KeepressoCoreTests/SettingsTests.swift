@@ -72,20 +72,22 @@ import Foundation
     #expect(try JSONDecoder().decode(KeepressoSettings.self, from: data).menuPanelExpanded == false)
 }
 
-@Test func toolsSectionDefaultsOpenAndRemembersCollapsedState() throws {
+@Test func toolsSectionDefaultsClosedAndRemembersExpandedState() throws {
     let legacyJSON = """
     { "showToolsInMenu": true }
     """
     let upgraded = try JSONDecoder().decode(
         KeepressoSettings.self, from: Data(legacyJSON.utf8))
-    #expect(upgraded.toolsSectionExpanded)
+    #expect(!upgraded.toolsSectionExpanded)
+    #expect(!KeepressoSettings.default.toolsSectionExpanded)
 
     var settings = KeepressoSettings.default
-    settings.toolsSectionExpanded = false
+    settings.menuCustomizationEnabled = true
+    settings.toolsSectionExpanded = true
     let data = try JSONEncoder().encode(settings)
     #expect(try JSONDecoder().decode(
         KeepressoSettings.self, from: data
-    ).toolsSectionExpanded == false)
+    ).toolsSectionExpanded == true)
 }
 
 @Test func menuCustomizationIsOptInAndSectionChoicesRoundTrip() throws {
@@ -175,6 +177,89 @@ import Foundation
     #expect(MenuBarSection.displayedSections(
         in: order, enabled: enabled, expanded: true
     ) == [.toolsAndShortcuts, .triggers, .manualSession])
+}
+
+@Test func disablingCustomizationRestoresStandardLayoutWithoutLosingChoices() throws {
+    var settings = KeepressoSettings(
+        menuPanelExpanded: false,
+        menuCustomizationEnabled: true,
+        showManualSessionInMenu: false,
+        showTriggerControlsInMenu: false,
+        showQuickSettingsInMenu: true,
+        showToolsInMenu: true,
+        toolsSectionExpanded: true,
+        menuSectionOrder: [.toolsAndShortcuts, .quickSettings, .manualSession, .triggers]
+    )
+    #expect(settings.customizedMenuSections == [.toolsAndShortcuts, .quickSettings])
+
+    settings.menuCustomizationEnabled = false
+    let data = try JSONEncoder().encode(settings)
+    let restored = try JSONDecoder().decode(KeepressoSettings.self, from: data)
+    // Nil selects the original adaptive panel, even with saved custom choices.
+    #expect(restored.customizedMenuSections == nil)
+    #expect(restored == settings)
+
+    settings.menuCustomizationEnabled = true
+    #expect(settings.customizedMenuSections == [.toolsAndShortcuts, .quickSettings])
+}
+
+@Test(arguments: [true, false])
+func legacyMenuChoicesDoNotOptUsersIn(expanded: Bool) throws {
+    // Settings from the early PR version have section choices but no explicit
+    // opt-in. A normal upgrade must ignore them when choosing the layout.
+    let json = """
+    {
+      "triggersEnabled": true,
+      "menuPanelExpanded": \(expanded),
+      "showQuickSettingsInMenu": false,
+      "showToolsInMenu": false,
+      "toolsSectionExpanded": true,
+      "menuSectionOrder": ["toolsAndShortcuts", "manualSession"]
+    }
+    """
+    let settings = try JSONDecoder().decode(KeepressoSettings.self, from: Data(json.utf8))
+    #expect(settings.customizedMenuSections == nil)
+    #expect(settings.menuPanelExpanded == expanded)
+    #expect(settings.triggersEnabled)
+}
+
+@Test func malformedCustomizationDoesNotDiscardExistingSettings() throws {
+    let legacyJSON = """
+    {
+      "triggersEnabled": true,
+      "menuPanelExpanded": false,
+      "showCountdownInMenuBar": true,
+      "closedDisplayOnlyWhileBrewing": true,
+      "pauseBelowBatteryPercent": 40,
+      "glassClarity": 75,
+      "quickStopDurations": [900, 5400]
+    }
+    """
+    let legacy = try JSONDecoder().decode(KeepressoSettings.self, from: Data(legacyJSON.utf8))
+    var object = try #require(JSONSerialization.jsonObject(with: Data(legacyJSON.utf8)) as? [String: Any])
+    object["menuCustomizationEnabled"] = "yes"
+    object["showManualSessionInMenu"] = []
+    object["showTriggerControlsInMenu"] = "no"
+    object["showQuickSettingsInMenu"] = [:] as [String: String]
+    object["showToolsInMenu"] = 0
+    object["toolsSectionExpanded"] = "yes"
+    object["menuSectionOrder"] = ["quickSettings", 123] as [Any]
+    let data = try JSONSerialization.data(withJSONObject: object)
+    let recovered = try JSONDecoder().decode(KeepressoSettings.self, from: data)
+    #expect(recovered == legacy)
+}
+
+@Test func emptyCustomizedMenuRepairsToManualControls() throws {
+    let settings = KeepressoSettings(
+        menuCustomizationEnabled: true,
+        showManualSessionInMenu: false,
+        showTriggerControlsInMenu: false,
+        showQuickSettingsInMenu: false,
+        showToolsInMenu: false
+    )
+    #expect(settings.customizedMenuSections == [.manualSession])
+    let data = try JSONEncoder().encode(settings)
+    #expect(try JSONDecoder().decode(KeepressoSettings.self, from: data) == settings)
 }
 
 @Test func optionsWithoutSimulateActivityDecodeToItsDefault() throws {
@@ -281,4 +366,80 @@ import Foundation
         from: Data(#"{"automationLeasesEnabled":false}"#.utf8)
     )
     #expect(!off.automationLeasesEnabled)
+}
+
+@Test func positiveIntervalHasACapAndAFloor() throws {
+    // `reminderAfter` is also a divisor (`elapsed / reminderAfter`): a
+    // denormal like 1e-300 would trap `Int(_:)` on the 1 Hz reconcile path,
+    // and an absurd value would never fire. Both are cleaned on decode.
+    let tiny = try JSONDecoder().decode(
+        KeepressoSettings.self,
+        from: Data(#"{ "reminderAfter": 1e-300 }"#.utf8))
+    #expect(tiny.reminderAfter == 1)
+
+    let huge = try JSONDecoder().decode(
+        KeepressoSettings.self,
+        from: Data(#"{ "reminderAfter": 1e300, "awdlGraceSeconds": 1e300 }"#.utf8))
+    let cap = SessionMode.maxTimedMinutes * 60
+    #expect(huge.reminderAfter == cap)
+    #expect(huge.awdlGraceSeconds == cap)
+
+    // The programmatic init applies the same cleanup as the decoder.
+    #expect(KeepressoSettings(reminderAfter: 0.001).reminderAfter == 1)
+    #expect(KeepressoSettings(awdlGraceSeconds: -5).awdlGraceSeconds == 60)
+
+    // Sane values pass through untouched.
+    let fine = try JSONDecoder().decode(
+        KeepressoSettings.self,
+        from: Data(#"{ "reminderAfter": 1800, "awdlGraceSeconds": 90 }"#.utf8))
+    #expect(fine.reminderAfter == 1800)
+    #expect(fine.awdlGraceSeconds == 90)
+}
+
+@Test func hotKeySanitizedOnBothInitPaths() throws {
+    // A corrupt imported shortcut is dropped rather than trapping the
+    // Carbon conversion later, on decode and on programmatic init alike.
+    let bad = try JSONDecoder().decode(
+        KeepressoSettings.self,
+        from: Data(#"{ "hotKey": { "keyCode": -1, "modifierFlags": 1048576 } }"#.utf8))
+    #expect(bad.hotKey == nil)
+    #expect(KeepressoSettings(hotKey: HotKeyShortcut(keyCode: -1, modifierFlags: 0)).hotKey == nil)
+
+    // The bound is the RegisterEventHotKey parameter width (UInt32).
+    let wide = HotKeyShortcut(keyCode: Int(UInt32.max), modifierFlags: 1_048_576)
+    #expect(KeepressoSettings(hotKey: wide).hotKey == wide)
+    let fine = HotKeyShortcut(keyCode: 40, modifierFlags: 1_048_576)
+    #expect(KeepressoSettings(hotKey: fine).hotKey == fine)
+}
+
+@Test func freshInstallDefaultsOnlyTouchUnsaved() {
+    // A first launch (nothing persisted) starts session-scoped; anything
+    // saved, including an explicit off, passes through untouched.
+    let fresh = KeepressoSettings.default.withFreshInstallDefaults(hasStoredSettings: false)
+    #expect(fresh.closedDisplayOnlyWhileBrewing)
+
+    var savedOff = KeepressoSettings.default
+    savedOff.closedDisplayOnlyWhileBrewing = false
+    #expect(savedOff.withFreshInstallDefaults(hasStoredSettings: true) == savedOff)
+
+    // Everything else passes through on a fresh install too.
+    #expect(fresh.reminderAfter == KeepressoSettings.default.reminderAfter)
+    #expect(fresh.options == KeepressoSettings.default.options)
+}
+
+@Test func storeKnowsWhetherAnythingWasPersisted() {
+    let defaults = UserDefaults(suiteName: "keepresso.tests.firstlaunch")!
+    defaults.removePersistentDomain(forName: "keepresso.tests.firstlaunch")
+    let store = UserDefaultsSettingsStore(defaults: defaults, key: "k")
+    #expect(!store.hasStoredSettings)
+    store.save(KeepressoSettings.default)
+    #expect(store.hasStoredSettings)
+}
+
+@Test func displaySecondsNeverTraps() {
+    #expect(KeepressoSettings.displaySeconds(90.4) == 90)
+    #expect(KeepressoSettings.displaySeconds(-3) == 0)
+    #expect(KeepressoSettings.displaySeconds(.nan) == 0)
+    #expect(KeepressoSettings.displaySeconds(.infinity) == 0)
+    #expect(KeepressoSettings.displaySeconds(1e308) > Int.max / 4)
 }

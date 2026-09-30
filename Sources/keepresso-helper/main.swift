@@ -54,7 +54,7 @@ final class HelperConnection: NSObject, HelperXPCProtocol {
     }
 
     func fanHoldDropped(reply: @escaping @Sendable (Bool) -> Void) {
-        reply(engine.fanHoldDropped)
+        reply(engine.fanHoldWasDropped())
     }
 
     func setPriorityHold(_ holding: Bool, pid: Int, reply: @escaping @Sendable (Bool) -> Void) {
@@ -103,11 +103,29 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
         // own signature at runtime, never hardcoded). Then the console user's
         // uid: a second local account running the same signed app must not
         // drive machine-wide root verbs.
-        newConnection.setCodeSigningRequirement(
-            HelperService.peerRequirement(identifier: HelperService.appCodeSignIdentifier)
-        )
-        guard let peerUID = HelperPeerPolicy.uid(ofPID: newConnection.processIdentifier),
-              HelperPeerPolicy.shouldAccept(peerUID: peerUID, consoleUID: consoleUserID())
+        if let requirement = HelperService.anchoredPeerRequirement(
+            identifier: HelperService.appCodeSignIdentifier
+        ) {
+            newConnection.setCodeSigningRequirement(requirement)
+        } else {
+            // Ad-hoc build: there is no Team ID to anchor a requirement to,
+            // so an identifier-only requirement would let any local process
+            // claim the app's identifier and drive root verbs. Pin the peer
+            // to the exact app binary inside this daemon's own bundle,
+            // kernel-enforced: unlike a pid-based path lookup this has no
+            // pid-reuse race. Fail closed when the pin cannot be built.
+            guard let selfPath = HelperPeerPolicy.executablePath(ofPID: getpid()),
+                  let appPath = HelperPeerPolicy.bundledAppExecutablePath(for: selfPath),
+                  let requirement = HelperPeerPolicy.pinnedPeerRequirement(
+                      identifier: HelperService.appCodeSignIdentifier,
+                      executablePath: appPath)
+            else { return false }
+            newConnection.setCodeSigningRequirement(requirement)
+        }
+        // The uid comes from the connection itself, not from a pid lookup,
+        // so a recycled pid cannot smuggle a different user past this check.
+        guard HelperPeerPolicy.shouldAccept(
+            peerUID: newConnection.effectiveUserIdentifier, consoleUID: consoleUserID())
         else { return false }
 
         lock.lock()

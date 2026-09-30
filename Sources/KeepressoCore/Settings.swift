@@ -89,11 +89,14 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     public var showQuickSettingsInMenu: Bool
     /// Whether the specialized assistant shortcuts appear in the panel.
     public var showToolsInMenu: Bool
-    /// Whether the specialized assistant shortcuts are disclosed. Open by
-    /// default, then remembers the user's choice across menu and app launches.
+    /// Whether the customized Tools section is disclosed. Closed by default,
+    /// matching the standard menu; remembered only in the customized layout.
     public var toolsSectionExpanded: Bool
     /// Display order for the four user-configurable menu sections.
     public var menuSectionOrder: [MenuBarSection]
+    /// Optional granular layout. Nil retains the original four-section
+    /// customization. It never affects the standard menu while opt-in is off.
+    public var menuLayout: MenuLayout?
     /// How see-through the menu-bar dropdown is, 0 (fully frosty,
     /// strongest readability backing) to 100 (clearest Liquid Glass).
     /// Defaults to the halfway 50.
@@ -178,8 +181,9 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         showTriggerControlsInMenu: Bool = true,
         showQuickSettingsInMenu: Bool = true,
         showToolsInMenu: Bool = true,
-        toolsSectionExpanded: Bool = true,
+        toolsSectionExpanded: Bool = false,
         menuSectionOrder: [MenuBarSection] = MenuBarSection.defaultOrder,
+        menuLayout: MenuLayout? = nil,
         glassClarity: Int = 50,
         awdlAutoWithGaming: Bool = false,
         awdlNotifications: Bool = false,
@@ -197,10 +201,10 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         controllerPokeWhileGaming: Bool = false
     ) {
         self.options = options
-        self.defaultMode = defaultMode
+        self.defaultMode = Self.sanitizedMode(defaultMode)
         self.triggersEnabled = triggersEnabled
         self.ruleSet = ruleSet
-        self.reminderAfter = reminderAfter
+        self.reminderAfter = Self.normalizedPositiveInterval(reminderAfter)
         self.reminderRepeats = reminderRepeats
         self.reminderSound = reminderSound
         self.notifyOnEnd = notifyOnEnd
@@ -233,13 +237,14 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         }
         self.toolsSectionExpanded = toolsSectionExpanded
         self.menuSectionOrder = Self.normalizedMenuSectionOrder(menuSectionOrder)
+        self.menuLayout = menuLayout?.normalized()
         self.glassClarity = min(max(glassClarity, 0), 100)
         self.awdlAutoWithGaming = awdlAutoWithGaming
         self.awdlNotifications = awdlNotifications
-        self.awdlGraceSeconds = awdlGraceSeconds
+        self.awdlGraceSeconds = Self.normalizedPositiveInterval(awdlGraceSeconds) ?? 60
         self.closedDisplayOnlyWhileBrewing = closedDisplayOnlyWhileBrewing
         self.closedLidDisplayPolicy = closedLidDisplayPolicy
-        self.hotKey = hotKey
+        self.hotKey = Self.sanitizedHotKey(hotKey)
         self.startOnLaunch = startOnLaunch
         self.presets = presets
         self.seededPresetIDs = seededPresetIDs
@@ -306,10 +311,12 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         options = try c.decodeIfPresent(SleepPreventionOptions.self, forKey: .options) ?? .default
-        defaultMode = try c.decodeIfPresent(SessionMode.self, forKey: .defaultMode) ?? .indefinite
+        defaultMode = Self.sanitizedMode(
+            try c.decodeIfPresent(SessionMode.self, forKey: .defaultMode) ?? .indefinite)
         triggersEnabled = try c.decodeIfPresent(Bool.self, forKey: .triggersEnabled) ?? false
         ruleSet = try c.decodeIfPresent(RuleSet.self, forKey: .ruleSet) ?? .empty
-        reminderAfter = try c.decodeIfPresent(TimeInterval.self, forKey: .reminderAfter)
+        reminderAfter = Self.normalizedPositiveInterval(
+            try c.decodeIfPresent(TimeInterval.self, forKey: .reminderAfter))
         reminderRepeats = try c.decodeIfPresent(Bool.self, forKey: .reminderRepeats) ?? false
         reminderSound = try c.decodeIfPresent(Bool.self, forKey: .reminderSound) ?? true
         notifyOnEnd = try c.decodeIfPresent(Bool.self, forKey: .notifyOnEnd) ?? false
@@ -333,12 +340,14 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         menuPanelExpanded = try c.decodeIfPresent(Bool.self, forKey: .menuPanelExpanded) ?? true
         // Menu customization was introduced as an opt-in. A settings blob from
         // an older release must continue to render the established layout.
-        menuCustomizationEnabled = try c.decodeIfPresent(
-            Bool.self, forKey: .menuCustomizationEnabled) ?? false
-        let decodedManualSection = try c.decodeIfPresent(Bool.self, forKey: .showManualSessionInMenu) ?? true
-        let decodedTriggerSection = try c.decodeIfPresent(Bool.self, forKey: .showTriggerControlsInMenu) ?? true
-        let decodedQuickSettings = try c.decodeIfPresent(Bool.self, forKey: .showQuickSettingsInMenu) ?? true
-        let decodedTools = try c.decodeIfPresent(Bool.self, forKey: .showToolsInMenu) ?? true
+        // Invalid customization metadata falls back locally, so it cannot
+        // discard the user's unrelated settings, rules, or presets.
+        menuCustomizationEnabled = (try? c.decodeIfPresent(
+            Bool.self, forKey: .menuCustomizationEnabled)) ?? false
+        let decodedManualSection = (try? c.decodeIfPresent(Bool.self, forKey: .showManualSessionInMenu)) ?? true
+        let decodedTriggerSection = (try? c.decodeIfPresent(Bool.self, forKey: .showTriggerControlsInMenu)) ?? true
+        let decodedQuickSettings = (try? c.decodeIfPresent(Bool.self, forKey: .showQuickSettingsInMenu)) ?? true
+        let decodedTools = (try? c.decodeIfPresent(Bool.self, forKey: .showToolsInMenu)) ?? true
         if decodedManualSection || decodedTriggerSection || decodedQuickSettings || decodedTools {
             showManualSessionInMenu = decodedManualSection
             showTriggerControlsInMenu = decodedTriggerSection
@@ -350,18 +359,20 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
             showQuickSettingsInMenu = false
             showToolsInMenu = false
         }
-        toolsSectionExpanded = try c.decodeIfPresent(Bool.self, forKey: .toolsSectionExpanded) ?? true
+        toolsSectionExpanded = (try? c.decodeIfPresent(Bool.self, forKey: .toolsSectionExpanded)) ?? false
         // Decode raw strings so a section added by a newer version is ignored
         // instead of making the user's entire settings file fail to load.
-        let decodedSectionOrder = (try c.decodeIfPresent(
+        let decodedSectionOrder = (try? c.decodeIfPresent(
             [String].self, forKey: .menuSectionOrder))?
             .compactMap(MenuBarSection.init(rawValue:))
             ?? MenuBarSection.defaultOrder
         menuSectionOrder = Self.normalizedMenuSectionOrder(decodedSectionOrder)
+        menuLayout = try? c.decodeIfPresent(MenuLayout.self, forKey: .menuLayout)
         glassClarity = min(max(try c.decodeIfPresent(Int.self, forKey: .glassClarity) ?? 50, 0), 100)
         awdlAutoWithGaming = try c.decodeIfPresent(Bool.self, forKey: .awdlAutoWithGaming) ?? false
         awdlNotifications = try c.decodeIfPresent(Bool.self, forKey: .awdlNotifications) ?? false
-        awdlGraceSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .awdlGraceSeconds) ?? 60
+        awdlGraceSeconds = Self.normalizedPositiveInterval(
+            try c.decodeIfPresent(TimeInterval.self, forKey: .awdlGraceSeconds) ?? 60) ?? 60
         closedDisplayOnlyWhileBrewing = try c.decodeIfPresent(Bool.self, forKey: .closedDisplayOnlyWhileBrewing) ?? false
         // Decoded as a raw string, not the enum: a value persisted by an older
         // build (like the branch-only `keepDark`) must fall back to the
@@ -369,7 +380,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         // user loses every setting, not just this one.
         let policyRaw = try c.decodeIfPresent(String.self, forKey: .closedLidDisplayPolicy)
         closedLidDisplayPolicy = policyRaw.flatMap(ClosedLidDisplayPolicy.init(rawValue:)) ?? .displayOff
-        hotKey = try c.decodeIfPresent(HotKeyShortcut.self, forKey: .hotKey)
+        hotKey = Self.sanitizedHotKey(try c.decodeIfPresent(HotKeyShortcut.self, forKey: .hotKey))
         startOnLaunch = try c.decodeIfPresent(Bool.self, forKey: .startOnLaunch) ?? false
         presets = try c.decodeIfPresent([Preset].self, forKey: .presets) ?? Preset.builtIns
         // Settings saved before seeding was tracked (1.2.x and earlier) had
@@ -394,6 +405,52 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     /// The most quick-stop shortcuts the menu row holds before it overflows.
     public static let maxQuickStopDurations = 4
 
+    public var customizedMenuLayout: MenuLayout? {
+        menuCustomizationEnabled ? menuLayout : nil
+    }
+
+    /// Merely enabling customization keeps the standard menu until a layout
+    /// choice is edited. Earlier four-section choices still remain usable.
+    public var hasLegacyMenuChoices: Bool {
+        menuSectionOrder != MenuBarSection.defaultOrder
+            || !showManualSessionInMenu || !showTriggerControlsInMenu
+            || !showQuickSettingsInMenu || !showToolsInMenu || toolsSectionExpanded
+    }
+
+    /// Apply presentation choices while retaining readable section settings
+    /// for earlier releases. No feature, session, or trigger settings change.
+    public mutating func setMenuLayout(_ layout: MenuLayout) {
+        let layout = layout.normalized()
+        menuLayout = layout
+        menuSectionOrder = Self.normalizedMenuSectionOrder(
+            layout.sectionOrder.compactMap { MenuBarSection(rawValue: $0.rawValue) })
+        showManualSessionInMenu = !layout.hiddenSections.contains(.manualSession)
+        showTriggerControlsInMenu = !layout.hiddenSections.contains(.triggers)
+        showQuickSettingsInMenu = !layout.hiddenSections.contains(.quickSettings)
+        showToolsInMenu = !layout.hiddenSections.contains(.toolsAndShortcuts)
+        // Earlier customization versions require one legacy section. The
+        // granular layout may still hide all of its groups independently.
+        if !showManualSessionInMenu && !showTriggerControlsInMenu
+            && !showQuickSettingsInMenu && !showToolsInMenu {
+            showManualSessionInMenu = true
+        }
+        toolsSectionExpanded = !layout.collapsedSections.contains(.toolsAndShortcuts)
+    }
+
+    /// The custom layout is unavailable until explicitly enabled. Keeping
+    /// that decision here prevents saved choices from affecting the default
+    /// layout after customization is turned off or an old backup is imported.
+    public var customizedMenuSections: [MenuBarSection]? {
+        guard menuCustomizationEnabled else { return nil }
+        var enabled = Set<MenuBarSection>()
+        if showManualSessionInMenu { enabled.insert(.manualSession) }
+        if showTriggerControlsInMenu { enabled.insert(.triggers) }
+        if showQuickSettingsInMenu { enabled.insert(.quickSettings) }
+        if showToolsInMenu { enabled.insert(.toolsAndShortcuts) }
+        return MenuBarSection.displayedSections(
+            in: menuSectionOrder, enabled: enabled, expanded: menuPanelExpanded)
+    }
+
     /// Keep the first occurrence of every known section and append any missing
     /// sections in default order. This repairs imported or hand-edited lists
     /// without discarding the user's valid ordering choices.
@@ -407,11 +464,15 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     }
 
     /// Sanitize a quick-stop duration list from any source (the editor, an
-    /// imported blob, a hand-edited file): drop non-positive entries, dedupe,
-    /// sort ascending, and cap at ``maxQuickStopDurations``.
+    /// imported blob, a hand-edited file): drop non-positive and non-finite
+    /// entries, dedupe, sort ascending, and cap at ``maxQuickStopDurations``.
     public static func normalizedQuickStopDurations(_ raw: [TimeInterval]) -> [TimeInterval] {
+        let maxSeconds = SessionMode.maxTimedMinutes * 60
         var seen = Set<TimeInterval>()
-        let cleaned = raw.filter { $0 > 0 && seen.insert($0).inserted }
+        let cleaned = raw
+            .filter { $0.isFinite && $0 > 0 }
+            .map { min($0, maxSeconds) }
+            .filter { seen.insert($0).inserted }
         return Array(cleaned.sorted().prefix(maxQuickStopDurations))
     }
 
@@ -424,11 +485,48 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         min(max(raw, batteryPausePercentRange.lowerBound), batteryPausePercentRange.upperBound)
     }
 
-    /// An ending-soon lead time from any source: positive, or `nil` (off).
-    /// A zero or negative lead would show the feature enabled while the
-    /// notice can never fire.
+    /// An ending-soon lead time from any source: positive and finite, or `nil`
+    /// (off). A zero or negative lead would show the feature enabled while the
+    /// notice can never fire, and an absurd one would be rounded to a `Double`
+    /// too large for the duration formatter.
     static func normalizedEndingSoonNotice(_ raw: TimeInterval?) -> TimeInterval? {
-        raw.flatMap { $0 > 0 ? $0 : nil }
+        normalizedPositiveInterval(raw).map { min($0, SessionMode.maxTimedMinutes * 60) }
+    }
+
+    /// A positive, finite interval or `nil`: shared guard for decoded
+    /// durations that are later converted to `Int` for display. Capped at a
+    /// real session length (like every sibling sanitizer) and floored at one
+    /// second: the value is also a divisor (`elapsed / reminderAfter`), and a
+    /// denormal like `1e-300` would make that ratio trap `Int(_:)`.
+    static func normalizedPositiveInterval(_ raw: TimeInterval?) -> TimeInterval? {
+        raw.flatMap { $0.isFinite && $0 > 0 ? min(max($0, 1), SessionMode.maxTimedMinutes * 60) : nil }
+    }
+
+    /// A decoded timed mode with its duration bounded to a real session
+    /// length; an unusable duration falls back to indefinite.
+    static func sanitizedMode(_ mode: SessionMode) -> SessionMode {
+        guard case .timed(let duration) = mode else { return mode }
+        guard duration.isFinite, duration > 0 else { return .indefinite }
+        return .timed(duration: min(duration, SessionMode.maxTimedMinutes * 60))
+    }
+
+    /// Whole seconds for UI display that never traps: `Int(_:)` aborts on
+    /// NaN, infinity, and out-of-range magnitudes (including huge decoded
+    /// grace intervals), so clamp first. Negative or unreadable values read
+    /// as zero.
+    public static func displaySeconds(_ seconds: TimeInterval) -> Int {
+        guard seconds.isFinite, seconds > 0 else { return 0 }
+        return Int(min(seconds.rounded(), Double(Int.max / 2)))
+    }
+
+    /// A decoded hotkey whose key code and modifier flags fit the Carbon/AppKit
+    /// conversions the app performs; out-of-range values are dropped rather
+    /// than trapping later. The bound is the `RegisterEventHotKey` parameter
+    /// width (`UInt32`), matching the check in `GlobalHotKeyManager.update`.
+    public static func sanitizedHotKey(_ raw: HotKeyShortcut?) -> HotKeyShortcut? {
+        guard let raw, raw.keyCode >= 0, raw.keyCode <= Int(UInt32.max),
+              raw.modifierFlags >= 0 else { return nil }
+        return raw
     }
 
     /// First-launch defaults: keep system awake, no triggers.
@@ -461,6 +559,9 @@ public protocol SettingsStore: AnyObject {
     func load() -> KeepressoSettings
     /// Persist settings; failures are swallowed (a lost write is non-fatal).
     func save(_ settings: KeepressoSettings)
+    /// Whether a blob was ever persisted, so first launch (nothing saved
+    /// yet) can take different defaults without migrating anyone.
+    var hasStoredSettings: Bool { get }
 }
 
 /// Real store backed by `UserDefaults`, encoding settings as JSON under a single
@@ -488,5 +589,24 @@ public final class UserDefaultsSettingsStore: SettingsStore {
     public func save(_ settings: KeepressoSettings) {
         guard let data = try? JSONEncoder().encode(settings) else { return }
         defaults.set(data, forKey: key)
+    }
+
+    public var hasStoredSettings: Bool {
+        defaults.data(forKey: key) != nil
+    }
+}
+
+// MARK: - Fresh-install defaults
+
+extension KeepressoSettings {
+    /// Session-scoped closed-display for first launch only: nothing
+    /// persisted yet means a fresh install, which starts safe. Anything
+    /// saved (even a corrupt blob) passes through untouched, so existing
+    /// installs keep whatever they had, including off.
+    public func withFreshInstallDefaults(hasStoredSettings: Bool) -> KeepressoSettings {
+        guard !hasStoredSettings else { return self }
+        var copy = self
+        copy.closedDisplayOnlyWhileBrewing = true
+        return copy
     }
 }

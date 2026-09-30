@@ -275,7 +275,7 @@ private struct ActivityTab: View {
     }
 
     private func formatHeld(_ seconds: TimeInterval) -> String {
-        let total = Int(seconds.rounded())
+        let total = KeepressoSettings.displaySeconds(seconds)
         let h = total / 3600
         let m = (total % 3600) / 60
         if h > 0 { return L("%dh %dm", h, m) }
@@ -327,7 +327,8 @@ private struct GeneralTab: View {
     @Bindable var model: AppModel
     @Environment(\.openWindow) private var openWindow
     @State private var launchAtLogin = LoginItem.isEnabled
-    @State private var showManualDuration = false
+    /// Bumped when the lid-closed row is clicked while the automation owns it.
+    @State private var lidRowShakes = 0
     /// The result of the last export/import, shown inline under the buttons.
     @State private var transferNote: TransferNote?
 
@@ -356,82 +357,6 @@ private struct GeneralTab: View {
         Self.quickStopOptions.first { !model.quickStopDurations.contains($0) }
     }
 
-    /// Menu-bar sections can be mixed freely, but the final visible section
-    /// stays enabled so the user's customized panel never becomes empty.
-    private var visibleMenuSectionCount: Int {
-        [
-            model.showManualSessionInMenu,
-            model.showTriggerControlsInMenu,
-            model.showQuickSettingsInMenu,
-            model.showToolsInMenu,
-        ].filter { $0 }.count
-    }
-
-    private func isLastVisibleMenuSection(_ isVisible: Bool) -> Bool {
-        isVisible && visibleMenuSectionCount == 1
-    }
-
-    private func menuSectionLabel(_ section: MenuBarSection) -> String {
-        switch section {
-        case .manualSession: L("Manual session")
-        case .triggers: L("Triggers")
-        case .quickSettings: L("Quick settings")
-        case .toolsAndShortcuts: L("Tools & shortcuts")
-        }
-    }
-
-    private func menuSectionIsVisible(_ section: MenuBarSection) -> Bool {
-        switch section {
-        case .manualSession: model.showManualSessionInMenu
-        case .triggers: model.showTriggerControlsInMenu
-        case .quickSettings: model.showQuickSettingsInMenu
-        case .toolsAndShortcuts: model.showToolsInMenu
-        }
-    }
-
-    private func setMenuSection(_ section: MenuBarSection, visible: Bool) {
-        switch section {
-        case .manualSession: model.showManualSessionInMenu = visible
-        case .triggers: model.showTriggerControlsInMenu = visible
-        case .quickSettings: model.showQuickSettingsInMenu = visible
-        case .toolsAndShortcuts: model.showToolsInMenu = visible
-        }
-    }
-
-    private func menuSectionVisibilityBinding(_ section: MenuBarSection) -> Binding<Bool> {
-        Binding(
-            get: { menuSectionIsVisible(section) },
-            set: { setMenuSection(section, visible: $0) }
-        )
-    }
-
-    @ViewBuilder
-    private func menuSectionPreferenceRow(_ section: MenuBarSection) -> some View {
-        HStack(spacing: 8) {
-            Toggle(menuSectionLabel(section), isOn: menuSectionVisibilityBinding(section))
-                .disabled(isLastVisibleMenuSection(menuSectionIsVisible(section)))
-                .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: 2) {
-                Button {
-                    model.moveMenuSection(section, by: -1)
-                } label: {
-                    Label("Move up", systemImage: "chevron.up")
-                        .labelStyle(.iconOnly)
-                }
-                .disabled(section == model.menuSectionOrder.first)
-                Button {
-                    model.moveMenuSection(section, by: 1)
-                } label: {
-                    Label("Move down", systemImage: "chevron.down")
-                        .labelStyle(.iconOnly)
-                }
-                .disabled(section == model.menuSectionOrder.last)
-            }
-            .buttonStyle(.borderless)
-            .controlSize(.small)
-        }
-    }
-
     var body: some View {
         Form {
             Section {
@@ -443,34 +368,6 @@ private struct GeneralTab: View {
                 Toggle("Prevent system sleep", isOn: optionBinding(\.preventSystemSleep))
             } header: {
                 sectionHeader("Keep awake", info: L("Two independent switches. Preventing system sleep keeps the Mac itself running: work finishes, downloads complete, and it stays reachable over the network, while the screen is still free to turn off. Preventing display sleep also keeps the screen lit, which is what you want for a dashboard or a video, and what drains a battery fastest. Most setups want system sleep prevented and display sleep left alone."))
-            }
-            Section {
-                Picker("For", selection: Binding(
-                    get: { model.defaultMode },
-                    set: { model.defaultMode = $0 }
-                )) {
-                    ForEach(Array(MenuBarContent.durationOptions.enumerated()), id: \.offset) { _, option in
-                        Text(option.label).tag(option.mode)
-                    }
-                    if !MenuBarContent.durationOptions.contains(where: { $0.mode == model.defaultMode }) {
-                        Text(MenuBarContent.modeLabel(model.defaultMode)).tag(model.defaultMode)
-                    }
-                }
-                Button("Custom Duration\u{2026}") { showManualDuration = true }
-                    .popover(isPresented: $showManualDuration) {
-                        MenuBarContent.CustomDurationEditor(
-                            initial: model.defaultMode.duration ?? 3 * 60 * 60
-                        ) {
-                            model.defaultMode = .timed(duration: $0)
-                        }
-                    }
-                Button(session.isActive && (!model.triggersEnabled || model.triggersPaused)
-                    ? L("Update Session")
-                    : L("Start")) {
-                    model.startManualOverride(mode: model.defaultMode)
-                }
-            } header: {
-                sectionHeader("Manual session", info: L("A manual session keeps the Mac awake for the selected duration even when no trigger condition is met. Starting one pauses triggers until you resume them."))
             }
             Section {
                 Toggle("Launch at login", isOn: Binding(
@@ -614,28 +511,23 @@ private struct GeneralTab: View {
                     .foregroundStyle(.secondary)
             }
             Section {
-                Toggle("Customize menu sections", isOn: Binding(
-                    get: { model.menuCustomizationEnabled },
-                    set: { model.menuCustomizationEnabled = $0 }
-                ))
-                if model.menuCustomizationEnabled {
-                    ForEach(model.menuSectionOrder) { section in
-                        menuSectionPreferenceRow(section)
-                    }
-                }
                 Toggle("Show countdown in menu bar", isOn: Binding(
                     get: { model.showCountdownInMenuBar },
                     set: { model.showCountdownInMenuBar = $0 }
                 ))
+                Toggle("Customize menu sections", isOn: Binding(
+                    get: { model.menuCustomizationEnabled },
+                    set: { model.menuCustomizationEnabled = $0 }
+                ))
+                .help(L("Choose which sections appear in the menu-bar dropdown. Manual session shows fixed and custom timers. Triggers shows AI-agent and other automatic conditions. Quick settings contains lid and battery controls. Tools & shortcuts opens the specialized assistants. Turn on any combination."))
+                Button("Customize Menu…") {
+                    NSApp.activate(ignoringOtherApps: true)
+                    openWindow(id: KeepressoApp.menuCustomizationWindowID)
+                }
             } header: {
-                sectionHeader("Menu bar", info: L("Choose which sections appear in the menu-bar dropdown. Manual session shows fixed and custom timers. Triggers shows AI-agent and other automatic conditions. Quick settings contains lid and battery controls. Tools & shortcuts opens the specialized assistants. Turn on any combination."))
+                Text("Menu bar")
             } footer: {
                 VStack(alignment: .leading, spacing: 3) {
-                    if model.menuCustomizationEnabled {
-                        Text("Use the arrows to arrange the menu sections.")
-                        Text("Show less keeps the first two visible sections.")
-                        Text("At least one control section must stay visible.")
-                    }
                     Text("Shows the remaining time next to the menu-bar icon during a timed session.")
                 }
                 .font(.caption)
@@ -918,30 +810,48 @@ private struct GeneralTab: View {
         }
     }
 
-    /// Session-scoped closed-display is the normal path. The persistent
-    /// `pmset disablesleep` override remains available for always-on machines,
-    /// but lives behind a disclosure with an explicit warning and recovery
-    /// button so it cannot silently strand the Apple menu's Sleep command.
+    /// The pmset disablesleep switch. On a laptop it's "closed-display mode"
+    /// (keep running with the lid shut); a desktop has no lid, so the same
+    /// switch is presented as a hard "disable sleep" override. Shown on both,
+    /// so a desktop that latched the setting always has a way to unlatch it.
     private var closedDisplaySection: some View {
         Section {
-            Toggle("Only while brewing", isOn: Binding(
-                get: { model.closedDisplayOnlyWhileBrewing },
-                set: { model.closedDisplayOnlyWhileBrewing = $0 }
+            Toggle(model.machineHasBattery ? "Keep awake with the lid closed" : "Disable system sleep",
+                   isOn: Binding(
+                get: { model.closedDisplayEnabled },
+                set: { model.setClosedDisplay($0) }
             ))
-            .disabled(model.closedDisplayAutoBusy)
-            if model.closedDisplayAutoBusy && !model.helperInstalled {
-                AdminAuthNote(purpose: model.machineHasBattery
-                    ? L("switch closed-display mode with the session")
-                    : L("switch the sleep override with the session"))
+            // "Only while brewing" is authoritative: while it's on this row
+            // reports the automation's state instead of offering a manual
+            // override the next tick would undo. Clicking it shakes the line
+            // below, which names what is driving it. The section header's info
+            // button stays live, so the explanation is still one click away.
+            .disabled(model.closedDisplayBusy || model.closedDisplayOnlyWhileBrewing)
+            .overlay {
+                if model.closedDisplayOnlyWhileBrewing {
+                    Rectangle()
+                        .fill(.clear)
+                        .contentShape(Rectangle())
+                        .onTapGesture { lidRowShakes += 1 }
+                }
             }
-            if let error = model.closedDisplayAutoError {
+            if model.closedDisplayBusy && !model.helperInstalled {
+                AdminAuthNote(purpose: model.machineHasBattery
+                    ? L("keep the Mac awake with the lid closed")
+                    : L("disable system sleep"))
+            }
+            if model.closedDisplayOnlyWhileBrewing {
+                Text("Follows the session while \u{201C}Only while brewing\u{201D} is on.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .shakes(on: lidRowShakes)
+            }
+            if let error = model.closedDisplayError {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
-
-            if model.machineHasBattery
-                && (model.closedDisplayOnlyWhileBrewing || model.closedDisplayEnabled) {
+            if model.machineHasBattery && model.closedDisplayEnabled {
                 Picker(L("If the lid shuts"), selection: Binding(
                     get: { model.closedLidDisplayPolicy },
                     set: { model.closedLidDisplayPolicy = $0 }
@@ -959,47 +869,28 @@ private struct GeneralTab: View {
                         .foregroundStyle(.secondary)
                 }
             }
-
-            if model.closedDisplayEnabled {
-                Button("Restore System Sleep") { model.restoreSystemSleep() }
-                    .disabled(model.closedDisplayBusy || model.closedDisplayAutoBusy)
-            }
-            if model.closedDisplayBusy && !model.helperInstalled {
+            Toggle("Only while brewing", isOn: Binding(
+                get: { model.closedDisplayOnlyWhileBrewing },
+                set: { model.closedDisplayOnlyWhileBrewing = $0 }
+            ))
+            .disabled(model.closedDisplayAutoBusy)
+            if model.closedDisplayAutoBusy && !model.helperInstalled {
                 AdminAuthNote(purpose: model.machineHasBattery
-                    ? L("keep the Mac awake with the lid closed")
-                    : L("disable system sleep"))
+                    ? L("switch closed-display mode with the session")
+                    : L("switch the sleep override with the session"))
             }
-            if let error = model.closedDisplayError {
+            if let error = model.closedDisplayAutoError {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
-
-            DisclosureGroup("Persistent override") {
-                VStack(alignment: .leading, spacing: 6) {
-                    Toggle("Keep enabled until I turn it off", isOn: Binding(
-                        get: { model.closedDisplayEnabled },
-                        set: { model.setClosedDisplay($0) }
-                    ))
-                    .disabled(
-                        model.closedDisplayBusy
-                            || model.closedDisplayAutoBusy
-                            || model.closedDisplayOnlyWhileBrewing
-                    )
-
-                    Text(model.machineHasBattery
-                        ? L("Stays awake on battery too; the display turns off when the lid closes. Turn it off before putting it in a bag.")
-                        : L("The Mac won't sleep at all until you turn this off. The display still sleeps as usual."))
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.top, 4)
-            }
+            Text("Turn this on and then quit, and Keepresso asks whether to turn it off first.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         } header: {
             model.machineHasBattery
-                ? sectionHeader("Closed-display mode", info: L("Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits."))
-                : sectionHeader("Disable sleep", info: L("Turns the sleep override on when a keep-awake session starts and off when it ends or Keepresso quits."))
+                ? sectionHeader("Closed-display mode", info: L("Normally a MacBook sleeps the moment you shut the lid unless a display is attached. This keeps it running with the lid shut and nothing plugged in, on power or battery. What the screen itself does when the lid closes is your choice below (\u{201C}If the lid shuts\u{201D}): turn it off, keep it powered at zero brightness so a remote session stays live, or leave it alone. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off: closed and on battery, the Mac can still drain over time, so don't leave it on in a bag. \u{201C}Only while brewing\u{201D} ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for \u{201C}Only while brewing\u{201D}."))
+                : sectionHeader("Disable sleep", info: L("Stops the Mac from sleeping at all, even with no session running. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off, even if Keepresso quits. The display still sleeps as usual. \u{201C}Only while brewing\u{201D} ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for \u{201C}Only while brewing\u{201D}."))
         } footer: {
             model.machineHasBattery
                 ? sectionFooter("Keeps running with the lid shut and no external display.")

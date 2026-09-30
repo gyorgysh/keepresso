@@ -30,7 +30,13 @@ public final class SessionController {
     /// ``start(mode:options:)`` only hold until the next tick. While gated the
     /// timed-``mode`` cap is ignored, a condition-gated session isn't time-boxed.
     /// Leave `nil` for the classic manual toggle.
-    public var triggerGate: TriggerEvaluating?
+    public var triggerGate: TriggerEvaluating? {
+        didSet {
+            // Triggers own activation from here: a manual session a safety
+            // pause remembered must not resume underneath the gate later.
+            if triggerGate != nil { safetyPausedManual = nil }
+        }
+    }
 
     /// When set, automation leases are one more demand source, considered in
     /// both manual and trigger mode: any live lease keeps the Mac awake, and
@@ -257,6 +263,20 @@ public final class SessionController {
     /// The thermal twin of ``batteryRefusedStarts``.
     public private(set) var thermalRefusedStarts = 0
 
+    /// A manual session a safety pause (battery or thermal) force-stopped,
+    /// remembered so ``reconcile`` restarts it when the pause lifts. Only
+    /// manual sessions need this: trigger-gated and lease-held sessions
+    /// reactivate through the gate and lease demand on the next tick, and
+    /// recording them would fight that ownership. Any explicit `start` or
+    /// `stop` clears it, so user intent always wins over the remembered pause.
+    private var safetyPausedManual: (
+        mode: SessionMode,
+        options: SleepPreventionOptions,
+        startedAt: Date?,
+        remindersFired: Int,
+        reason: String
+    )?
+
     /// Set when ``reconcile(now:systemIdleSeconds:battery:thermal:)`` wanted
     /// power assertions that the backend did not hold afterwards (an
     /// `IOPMAssertionCreateWithName` failure). Cleared once the held set
@@ -350,6 +370,8 @@ public final class SessionController {
         // A manual start takes ownership: lease expiry no longer ends the
         // session, and the timed cap applies again.
         leaseHeld = false
+        // Fresh user intent supersedes anything a safety pause remembered.
+        safetyPausedManual = nil
         let restarted = isActive
         if let options { self.options = options }
         self.mode = mode
@@ -433,6 +455,10 @@ public final class SessionController {
         remindersFired = 0
         endingSoonFired = false
         lastActivityPokeAt = nil
+        // An explicit stop cancels a pending auto-resume: the user ended it,
+        // so a later pause lift must not restart brewing behind their back.
+        // The safety-pause paths re-record below, after this teardown.
+        safetyPausedManual = nil
         // Drop the lid latch so the next start fails open until the host
         // supplies a real display reading (avoids holding a stale shut
         // verdict across open-then-start before the next ticker sample).
@@ -450,6 +476,67 @@ public final class SessionController {
         case .safetyPause:
             performEndEffects(notice: notice, scheduleAction: false)
         }
+    }
+
+    /// Force-stop for a safety pause (battery or thermal), remembering a
+    /// manual session so the pause lifting restarts it. Trigger-gated and
+    /// lease-held sessions reactivate through the gate and lease demand, so
+    /// only a session the manual toggle owns is recorded; anything else would
+    /// fight that ownership on resume.
+    private func safetyStop(
+        reason: String,
+        effects: StopEffects,
+        notice: (title: String, body: String)?,
+        resumeReason: String
+    ) {
+        let manualOwned = triggerGate == nil && !leaseHeld
+        let snapshot = (
+            mode: mode,
+            options: options,
+            startedAt: startedAt,
+            remindersFired: remindersFired,
+            reason: resumeReason
+        )
+        stop(reason: reason, effects: effects, notice: notice)
+        if manualOwned { safetyPausedManual = snapshot }
+    }
+
+    /// Restart a manual session a safety pause stopped, now that the pause
+    /// has lifted. Mirrors what ``start(mode:options:cause:)`` sets, but logs
+    /// the resume truthfully instead of as a fresh manual start, and keeps
+    /// the original `startedAt` so a timed session's remaining time stays
+    /// honest (an overdue deadline ends on the next tick, as it should).
+    private func resumeSafetyPausedSession(
+        _ paused: (
+            mode: SessionMode,
+            options: SleepPreventionOptions,
+            startedAt: Date?,
+            remindersFired: Int,
+            reason: String
+        ),
+        at instant: Date
+    ) {
+        safetyPausedManual = nil
+        cancelPendingEndAction()
+        leaseHeld = false
+        mode = paused.mode
+        options = paused.options
+        startedAt = paused.startedAt ?? instant
+        isActive = true
+        // Keep the nudge counter: the pause must not re-fire a one-shot
+        // "still brewing" reminder the session already delivered.
+        remindersFired = paused.remindersFired
+        lastActivityPokeAt = nil
+        armEndingSoon(remaining: paused.mode.duration.map {
+            $0 - instant.timeIntervalSince(startedAt ?? instant)
+        })
+        log.record(
+            began: true,
+            reason: paused.reason,
+            kind: .sessionStarted,
+            batteryPercent: lastBatteryPercent,
+            at: instant
+        )
     }
 
     /// Notify (and optionally schedule the end action) when a session ends on
@@ -642,13 +729,14 @@ public final class SessionController {
                 // lifts, arbitrarily later.
                 cancelPendingEndAction()
                 if isActive {
-                    stop(
+                    safetyStop(
                         reason: L("Paused, battery below %d%%", threshold),
                         effects: .safetyPause(kind: .batteryPaused),
                         notice: (
                             title: L("Paused on low battery"),
                             body: L("Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge.", percent)
-                        )
+                        ),
+                        resumeReason: L("Resumed, battery recovered")
                     )
                 }
                 return
@@ -677,13 +765,14 @@ public final class SessionController {
                     // Same rule as the battery latch above.
                     cancelPendingEndAction()
                     if isActive {
-                        stop(
+                        safetyStop(
                             reason: L("Paused, the Mac is running hot"),
                             effects: .safetyPause(kind: .thermalPaused),
                             notice: (
                                 title: L("Paused on high temperature"),
                                 body: L("Keepresso stopped the keep-awake session so the Mac can cool down. It resumes when temperatures recover.")
-                            )
+                            ),
+                            resumeReason: L("Resumed, temperature recovered")
                         )
                     }
                 }
@@ -697,6 +786,16 @@ public final class SessionController {
                     return
                 }
             }
+        }
+
+        // A lifted safety pause restarts the manual session it stopped ahead
+        // of the chain below, so an overdue timed deadline still ends on
+        // this same tick through the normal expiry path instead of holding
+        // assertions for a tick past it. No gate (it reactivates on its own)
+        // and no leases (they take precedence): with either present, the
+        // remembered session stays out of the way.
+        if triggerGate == nil, !isActive, !leaseDemand, let paused = safetyPausedManual {
+            resumeSafetyPausedSession(paused, at: instant)
         }
 
         if let triggerGate {
@@ -990,8 +1089,14 @@ public final class SessionController {
                 return
             }
             let needed = TimeInterval(minutes * 60)
-            if let idle = systemIdleSeconds, idle < needed {
-                lastActivityPokeAt = nil
+            // No idle reading means "not known to be idle": hold the poke
+            // rather than firing one on an out-of-band reconcile (lease
+            // doorbell, start, URL command) while the user may be typing.
+            // The arm is left alone so the hold neither fires now nor resets
+            // the cadence: clearing it here would make every nil-idle
+            // reconcile re-arm, and the next tick would poke immediately,
+            // bypassing `pokeInterval` under a heartbeating agent.
+            guard let idle = systemIdleSeconds, idle >= needed else {
                 return
             }
         } else if let idle = systemIdleSeconds, idle < Self.activityIdleThreshold {
@@ -1012,8 +1117,12 @@ public final class SessionController {
     /// interval (and never floods if several intervals elapse between ticks, e.g.
     /// across a sleep). No-op when reminders are off.
     private func maybeRemind(at instant: Date) {
-        guard isActive, let after = reminderAfter, after > 0, let startedAt else { return }
-        let intervalsPassed = Int(instant.timeIntervalSince(startedAt) / after)
+        guard isActive, let after = reminderAfter, after > 0, after.isFinite, let startedAt else { return }
+        // Clamp before converting: a directly assigned (unsanitized)
+        // `reminderAfter` near zero would make this ratio trap `Int(_:)`.
+        let ratio = instant.timeIntervalSince(startedAt) / after
+        guard ratio.isFinite, ratio >= 0 else { return }
+        let intervalsPassed = Int(min(ratio, Double(Int.max / 2)))
         guard intervalsPassed >= 1 else { return }
         // Recurring tracks every interval; one-shot caps at the first.
         let target = reminderRepeats ? intervalsPassed : 1
@@ -1066,6 +1175,11 @@ public final class SessionController {
     /// "2 hours, 15 minutes". `DateComponentsFormatter` follows the app's
     /// language and each language's plural rules, so no per-unit strings table.
     static func humanDuration(_ seconds: TimeInterval) -> String {
+        // Defensive: imported settings can carry huge or non-finite
+        // durations, and `Int(_:)` traps outside its range.
+        guard seconds.isFinite, seconds > 0,
+              seconds < Double(Int.max / 2)
+        else { return "" }
         let total = Int(seconds.rounded())
         let formatter = DateComponentsFormatter()
         formatter.unitsStyle = .full
@@ -1102,6 +1216,8 @@ public final class SessionController {
     /// demand is leases, with the log attributed to the first live lease.
     private func beginLeaseSession(at instant: Date) {
         cancelPendingEndAction()
+        // The lease owns the session from here, not a remembered manual one.
+        safetyPausedManual = nil
         isActive = true
         startedAt = instant
         remindersFired = 0

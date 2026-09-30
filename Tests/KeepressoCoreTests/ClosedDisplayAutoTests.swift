@@ -399,3 +399,27 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: data)
     #expect(decoded.closedDisplayOnlyWhileBrewing)
 }
+
+// MARK: - Quit modal coverage
+
+@Test func quitModalCoversWhatQuittingWouldOrphan() {
+    typealias Q = QuitSleepCheck
+    #expect(Q.coverage(brewing: false, overrideLive: false) == .none)
+    // Brewing with nothing persistent: the session ends, nothing survives.
+    #expect(Q.coverage(brewing: true, overrideLive: false) == .session)
+    // A persistent override live: quitting would orphan it unmanaged. The
+    // run that set it does not matter, a setting left on days ago is
+    // exactly what gets forgotten.
+    #expect(Q.coverage(brewing: false, overrideLive: true) == .overrideLive)
+    #expect(Q.coverage(brewing: true, overrideLive: true) == .sessionAndOverride)
+}
+
+@Test func quitModalTreatsAScopedHoldAsNothingToAskAbout() {
+    typealias Q = QuitSleepCheck
+    // "Only while brewing" holds `disablesleep` too, but it self-cleans on
+    // exit, so the host passes `overrideLive: false` for it: the session
+    // variant shows, with no override line, and a quit with no session at
+    // all stays silent.
+    #expect(Q.coverage(brewing: true, overrideLive: false) == .session)
+    #expect(Q.coverage(brewing: false, overrideLive: false) == .none)
+}
