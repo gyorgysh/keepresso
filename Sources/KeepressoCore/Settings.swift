@@ -1,5 +1,33 @@
 import Foundation
 
+/// User-orderable sections in the menu-bar dropdown. Raw values are persisted,
+/// so keep them stable across releases.
+public enum MenuBarSection: String, Codable, CaseIterable, Identifiable, Sendable {
+    case manualSession
+    case triggers
+    case quickSettings
+    case toolsAndShortcuts
+
+    public var id: String { rawValue }
+
+    /// Matches the menu's layout before section ordering was customizable.
+    public static let defaultOrder: [MenuBarSection] = [
+        .triggers, .manualSession, .quickSettings, .toolsAndShortcuts,
+    ]
+
+    public static let compactVisibleCount = 2
+
+    public static func displayedSections(
+        in order: [MenuBarSection],
+        enabled: Set<MenuBarSection>,
+        expanded: Bool
+    ) -> [MenuBarSection] {
+        let visible = KeepressoSettings.normalizedMenuSectionOrder(order)
+            .filter(enabled.contains)
+        return expanded ? visible : Array(visible.prefix(compactVisibleCount))
+    }
+}
+
 /// Everything Keepresso persists across launches.
 public struct KeepressoSettings: Codable, Equatable, Sendable {
     /// What to keep awake (system / display / screen-saver yield).
@@ -50,6 +78,25 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     /// collapsed status-and-controls-only layout (the panel's "Show less" row).
     /// Expanded by default.
     public var menuPanelExpanded: Bool
+    /// Whether the user has opted into changing menu-section visibility and
+    /// order. Off preserves the established adaptive menu layout.
+    public var menuCustomizationEnabled: Bool
+    /// Whether the manual start/timer controls appear in the menu-bar panel.
+    public var showManualSessionInMenu: Bool
+    /// Whether trigger status and pause/resume controls appear in the panel.
+    public var showTriggerControlsInMenu: Bool
+    /// Whether the lid-closed and low-battery controls appear in the panel.
+    public var showQuickSettingsInMenu: Bool
+    /// Whether the specialized assistant shortcuts appear in the panel.
+    public var showToolsInMenu: Bool
+    /// Whether the customized Tools section is disclosed. Closed by default,
+    /// matching the standard menu; remembered only in the customized layout.
+    public var toolsSectionExpanded: Bool
+    /// Display order for the four user-configurable menu sections.
+    public var menuSectionOrder: [MenuBarSection]
+    /// Optional granular layout. Nil retains the original four-section
+    /// customization. It never affects the standard menu while opt-in is off.
+    public var menuLayout: MenuLayout?
     /// How see-through the menu-bar dropdown is, 0 (fully frosty,
     /// strongest readability backing) to 100 (clearest Liquid Glass).
     /// Defaults to the halfway 50.
@@ -129,6 +176,14 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         pauseBelowBatteryPercent: Int? = nil,
         showCountdownInMenuBar: Bool = false,
         menuPanelExpanded: Bool = true,
+        menuCustomizationEnabled: Bool = false,
+        showManualSessionInMenu: Bool = true,
+        showTriggerControlsInMenu: Bool = true,
+        showQuickSettingsInMenu: Bool = true,
+        showToolsInMenu: Bool = true,
+        toolsSectionExpanded: Bool = false,
+        menuSectionOrder: [MenuBarSection] = MenuBarSection.defaultOrder,
+        menuLayout: MenuLayout? = nil,
         glassClarity: Int = 50,
         awdlAutoWithGaming: Bool = false,
         awdlNotifications: Bool = false,
@@ -165,6 +220,24 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.pauseBelowBatteryPercent = pauseBelowBatteryPercent.map(Self.clampedBatteryPausePercent)
         self.showCountdownInMenuBar = showCountdownInMenuBar
         self.menuPanelExpanded = menuPanelExpanded
+        self.menuCustomizationEnabled = menuCustomizationEnabled
+        if showManualSessionInMenu || showTriggerControlsInMenu
+            || showQuickSettingsInMenu || showToolsInMenu {
+            self.showManualSessionInMenu = showManualSessionInMenu
+            self.showTriggerControlsInMenu = showTriggerControlsInMenu
+            self.showQuickSettingsInMenu = showQuickSettingsInMenu
+            self.showToolsInMenu = showToolsInMenu
+        } else {
+            // A settings import or hand-written initializer must not produce a
+            // panel with no user-selected sections at all.
+            self.showManualSessionInMenu = true
+            self.showTriggerControlsInMenu = false
+            self.showQuickSettingsInMenu = false
+            self.showToolsInMenu = false
+        }
+        self.toolsSectionExpanded = toolsSectionExpanded
+        self.menuSectionOrder = Self.normalizedMenuSectionOrder(menuSectionOrder)
+        self.menuLayout = menuLayout?.normalized()
         self.glassClarity = min(max(glassClarity, 0), 100)
         self.awdlAutoWithGaming = awdlAutoWithGaming
         self.awdlNotifications = awdlNotifications
@@ -265,6 +338,36 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
             .map(Self.clampedBatteryPausePercent)
         showCountdownInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showCountdownInMenuBar) ?? false
         menuPanelExpanded = try c.decodeIfPresent(Bool.self, forKey: .menuPanelExpanded) ?? true
+        // Menu customization was introduced as an opt-in. A settings blob from
+        // an older release must continue to render the established layout.
+        // Invalid customization metadata falls back locally, so it cannot
+        // discard the user's unrelated settings, rules, or presets.
+        menuCustomizationEnabled = (try? c.decodeIfPresent(
+            Bool.self, forKey: .menuCustomizationEnabled)) ?? false
+        let decodedManualSection = (try? c.decodeIfPresent(Bool.self, forKey: .showManualSessionInMenu)) ?? true
+        let decodedTriggerSection = (try? c.decodeIfPresent(Bool.self, forKey: .showTriggerControlsInMenu)) ?? true
+        let decodedQuickSettings = (try? c.decodeIfPresent(Bool.self, forKey: .showQuickSettingsInMenu)) ?? true
+        let decodedTools = (try? c.decodeIfPresent(Bool.self, forKey: .showToolsInMenu)) ?? true
+        if decodedManualSection || decodedTriggerSection || decodedQuickSettings || decodedTools {
+            showManualSessionInMenu = decodedManualSection
+            showTriggerControlsInMenu = decodedTriggerSection
+            showQuickSettingsInMenu = decodedQuickSettings
+            showToolsInMenu = decodedTools
+        } else {
+            showManualSessionInMenu = true
+            showTriggerControlsInMenu = false
+            showQuickSettingsInMenu = false
+            showToolsInMenu = false
+        }
+        toolsSectionExpanded = (try? c.decodeIfPresent(Bool.self, forKey: .toolsSectionExpanded)) ?? false
+        // Decode raw strings so a section added by a newer version is ignored
+        // instead of making the user's entire settings file fail to load.
+        let decodedSectionOrder = (try? c.decodeIfPresent(
+            [String].self, forKey: .menuSectionOrder))?
+            .compactMap(MenuBarSection.init(rawValue:))
+            ?? MenuBarSection.defaultOrder
+        menuSectionOrder = Self.normalizedMenuSectionOrder(decodedSectionOrder)
+        menuLayout = try? c.decodeIfPresent(MenuLayout.self, forKey: .menuLayout)
         glassClarity = min(max(try c.decodeIfPresent(Int.self, forKey: .glassClarity) ?? 50, 0), 100)
         awdlAutoWithGaming = try c.decodeIfPresent(Bool.self, forKey: .awdlAutoWithGaming) ?? false
         awdlNotifications = try c.decodeIfPresent(Bool.self, forKey: .awdlNotifications) ?? false
@@ -301,6 +404,64 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
 
     /// The most quick-stop shortcuts the menu row holds before it overflows.
     public static let maxQuickStopDurations = 4
+
+    public var customizedMenuLayout: MenuLayout? {
+        menuCustomizationEnabled ? menuLayout : nil
+    }
+
+    /// Merely enabling customization keeps the standard menu until a layout
+    /// choice is edited. Earlier four-section choices still remain usable.
+    public var hasLegacyMenuChoices: Bool {
+        menuSectionOrder != MenuBarSection.defaultOrder
+            || !showManualSessionInMenu || !showTriggerControlsInMenu
+            || !showQuickSettingsInMenu || !showToolsInMenu || toolsSectionExpanded
+    }
+
+    /// Apply presentation choices while retaining readable section settings
+    /// for earlier releases. No feature, session, or trigger settings change.
+    public mutating func setMenuLayout(_ layout: MenuLayout) {
+        let layout = layout.normalized()
+        menuLayout = layout
+        menuSectionOrder = Self.normalizedMenuSectionOrder(
+            layout.sectionOrder.compactMap { MenuBarSection(rawValue: $0.rawValue) })
+        showManualSessionInMenu = !layout.hiddenSections.contains(.manualSession)
+        showTriggerControlsInMenu = !layout.hiddenSections.contains(.triggers)
+        showQuickSettingsInMenu = !layout.hiddenSections.contains(.quickSettings)
+        showToolsInMenu = !layout.hiddenSections.contains(.toolsAndShortcuts)
+        // Earlier customization versions require one legacy section. The
+        // granular layout may still hide all of its groups independently.
+        if !showManualSessionInMenu && !showTriggerControlsInMenu
+            && !showQuickSettingsInMenu && !showToolsInMenu {
+            showManualSessionInMenu = true
+        }
+        toolsSectionExpanded = !layout.collapsedSections.contains(.toolsAndShortcuts)
+    }
+
+    /// The custom layout is unavailable until explicitly enabled. Keeping
+    /// that decision here prevents saved choices from affecting the default
+    /// layout after customization is turned off or an old backup is imported.
+    public var customizedMenuSections: [MenuBarSection]? {
+        guard menuCustomizationEnabled else { return nil }
+        var enabled = Set<MenuBarSection>()
+        if showManualSessionInMenu { enabled.insert(.manualSession) }
+        if showTriggerControlsInMenu { enabled.insert(.triggers) }
+        if showQuickSettingsInMenu { enabled.insert(.quickSettings) }
+        if showToolsInMenu { enabled.insert(.toolsAndShortcuts) }
+        return MenuBarSection.displayedSections(
+            in: menuSectionOrder, enabled: enabled, expanded: menuPanelExpanded)
+    }
+
+    /// Keep the first occurrence of every known section and append any missing
+    /// sections in default order. This repairs imported or hand-edited lists
+    /// without discarding the user's valid ordering choices.
+    public static func normalizedMenuSectionOrder(
+        _ raw: [MenuBarSection]
+    ) -> [MenuBarSection] {
+        var seen = Set<MenuBarSection>()
+        var result = raw.filter { seen.insert($0).inserted }
+        result.append(contentsOf: MenuBarSection.defaultOrder.filter { seen.insert($0).inserted })
+        return result
+    }
 
     /// Sanitize a quick-stop duration list from any source (the editor, an
     /// imported blob, a hand-edited file): drop non-positive and non-finite

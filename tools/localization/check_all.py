@@ -62,6 +62,9 @@ SOURCE_COVERAGE = [
             "Sources/Keepresso/HelperSetupView.swift",
             "Sources/Keepresso/PreferencesView.swift",
             "Sources/Keepresso/MenuBarContent.swift",
+            "Sources/Keepresso/MenuCustomizationView.swift",
+            "Sources/Keepresso/MenuBarLabel.swift",
+            "Sources/Keepresso/KeepressoApp.swift",
             "Sources/Keepresso/StatusItemBridge.swift",
             "Sources/Keepresso/ShortcutRecorder.swift",
             "Sources/Keepresso/WelcomeView.swift",
@@ -71,6 +74,7 @@ SOURCE_COVERAGE = [
         [
             r'\bL\(\s*"((?:[^"\\]|\\.)*)"',
             r'\b(?:Text|Button|Label|Toggle|Picker|LabeledContent|GroupBox|Section)\(\s*"((?:[^"\\]|\\.)*)"',
+            r'\b(?:Menu|Window|TextField)\(\s*"((?:[^"\\]|\\.)*)"',
             r'\bsection(?:Header|Footer)\(\s*"((?:[^"\\]|\\.)*)"',
         ],
     ),

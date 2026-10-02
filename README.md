@@ -344,6 +344,31 @@ Updates, and Quit.
 - **Quick toggle.** Flip **Keep awake** on or off and pick a duration:
   indefinitely, a preset (15 minutes, 1 hour, 4 hours), any custom duration, or
   until a time of day. The cup fills and animates while brewing.
+- **Customize the menu.** Open **Customize Menu…** in Preferences > General >
+  Menu bar for a live preview beside the editor. Enable **Customize menu
+  sections**, then start with
+  **Minimal**, **Compact**, **Balanced**, **Lid controls**, **Brewing controls**,
+  **Status only**, or **Detailed**, then hide, reorder, pin, or move any of the 39
+  controls between groups. Choose spacing, panel width, status style, group
+  headings and disclosures, trigger and agent detail, and menu-bar text. Session
+  action buttons use the accent color by default, while dropdowns and app links
+  stay neutral. **Appearance > Control style > Clear style** makes the session
+  actions neutral too, with the same button shape and centered label. All presets
+  keep the standard 280-point width. Settings and tools start collapsed; the
+  session controls adapt to manual and trigger
+  sessions. The two small switch variants add just closed-display mode or
+  Only while brewing to Compact.
+  Status only shows information without session buttons. Preview controls cannot
+  change a session or feature setting.
+  “Show less” can retain pinned controls, the first few groups, or everything.
+  Optional quick controls include manual sessions while triggers are running,
+  display sleep, keep-active, reminders, presets, and end actions.
+  Customization is off by default. Enabling it keeps the standard menu until
+  you choose a profile or edit a layout option. Disabling it restores that menu
+  while retaining your custom layout. Layout changes preserve feature settings
+  and are included in configuration backups. Preferences and Quit remain
+  available by right-click and keyboard shortcut. Active sleep overrides and
+  safety warnings remain visible, with their settings reachable in Preferences.
 - **Show less.** The disclosure row at the bottom of the panel folds the option
   toggles and app entries away, leaving just the status and the keep-awake
   controls. Keepresso remembers the choice, and everything hidden stays

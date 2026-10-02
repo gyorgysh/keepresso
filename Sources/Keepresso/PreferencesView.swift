@@ -515,13 +515,26 @@ private struct GeneralTab: View {
                     get: { model.showCountdownInMenuBar },
                     set: { model.showCountdownInMenuBar = $0 }
                 ))
+                Toggle("Customize menu sections", isOn: Binding(
+                    get: { model.menuCustomizationEnabled },
+                    set: { model.menuCustomizationEnabled = $0 }
+                ))
+                .help(L("Choose which sections appear in the menu-bar dropdown. Manual session shows fixed and custom timers. Triggers shows AI-agent and other automatic conditions. Quick settings contains lid and battery controls. Tools & shortcuts opens the specialized assistants. Turn on any combination."))
+                Button("Customize Menu…") {
+                    NSApp.activate(ignoringOtherApps: true)
+                    openWindow(id: KeepressoApp.menuCustomizationWindowID)
+                }
             } header: {
                 Text("Menu bar")
             } footer: {
-                Text("Shows the remaining time next to the menu-bar icon during a timed session.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Shows the remaining time next to the menu-bar icon during a timed session.")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
+            .animation(.snappy(duration: 0.2), value: model.menuSectionOrder)
+            .animation(.snappy(duration: 0.2), value: model.menuCustomizationEnabled)
             Section {
                 ForEach(Array(model.quickStopDurations.enumerated()), id: \.offset) { index, duration in
                     HStack {

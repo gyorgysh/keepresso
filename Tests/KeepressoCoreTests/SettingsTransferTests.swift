@@ -24,6 +24,27 @@ import Foundation
     #expect(envelope.appVersion == "1.7.0")
 }
 
+@Test func menuCustomizationBackupPreservesExistingSettings() throws {
+    var settings = KeepressoSettings(
+        triggersEnabled: true,
+        menuPanelExpanded: false,
+        menuCustomizationEnabled: true,
+        showManualSessionInMenu: false,
+        showQuickSettingsInMenu: false,
+        toolsSectionExpanded: true,
+        menuSectionOrder: [.toolsAndShortcuts, .triggers, .quickSettings, .manualSession],
+        closedDisplayOnlyWhileBrewing: true
+    )
+    settings.ruleSet = RuleSet(combine: .all, rules: [.process("ffmpeg"), .externalDisplay])
+    settings.presets = [Preset(id: "custom", name: "Render", ruleSet: settings.ruleSet)]
+    settings.defaultMode = .timed(duration: 3 * 60 * 60)
+    settings.options.preventDisplaySleep = true
+    let data = try SettingsTransfer.exportData(settings)
+    let imported = try SettingsTransfer.importSettings(from: data)
+    #expect(imported == settings)
+    #expect(imported.customizedMenuSections == [.toolsAndShortcuts, .triggers])
+}
+
 @Test func importRejectsAFileThatIsntAKeepressoExport() throws {
     // A bare KeepressoSettings blob (e.g. the raw UserDefaults value) is valid
     // JSON but has no envelope, so import must refuse it rather than silently

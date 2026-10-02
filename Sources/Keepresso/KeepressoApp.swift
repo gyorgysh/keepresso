@@ -54,6 +54,12 @@ struct KeepressoApp: App {
         .windowResizability(.contentSize)
         .handlesExternalEvents(matching: [])
 
+        Window("Customize Menu", id: Self.menuCustomizationWindowID) {
+            MenuCustomizationView(model: appDelegate.model)
+        }
+        .defaultSize(width: 940, height: 800)
+        .handlesExternalEvents(matching: [])
+
         Window("About Keepresso", id: Self.aboutWindowID) {
             AboutView()
         }
@@ -83,6 +89,7 @@ struct KeepressoApp: App {
     static let keyboardCleanerWindowID = "keyboard-cleaner"
     static let wifiAssistantWindowID = "wifi-assistant"
     static let preferencesWindowID = "preferences"
+    static let menuCustomizationWindowID = "menu-customization"
     static let aboutWindowID = "about"
     static let welcomeWindowID = "welcome"
     static let helperWindowID = "helper"
@@ -102,7 +109,8 @@ private struct MenuBarLabelView: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        MenuBarLabel(session: model.session, showCountdown: model.showCountdownInMenuBar)
+        MenuBarLabel(session: model.session, showCountdown: model.showCountdownInMenuBar,
+                     presentation: model.advancedMenuLayout)
             .task {
                 // The context menu's window entries need openWindow, which
                 // only exists inside SwiftUI; this is the app's one always

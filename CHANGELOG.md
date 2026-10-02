@@ -3,6 +3,50 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [1.26.0] - Unreleased
+
+Theme: make the menu your own, while keeping the familiar default experience.
+
+### Added
+
+- **Customize every menu control without changing the default menu.** A new
+  editor lets you show, hide, move, reorder, pin, and collapse controls and
+  sections. Start with Minimal, Compact, Balanced, Lid controls, Brewing
+  controls, Status only, or Detailed. Every preset starts at the standard
+  width, with settings and tools tucked away. Thanks to @alvst for the menu
+  customization work in PR #26.
+
+- **See layout changes as you edit.** A live preview sits beside the controls
+  and shows expanded and compact layouts, with an option to include inactive
+  controls. Preview buttons cannot change sessions or system settings.
+
+- **Choose the amount of detail.** Customize panel width, spacing, the status
+  header, trigger and agent rows, and menu-bar text. Session actions use subtle
+  accent buttons; Clear style keeps the same buttons with neutral colors.
+  Dropdowns and app links stay neutral in both styles.
+
+- **Take manual control while triggers are running.** Start a timed or
+  indefinite manual session from a customized menu, then resume triggers when
+  you want automatic control again.
+
+### Fixed
+
+- **Customized status stays live.** Countdown captions and trigger details
+  refresh each second even when other activity rows are hidden.
+
+- **Existing settings keep working.** Customization stays off until enabled,
+  saved choices survive switching back to the standard menu, and import/export
+  preserves rules, presets, and feature settings. Unknown or malformed layout
+  fields fall back without discarding the rest of the configuration.
+
+- **Customized menus remain clickable.** Temporary window-view detachment no
+  longer starts a hide/remount loop. Expanded sections keep a collapse control,
+  and window actions close the menu panel before opening the chosen window.
+
+- **Hidden lid controls still report their state.** Active sleep overrides,
+  authorization prompts, and restore errors remain visible without duplicating
+  information already shown by a visible control.
+
 ## [1.25.0] - 2026-09-14
 
 Theme: scheduled wakes land on time, and the app stops tripping over corrupt input.

@@ -72,6 +72,196 @@ import Foundation
     #expect(try JSONDecoder().decode(KeepressoSettings.self, from: data).menuPanelExpanded == false)
 }
 
+@Test func toolsSectionDefaultsClosedAndRemembersExpandedState() throws {
+    let legacyJSON = """
+    { "showToolsInMenu": true }
+    """
+    let upgraded = try JSONDecoder().decode(
+        KeepressoSettings.self, from: Data(legacyJSON.utf8))
+    #expect(!upgraded.toolsSectionExpanded)
+    #expect(!KeepressoSettings.default.toolsSectionExpanded)
+
+    var settings = KeepressoSettings.default
+    settings.menuCustomizationEnabled = true
+    settings.toolsSectionExpanded = true
+    let data = try JSONEncoder().encode(settings)
+    #expect(try JSONDecoder().decode(
+        KeepressoSettings.self, from: data
+    ).toolsSectionExpanded == true)
+}
+
+@Test func menuCustomizationIsOptInAndSectionChoicesRoundTrip() throws {
+    // A settings blob from before menu customization keeps the established
+    // layout. All section choices are seeded on for a later explicit opt-in.
+    let json = """
+    { "triggersEnabled": true }
+    """
+    let upgraded = try JSONDecoder().decode(KeepressoSettings.self, from: Data(json.utf8))
+    #expect(!upgraded.menuCustomizationEnabled)
+    #expect(upgraded.showManualSessionInMenu)
+    #expect(upgraded.showTriggerControlsInMenu)
+    #expect(upgraded.showQuickSettingsInMenu)
+    #expect(upgraded.showToolsInMenu)
+
+    // A user's one-section layout survives persistence.
+    var settings = KeepressoSettings.default
+    settings.menuCustomizationEnabled = true
+    settings.showManualSessionInMenu = false
+    settings.showQuickSettingsInMenu = false
+    settings.showToolsInMenu = false
+    let data = try JSONEncoder().encode(settings)
+    let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: data)
+    #expect(decoded.menuCustomizationEnabled)
+    #expect(!decoded.showManualSessionInMenu)
+    #expect(decoded.showTriggerControlsInMenu)
+    #expect(!decoded.showQuickSettingsInMenu)
+    #expect(!decoded.showToolsInMenu)
+
+    // Corrupt or hand-edited settings cannot hide every configurable section.
+    let emptyJSON = """
+    {
+      "showManualSessionInMenu": false,
+      "showTriggerControlsInMenu": false,
+      "showQuickSettingsInMenu": false,
+      "showToolsInMenu": false
+    }
+    """
+    let repaired = try JSONDecoder().decode(KeepressoSettings.self, from: Data(emptyJSON.utf8))
+    #expect(repaired.showManualSessionInMenu)
+    #expect(!repaired.showTriggerControlsInMenu)
+    #expect(!repaired.showQuickSettingsInMenu)
+    #expect(!repaired.showToolsInMenu)
+}
+
+@Test func menuSectionOrderDefaultsRoundTripsAndRepairsMalformedLists() throws {
+    let legacyJSON = """
+    { "triggersEnabled": true }
+    """
+    let upgraded = try JSONDecoder().decode(
+        KeepressoSettings.self, from: Data(legacyJSON.utf8))
+    #expect(upgraded.menuSectionOrder == MenuBarSection.defaultOrder)
+
+    var settings = KeepressoSettings.default
+    settings.menuSectionOrder = [
+        .manualSession, .toolsAndShortcuts, .triggers, .quickSettings,
+    ]
+    let data = try JSONEncoder().encode(settings)
+    let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: data)
+    #expect(decoded.menuSectionOrder == settings.menuSectionOrder)
+
+    // Duplicates are removed, unknown future values are ignored, and missing
+    // known sections return at the end in their stable default order.
+    let malformedJSON = """
+    {
+      "menuSectionOrder": ["quickSettings", "quickSettings", "futureSection", "triggers"]
+    }
+    """
+    let repaired = try JSONDecoder().decode(
+        KeepressoSettings.self, from: Data(malformedJSON.utf8))
+    #expect(repaired.menuSectionOrder == [
+        .quickSettings, .triggers, .manualSession, .toolsAndShortcuts,
+    ])
+}
+
+@Test func collapsedMenuKeepsTheFirstTwoEnabledSections() {
+    let order: [MenuBarSection] = [
+        .toolsAndShortcuts, .quickSettings, .triggers, .manualSession,
+    ]
+    let enabled: Set<MenuBarSection> = [
+        .toolsAndShortcuts, .triggers, .manualSession,
+    ]
+
+    #expect(MenuBarSection.displayedSections(
+        in: order, enabled: enabled, expanded: false
+    ) == [.toolsAndShortcuts, .triggers])
+    #expect(MenuBarSection.displayedSections(
+        in: order, enabled: enabled, expanded: true
+    ) == [.toolsAndShortcuts, .triggers, .manualSession])
+}
+
+@Test func disablingCustomizationRestoresStandardLayoutWithoutLosingChoices() throws {
+    var settings = KeepressoSettings(
+        menuPanelExpanded: false,
+        menuCustomizationEnabled: true,
+        showManualSessionInMenu: false,
+        showTriggerControlsInMenu: false,
+        showQuickSettingsInMenu: true,
+        showToolsInMenu: true,
+        toolsSectionExpanded: true,
+        menuSectionOrder: [.toolsAndShortcuts, .quickSettings, .manualSession, .triggers]
+    )
+    #expect(settings.customizedMenuSections == [.toolsAndShortcuts, .quickSettings])
+
+    settings.menuCustomizationEnabled = false
+    let data = try JSONEncoder().encode(settings)
+    let restored = try JSONDecoder().decode(KeepressoSettings.self, from: data)
+    // Nil selects the original adaptive panel, even with saved custom choices.
+    #expect(restored.customizedMenuSections == nil)
+    #expect(restored == settings)
+
+    settings.menuCustomizationEnabled = true
+    #expect(settings.customizedMenuSections == [.toolsAndShortcuts, .quickSettings])
+}
+
+@Test(arguments: [true, false])
+func legacyMenuChoicesDoNotOptUsersIn(expanded: Bool) throws {
+    // Settings from the early PR version have section choices but no explicit
+    // opt-in. A normal upgrade must ignore them when choosing the layout.
+    let json = """
+    {
+      "triggersEnabled": true,
+      "menuPanelExpanded": \(expanded),
+      "showQuickSettingsInMenu": false,
+      "showToolsInMenu": false,
+      "toolsSectionExpanded": true,
+      "menuSectionOrder": ["toolsAndShortcuts", "manualSession"]
+    }
+    """
+    let settings = try JSONDecoder().decode(KeepressoSettings.self, from: Data(json.utf8))
+    #expect(settings.customizedMenuSections == nil)
+    #expect(settings.menuPanelExpanded == expanded)
+    #expect(settings.triggersEnabled)
+}
+
+@Test func malformedCustomizationDoesNotDiscardExistingSettings() throws {
+    let legacyJSON = """
+    {
+      "triggersEnabled": true,
+      "menuPanelExpanded": false,
+      "showCountdownInMenuBar": true,
+      "closedDisplayOnlyWhileBrewing": true,
+      "pauseBelowBatteryPercent": 40,
+      "glassClarity": 75,
+      "quickStopDurations": [900, 5400]
+    }
+    """
+    let legacy = try JSONDecoder().decode(KeepressoSettings.self, from: Data(legacyJSON.utf8))
+    var object = try #require(JSONSerialization.jsonObject(with: Data(legacyJSON.utf8)) as? [String: Any])
+    object["menuCustomizationEnabled"] = "yes"
+    object["showManualSessionInMenu"] = []
+    object["showTriggerControlsInMenu"] = "no"
+    object["showQuickSettingsInMenu"] = [:] as [String: String]
+    object["showToolsInMenu"] = 0
+    object["toolsSectionExpanded"] = "yes"
+    object["menuSectionOrder"] = ["quickSettings", 123] as [Any]
+    let data = try JSONSerialization.data(withJSONObject: object)
+    let recovered = try JSONDecoder().decode(KeepressoSettings.self, from: data)
+    #expect(recovered == legacy)
+}
+
+@Test func emptyCustomizedMenuRepairsToManualControls() throws {
+    let settings = KeepressoSettings(
+        menuCustomizationEnabled: true,
+        showManualSessionInMenu: false,
+        showTriggerControlsInMenu: false,
+        showQuickSettingsInMenu: false,
+        showToolsInMenu: false
+    )
+    #expect(settings.customizedMenuSections == [.manualSession])
+    let data = try JSONEncoder().encode(settings)
+    #expect(try JSONDecoder().decode(KeepressoSettings.self, from: data) == settings)
+}
+
 @Test func optionsWithoutSimulateActivityDecodeToItsDefault() throws {
     // Same guarantee one level down: an options blob from before keep-active
     // existed still decodes (simulateUserActivity defaults off).
