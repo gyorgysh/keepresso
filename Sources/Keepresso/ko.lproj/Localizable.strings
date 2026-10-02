@@ -808,7 +808,7 @@
 "First sections" = "첫 번째 섹션";
 "Follow countdown setting" = "카운트다운 설정 따르기";
 "Icon only" = "아이콘만";
-"Keep in Show less" = "간소화 보기에도 유지";
+"Keep in Show less" = "“간략히 보기”에도 유지";
 "Minimal" = "최소";
 "Move to section" = "섹션으로 이동";
 "No matching triggers" = "일치하는 트리거 없음";
@@ -816,14 +816,14 @@
 "Other apps" = "다른 앱";
 "Panel width: %d pt" = "패널 너비: %d pt";
 "Pause / Resume Triggers" = "트리거 일시 정지 / 재개";
-"Pin controls to keep them visible in Show less." = "컨트롤을 고정하면 간소화 보기에도 표시됩니다.";
+"Pin controls to keep them visible in Show less." = "컨트롤을 고정하면 “간략히 보기”에도 표시됩니다.";
 "Pinned controls" = "고정한 컨트롤";
 "Remaining time" = "남은 시간";
 "Reset customization" = "사용자화 초기화";
 "Sections: %d" = "섹션: %d";
 "Show agent details" = "에이전트 세부 정보 표시";
 "Show cup icon" = "컵 아이콘 표시";
-"Show more / Show less" = "더 보기 / 간소화 보기";
+"Show more / Show less" = "더 보기 / 간략히 보기";
 "Show section dividers" = "섹션 구분선 표시";
 "Show section headings" = "섹션 제목 표시";
 "Show, hide, pin, reorder, or move any control to another section." = "모든 컨트롤을 표시, 숨기기, 고정, 재정렬하거나 다른 섹션으로 옮길 수 있습니다.";
@@ -841,7 +841,7 @@
 "Trigger summary" = "트리거 요약";
 "Use standard menu" = "기본 메뉴 사용";
 "Warnings stay visible. Preferences and Quit are also available by right-clicking the cup." = "경고는 계속 표시됩니다. 컵을 오른쪽 클릭하면 환경설정과 종료도 사용할 수 있습니다.";
-"A compact session menu with Only while brewing." = "실행 중에만 스위치가 있는 간소화 세션 메뉴.";
+"A compact session menu with Only while brewing." = "“깨어 있게 유지 세션 중에만” 스위치가 있는 간소화 세션 메뉴.";
 "A compact session menu with the closed-display switch." = "덮개를 닫은 모드 스위치가 있는 간소화 세션 메뉴.";
 "A small session menu with status and quick timers." = "상태와 빠른 타이머가 있는 작은 세션 메뉴.";
 "Adapt controls to manual or trigger sessions" = "수동 또는 트리거 세션에 맞게 컨트롤 표시";

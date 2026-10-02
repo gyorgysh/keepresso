@@ -815,7 +815,7 @@
 "Only show matching triggers" = "Afficher uniquement les conditions remplies";
 "Other apps" = "Autres apps";
 "Panel width: %d pt" = "Largeur du panneau : %d pt";
-"Pause / Resume Triggers" = "Suspendre / Reprendre les conditions";
+"Pause / Resume Triggers" = "Suspendre / Reprendre les déclencheurs";
 "Pin controls to keep them visible in Show less." = "Épinglez les commandes pour les garder visibles dans Afficher moins.";
 "Pinned controls" = "Commandes épinglées";
 "Remaining time" = "Temps restant";
@@ -840,8 +840,8 @@
 "Trigger rows: %d" = "Lignes de conditions : %d";
 "Trigger summary" = "Résumé des conditions";
 "Use standard menu" = "Utiliser le menu standard";
-"Warnings stay visible. Preferences and Quit are also available by right-clicking the cup." = "Les avertissements restent visibles. Préférences et Quitter sont aussi accessibles par un clic droit sur la tasse.";
-"A compact session menu with Only while brewing." = "Un menu compact avec Uniquement pendant l’activité.";
+"Warnings stay visible. Preferences and Quit are also available by right-clicking the cup." = "Les avertissements restent visibles. Réglages et Quitter sont aussi accessibles par un clic droit sur la tasse.";
+"A compact session menu with Only while brewing." = "Un menu compact avec l’option «Uniquement pendant l’infusion».";
 "A compact session menu with the closed-display switch." = "Un menu compact avec le mode écran fermé.";
 "A small session menu with status and quick timers." = "Un petit menu avec l’état et des minuteries rapides.";
 "Adapt controls to manual or trigger sessions" = "Adapter les commandes aux sessions manuelles ou automatiques";

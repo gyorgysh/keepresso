@@ -29,7 +29,7 @@ APP = {
     "Move up": "上に移動",
     "Move down": "下に移動",
     "Use the arrows to arrange the menu sections.": "矢印を使ってメニューセクションを並べ替えます。",
-    "Show less keeps the first two visible sections.": "「表示を減らす」では、表示中の先頭2セクションが残ります。",
+    "Show less keeps the first two visible sections.": "「詳細を隠す」では、表示中の先頭2セクションが残ります。",
     "Battery": "バッテリー",
     "Welcome": "ようこそ",
     "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.": "蓋を閉じて外部ディスプレイがない状態でも Mac を動作させ続けます。これは管理者権限が必要なシステム設定を切り替えます。管理者ヘルパーがインストールされていれば静かに実行されます（設定 ▸ 一般）。そうでない場合、macOS がパスワードを求めます。",

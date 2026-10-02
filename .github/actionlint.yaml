@@ -1,0 +1,5 @@
+# GitHub's hosted Xcode 27 image is not in actionlint's built-in label list yet.
+# Treat it as an allowed extra label while continuing to check all other labels.
+self-hosted-runner:
+  labels:
+    - xcode-27

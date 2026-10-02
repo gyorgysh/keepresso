@@ -815,7 +815,7 @@
 "Only show matching triggers" = "Mostra solo condizioni soddisfatte";
 "Other apps" = "Altre app";
 "Panel width: %d pt" = "Larghezza pannello: %d pt";
-"Pause / Resume Triggers" = "Pausa / Riprendi condizioni";
+"Pause / Resume Triggers" = "Sospendi / Riprendi attivatori";
 "Pin controls to keep them visible in Show less." = "Fissa i controlli per mantenerli visibili in Mostra meno.";
 "Pinned controls" = "Controlli fissati";
 "Remaining time" = "Tempo rimanente";
@@ -823,7 +823,7 @@
 "Sections: %d" = "Sezioni: %d";
 "Show agent details" = "Mostra dettagli agenti";
 "Show cup icon" = "Mostra icona della tazza";
-"Show more / Show less" = "Mostra di più / Mostra meno";
+"Show more / Show less" = "Mostra altro / Mostra meno";
 "Show section dividers" = "Mostra separatori di sezione";
 "Show section headings" = "Mostra titoli delle sezioni";
 "Show, hide, pin, reorder, or move any control to another section." = "Mostra, nascondi, fissa, riordina o sposta qualsiasi controllo in un’altra sezione.";
@@ -840,8 +840,8 @@
 "Trigger rows: %d" = "Righe condizioni: %d";
 "Trigger summary" = "Riepilogo condizioni";
 "Use standard menu" = "Usa menu standard";
-"Warnings stay visible. Preferences and Quit are also available by right-clicking the cup." = "Gli avvisi restano visibili. Preferenze ed Esci sono disponibili anche facendo clic destro sulla tazza.";
-"A compact session menu with Only while brewing." = "Un menu compatto con Solo durante l’attività.";
+"Warnings stay visible. Preferences and Quit are also available by right-clicking the cup." = "Gli avvisi restano visibili. Impostazioni ed Esci sono disponibili anche facendo clic destro sulla tazza.";
+"A compact session menu with Only while brewing." = "Un menu compatto con l’opzione «Solo durante l’infusione».";
 "A compact session menu with the closed-display switch." = "Un menu compatto con l’interruttore dello schermo chiuso.";
 "A small session menu with status and quick timers." = "Un piccolo menu con stato e timer rapidi.";
 "Adapt controls to manual or trigger sessions" = "Adatta i controlli alle sessioni manuali o automatiche";

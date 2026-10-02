@@ -815,7 +815,7 @@
 "Only show matching triggers" = "Mostrar solo condiciones coincidentes";
 "Other apps" = "Otras apps";
 "Panel width: %d pt" = "Ancho del panel: %d pt";
-"Pause / Resume Triggers" = "Pausar / Reanudar condiciones";
+"Pause / Resume Triggers" = "Pausar / Reanudar disparadores";
 "Pin controls to keep them visible in Show less." = "Fija controles para mantenerlos visibles en Mostrar menos.";
 "Pinned controls" = "Controles fijados";
 "Remaining time" = "Tiempo restante";
@@ -840,8 +840,8 @@
 "Trigger rows: %d" = "Filas de condiciones: %d";
 "Trigger summary" = "Resumen de condiciones";
 "Use standard menu" = "Usar menú estándar";
-"Warnings stay visible. Preferences and Quit are also available by right-clicking the cup." = "Los avisos siguen visibles. Preferencias y Salir también están disponibles al hacer clic derecho en la taza.";
-"A compact session menu with Only while brewing." = "Un menú compacto con Solo mientras se prepara.";
+"Warnings stay visible. Preferences and Quit are also available by right-clicking the cup." = "Los avisos siguen visibles. Ajustes y Salir también están disponibles al hacer clic derecho en la taza.";
+"A compact session menu with Only while brewing." = "Un menú compacto con el interruptor «Solo mientras está en marcha».";
 "A compact session menu with the closed-display switch." = "Un menú compacto con el interruptor de pantalla cerrada.";
 "A small session menu with status and quick timers." = "Un menú pequeño con estado y temporizadores rápidos.";
 "Adapt controls to manual or trigger sessions" = "Adaptar controles a sesiones manuales o por condiciones";

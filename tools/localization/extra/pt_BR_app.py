@@ -60,7 +60,7 @@ APP = {
     "Manual session": "Sessão manual",
     "Quick settings": "Ajustes rápidos",
     "Tools & shortcuts": "Ferramentas e atalhos",
-    "Choose which sections appear in the menu-bar dropdown. Manual session shows fixed and custom timers. Triggers shows AI-agent and other automatic conditions. Quick settings contains lid and battery controls. Tools & shortcuts opens the specialized assistants. Turn on any combination.": "Escolha quais seções aparecem no menu da barra de menus. Sessão manual mostra temporizadores fixos e personalizados. Acionadores mostra o agente de IA e outras condições automáticas. Ajustes rápidos contém os controles da tampa e da bateria. Ferramentas e atalhos abre os assistentes especializados. Ative qualquer combinação.",
+    "Choose which sections appear in the menu-bar dropdown. Manual session shows fixed and custom timers. Triggers shows AI-agent and other automatic conditions. Quick settings contains lid and battery controls. Tools & shortcuts opens the specialized assistants. Turn on any combination.": "Escolha quais seções aparecem no menu da barra de menus. Sessão manual mostra temporizadores fixos e personalizados. Gatilhos mostra o agente de IA e outras condições automáticas. Ajustes rápidos contém os controles da tampa e da bateria. Ferramentas e atalhos abre os assistentes especializados. Ative qualquer combinação.",
     "At least one section must stay visible.": "Pelo menos uma seção deve permanecer visível.",
     "Gaming": "Jogos",
     "None": "Nenhum",

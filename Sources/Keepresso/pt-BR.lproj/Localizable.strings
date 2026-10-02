@@ -61,7 +61,7 @@
 "Manual session" = "Sessão manual";
 "Quick settings" = "Ajustes rápidos";
 "Tools & shortcuts" = "Ferramentas e atalhos";
-"Choose which sections appear in the menu-bar dropdown. Manual session shows fixed and custom timers. Triggers shows AI-agent and other automatic conditions. Quick settings contains lid and battery controls. Tools & shortcuts opens the specialized assistants. Turn on any combination." = "Escolha quais seções aparecem no menu da barra de menus. Sessão manual mostra temporizadores fixos e personalizados. Acionadores mostra o agente de IA e outras condições automáticas. Ajustes rápidos contém os controles da tampa e da bateria. Ferramentas e atalhos abre os assistentes especializados. Ative qualquer combinação.";
+"Choose which sections appear in the menu-bar dropdown. Manual session shows fixed and custom timers. Triggers shows AI-agent and other automatic conditions. Quick settings contains lid and battery controls. Tools & shortcuts opens the specialized assistants. Turn on any combination." = "Escolha quais seções aparecem no menu da barra de menus. Sessão manual mostra temporizadores fixos e personalizados. Gatilhos mostra o agente de IA e outras condições automáticas. Ajustes rápidos contém os controles da tampa e da bateria. Ferramentas e atalhos abre os assistentes especializados. Ative qualquer combinação.";
 "At least one section must stay visible." = "Pelo menos uma seção deve permanecer visível.";
 "Gaming" = "Jogos";
 "None" = "Nenhum";
@@ -815,7 +815,7 @@
 "Only show matching triggers" = "Mostrar apenas condições atendidas";
 "Other apps" = "Outros apps";
 "Panel width: %d pt" = "Largura do painel: %d pt";
-"Pause / Resume Triggers" = "Pausar / Retomar condições";
+"Pause / Resume Triggers" = "Pausar / Retomar gatilhos";
 "Pin controls to keep them visible in Show less." = "Fixe controles para mantê-los visíveis em Mostrar menos.";
 "Pinned controls" = "Controles fixados";
 "Remaining time" = "Tempo restante";
@@ -841,7 +841,7 @@
 "Trigger summary" = "Resumo das condições";
 "Use standard menu" = "Usar menu padrão";
 "Warnings stay visible. Preferences and Quit are also available by right-clicking the cup." = "Os avisos continuam visíveis. Preferências e Sair também estão disponíveis ao clicar com o botão direito na xícara.";
-"A compact session menu with Only while brewing." = "Menu compacto com Somente durante a atividade.";
+"A compact session menu with Only while brewing." = "Menu compacto com a opção “Somente durante o preparo”.";
 "A compact session menu with the closed-display switch." = "Menu compacto com o interruptor de tela fechada.";
 "A small session menu with status and quick timers." = "Menu pequeno com estado e temporizadores rápidos.";
 "Adapt controls to manual or trigger sessions" = "Adaptar controles a sessões manuais ou por condições";

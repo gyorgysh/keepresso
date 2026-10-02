@@ -18,7 +18,7 @@ permissions:
 jobs:
   release:
     name: Build, sign, notarize, publish
-    runs-on: macos-26
+    runs-on: xcode-27
     environment: release # add a required reviewer to this environment in repo settings
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -39,9 +39,9 @@ jobs:
       # moved tag must not be able to swap in new code.
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90
         with:
-          xcode-version: latest-stable
-      # Keep releases on stable Xcode until the preview toolchain is promoted.
-      # macOS 27 runtime compatibility does not require linking the 27 SDK.
+          xcode-version: '27.0'
+      # Match Preview and CI's stable Xcode 27 build. The runner image can
+      # contain newer betas, so select the stable toolchain explicitly.
       - name: Record release toolchain
         run: |
           sw_vers
@@ -91,7 +91,11 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security import "$CERT" -k "$KEYCHAIN" -P "$CERT_P12_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          EXISTING_KEYCHAINS=()
+          while IFS= read -r EXISTING_KEYCHAIN; do
+            EXISTING_KEYCHAINS+=("$EXISTING_KEYCHAIN")
+          done < <(security list-keychains -d user | sed 's/^[[:space:]]*"//; s/"[[:space:]]*$//')
+          security list-keychains -d user -s "$KEYCHAIN" "${EXISTING_KEYCHAINS[@]}"
           rm -f "$CERT"
 
       - name: Build and export signed app

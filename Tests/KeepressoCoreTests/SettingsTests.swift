@@ -443,3 +443,104 @@ func legacyMenuChoicesDoNotOptUsersIn(expanded: Bool) throws {
     #expect(KeepressoSettings.displaySeconds(.infinity) == 0)
     #expect(KeepressoSettings.displaySeconds(1e308) > Int.max / 4)
 }
+
+@Test(arguments: [true, false])
+func customizationUpgradePreservesAComplete125SettingsBlob(expanded: Bool) throws {
+    // Produced by the settings encoder at f231b07 (1.25.0), before menu
+    // customization existed. Keep the serialized representation here so an
+    // upgrade exercises the previous release's data, including its enum shape.
+    let fixture = """
+    {
+      "options": {
+        "preventSystemSleep": false, "preventDisplaySleep": true,
+        "allowScreenSaverAfter": 400, "dimFloor": 0.25,
+        "simulateUserActivity": true, "activitySimulationMethod": "specifiedKey",
+        "activitySimulationKeyCode": 40, "activityPokeIdleMinutes": 5
+      },
+      "defaultMode": {"timed": {"duration": 12345}},
+      "triggersEnabled": true,
+      "ruleSet": {"combine": "all", "rules": [{"process": {"_0": "ffmpeg"}}, {"externalDisplay": {}}]},
+      "reminderAfter": 1800, "reminderRepeats": true, "reminderSound": false,
+      "notifyOnEnd": true, "endingSoonNoticeSeconds": 120,
+      "quickStopDurations": [900, 5400], "endAction": "lockScreen",
+      "eventHooks": [{
+        "id": "E7A6D53C-E07A-48AE-9194-EEBF2C38A38B", "enabled": true,
+        "event": "sessionStarted", "action": {"runShortcut": {"name": "Mine"}}
+      }],
+      "wakeSchedule": {
+        "repeatingEnabled": true, "repeatSecondsFromMidnight": 42300,
+        "repeatWeekdays": "MTWRF", "startSessionOnWake": true,
+        "sessionDurationSeconds": 6000, "presetID": "custom"
+      },
+      "automationSync": {
+        "enabled": true, "enabledSources": [], "mutedIDs": ["hidden"],
+        "holdSeconds": 2400, "leadSeconds": 120
+      },
+      "diskKeepAlive": {"directory": "file:///Volumes/Archive", "interval": 200},
+      "virtualDisplay": {"width": 1920, "height": 1080, "hiDPI": false},
+      "thermalSafety": {
+        "mode": {"sensors": {"ids": ["Tp09"], "celsius": 98}},
+        "sustainSeconds": 60, "fanBoostPercent": 80, "stopBrewing": true
+      },
+      "pauseBelowBatteryPercent": 40, "showCountdownInMenuBar": true,
+      "menuPanelExpanded": true, "glassClarity": 75,
+      "awdlAutoWithGaming": true, "awdlNotifications": true, "awdlGraceSeconds": 150,
+      "closedDisplayOnlyWhileBrewing": false, "closedLidDisplayPolicy": "displayOff",
+      "hotKey": {"keyCode": 40, "modifierFlags": 1048576}, "startOnLaunch": true,
+      "presets": [{
+        "id": "custom", "name": "Render",
+        "ruleSet": {"combine": "all", "rules": [{"process": {"_0": "ffmpeg"}}, {"externalDisplay": {}}]}
+      }],
+      "seededPresetIDs": ["user-deleted-built-in"], "hasOnboarded": true,
+      "automationLeasesEnabled": false, "automationWakeControlEnabled": true,
+      "gamePriorityBoost": true, "controllerPokeWhileGaming": true
+    }
+    """
+    var oldFields = try #require(JSONSerialization.jsonObject(with: Data(fixture.utf8)) as? [String: Any])
+    oldFields["menuPanelExpanded"] = expanded
+    let oldData = try JSONSerialization.data(withJSONObject: oldFields)
+    let upgraded = try JSONDecoder().decode(KeepressoSettings.self, from: oldData)
+    #expect(!upgraded.menuCustomizationEnabled)
+    #expect(upgraded.menuLayout == nil)
+    #expect(upgraded.customizedMenuLayout == nil)
+    #expect(upgraded.customizedMenuSections == nil)
+    #expect(upgraded.menuPanelExpanded == expanded)
+    #expect(!upgraded.closedDisplayOnlyWhileBrewing)
+    #expect(upgraded.withFreshInstallDefaults(hasStoredSettings: true) == upgraded)
+
+    func previousReleaseFields(_ settings: KeepressoSettings) throws -> NSDictionary {
+        let encoded = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(settings)) as? [String: Any])
+        return encoded.filter { oldFields.keys.contains($0.key) } as NSDictionary
+    }
+    #expect(try previousReleaseFields(upgraded) == oldFields as NSDictionary)
+
+    let suite = "keepresso.tests.customizationUpgrade." + UUID().uuidString
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set(oldData, forKey: UserDefaultsSettingsStore.defaultKey)
+    let store = UserDefaultsSettingsStore(defaults: defaults)
+    #expect(store.hasStoredSettings)
+    #expect(store.load() == upgraded)
+    store.save(upgraded)
+    #expect(store.load() == upgraded)
+
+    let oldExport = try JSONSerialization.data(withJSONObject: [
+        "format": SettingsTransfer.formatName, "version": 1,
+        "appVersion": "1.25.0", "settings": oldFields,
+    ])
+    #expect(try SettingsTransfer.importSettings(from: oldExport) == upgraded)
+
+    var customized = upgraded
+    customized.menuCustomizationEnabled = true
+    customized.setMenuLayout(.profile(.statusOnly))
+    #expect(try previousReleaseFields(customized) == oldFields as NSDictionary)
+    let imported = try SettingsTransfer.importSettings(from: SettingsTransfer.exportData(customized))
+    #expect(imported == customized)
+    customized.menuCustomizationEnabled = false
+    store.save(customized)
+    let restored = store.load()
+    #expect(restored.customizedMenuLayout == nil)
+    #expect(restored.customizedMenuSections == nil)
+    #expect(restored.menuLayout == customized.menuLayout)
+    #expect(try previousReleaseFields(restored) == oldFields as NSDictionary)
+}

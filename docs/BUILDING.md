@@ -61,7 +61,12 @@ independent of any UI:
 ```sh
 swift build      # build the core library
 swift test       # run the test suite
+python3 tools/localization/check_all.py  # validate all shipped languages
+bash scripts/check-versions.sh          # check app, widget and helper versions
 ```
+
+CI checks both Xcode 26 and stable Xcode 27. Signed preview and release builds
+use Xcode 27.0; the app's minimum deployment target remains macOS 14.
 
 ## Good to know
 

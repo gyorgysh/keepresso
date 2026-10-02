@@ -76,6 +76,10 @@ SOURCE_COVERAGE = [
             r'\b(?:Text|Button|Label|Toggle|Picker|LabeledContent|GroupBox|Section)\(\s*"((?:[^"\\]|\\.)*)"',
             r'\b(?:Menu|Window|TextField)\(\s*"((?:[^"\\]|\\.)*)"',
             r'\bsection(?:Header|Footer)\(\s*"((?:[^"\\]|\\.)*)"',
+            r'\bswitchRow\(\s*"((?:[^"\\]|\\.)*)"',
+            # These call sites use a simple ternary to select two catalog keys
+            # (for example L(up ? "Move up" : "Move down")).
+            r'\b(?:L|Text)\(\s*[^"\n?]+\?\s*"((?:[^"\\]|\\.)*)"\s*:\s*"((?:[^"\\]|\\.)*)"',
         ],
     ),
     (
@@ -110,13 +114,14 @@ def check_source_coverage(problems: list):
                 source = source_file.read()
             for pattern in patterns:
                 for match in re.finditer(pattern, source, re.DOTALL):
-                    key = swift_literal(match.group(1))
-                    if key and key not in catalog:
-                        line = source.count("\n", 0, match.start()) + 1
-                        problems.append(
-                            f"{name}: source key missing from catalog at "
-                            f"{relative_path}:{line}: {key!r}"
-                        )
+                    for raw in match.groups():
+                        key = swift_literal(raw)
+                        if key and key not in catalog:
+                            line = source.count("\n", 0, match.start()) + 1
+                            problems.append(
+                                f"{name}: source key missing from catalog at "
+                                f"{relative_path}:{line}: {key!r}"
+                            )
 
 
 def check_translations(problems: list):

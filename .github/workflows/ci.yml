@@ -20,14 +20,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check every language and the generated .strings
         run: python3 tools/localization/check_all.py
+      - name: Check app, widget, and helper versions
+        run: bash scripts/check-versions.sh
 
   core-tests:
     name: Core build & tests
     runs-on: macos-26
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # The project format (objectVersion 77) and swift-testing both need
-      # Xcode 16+, so pin to the latest stable Xcode on the runner.
+      # Keep coverage on the stable Xcode available on macOS 26 as well as
+      # the Xcode 27 toolchain used for signed builds below.
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
           xcode-version: latest-stable
@@ -65,12 +67,15 @@ jobs:
 
   xcode-27:
     name: Xcode 27 compatibility
-    # Preview SDK coverage is separate from the stable release toolchain.
-    # Use the image's default Xcode: latest-stable would exclude its beta/RC.
+    # Xcode 27 is stable. This runner image is still called a public preview
+    # by GitHub, and may also contain beta toolchains; select stable 27.0.
     runs-on: xcode-27
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: '27.0'
       - name: Record and verify toolchain
         run: |
           sw_vers

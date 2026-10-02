@@ -392,7 +392,7 @@ struct MenuBarContent: View {
         case .quickStop:
             VStack(alignment: .leading, spacing: 6) {
                 Text("Stop in")
-                quickStopButtons
+                adaptiveQuickStopButtons
                     .tint(layout.controlStyle == .accent ? .keepressoBrew : .primary)
                     .foregroundStyle(layout.controlStyle == .accent ? Color.keepressoBrew : .primary)
             }
@@ -1109,7 +1109,7 @@ struct MenuBarContent: View {
                 Spacer()
                 Image(systemName: menuExpanded ? "chevron.up" : "chevron.down")
                     .font(type.caption2)
-                Text(menuExpanded ? "Show less" : "Show more")
+                Text(menuExpanded ? L("Show less") : L("Show more"))
                     .font(type.caption)
                 Spacer()
             }
@@ -1135,14 +1135,42 @@ struct MenuBarContent: View {
     private var quickStopButtons: some View {
         HStack(spacing: 6) {
             ForEach(model.quickStopDurations, id: \.self) { duration in
-                Button(Self.shortDuration(duration)) {
-                    model.stopSessionIn(duration)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .lineLimit(1)
+                quickStopButton(duration)
             }
         }
+    }
+
+    /// Custom widths and translated compound durations can exceed a single
+    /// row. Measure the full labels before choosing a grid or column.
+    private var adaptiveQuickStopButtons: some View {
+        let durations = model.quickStopDurations
+        return ViewThatFits(in: .horizontal) {
+            quickStopButtons.fixedSize()
+            Grid(alignment: .leading, horizontalSpacing: 6, verticalSpacing: 6) {
+                ForEach(Array(stride(from: 0, to: durations.count, by: 2)), id: \.self) { index in
+                    GridRow {
+                        quickStopButton(durations[index])
+                        if index + 1 < durations.count {
+                            quickStopButton(durations[index + 1])
+                        }
+                    }
+                }
+            }
+            .fixedSize()
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(durations, id: \.self) { duration in
+                    quickStopButton(duration)
+                }
+            }
+            .fixedSize()
+        }
+    }
+
+    private func quickStopButton(_ duration: TimeInterval) -> some View {
+        Button(Self.shortDuration(duration)) { model.stopSessionIn(duration) }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .lineLimit(1)
     }
 
     /// Whether the shortcut buttons fit next to the "Stop in" label: at most

@@ -823,7 +823,7 @@
 "Sections: %d" = "Bölümler: %d";
 "Show agent details" = "Aracı ayrıntılarını göster";
 "Show cup icon" = "Fincan simgesini göster";
-"Show more / Show less" = "Daha fazla / Daha az göster";
+"Show more / Show less" = "Daha fazla göster / Daha az göster";
 "Show section dividers" = "Bölüm ayırıcılarını göster";
 "Show section headings" = "Bölüm başlıklarını göster";
 "Show, hide, pin, reorder, or move any control to another section." = "Her kontrolü gösterin, gizleyin, sabitleyin, yeniden sıralayın veya başka bölüme taşıyın.";
@@ -841,7 +841,7 @@
 "Trigger summary" = "Tetikleyici özeti";
 "Use standard menu" = "Standart menüyü kullan";
 "Warnings stay visible. Preferences and Quit are also available by right-clicking the cup." = "Uyarılar görünür kalır. Fincana sağ tıklayarak Tercihler ve Çıkış seçeneklerine de ulaşabilirsiniz.";
-"A compact session menu with Only while brewing." = "Yalnızca çalışırken anahtarı olan kompakt oturum menüsü.";
+"A compact session menu with Only while brewing." = "“Yalnızca demlenirken” anahtarı olan kompakt oturum menüsü.";
 "A compact session menu with the closed-display switch." = "Kapalı ekran anahtarı olan kompakt oturum menüsü.";
 "A small session menu with status and quick timers." = "Durum ve hızlı zamanlayıcıları olan küçük oturum menüsü.";
 "Adapt controls to manual or trigger sessions" = "Kontrolleri elle veya tetikleyicili oturumlara uyarla";

@@ -81,7 +81,7 @@ targets:
         CFBundleName: Keepresso
         CFBundleDisplayName: Keepresso
         CFBundleShortVersionString: "1.26.0"
-        CFBundleVersion: "41"
+        CFBundleVersion: "42"
         LSUIElement: true            # menu-bar agent: no Dock icon
         LSMinimumSystemVersion: "14.0"
         # The shipped localizations (Localizable.strings under *.lproj); keep
@@ -120,7 +120,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: sh.gyorgy.keepresso
         MARKETING_VERSION: "1.26.0"
-        CURRENT_PROJECT_VERSION: "41"
+        CURRENT_PROJECT_VERSION: "42"
         SWIFT_VERSION: "5.9"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Bridges the Objective-C virtual-display wrapper (private CG API) to Swift.
@@ -200,7 +200,7 @@ targets:
         # to depend on, and a stale helper version only misleads crash/launchd
         # and BTM logs.
         CFBundleShortVersionString: "1.26.0"
-        CFBundleVersion: "41"
+        CFBundleVersion: "42"
     settings:
       base:
         PRODUCT_NAME: keepresso-helper
@@ -239,7 +239,7 @@ targets:
         CFBundleName: KeepressoWidget
         CFBundleDisplayName: Keepresso
         CFBundleShortVersionString: "1.26.0"
-        CFBundleVersion: "41"
+        CFBundleVersion: "42"
         # Same 15 localizations as the app; keep in sync with
         # tools/localization/gen_strings.py.
         CFBundleLocalizations: [en, de, es, fr, it, hu, pt-BR, tr, ru, ja, ko, pl, uk, zh-Hans, zh-Hant]
@@ -264,7 +264,7 @@ targets:
         # Keep in lockstep with the app target's versions on every release
         # bump (the release scripts read the app's, the first in this file).
         MARKETING_VERSION: "1.26.0"
-        CURRENT_PROJECT_VERSION: "41"
+        CURRENT_PROJECT_VERSION: "42"
         SWIFT_VERSION: "5.9"
         ENABLE_HARDENED_RUNTIME: true
         CODE_SIGN_STYLE: Automatic

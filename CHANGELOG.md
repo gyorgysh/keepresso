@@ -31,6 +31,11 @@ Theme: make the menu your own, while keeping the familiar default experience.
 
 ### Fixed
 
+- **Translated customization controls stay consistent.** Expand labels use the
+  selected language, and layout descriptions name the switches they refer to.
+  Quick-stop shortcuts wrap in narrow custom panels so their full durations
+  remain readable.
+
 - **Customized status stays live.** Countdown captions and trigger details
   refresh each second even when other activity rows are hidden.
 
