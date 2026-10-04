@@ -29,8 +29,6 @@
 "Customize menu sections" = "Customize menu sections";
 "Move up" = "Move up";
 "Move down" = "Move down";
-"Use the arrows to arrange the menu sections." = "Use the arrows to arrange the menu sections.";
-"Show less keeps the first two visible sections." = "Show less keeps the first two visible sections.";
 "Battery" = "Battery";
 "Welcome" = "Welcome";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.";
@@ -61,8 +59,6 @@
 "Manual session" = "Manual session";
 "Quick settings" = "Quick settings";
 "Tools & shortcuts" = "Tools & shortcuts";
-"Choose which sections appear in the menu-bar dropdown. Manual session shows fixed and custom timers. Triggers shows AI-agent and other automatic conditions. Quick settings contains lid and battery controls. Tools & shortcuts opens the specialized assistants. Turn on any combination." = "Choose which sections appear in the menu-bar dropdown. Manual session shows fixed and custom timers. Triggers shows AI-agent and other automatic conditions. Quick settings contains lid and battery controls. Tools & shortcuts opens the specialized assistants. Turn on any combination.";
-"At least one section must stay visible." = "At least one section must stay visible.";
 "Gaming" = "Gaming";
 "None" = "None";
 "any" = "any";
@@ -860,3 +856,4 @@
 "Status and activity only, without session buttons." = "Status and activity only, without session buttons.";
 "Status only" = "Status only";
 "The familiar menu, with settings and tools tucked away." = "The familiar menu, with settings and tools tucked away.";
+"Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows." = "Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows.";

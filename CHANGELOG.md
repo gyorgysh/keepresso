@@ -13,7 +13,11 @@ Theme: make the menu your own, while keeping the familiar default experience.
   editor lets you show, hide, move, reorder, pin, and collapse controls and
   sections. Start with Minimal, Compact, Balanced, Lid controls, Brewing
   controls, Status only, or Detailed. Every preset starts at the standard
-  width, with settings and tools tucked away. Thanks to @alvst for the menu
+  width, with settings and tools tucked away. Customization stays off until you
+  enable it, and turning it off restores the standard menu while keeping your
+  layout. Layouts are part of settings backups, and a malformed layout never
+  discards your other settings. Hidden lid controls still report an active
+  sleep override, a password prompt, or an error. Thanks to @alvst for the menu
   customization work in PR #26.
 
 - **See layout changes as you edit.** A live preview sits beside the controls
@@ -22,35 +26,13 @@ Theme: make the menu your own, while keeping the familiar default experience.
 
 - **Choose the amount of detail.** Customize panel width, spacing, the status
   header, trigger and agent rows, and menu-bar text. Session actions use subtle
-  accent buttons; Clear style keeps the same buttons with neutral colors.
-  Dropdowns and app links stay neutral in both styles.
+  accent buttons, and Clear style keeps the same buttons with neutral colors.
+  Dropdowns and app links stay neutral in both styles. Quick-stop shortcuts
+  wrap in narrow panels so their full durations stay readable.
 
 - **Take manual control while triggers are running.** Start a timed or
   indefinite manual session from a customized menu, then resume triggers when
   you want automatic control again.
-
-### Fixed
-
-- **Translated customization controls stay consistent.** Expand labels use the
-  selected language, and layout descriptions name the switches they refer to.
-  Quick-stop shortcuts wrap in narrow custom panels so their full durations
-  remain readable.
-
-- **Customized status stays live.** Countdown captions and trigger details
-  refresh each second even when other activity rows are hidden.
-
-- **Existing settings keep working.** Customization stays off until enabled,
-  saved choices survive switching back to the standard menu, and import/export
-  preserves rules, presets, and feature settings. Unknown or malformed layout
-  fields fall back without discarding the rest of the configuration.
-
-- **Customized menus remain clickable.** Temporary window-view detachment no
-  longer starts a hide/remount loop. Expanded sections keep a collapse control,
-  and window actions close the menu panel before opening the chosen window.
-
-- **Hidden lid controls still report their state.** Active sleep overrides,
-  authorization prompts, and restore errors remain visible without duplicating
-  information already shown by a visible control.
 
 ## [1.25.0] - 2026-09-14
 

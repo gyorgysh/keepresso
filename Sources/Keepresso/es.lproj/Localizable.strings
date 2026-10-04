@@ -29,8 +29,6 @@
 "Customize menu sections" = "Personalizar secciones del menú";
 "Move up" = "Mover arriba";
 "Move down" = "Mover abajo";
-"Use the arrows to arrange the menu sections." = "Usa las flechas para ordenar las secciones del menú.";
-"Show less keeps the first two visible sections." = "Mostrar menos mantiene visibles las dos primeras secciones.";
 "Battery" = "Batería";
 "Welcome" = "Bienvenida";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Mantiene el Mac funcionando con la tapa cerrada y sin pantalla externa. Esto modifica un ajuste del sistema que requiere permisos de administrador: silencioso con el asistente de administrador instalado (Ajustes ▸ General), de lo contrario macOS pide tu contraseña.";
@@ -61,8 +59,6 @@
 "Manual session" = "Sesión manual";
 "Quick settings" = "Ajustes rápidos";
 "Tools & shortcuts" = "Herramientas y accesos directos";
-"Choose which sections appear in the menu-bar dropdown. Manual session shows fixed and custom timers. Triggers shows AI-agent and other automatic conditions. Quick settings contains lid and battery controls. Tools & shortcuts opens the specialized assistants. Turn on any combination." = "Elige qué secciones aparecen en el desplegable de la barra de menús. Sesión manual muestra temporizadores fijos y personalizados. Disparadores muestra el agente de IA y otras condiciones automáticas. Ajustes rápidos contiene los controles de tapa y batería. Herramientas y accesos directos abre los asistentes especializados. Activa cualquier combinación.";
-"At least one section must stay visible." = "Al menos una sección debe permanecer visible.";
 "Gaming" = "Juegos";
 "None" = "Ninguno";
 "any" = "cualquiera";
@@ -860,3 +856,4 @@
 "Status and activity only, without session buttons." = "Solo estado y actividad, sin botones de sesión.";
 "Status only" = "Solo estado";
 "The familiar menu, with settings and tools tucked away." = "El menú habitual, con ajustes y herramientas recogidos.";
+"Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows." = "Sustituye el desplegable estándar por tu propio diseño. Abre Personalizar menú… para mostrar, ocultar o reordenar controles, cambiar su estilo y espaciado, y elegir qué muestra el elemento de la barra de menús.";

@@ -29,8 +29,6 @@
 "Customize menu sections" = "Menüabschnitte anpassen";
 "Move up" = "Nach oben";
 "Move down" = "Nach unten";
-"Use the arrows to arrange the menu sections." = "Ordne die Menüabschnitte mit den Pfeilen an.";
-"Show less keeps the first two visible sections." = "„Weniger anzeigen“ behält die ersten beiden sichtbaren Abschnitte.";
 "Battery" = "Akku";
 "Welcome" = "Willkommen";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Hält den Mac bei geschlossenem Deckel und ohne externes Display am Laufen. Dies ändert eine Systemeinstellung, die Administratorrechte erfordert: lautlos mit installiertem Administrator-Hilfsdienst (Einstellungen ▸ Allgemein), sonst fragt macOS nach deinem Passwort.";
@@ -61,8 +59,6 @@
 "Manual session" = "Manuelle Sitzung";
 "Quick settings" = "Schnelleinstellungen";
 "Tools & shortcuts" = "Werkzeuge und Kurzbefehle";
-"Choose which sections appear in the menu-bar dropdown. Manual session shows fixed and custom timers. Triggers shows AI-agent and other automatic conditions. Quick settings contains lid and battery controls. Tools & shortcuts opens the specialized assistants. Turn on any combination." = "Wähle, welche Bereiche im Menüleisten-Dropdown erscheinen. Manuelle Sitzung zeigt feste und eigene Timer. Auslöser zeigt den KI-Agenten und andere automatische Bedingungen. Schnelleinstellungen enthält die Deckel- und Akkusteuerung. Werkzeuge und Kurzbefehle öffnet die spezialisierten Assistenten. Aktiviere eine beliebige Kombination.";
-"At least one section must stay visible." = "Mindestens ein Bereich muss sichtbar bleiben.";
 "Gaming" = "Gaming";
 "None" = "Keiner";
 "any" = "beliebige";
@@ -860,3 +856,4 @@
 "Status and activity only, without session buttons." = "Nur Status und Aktivität, ohne Sitzungsschaltflächen.";
 "Status only" = "Nur Status";
 "The familiar menu, with settings and tools tucked away." = "Das vertraute Menü mit eingeklappten Einstellungen und Werkzeugen.";
+"Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows." = "Ersetzt das Standard-Dropdown durch dein eigenes Layout. Öffne Menü anpassen…, um Bedienelemente anzuzeigen, auszublenden oder neu anzuordnen, ihren Stil und die Abstände zu ändern und festzulegen, was in der Menüleiste erscheint.";

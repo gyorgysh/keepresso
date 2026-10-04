@@ -1606,8 +1606,8 @@ final class AppModel {
         }
     }
 
-    /// Custom section visibility and ordering are opt-in so upgrades retain
-    /// the menu layout users already know.
+    /// The custom menu layout is opt-in so upgrades retain the menu users
+    /// already know.
     var menuCustomizationEnabled: Bool {
         get { settings.menuCustomizationEnabled }
         set {
@@ -1616,91 +1616,19 @@ final class AppModel {
         }
     }
 
-    /// At least one configurable section stays visible. Preferences remains
-    /// available even in a tools-only layout.
-    var showManualSessionInMenu: Bool {
-        get { settings.showManualSessionInMenu }
-        set {
-            guard newValue || settings.showTriggerControlsInMenu
-                || settings.showQuickSettingsInMenu || settings.showToolsInMenu else { return }
-            settings.showManualSessionInMenu = newValue
-            persist()
-        }
-    }
-
-    var showTriggerControlsInMenu: Bool {
-        get { settings.showTriggerControlsInMenu }
-        set {
-            guard newValue || settings.showManualSessionInMenu
-                || settings.showQuickSettingsInMenu || settings.showToolsInMenu else { return }
-            settings.showTriggerControlsInMenu = newValue
-            persist()
-        }
-    }
-
-    var showQuickSettingsInMenu: Bool {
-        get { settings.showQuickSettingsInMenu }
-        set {
-            guard newValue || settings.showManualSessionInMenu
-                || settings.showTriggerControlsInMenu || settings.showToolsInMenu else { return }
-            settings.showQuickSettingsInMenu = newValue
-            persist()
-        }
-    }
-
-    var showToolsInMenu: Bool {
-        get { settings.showToolsInMenu }
-        set {
-            guard newValue || settings.showManualSessionInMenu
-                || settings.showTriggerControlsInMenu || settings.showQuickSettingsInMenu else { return }
-            settings.showToolsInMenu = newValue
-            persist()
-        }
-    }
-
-    var toolsSectionExpanded: Bool {
-        get { settings.toolsSectionExpanded }
-        set {
-            settings.toolsSectionExpanded = newValue
-            persist()
-        }
-    }
-
-    /// Nil means the standard layout, independent of saved custom choices.
-    var customizedMenuSections: [MenuBarSection]? { settings.customizedMenuSections }
-
     /// A saved granular layout is used only behind the existing opt-in flag.
     var advancedMenuLayout: MenuLayout? {
         settings.customizedMenuLayout
     }
 
     var editableMenuLayout: MenuLayout {
-        settings.menuLayout ?? (settings.hasLegacyMenuChoices ? MenuLayout.legacy(settings) : MenuLayout())
-    }
-
-    var usesCustomMenuSections: Bool {
-        settings.menuCustomizationEnabled && (settings.menuLayout != nil || settings.hasLegacyMenuChoices)
+        settings.menuLayout ?? MenuLayout()
     }
 
     func updateMenuLayout(_ update: (inout MenuLayout) -> Void) {
         var layout = editableMenuLayout
         update(&layout)
         settings.setMenuLayout(layout)
-        persist()
-    }
-
-    /// Saved display order for the four configurable menu sections.
-    var menuSectionOrder: [MenuBarSection] { settings.menuSectionOrder }
-
-    /// Move one section by a single row in Preferences. Keeping the mutation
-    /// here ensures every reorder is normalized and persisted immediately.
-    func moveMenuSection(_ section: MenuBarSection, by offset: Int) {
-        guard let source = settings.menuSectionOrder.firstIndex(of: section) else { return }
-        let destination = source + offset
-        guard settings.menuSectionOrder.indices.contains(destination) else { return }
-        settings.menuSectionOrder.swapAt(source, destination)
-        settings.menuSectionOrder = KeepressoSettings.normalizedMenuSectionOrder(
-            settings.menuSectionOrder)
         persist()
     }
 

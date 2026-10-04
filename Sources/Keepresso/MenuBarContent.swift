@@ -8,7 +8,6 @@ import Combine
 struct MenuPreviewConfiguration {
     var layout: MenuLayout?
     var expanded: Bool
-    var useCustomSections = false
     var includesUnavailableItems = false
     var maxHeight: CGFloat = 480
 }
@@ -45,9 +44,6 @@ struct MenuBarContent: View {
         if let preview { return preview.layout }
         return model.advancedMenuLayout
     }
-    private var customizationEnabled: Bool {
-        preview?.useCustomSections ?? model.usesCustomMenuSections
-    }
     private var menuExpanded: Bool { preview?.expanded ?? model.menuPanelExpanded }
 
     /// Whether the panel is actually on screen. The closed panel keeps this
@@ -65,6 +61,10 @@ struct MenuBarContent: View {
     @State private var advancedUntilItem: MenuItem?
     @State private var advancedContentHeight: CGFloat?
     @State private var previewTick = 0
+    /// Held in state so each body pass reuses one timer. A publisher built in
+    /// `body` is replaced on every re-render, which restarts its countdown.
+    /// Autoconnect only starts it for the preview, the one subscriber.
+    @State private var previewTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     @State private var previewCollapsedSections: Set<MenuLayoutSection>?
     /// An expanded group keeps its disclosure so the user can collapse it again.
     @State private var disclosedSections: Set<MenuLayoutSection> = []
@@ -116,7 +116,7 @@ struct MenuBarContent: View {
         Group {
             if preview != nil {
                 panelBody
-                    .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in previewTick &+= 1 }
+                    .onReceive(previewTimer) { _ in previewTick &+= 1 }
                     .onChange(of: advancedMenuLayout?.collapsedSections) { _, _ in previewCollapsedSections = nil }
             } else {
                 livePanel
@@ -174,7 +174,6 @@ struct MenuBarContent: View {
         .animation(.snappy(duration: 0.25), value: model.helperAttention)
         .animation(.snappy(duration: 0.25), value: model.menuPanelExpanded)
         .animation(.snappy(duration: 0.25), value: model.menuCustomizationEnabled)
-        .animation(.snappy(duration: 0.25), value: displayedMenuSections)
         .glassPanelBackground()
         .tint(.keepressoBrew)
         .font(type.body)
@@ -198,16 +197,7 @@ struct MenuBarContent: View {
 
             heldByLine
 
-            if customizationEnabled {
-                Divider()
-                configuredMenuSections
-                sleepRecoveryControls
-                statusStack
-                Divider()
-                appEntries
-            } else {
-                standardMenuSections
-            }
+            standardMenuSections
 
             expandToggleRow
         }
@@ -291,6 +281,7 @@ struct MenuBarContent: View {
     private func advancedSections(_ groups: [MenuLayoutGroup], layout: MenuLayout, visible: Set<MenuItem>) -> some View {
         let closedDisplayHidden = !visible.contains(.closedDisplay)
         let brewingOnlyHidden = !visible.contains(.brewingOnly)
+        let combinesCaption = combinesStatusCaption(layout, groups: groups)
         let needsSleepStatus = (closedDisplayHidden
             && (model.closedDisplayEnabled || model.closedDisplayBusy || model.closedDisplayError != nil))
             || (brewingOnlyHidden && (model.closedDisplayAutoBusy || model.closedDisplayAutoError != nil))
@@ -303,7 +294,7 @@ struct MenuBarContent: View {
             }
             ForEach(groups) { group in
                 if layout.showDividers && group.id != groups.first?.id { Divider() }
-                advancedGroup(group, layout: layout)
+                advancedGroup(group, layout: layout, combinesCaption: combinesCaption)
             }
             // Collapsed groups retain their controls behind their disclosure.
             // Hidden overrides still report their state, including status-only
@@ -315,6 +306,17 @@ struct MenuBarContent: View {
                 }
                 .padding(.top, layout.showDividers ? 0 : 4)
             }
+            // Manual controls pause triggers. If the trigger action is hidden
+            // or collapsed, keep the way back to automatic control beside them.
+            if model.triggersEnabled && model.triggersPaused && session.liveLeases.isEmpty
+                && !visible.contains(.triggerAction)
+                && !visible.isDisjoint(with: [.manualToggle, .duration, .manualOverride, .quickStop]) {
+                Button { model.resumeTriggers() } label: {
+                    Text("Resume Triggers").frame(maxWidth: .infinity)
+                }
+                .modifier(CustomMenuControlStyle(item: .triggerAction, style: layout.controlStyle))
+                .disabled(preview != nil)
+            }
             if visible.isEmpty {
                 Button("Customize Menu…") { open(KeepressoApp.menuCustomizationWindowID) }
                     .buttonStyle(.menuRow)
@@ -325,7 +327,7 @@ struct MenuBarContent: View {
     }
 
     @ViewBuilder
-    private func advancedGroup(_ group: MenuLayoutGroup, layout: MenuLayout) -> some View {
+    private func advancedGroup(_ group: MenuLayoutGroup, layout: MenuLayout, combinesCaption: Bool) -> some View {
         let collapsed = (preview != nil ? (previewCollapsedSections ?? layout.collapsedSections) : layout.collapsedSections)
             .contains(group.section)
         VStack(alignment: .leading, spacing: group.section == .manualSession ? layout.density.spacing - 2 : layout.density.spacing) {
@@ -357,7 +359,7 @@ struct MenuBarContent: View {
             }
             if !collapsed {
                 ForEach(group.items) { item in
-                    advancedItem(item, layout: layout)
+                    advancedItem(item, layout: layout, combinesCaption: combinesCaption)
                         .modifier(CustomMenuControlStyle(item: item, style: layout.controlStyle))
                         .disabled(preview != nil).allowsHitTesting(preview == nil)
                 }
@@ -366,16 +368,16 @@ struct MenuBarContent: View {
     }
 
     @ViewBuilder
-    private func advancedItem(_ item: MenuItem, layout: MenuLayout) -> some View {
+    private func advancedItem(_ item: MenuItem, layout: MenuLayout, combinesCaption: Bool) -> some View {
         // Each ForEach row needs its own clock dependency: Date-based values
         // and cached trigger states do not publish Observation changes.
         let _ = preview == nil ? panel.tick : UInt(previewTick)
         switch item {
         case .statusHeader:
-            if combinesStatusCaption(layout) { header }
+            if combinesCaption { header }
             else { advancedHeader(layout.headerStyle) }
         case .statusCaption:
-            if !combinesStatusCaption(layout) {
+            if !combinesCaption {
                 Text(statusDetail).font(type.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -486,11 +488,11 @@ struct MenuBarContent: View {
         }
     }
 
-    private func combinesStatusCaption(_ layout: MenuLayout) -> Bool {
+    /// Computed once per render from the groups already built for the panel.
+    private func combinesStatusCaption(_ layout: MenuLayout, groups: [MenuLayoutGroup]) -> Bool {
         guard layout.headerStyle == .card,
               layout.placement(of: .statusHeader) == layout.placement(of: .statusCaption) else { return false }
-        let group = layout.groups(expanded: menuExpanded, available: availableMenuItems(layout))
-            .first { $0.items.contains(.statusHeader) }
+        let group = groups.first { $0.items.contains(.statusHeader) }
         guard let items = group?.items, let index = items.firstIndex(of: .statusHeader),
               items.indices.contains(index + 1) else { return false }
         return items[index + 1] == .statusCaption
@@ -732,155 +734,6 @@ struct MenuBarContent: View {
         }
     }
 
-    /// Visible sections in the user's saved order. Show less treats that order
-    /// as priority and keeps the first two enabled sections, whatever they are.
-    private var displayedMenuSections: [MenuBarSection] {
-        model.customizedMenuSections ?? []
-    }
-
-    @ViewBuilder
-    private var configuredMenuSections: some View {
-        ForEach(displayedMenuSections) { section in
-            if section != displayedMenuSections.first { Divider() }
-            configuredMenuSection(section)
-        }
-    }
-
-    @ViewBuilder
-    private func configuredMenuSection(_ section: MenuBarSection) -> some View {
-        switch section {
-        case .manualSession:
-            manualSessionControls
-        case .triggers:
-            triggerControls
-        case .quickSettings:
-            quickSettings
-        case .toolsAndShortcuts:
-            toolsControls
-        }
-    }
-
-    @ViewBuilder
-    private var triggerControls: some View {
-        switchRow("Activate by triggers", isOn: Binding(
-            get: { model.triggersEnabled },
-            set: { model.triggersEnabled = $0 }
-        ))
-
-        if model.triggersEnabled && !model.triggersPaused {
-            activeTriggerControls
-        } else if model.triggersEnabled {
-            Text("Triggers paused. Controlling manually for now.")
-                .font(type.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Button("Resume Triggers") { model.resumeTriggers() }
-                .prominentActionStyle()
-                .frame(maxWidth: .infinity)
-        }
-    }
-
-    @ViewBuilder
-    private var activeTriggerControls: some View {
-        triggerSummary
-            .transition(.opacity)
-
-        // Pausing means "let my Mac sleep", so live automation leases come
-        // first: the row offers ending them before trigger control pauses.
-        if session.liveLeases.isEmpty {
-            Text("Activation is controlled by triggers.\nEdit them in Preferences.")
-                .font(type.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Button("Pause Triggers") { model.pauseTriggers() }
-                .prominentActionStyle()
-                .frame(maxWidth: .infinity)
-        } else {
-            Text("Activation is controlled by triggers.\nEnd the automation leases before pausing.")
-                .font(type.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Button("End Automation Leases") { model.endAutomationLeases() }
-                .prominentActionStyle()
-                .frame(maxWidth: .infinity)
-        }
-    }
-
-    @ViewBuilder
-    private var manualSessionControls: some View {
-        if model.triggersEnabled && !model.triggersPaused {
-            LabeledContent("Keep awake") {
-                Menu("For") {
-                    ForEach(Array(Self.durationOptions.enumerated()), id: \.offset) { _, option in
-                        Button(L(option.label)) { model.startManualOverride(mode: option.mode) }
-                    }
-                    Divider()
-                    Button("Custom Duration\u{2026}") { showCustomDuration = true }
-                    Button("Until a Time\u{2026}") { showUntilTime = true }
-                }
-                .fixedSize()
-            }
-            .popover(isPresented: $showCustomDuration) {
-                CustomDurationEditor(initial: model.defaultMode.duration ?? 3 * 60 * 60) {
-                    model.startManualOverride(mode: .timed(duration: $0))
-                }
-            }
-            .popover(isPresented: $showUntilTime) {
-                UntilTimeEditor(isActive: session.isActive) { hour, minute in
-                    model.startUntil(hour: hour, minute: minute)
-                }
-            }
-        } else {
-            switchRow("Keep awake", isOn: Binding(
-                get: { session.isActive },
-                set: { _ in model.toggleManual() }
-            ))
-
-            LabeledContent("For") {
-                Menu(Self.modeLabel(model.mode)) {
-                    ForEach(Array(Self.durationOptions.enumerated()), id: \.offset) { _, option in
-                        Button(L(option.label)) { model.mode = option.mode }
-                    }
-                    Divider()
-                    Button("Custom Duration\u{2026}") { showCustomDuration = true }
-                    Button("Until a Time\u{2026}") { showUntilTime = true }
-                }
-                .fixedSize()
-            }
-            .popover(isPresented: $showCustomDuration) {
-                CustomDurationEditor(initial: model.mode.duration ?? 60 * 60) {
-                    model.mode = .timed(duration: $0)
-                }
-            }
-            .popover(isPresented: $showUntilTime) {
-                UntilTimeEditor(isActive: session.isActive) { hour, minute in
-                    model.startUntil(hour: hour, minute: minute)
-                }
-            }
-
-            if session.isActive && !model.quickStopDurations.isEmpty {
-                // Compound durations or four shortcuts need their own row so
-                // translated labels never clip in the compact panel.
-                if quickStopButtonsFitInline {
-                    LabeledContent("Stop in") { quickStopButtons }
-                } else {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Stop in")
-                        quickStopButtons
-                    }
-                }
-            }
-
-            // If the user hides the trigger section, never strand a paused
-            // trigger engine with no path back from the menu.
-            if model.triggersEnabled
-                && !displayedMenuSections.contains(.triggers) {
-                Button("Resume Triggers") { model.resumeTriggers() }
-                    .prominentActionStyle()
-                    .frame(maxWidth: .infinity)
-            }
-        }
-    }
 
     /// The middle option toggles (closed-display, only-while-brewing, battery),
     /// hidden while the panel is collapsed.
@@ -995,34 +848,10 @@ struct MenuBarContent: View {
         }
     }
 
-    /// A customized panel must still expose an active sleep override and
-    /// authentication or restore failures if Quick settings was hidden.
-    @ViewBuilder
-    private var sleepRecoveryControls: some View {
-        if !displayedMenuSections.contains(.quickSettings)
-            && (model.closedDisplayEnabled || model.closedDisplayBusy
-                || model.closedDisplayAutoBusy || model.closedDisplayError != nil
-                || model.closedDisplayAutoError != nil) {
-            Divider()
-            closedDisplayControls
-        }
-    }
-
-    private var toolsDisclosureExpanded: Bool {
-        get { customizationEnabled ? model.toolsSectionExpanded : toolsExpanded }
-        nonmutating set {
-            if customizationEnabled {
-                model.toolsSectionExpanded = newValue
-            } else {
-                toolsExpanded = newValue
-            }
-        }
-    }
-
     @ViewBuilder
     private var toolsControls: some View {
         Button {
-            withAnimation(.snappy(duration: 0.2)) { toolsDisclosureExpanded.toggle() }
+            withAnimation(.snappy(duration: 0.2)) { toolsExpanded.toggle() }
         } label: {
             HStack {
                 Text("Tools")
@@ -1030,11 +859,11 @@ struct MenuBarContent: View {
                 Image(systemName: "chevron.right")
                     .font(type.caption2)
                     .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(toolsDisclosureExpanded ? 90 : 0))
+                    .rotationEffect(.degrees(toolsExpanded ? 90 : 0))
             }
         }
         .buttonStyle(.menuRow)
-        if toolsDisclosureExpanded {
+        if toolsExpanded {
             VStack(alignment: .leading, spacing: 0) {
                 Button("Headless Setup…") { open(KeepressoApp.setupWindowID) }
                     .buttonStyle(.menuRow)
@@ -1050,17 +879,13 @@ struct MenuBarContent: View {
         }
     }
 
-    /// Standard mode folds these entries away with Show less. Custom mode
-    /// keeps Preferences and Quit available; Tools follows the saved section
-    /// order, and Help follows the panel's expanded state.
+    /// Folded away with Show less, so Help follows the panel's expanded state.
     @ViewBuilder
     private var appEntries: some View {
         Button("Preferences…") { open(KeepressoApp.preferencesWindowID) }
             .menuShortcut(",", enabled: preview == nil)
             .buttonStyle(.menuRow)
-        if !customizationEnabled {
-            toolsControls
-        }
+        toolsControls
         if menuExpanded {
             Button {
                 withAnimation(.snappy(duration: 0.2)) { helpExpanded.toggle() }
@@ -1120,7 +945,7 @@ struct MenuBarContent: View {
         // folded away. As a background, the carriers take no layout slot in
         // the panel's VStack (a zero-size child would still add its spacing).
         .background {
-            if preview == nil && !menuExpanded && !customizationEnabled {
+            if preview == nil && !menuExpanded {
                 Button("") { open(KeepressoApp.preferencesWindowID) }
                     .menuShortcut(",", enabled: preview == nil)
                     .hidden()

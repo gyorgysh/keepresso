@@ -29,12 +29,9 @@ import Foundation
         triggersEnabled: true,
         menuPanelExpanded: false,
         menuCustomizationEnabled: true,
-        showManualSessionInMenu: false,
-        showQuickSettingsInMenu: false,
-        toolsSectionExpanded: true,
-        menuSectionOrder: [.toolsAndShortcuts, .triggers, .quickSettings, .manualSession],
         closedDisplayOnlyWhileBrewing: true
     )
+    settings.setMenuLayout(.profile(.compact))
     settings.ruleSet = RuleSet(combine: .all, rules: [.process("ffmpeg"), .externalDisplay])
     settings.presets = [Preset(id: "custom", name: "Render", ruleSet: settings.ruleSet)]
     settings.defaultMode = .timed(duration: 3 * 60 * 60)
@@ -42,7 +39,7 @@ import Foundation
     let data = try SettingsTransfer.exportData(settings)
     let imported = try SettingsTransfer.importSettings(from: data)
     #expect(imported == settings)
-    #expect(imported.customizedMenuSections == [.toolsAndShortcuts, .triggers])
+    #expect(imported.customizedMenuLayout == settings.menuLayout)
 }
 
 @Test func importRejectsAFileThatIsntAKeepressoExport() throws {

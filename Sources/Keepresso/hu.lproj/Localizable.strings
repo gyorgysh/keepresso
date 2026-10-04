@@ -29,8 +29,6 @@
 "Customize menu sections" = "Menüszakaszok testreszabása";
 "Move up" = "Mozgatás felfelé";
 "Move down" = "Mozgatás lefelé";
-"Use the arrows to arrange the menu sections." = "A nyílgombokkal rendezheti a menü szakaszait.";
-"Show less keeps the first two visible sections." = "A „Kevesebb megjelenítése” az első két látható szakaszt tartja meg.";
 "Battery" = "Akkumulátor";
 "Welcome" = "Üdvözlés";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "A Macet csukott fedéllel és külső kijelző nélkül is működésben tartja. Ez egy rendszergazdai jogokat igénylő rendszerbeállítást állít át: telepített rendszergazdai segéddel csendes (Beállítások ▸ Általános), egyébként a macOS bekéri a jelszavát.";
@@ -61,8 +59,6 @@
 "Manual session" = "Kézi munkamenet";
 "Quick settings" = "Gyorsbeállítások";
 "Tools & shortcuts" = "Eszközök és parancsikonok";
-"Choose which sections appear in the menu-bar dropdown. Manual session shows fixed and custom timers. Triggers shows AI-agent and other automatic conditions. Quick settings contains lid and battery controls. Tools & shortcuts opens the specialized assistants. Turn on any combination." = "Válassza ki, mely szakaszok jelenjenek meg a menüsori lenyíló panelen. A Kézi munkamenet rögzített és egyéni időzítőket jelenít meg. A Triggerek az AI-ügynök és más automatikus feltételeket jelenítik meg. A Gyorsbeállítások a fedél- és akkumulátorvezérlőket tartalmazza. Az Eszközök és parancsikonok a speciális segédeket nyitja meg. Bármilyen kombináció bekapcsolható.";
-"At least one section must stay visible." = "Legalább egy szakasznak láthatónak kell maradnia.";
 "Gaming" = "Játék";
 "None" = "Nincs";
 "any" = "bármelyik";
@@ -860,3 +856,4 @@
 "Status and activity only, without session buttons." = "Csak állapot és tevékenység, munkamenetgombok nélkül.";
 "Status only" = "Csak állapot";
 "The familiar menu, with settings and tools tucked away." = "A megszokott menü, összecsukott beállításokkal és eszközökkel.";
+"Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows." = "A szokásos lenyíló panel helyett a saját elrendezésedet használja. A Menü testreszabása… megnyitásával megjeleníthetsz, elrejthetsz vagy átrendezhetsz vezérlőket, módosíthatod a stílusukat és a térközt, és kiválaszthatod, mit mutasson a menüsori elem.";

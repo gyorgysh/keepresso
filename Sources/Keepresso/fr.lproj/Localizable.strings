@@ -29,8 +29,6 @@
 "Customize menu sections" = "Personnaliser les sections du menu";
 "Move up" = "Déplacer vers le haut";
 "Move down" = "Déplacer vers le bas";
-"Use the arrows to arrange the menu sections." = "Utilisez les flèches pour organiser les sections du menu.";
-"Show less keeps the first two visible sections." = "Afficher moins conserve les deux premières sections visibles.";
 "Battery" = "Batterie";
 "Welcome" = "Bienvenue";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "Garde le Mac actif capot fermé et sans écran externe. Cela modifie un réglage système qui nécessite des droits d'administrateur : silencieux avec l'assistant administrateur installé (Réglages ▸ Général), sinon macOS demande votre mot de passe.";
@@ -61,8 +59,6 @@
 "Manual session" = "Session manuelle";
 "Quick settings" = "Réglages rapides";
 "Tools & shortcuts" = "Outils et raccourcis";
-"Choose which sections appear in the menu-bar dropdown. Manual session shows fixed and custom timers. Triggers shows AI-agent and other automatic conditions. Quick settings contains lid and battery controls. Tools & shortcuts opens the specialized assistants. Turn on any combination." = "Choisissez les sections qui apparaissent dans le menu déroulant de la barre des menus. Session manuelle affiche les minuteurs fixes et personnalisés. Déclencheurs affiche l’agent IA et les autres conditions automatiques. Réglages rapides contient les commandes du capot et de la batterie. Outils et raccourcis ouvre les assistants spécialisés. Activez la combinaison de votre choix.";
-"At least one section must stay visible." = "Au moins une section doit rester visible.";
 "Gaming" = "Jeu";
 "None" = "Aucun";
 "any" = "n’importe laquelle";
@@ -860,3 +856,4 @@
 "Status and activity only, without session buttons." = "État et activité seuls, sans boutons de session.";
 "Status only" = "État seul";
 "The familiar menu, with settings and tools tucked away." = "Le menu habituel, avec réglages et outils repliés.";
+"Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows." = "Remplace le menu déroulant standard par votre propre disposition. Ouvrez Personnaliser le menu… pour afficher, masquer ou réorganiser les commandes, modifier leur style et leur espacement, et choisir ce qu’affiche l’élément de la barre des menus.";

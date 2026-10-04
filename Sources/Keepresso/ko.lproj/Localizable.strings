@@ -29,8 +29,6 @@
 "Customize menu sections" = "메뉴 섹션 사용자화";
 "Move up" = "위로 이동";
 "Move down" = "아래로 이동";
-"Use the arrows to arrange the menu sections." = "화살표를 사용하여 메뉴 섹션의 순서를 정하세요.";
-"Show less keeps the first two visible sections." = "‘간략히 보기’에서는 표시 중인 첫 두 섹션이 유지됩니다.";
 "Battery" = "배터리";
 "Welcome" = "환영";
 "Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password." = "덮개를 닫고 외부 디스플레이가 없어도 Mac이 계속 실행되도록 유지합니다. 이는 관리자 권한이 필요한 시스템 설정을 전환합니다. 관리자 도우미가 설치되어 있으면 조용히 처리되고 (환경설정 ▸ 일반), 그렇지 않으면 macOS가 암호를 요청합니다.";
@@ -61,8 +59,6 @@
 "Manual session" = "수동 세션";
 "Quick settings" = "빠른 설정";
 "Tools & shortcuts" = "도구 및 단축키";
-"Choose which sections appear in the menu-bar dropdown. Manual session shows fixed and custom timers. Triggers shows AI-agent and other automatic conditions. Quick settings contains lid and battery controls. Tools & shortcuts opens the specialized assistants. Turn on any combination." = "메뉴 막대 드롭다운에 표시할 섹션을 선택합니다. 수동 세션에는 고정 및 사용자 지정 타이머가 표시됩니다. 트리거에는 AI 에이전트와 기타 자동 조건이 표시됩니다. 빠른 설정에는 덮개 및 배터리 제어가 포함됩니다. 도구 및 단축키는 전문 도우미를 엽니다. 원하는 조합을 켤 수 있습니다.";
-"At least one section must stay visible." = "최소 한 개의 섹션은 표시되어야 합니다.";
 "Gaming" = "게임";
 "None" = "없음";
 "any" = "임의";
@@ -860,3 +856,4 @@
 "Status and activity only, without session buttons." = "세션 버튼 없이 상태와 활동만 표시합니다.";
 "Status only" = "상태만";
 "The familiar menu, with settings and tools tucked away." = "설정과 도구가 접혀 있는 익숙한 메뉴.";
+"Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows." = "기본 드롭다운을 직접 구성한 레이아웃으로 바꿉니다. 메뉴 사용자화…를 열어 컨트롤을 표시, 숨기기 또는 순서 변경하고, 스타일과 간격을 바꾸고, 메뉴 막대 항목에 표시할 내용을 선택할 수 있습니다.";

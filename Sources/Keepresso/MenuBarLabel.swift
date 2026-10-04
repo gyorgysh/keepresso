@@ -61,7 +61,9 @@ struct MenuBarLabel: View {
 
     private func customLabel(_ layout: MenuLayout) -> some View {
         HStack(spacing: 3) {
-            if layout.showMenuBarIcon { Image(nsImage: icon) }
+            // Always one Image: hiding the cup swaps in a blank sliver rather
+            // than removing the view, since a re-added sibling Image gets clipped.
+            Image(nsImage: layout.showMenuBarIcon ? icon : MenuBarIcon.hidden)
             if layout.menuBarTextStyle != .iconOnly {
                 if layout.menuBarTextStyle != .existing || (showCountdown && session.isActive && session.remaining != nil) {
                     Text(customText.isEmpty ? L("Idle") : customText).font(.caption.monospacedDigit()).foregroundStyle(.primary)

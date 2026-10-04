@@ -1,7 +1,7 @@
 import Foundation
 
-/// Stable identifiers for configurable groups. Unlike the legacy four-section
-/// layout, these groups can contain any row the user chooses to place there.
+/// Stable identifiers for configurable groups. Each group can contain any row
+/// the user chooses to place there.
 public enum MenuLayoutSection: String, CaseIterable, Codable, Identifiable, Sendable {
     case status, otherApps, triggers, manualSession, quickSettings, activity
     case presets, toolsAndShortcuts, appShortcuts, help
@@ -74,8 +74,8 @@ public struct MenuLayoutGroup: Equatable, Identifiable, Sendable {
     public var id: MenuLayoutSection { section }
 }
 
-/// The advanced layout is optional in KeepressoSettings. Its absence preserves
-/// legacy customization; disabling customization always selects the main layout.
+/// The custom layout is optional in KeepressoSettings. Its absence, or
+/// customization being off, selects the standard menu.
 public struct MenuLayout: Codable, Equatable, Sendable {
     public var sectionOrder: [MenuLayoutSection] = MenuLayoutSection.allCases
     public var itemOrder: [MenuItem] = MenuItem.allCases
@@ -156,32 +156,6 @@ public struct MenuLayout: Codable, Equatable, Sendable {
                                       .triggerSummary, .triggerRules, .leaseStatus, .fanStatus, .awdlStatus]
         let items = Set(groups(expanded: true).flatMap(\.items))
         return !items.isEmpty && items.isSubset(of: statuses)
-    }
-
-    /// Upgrade existing opt-in layouts without changing their visibility or
-    /// relative section order. Fixed status and app entries become movable.
-    public static func legacy(_ settings: KeepressoSettings) -> Self {
-        var layout = Self()
-        layout.adaptiveSessionControls = false
-        layout.placements = [:]
-        layout.hiddenItems.remove(.triggersToggle)
-        layout.collapsedSections.remove(.quickSettings)
-        let configured = settings.menuSectionOrder.compactMap { MenuLayoutSection(rawValue: $0.rawValue) }
-        layout.sectionOrder = [.status, .otherApps] + configured + [.activity, .appShortcuts, .help, .presets]
-        let visibility: [(MenuLayoutSection, Bool)] = [
-            (.manualSession, settings.showManualSessionInMenu),
-            (.triggers, settings.showTriggerControlsInMenu),
-            (.quickSettings, settings.showQuickSettingsInMenu),
-            (.toolsAndShortcuts, settings.showToolsInMenu),
-        ]
-        layout.hiddenSections = Set(visibility.filter { !$0.1 }.map(\.0))
-        if settings.toolsSectionExpanded { layout.collapsedSections.remove(.toolsAndShortcuts) }
-        let compactSections = Set(configured.filter { !layout.hiddenSections.contains($0) }.prefix(2))
-        layout.compactItems = Set(MenuItem.allCases.filter {
-            compactSections.contains($0.defaultSection)
-                || [.status, .otherApps, .activity, .appShortcuts].contains($0.defaultSection)
-        })
-        return layout.normalized()
     }
 
     public func placement(of item: MenuItem) -> MenuLayoutSection {

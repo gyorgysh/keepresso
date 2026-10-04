@@ -6,7 +6,6 @@ import Testing
     var settings = KeepressoSettings.default
     #expect(settings.menuLayout == nil)
     #expect(settings.customizedMenuLayout == nil)
-    #expect(settings.customizedMenuSections == nil)
     settings.setMenuLayout(.profile(.detailed))
     #expect(settings.customizedMenuLayout == nil)
     settings.menuCustomizationEnabled = true
@@ -14,7 +13,6 @@ import Testing
     settings.menuCustomizationEnabled = false
     let restored = try JSONDecoder().decode(KeepressoSettings.self, from: JSONEncoder().encode(settings))
     #expect(restored.customizedMenuLayout == nil)
-    #expect(restored.customizedMenuSections == nil)
     #expect(restored.menuLayout == settings.menuLayout)
 }
 
@@ -104,20 +102,6 @@ import Testing
     #expect(Set(layout.groups(expanded: false, available: available).flatMap(\.items)) == available)
 }
 
-@Test func legacyMenuLayoutRetainsSectionChoicesAndToolsDisclosure() {
-    var settings = KeepressoSettings.default
-    settings.menuSectionOrder = [.toolsAndShortcuts, .quickSettings, .manualSession, .triggers]
-    settings.showQuickSettingsInMenu = false
-    settings.toolsSectionExpanded = true
-    let layout = MenuLayout.legacy(settings)
-    #expect(layout.sectionOrder.prefix(6) == [.status, .otherApps, .toolsAndShortcuts, .quickSettings, .manualSession, .triggers])
-    #expect(layout.hiddenSections == [.quickSettings])
-    #expect(!layout.collapsedSections.contains(.toolsAndShortcuts))
-    #expect(layout.compactItems.contains(.setup))
-    #expect(layout.compactItems.contains(.duration))
-    #expect(!layout.compactItems.contains(.triggersToggle))
-}
-
 @Test func applyingEveryMenuProfileChangesOnlyPresentation() throws {
     var settings = KeepressoSettings.default
     settings.triggersEnabled = true
@@ -131,8 +115,7 @@ import Testing
     settings.presets = [Preset(id: "mine", name: "Mine", ruleSet: settings.ruleSet)]
     func featureFields(_ settings: KeepressoSettings) throws -> NSDictionary {
         var json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(settings)) as? [String: Any])
-        for key in ["menuLayout", "menuSectionOrder", "showManualSessionInMenu", "showTriggerControlsInMenu",
-                    "showQuickSettingsInMenu", "showToolsInMenu", "toolsSectionExpanded"] { json.removeValue(forKey: key) }
+        json.removeValue(forKey: "menuLayout")
         return json as NSDictionary
     }
     let original = try featureFields(settings)
@@ -187,11 +170,8 @@ import Testing
 @Test func enablingCustomizationAloneDoesNotSelectAnotherLayout() throws {
     var settings = KeepressoSettings.default
     settings.menuCustomizationEnabled = true
-    #expect(!settings.hasLegacyMenuChoices)
     #expect(settings.customizedMenuLayout == nil)
     #expect(try JSONDecoder().decode(KeepressoSettings.self, from: JSONEncoder().encode(settings)) == settings)
-    settings.showToolsInMenu = false
-    #expect(settings.hasLegacyMenuChoices)
 }
 
 @Test func olderGranularLayoutsPreserveWidthAndIndependentControls() throws {

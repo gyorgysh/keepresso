@@ -519,7 +519,7 @@ private struct GeneralTab: View {
                     get: { model.menuCustomizationEnabled },
                     set: { model.menuCustomizationEnabled = $0 }
                 ))
-                .help(L("Choose which sections appear in the menu-bar dropdown. Manual session shows fixed and custom timers. Triggers shows AI-agent and other automatic conditions. Quick settings contains lid and battery controls. Tools & shortcuts opens the specialized assistants. Turn on any combination."))
+                .help(L("Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows."))
                 Button("Customize Menu…") {
                     NSApp.activate(ignoringOtherApps: true)
                     openWindow(id: KeepressoApp.menuCustomizationWindowID)
@@ -527,14 +527,10 @@ private struct GeneralTab: View {
             } header: {
                 Text("Menu bar")
             } footer: {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Shows the remaining time next to the menu-bar icon during a timed session.")
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Text("Shows the remaining time next to the menu-bar icon during a timed session.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .animation(.snappy(duration: 0.2), value: model.menuSectionOrder)
-            .animation(.snappy(duration: 0.2), value: model.menuCustomizationEnabled)
             Section {
                 ForEach(Array(model.quickStopDurations.enumerated()), id: \.offset) { index, duration in
                     HStack {

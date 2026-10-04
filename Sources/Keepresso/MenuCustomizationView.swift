@@ -309,7 +309,6 @@ struct MenuCustomizationView: View {
                         MenuBarContent(model: model, updater: MenuPreviewUpdater(), bridge: previewBridge,
                                        preview: MenuPreviewConfiguration(
                                         layout: model.advancedMenuLayout, expanded: previewExpanded,
-                                        useCustomSections: model.usesCustomMenuSections,
                                         includesUnavailableItems: previewUnavailable,
                                         maxHeight: max(200, geometry.size.height - 90)))
                             .clipShape(RoundedRectangle(cornerRadius: 14))

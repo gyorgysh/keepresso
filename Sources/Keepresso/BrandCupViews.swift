@@ -18,6 +18,16 @@ enum MenuBarIcon {
     /// also avoids the status item's refusal to widen for changed label
     /// content (see ``MenuBarLabel``).
     static let pausedLowBattery = renderPausedLowBattery()
+    /// A blank 1pt sliver the custom label shows in place of the cup when the
+    /// cup is turned off. Keeping one `Image` in the label at all times means
+    /// turning the cup back on swaps this image for a wider one, which the
+    /// status item does resize for, instead of inserting a sibling `Image`,
+    /// which it clips (see ``MenuBarLabel``).
+    static let hidden: NSImage = {
+        let image = NSImage(size: NSSize(width: 1, height: BrandCupMark.grid), flipped: true) { _ in true }
+        image.isTemplate = true
+        return image
+    }()
 
     private static func render(active: Bool) -> NSImage {
         let side = BrandCupMark.grid
