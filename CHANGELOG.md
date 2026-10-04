@@ -3,7 +3,7 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
-## [1.26.0] - Unreleased
+## [1.26.0] - 2026-10-04
 
 Theme: make the menu your own, while keeping the familiar default experience.
 
