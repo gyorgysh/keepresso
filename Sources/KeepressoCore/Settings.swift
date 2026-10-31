@@ -6,8 +6,11 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     public var options: SleepPreventionOptions
     /// The duration to use when a manual session starts.
     public var defaultMode: SessionMode
-    /// Whether live triggers gate the session (vs. pure manual toggle).
+    /// Whether automatic conditions can request keep-awake alongside manual sessions.
     public var triggersEnabled: Bool
+    /// Legacy field retained for settings compatibility. Manual sessions now
+    /// run independently, so ending one never changes trigger control.
+    public var resumeTriggersAfterTimedSession: Bool
     /// The persisted trigger configuration.
     public var ruleSet: RuleSet
     /// Fire a "still brewing" reminder after this many seconds of an active
@@ -61,6 +64,10 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     /// collapsed status-and-controls-only layout (the panel's "Show less" row).
     /// Expanded by default.
     public var menuPanelExpanded: Bool
+    /// Show manual and automatic activity as separate menu controls. Existing
+    /// settings keep the established interface; fresh installs opt in through
+    /// ``withFreshInstallDefaults(hasStoredSettings:)``.
+    public var separateSessionControls: Bool
     /// Whether the user has opted into a custom menu layout. Off preserves
     /// the established adaptive menu.
     public var menuCustomizationEnabled: Bool
@@ -129,6 +136,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         options: SleepPreventionOptions = .default,
         defaultMode: SessionMode = .indefinite,
         triggersEnabled: Bool = false,
+        resumeTriggersAfterTimedSession: Bool = false,
         ruleSet: RuleSet = .empty,
         reminderAfter: TimeInterval? = nil,
         reminderRepeats: Bool = false,
@@ -151,6 +159,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         pauseBelowBatteryPercent: Int? = nil,
         showCountdownInMenuBar: Bool = false,
         menuPanelExpanded: Bool = true,
+        separateSessionControls: Bool = false,
         menuCustomizationEnabled: Bool = false,
         menuLayout: MenuLayout? = nil,
         glassClarity: Int = 50,
@@ -172,6 +181,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.options = options
         self.defaultMode = Self.sanitizedMode(defaultMode)
         self.triggersEnabled = triggersEnabled
+        self.resumeTriggersAfterTimedSession = resumeTriggersAfterTimedSession
         self.ruleSet = ruleSet
         self.reminderAfter = Self.normalizedPositiveInterval(reminderAfter)
         self.reminderRepeats = reminderRepeats
@@ -194,6 +204,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.pauseBelowBatteryPercent = pauseBelowBatteryPercent.map(Self.clampedBatteryPausePercent)
         self.showCountdownInMenuBar = showCountdownInMenuBar
         self.menuPanelExpanded = menuPanelExpanded
+        self.separateSessionControls = separateSessionControls
         self.menuCustomizationEnabled = menuCustomizationEnabled
         self.menuLayout = menuLayout?.normalized()
         self.glassClarity = min(max(glassClarity, 0), 100)
@@ -274,6 +285,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         defaultMode = Self.sanitizedMode(
             try c.decodeIfPresent(SessionMode.self, forKey: .defaultMode) ?? .indefinite)
         triggersEnabled = try c.decodeIfPresent(Bool.self, forKey: .triggersEnabled) ?? false
+        resumeTriggersAfterTimedSession = try c.decodeIfPresent(
+            Bool.self, forKey: .resumeTriggersAfterTimedSession) ?? false
         ruleSet = try c.decodeIfPresent(RuleSet.self, forKey: .ruleSet) ?? .empty
         reminderAfter = Self.normalizedPositiveInterval(
             try c.decodeIfPresent(TimeInterval.self, forKey: .reminderAfter))
@@ -304,6 +317,9 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
             .map(Self.clampedBatteryPausePercent)
         showCountdownInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showCountdownInMenuBar) ?? false
         menuPanelExpanded = try c.decodeIfPresent(Bool.self, forKey: .menuPanelExpanded) ?? true
+        // Missing or malformed values preserve the established interface and
+        // never discard unrelated settings on upgrade or import.
+        separateSessionControls = (try? c.decodeIfPresent(Bool.self, forKey: .separateSessionControls)) ?? false
         // Menu customization was introduced as an opt-in. A settings blob from
         // an older release must continue to render the established layout.
         // Invalid customization metadata falls back locally, so it cannot
@@ -494,14 +510,14 @@ public final class UserDefaultsSettingsStore: SettingsStore {
 // MARK: - Fresh-install defaults
 
 extension KeepressoSettings {
-    /// Session-scoped closed-display for first launch only: nothing
-    /// persisted yet means a fresh install, which starts safe. Anything
-    /// saved (even a corrupt blob) passes through untouched, so existing
-    /// installs keep whatever they had, including off.
+    /// Apply first-launch defaults only when no settings have been saved.
+    /// Existing installations, including those with a corrupt blob, keep
+    /// their established interface and closed-display behavior.
     public func withFreshInstallDefaults(hasStoredSettings: Bool) -> KeepressoSettings {
         guard !hasStoredSettings else { return self }
         var copy = self
         copy.closedDisplayOnlyWhileBrewing = true
+        copy.separateSessionControls = true
         return copy
     }
 }

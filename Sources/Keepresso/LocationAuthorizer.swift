@@ -2,48 +2,99 @@ import CoreLocation
 import Observation
 import AppKit
 
-/// Tracks (and requests) Location Services authorization.
-///
-/// Reading the joined Wi-Fi SSID via CoreWLAN requires Location permission on
-/// recent macOS, without it `CWInterface.ssid()` returns `nil` even while
-/// connected. The rules editor uses this to gate the "add current Wi-Fi"
-/// shortcut behind a one-tap permission prompt.
-///
-/// Intentionally **not** `@MainActor`: this is created as a `@State` default in
-/// a SwiftUI view (a non-isolated context), so an isolated `init` won't compile
-/// under strict concurrency. `CLLocationManager` delivers its delegate callbacks
-/// on the thread that created it, the main thread here, so the unsynchronized
-/// `status` mutation is already main-thread-confined in practice.
+/// Tracks Location Services authorization without blocking a SwiftUI update.
+/// Core Location can wait indefinitely for its daemon even on a status read,
+/// so all manager access lives on a shared background run-loop thread.
 @Observable
-final class LocationAuthorizer: NSObject, CLLocationManagerDelegate {
-    private let manager = CLLocationManager()
+final class LocationAuthorizer {
+    /// Nil until Core Location has returned its initial status.
+    private(set) var status: CLAuthorizationStatus?
+    @ObservationIgnored private var observer: NSObjectProtocol?
 
-    /// The current authorization status, kept live via the delegate callback.
-    private(set) var status: CLAuthorizationStatus
-
-    override init() {
-        status = manager.authorizationStatus
-        super.init()
-        manager.delegate = self
+    init() {
+        let worker = LocationAuthorizationWorker.shared
+        observer = NotificationCenter.default.addObserver(
+            forName: LocationAuthorizationWorker.statusChanged,
+            object: worker,
+            queue: .main
+        ) { [weak self] _ in
+            self?.status = worker.currentStatus
+        }
+        // Subscribe first, then read, so an update cannot be missed between
+        // creating a view and receiving the worker's first result.
+        status = worker.currentStatus
     }
 
-    /// Whether the SSID will be readable.
-    var isAuthorized: Bool {
-        status == .authorizedAlways || status == .authorized
+    deinit {
+        if let observer { NotificationCenter.default.removeObserver(observer) }
     }
 
-    /// Whether we can still ask (vs. the user having denied).
-    var canRequest: Bool {
-        status == .notDetermined
-    }
+    var isLoading: Bool { status == nil }
+    var isAuthorized: Bool { status == .authorizedAlways || status == .authorized }
+    var canRequest: Bool { status == .notDetermined }
 
-    /// Show the system permission prompt (no-op if already decided).
     func request() {
         NSApp.activate(ignoringOtherApps: true)
-        manager.requestWhenInUseAuthorization()
+        LocationAuthorizationWorker.shared.requestAuthorization()
+    }
+}
+
+/// One worker for the process prevents repeated view opens from creating
+/// additional threads if the system Location service stops responding.
+private final class LocationAuthorizationWorker: NSObject, CLLocationManagerDelegate, @unchecked Sendable {
+    static let shared = LocationAuthorizationWorker()
+    static let statusChanged = Notification.Name("KeepressoLocationAuthorizationStatusChanged")
+
+    private let statusLock = NSLock()
+    private var storedStatus: CLAuthorizationStatus?
+    private var workerThread: Thread!
+    // Created and used only on workerThread, including delegate callbacks.
+    private var manager: CLLocationManager?
+
+    var currentStatus: CLAuthorizationStatus? {
+        statusLock.lock()
+        defer { statusLock.unlock() }
+        return storedStatus
+    }
+
+    private override init() {
+        super.init()
+        let thread = Thread { [weak self] in self?.run() }
+        thread.name = "Keepresso Location authorization"
+        workerThread = thread
+        thread.start()
+    }
+
+    private func run() {
+        // CLLocationManager sends delegate messages on its creating thread;
+        // keep a run loop alive there rather than ever involving the UI thread.
+        let port = Port()
+        RunLoop.current.add(port, forMode: .default)
+        let manager = CLLocationManager()
+        self.manager = manager
+        manager.delegate = self
+        publish(manager.authorizationStatus)
+        RunLoop.current.run()
+    }
+
+    func requestAuthorization() {
+        perform(#selector(requestOnWorker), on: workerThread, with: nil, waitUntilDone: false)
+    }
+
+    @objc private func requestOnWorker() {
+        manager?.requestWhenInUseAuthorization()
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        status = manager.authorizationStatus
+        publish(manager.authorizationStatus)
+    }
+
+    private func publish(_ status: CLAuthorizationStatus) {
+        statusLock.lock()
+        storedStatus = status
+        statusLock.unlock()
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: Self.statusChanged, object: self)
+        }
     }
 }

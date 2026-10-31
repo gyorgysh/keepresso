@@ -53,13 +53,12 @@ struct MenuBarContent: View {
     @State private var panelVisible = true
     /// Bumped when the lid-closed row is clicked while the automation owns it.
     @State private var lidRowShakes = 0
-    @State private var showCustomDuration = false
-    @State private var showUntilTime = false
     @State private var toolsExpanded = false
     @State private var helpExpanded = false
     @State private var advancedDurationItem: MenuItem?
     @State private var advancedUntilItem: MenuItem?
     @State private var advancedContentHeight: CGFloat?
+    @State private var timerConfirmation: TimerConfirmation?
     @State private var previewTick = 0
     /// Held in state so each body pass reuses one timer. A publisher built in
     /// `body` is replaced on every re-render, which restarts its countdown.
@@ -68,6 +67,11 @@ struct MenuBarContent: View {
     @State private var previewCollapsedSections: Set<MenuLayoutSection>?
     /// An expanded group keeps its disclosure so the user can collapse it again.
     @State private var disclosedSections: Set<MenuLayoutSection> = []
+
+    private struct TimerConfirmation: Identifiable {
+        let id = UUID()
+        let message: String
+    }
 
     private static let durationOptions: [(label: String, mode: SessionMode)] = [
         ("Indefinitely", .indefinite),
@@ -146,7 +150,7 @@ struct MenuBarContent: View {
         .background(WindowVisibilityReader(isVisible: $panelVisible))
         .onChange(of: panelVisible) { _, visible in
             model.menuPanelVisible = visible
-            guard visible else { return }
+            guard visible else { timerConfirmation = nil; return }
             model.pulseMenuPanelIfVisible()
             model.refreshClosedDisplay()
         }
@@ -177,6 +181,28 @@ struct MenuBarContent: View {
         .glassPanelBackground()
         .tint(.keepressoBrew)
         .font(type.body)
+        .overlay(alignment: .top) {
+            if let timerConfirmation {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    Text(timerConfirmation.message)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                .font(type.callout)
+                .padding(12)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+                .padding(8)
+                .allowsHitTesting(false)
+            }
+        }
+        .task(id: timerConfirmation?.id) {
+            guard timerConfirmation != nil else { return }
+            do { try await Task.sleep(for: .seconds(3)) }
+            catch { return }
+            timerConfirmation = nil
+        }
         .onAppear {
             guard preview == nil else { return }
             model.menuPanelVisible = true
@@ -210,20 +236,21 @@ struct MenuBarContent: View {
     private func availableMenuItems(_ layout: MenuLayout) -> Set<MenuItem> {
         if preview?.includesUnavailableItems == true { return Set(MenuItem.allCases) }
         let triggerControlled = model.triggersEnabled && !model.triggersPaused
-        return Set(MenuItem.allCases.filter { item in
+        var available = Set(MenuItem.allCases.filter { item in
             switch item {
             case .manualToggle, .duration:
-                return !layout.adaptiveSessionControls || !triggerControlled
+                return model.separateSessionControls || !layout.adaptiveSessionControls || !triggerControlled || manualSessionRunning
             case .manualOverride:
-                return !layout.adaptiveSessionControls || triggerControlled
+                return model.separateSessionControls || !layout.adaptiveSessionControls || triggerControlled
             case .endTime: return session.isActive && session.remaining != nil
             case .otherApps: return panel.heldBy != nil
             case .quickStop:
-                return session.isActive && !session.isLeaseHeld
-                    && !(model.triggersEnabled && !model.triggersPaused)
-                    && !model.quickStopDurations.isEmpty
-            case .triggerAction: return model.triggersEnabled || !session.liveLeases.isEmpty
-            case .triggerSummary, .triggerRules: return model.triggersEnabled && !model.triggersPaused
+                return session.hasManualSession && session.isActive && !model.quickStopDurations.isEmpty
+            case .triggerAction: return model.triggersEnabled || (!model.separateSessionControls && !session.liveLeases.isEmpty)
+            // Keep the trigger status visible during a manual override. The
+            // summary explains that control is paused, while rule rows make
+            // it clear which conditions remain configured and active.
+            case .triggerSummary, .triggerRules: return model.triggersEnabled && (model.separateSessionControls || !model.triggersPaused)
             case .screenSaverYield: return session.options.preventDisplaySleep
             case .dimDisplay: return session.options.preventDisplaySleep && model.brightnessSupported
             case .lidPolicy: return model.machineHasBattery && (model.closedDisplayEnabled || model.closedDisplayOnlyWhileBrewing)
@@ -236,6 +263,16 @@ struct MenuBarContent: View {
             default: return true
             }
         })
+        if layout.adaptiveSessionControls && (model.separateSessionControls || manualSessionRunning) {
+            // Only replace the separate controls if their combined replacement
+            // is actually visible, including compact and collapsed layouts.
+            let collapsed = preview != nil ? (previewCollapsedSections ?? layout.collapsedSections) : layout.collapsedSections
+            let groups = layout.groups(expanded: menuExpanded, available: available.subtracting([.manualToggle, .duration]))
+            if groups.contains(where: { $0.items.contains(.manualOverride) && !collapsed.contains($0.section) }) {
+                available.subtract([.manualToggle, .duration])
+            }
+        }
+        return available
     }
 
     private func visibleItems(_ groups: [MenuLayoutGroup], layout: MenuLayout) -> Set<MenuItem> {
@@ -292,6 +329,13 @@ struct MenuBarContent: View {
                 Text(statusDetail).font(type.caption).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if model.separateSessionControls && model.triggersEnabled && model.triggersPaused
+                && visible.isDisjoint(with: [.triggerSummary, .triggerRules, .triggerAction]) {
+                Text("All triggers are paused.")
+                    .font(type.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             ForEach(groups) { group in
                 if layout.showDividers && group.id != groups.first?.id { Divider() }
                 advancedGroup(group, layout: layout, combinesCaption: combinesCaption)
@@ -308,14 +352,23 @@ struct MenuBarContent: View {
             }
             // Manual controls pause triggers. If the trigger action is hidden
             // or collapsed, keep the way back to automatic control beside them.
-            if model.triggersEnabled && model.triggersPaused && session.liveLeases.isEmpty
+            if model.separateSessionControls && model.triggersEnabled && model.triggersPaused
                 && !visible.contains(.triggerAction)
                 && !visible.isDisjoint(with: [.manualToggle, .duration, .manualOverride, .quickStop]) {
                 Button { model.resumeTriggers() } label: {
-                    Text("Resume Triggers").frame(maxWidth: .infinity)
+                    Text("Resume all triggers").frame(maxWidth: .infinity)
                 }
                 .modifier(CustomMenuControlStyle(item: .triggerAction, style: layout.controlStyle))
                 .disabled(preview != nil)
+            }
+            // A layout saved before the separate controls existed may hide
+            // every manual item. Do not strand an already-running session
+            // when switching back to the familiar presentation.
+            if !model.separateSessionControls && manualSessionRunning
+                && visible.isDisjoint(with: [.manualToggle, .manualOverride]) {
+                Button("Stop manual session") { toggleManualSession() }
+                    .modifier(CustomMenuControlStyle(item: .manualToggle, style: layout.controlStyle))
+                    .disabled(preview != nil)
             }
             if visible.isEmpty {
                 Button("Customize Menu…") { open(KeepressoApp.menuCustomizationWindowID) }
@@ -330,9 +383,13 @@ struct MenuBarContent: View {
     private func advancedGroup(_ group: MenuLayoutGroup, layout: MenuLayout, combinesCaption: Bool) -> some View {
         let collapsed = (preview != nil ? (previewCollapsedSections ?? layout.collapsedSections) : layout.collapsedSections)
             .contains(group.section)
+        let isTriggerSection = model.separateSessionControls && group.section == .triggers
+            && !Set(group.items).isDisjoint(with: [.triggerRules, .triggerSummary, .triggerAction])
+        let isManualSection = model.separateSessionControls && group.section == .manualSession
+            && !Set(group.items).isDisjoint(with: [.manualOverride, .manualToggle, .duration])
         VStack(alignment: .leading, spacing: group.section == .manualSession ? layout.density.spacing - 2 : layout.density.spacing) {
             if layout.showSectionTitles || collapsed || disclosedSections.contains(group.section)
-                || [.toolsAndShortcuts, .help].contains(group.section) {
+                || [.toolsAndShortcuts, .help].contains(group.section) || isTriggerSection || isManualSection {
                 Button {
                     disclosedSections.insert(group.section)
                     if preview != nil {
@@ -348,8 +405,14 @@ struct MenuBarContent: View {
                     }
                 } label: {
                     HStack {
-                        Text(group.section.label).font(type.callout.weight(.medium))
-                        Spacer()
+                        if isTriggerSection {
+                            sessionSectionHeading(L("Automatic triggers"), status: automaticTriggersStatus, active: model.triggersEnabled && !model.triggersPaused)
+                        } else if isManualSection {
+                            sessionSectionHeading(L("Manual session"), status: manualSessionStatus, active: manualSessionRunning && session.isActive)
+                        } else {
+                            Text(group.section.label).font(type.callout.weight(.medium))
+                            Spacer()
+                        }
                         Image(systemName: collapsed ? "chevron.right" : "chevron.down").font(type.caption2)
                     }
                 }
@@ -358,6 +421,10 @@ struct MenuBarContent: View {
                 .accessibilityValue(collapsed ? L("Show more") : L("Show less"))
             }
             if !collapsed {
+                if isTriggerSection && model.triggersPaused && !group.items.contains(.triggerSummary) {
+                    Text("All triggers are paused.")
+                        .font(type.caption).foregroundStyle(.secondary)
+                }
                 ForEach(group.items) { item in
                     advancedItem(item, layout: layout, combinesCaption: combinesCaption)
                         .modifier(CustomMenuControlStyle(item: item, style: layout.controlStyle))
@@ -383,17 +450,25 @@ struct MenuBarContent: View {
             }
         case .endTime:
             if let remaining = session.remaining {
-                LabeledContent("End time", value: Date().addingTimeInterval(remaining).formatted(date: .omitted, time: .shortened))
+                LabeledContent(model.separateSessionControls ? L("Manual session ends") : L("End time"), value: Date().addingTimeInterval(remaining).formatted(date: .omitted, time: .shortened))
                     .font(type.caption)
             }
         case .otherApps: heldByLine
         case .manualToggle:
-            switchRow("Keep awake", isOn: Binding(get: { session.isActive }, set: { _ in model.toggleManual() }))
-        case .duration: advancedDurationControl(item, alwaysStart: false)
-        case .manualOverride: advancedDurationControl(item, alwaysStart: true)
+            switchRow(model.separateSessionControls ? "Manual session" : "Keep awake", isOn: Binding(get: { manualSessionRunning }, set: { _ in toggleManualSession() }))
+        case .duration:
+            if model.separateSessionControls { advancedDurationControl(item, showsSessionControls: false) }
+            else { legacyDurationControl(item, alwaysStart: false) }
+        case .manualOverride:
+            if model.separateSessionControls {
+                advancedDurationControl(item, showsSessionControls: true,
+                                        showsHeading: layout.placement(of: item) != .manualSession)
+            } else {
+                legacyDurationControl(item, alwaysStart: true)
+            }
         case .quickStop:
             VStack(alignment: .leading, spacing: 6) {
-                Text("Stop in")
+                Text(model.separateSessionControls ? L("End manual session in") : L("Stop in"))
                 adaptiveQuickStopButtons
                     .tint(layout.controlStyle == .accent ? .keepressoBrew : .primary)
                     .foregroundStyle(layout.controlStyle == .accent ? Color.keepressoBrew : .primary)
@@ -401,26 +476,13 @@ struct MenuBarContent: View {
         case .triggersToggle:
             switchRow("Activate by triggers", isOn: Binding(get: { model.triggersEnabled }, set: { model.triggersEnabled = $0 }))
         case .triggerAction:
-            if !session.liveLeases.isEmpty {
-                Button { model.endAutomationLeases() } label: {
-                    Text("End Automation Leases")
-                        .frame(maxWidth: .infinity)
-                }
-            } else if model.triggersPaused {
-                Button { model.resumeTriggers() } label: {
-                    Text("Resume Triggers")
-                        .frame(maxWidth: .infinity)
-                }
-            } else {
-                Button { model.pauseTriggers() } label: {
-                    Text("Pause Triggers")
-                        .frame(maxWidth: .infinity)
-                }
-            }
+            if model.separateSessionControls { automaticTriggerAction }
+            else { legacyTriggerAction }
         case .triggerSummary:
-            Text(model.triggersPaused ? L("Triggers paused. Controlling manually for now.") : (model.triggerSummary() ?? L("No conditions yet"))).font(type.caption).foregroundStyle(.secondary)
+            Text(model.triggersPaused ? L("All triggers are paused.") : (model.triggerSummary() ?? L("No conditions yet"))).font(type.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-        case .triggerRules: advancedTriggerRules(layout)
+        case .triggerRules:
+            advancedTriggerRules(layout).opacity(model.triggersPaused ? 0.5 : 1)
         case .systemSleep:
             switchRow("Prevent system sleep", isOn: optionBinding(\.preventSystemSleep))
         case .displaySleep:
@@ -563,7 +625,7 @@ struct MenuBarContent: View {
                     .frame(width: style == .card ? 36 : 24, height: style == .card ? 36 : 24)
                     .accessibilityHidden(true)
             }
-            Text(session.pausedByBattery || session.pausedByThermal ? L("Paused") : (session.isActive ? L("Brewing") : L("Idle")))
+            Text(session.pausedByBattery || session.pausedByThermal ? L("Paused") : (session.isActive ? L("Keeping awake") : L("Keep awake is off")))
                 .font(style == .card ? type.headline : type.body.weight(.medium))
             Spacer(minLength: 0)
         }
@@ -576,146 +638,284 @@ struct MenuBarContent: View {
         .animation(.easeInOut(duration: 0.45), value: session.refusedStarts)
     }
 
-    private func advancedDurationControl(_ item: MenuItem, alwaysStart: Bool) -> some View {
-        let mode = alwaysStart ? model.defaultMode : model.mode
-        let label = alwaysStart ? L("Start manual session") : L("For")
-        return HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(label).fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 8)
-            Menu(Self.modeLabel(mode)) {
-                ForEach(Array(Self.durationOptions.enumerated()), id: \.offset) { _, option in
-                    Button(L(option.label)) { setAdvancedDuration(option.mode, alwaysStart: alwaysStart) }
-                }
-                Divider()
-                Button("Custom Duration\u{2026}") { advancedDurationItem = item }
-                Button("Until a Time\u{2026}") { advancedUntilItem = item }
+    /// Manual ownership is independent of the saved duration and live leases.
+    private var manualSessionRunning: Bool {
+        session.hasManualSession
+    }
+
+    private var manualSessionStatus: String {
+        manualSessionRunning ? L("Enabled") : L("Not running")
+    }
+
+    private var automaticTriggersStatus: String {
+        guard model.triggersEnabled else { return L("Off") }
+        return model.triggersPaused ? L("Paused") : L("Enabled")
+    }
+
+    private func sessionSectionHeading(_ title: String, status: String, active: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(title).font(type.callout.weight(.semibold))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Text(status).font(type.caption2.weight(.medium))
+                .foregroundStyle(active ? Color.keepressoBrew : .secondary)
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(active ? Color.keepressoBrew.opacity(0.08) : Color.primary.opacity(0.04), in: Capsule())
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func toggleManualSession() {
+        guard preview == nil else { return }
+        if manualSessionRunning {
+            model.stopManualSession()
+            if session.isActive {
+                timerConfirmation = TimerConfirmation(message: L("Manual session stopped. Other activity is still keeping awake."))
             }
-            .fixedSize()
-            .accessibilityLabel(label)
-            .accessibilityValue(Self.modeLabel(mode))
+        } else {
+            model.startManualSession(mode: model.defaultMode)
+            confirmDurationChange(wasTimedSession: false)
+        }
+    }
+
+    private func advancedDurationControl(_ item: MenuItem, showsSessionControls: Bool, showsHeading: Bool = false) -> some View {
+        let mode = manualSessionRunning ? session.mode : model.defaultMode
+        return VStack(alignment: .leading, spacing: 8) {
+            if showsHeading {
+                sessionSectionHeading(L("Manual session"), status: manualSessionStatus, active: manualSessionRunning && session.isActive)
+            }
+            if showsSessionControls, let remaining = session.remaining {
+                Text(L("Time remaining: %@", MenuBarLabel.format(remaining)))
+                    .font(type.caption).monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .contentTransition(.numericText(countsDown: true))
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Duration")
+                Spacer(minLength: 8)
+                Menu(Self.modeLabel(mode)) {
+                    advancedDurationOptions(item, mode: mode)
+                }
+                .fixedSize()
+                .accessibilityLabel(Text("Manual session duration"))
+                .accessibilityValue(Self.modeLabel(mode))
+            }
+            if showsSessionControls {
+                Button { toggleManualSession() } label: {
+                    Label(manualSessionRunning ? L("Stop manual session") : L("Start manual session"),
+                          systemImage: manualSessionRunning ? "stop.fill" : "play.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .prominentActionStyle()
+                .tint(advancedMenuLayout?.controlStyle == .clear ? Color.primary : .keepressoBrew)
+                if manualSessionRunning && session.isActive && (session.triggerActive || !session.liveLeases.isEmpty) {
+                    Text("Stopping this session leaves other activity running.")
+                        .font(type.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if model.triggersEnabled {
+                    Text("Manual sessions and triggers work independently.")
+                        .font(type.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
         .frame(maxWidth: .infinity)
         .popover(isPresented: Binding(get: { advancedDurationItem == item }, set: { if !$0 { advancedDurationItem = nil } })) {
             CustomDurationEditor(initial: mode.duration ?? 60 * 60) {
-                setAdvancedDuration(.timed(duration: $0), alwaysStart: alwaysStart)
+                advancedDurationItem = nil
+                setManualDuration(.timed(duration: $0))
             }
         }
         .popover(isPresented: Binding(get: { advancedUntilItem == item }, set: { if !$0 { advancedUntilItem = nil } })) {
-            UntilTimeEditor(isActive: session.isActive) { model.startUntil(hour: $0, minute: $1) }
+            UntilTimeEditor(isActive: manualSessionRunning) {
+                advancedUntilItem = nil
+                startUntil(hour: $0, minute: $1)
+            }
         }
     }
 
-    private func setAdvancedDuration(_ mode: SessionMode, alwaysStart: Bool) {
-        if alwaysStart || (model.triggersEnabled && !model.triggersPaused) { model.startManualOverride(mode: mode) }
+    /// The familiar compact controls, backed by the same independent manual
+    /// session as the separate-controls presentation.
+    private func legacyDurationControl(_ item: MenuItem, alwaysStart: Bool) -> some View {
+        let mode = alwaysStart ? model.defaultMode : model.mode
+        let label = alwaysStart ? L("Start manual session") : L("For")
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(label).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Menu(Self.modeLabel(mode)) {
+                    ForEach(Array(Self.durationOptions.enumerated()), id: \.offset) { _, option in
+                        Button(L(option.label)) { setLegacyDuration(option.mode, alwaysStart: alwaysStart) }
+                    }
+                    Divider()
+                    Button("Custom Duration\u{2026}") { advancedDurationItem = item }
+                    Button("Until a Time\u{2026}") { advancedUntilItem = item }
+                }
+                .fixedSize()
+                .accessibilityLabel(label)
+                .accessibilityValue(Self.modeLabel(mode))
+            }
+            if alwaysStart && manualSessionRunning {
+                Button("Stop manual session") { toggleManualSession() }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .popover(isPresented: Binding(get: { advancedDurationItem == item }, set: { if !$0 { advancedDurationItem = nil } })) {
+            CustomDurationEditor(initial: mode.duration ?? 60 * 60) {
+                advancedDurationItem = nil
+                setLegacyDuration(.timed(duration: $0), alwaysStart: alwaysStart)
+            }
+        }
+        .popover(isPresented: Binding(get: { advancedUntilItem == item }, set: { if !$0 { advancedUntilItem = nil } })) {
+            UntilTimeEditor(isActive: manualSessionRunning) {
+                advancedUntilItem = nil
+                startUntil(hour: $0, minute: $1)
+            }
+        }
+    }
+
+    private func setLegacyDuration(_ mode: SessionMode, alwaysStart: Bool) {
+        guard preview == nil else { return }
+        if alwaysStart { model.startManualSession(mode: mode) }
         else { model.mode = mode }
     }
 
     @ViewBuilder
+    private func advancedDurationOptions(_ item: MenuItem, mode: SessionMode) -> some View {
+        if !Self.durationOptions.contains(where: { $0.mode == mode }) {
+            durationOption(mode, title: Self.modeLabel(mode), selected: mode)
+            Divider()
+        }
+        ForEach(Array(Self.durationOptions.enumerated()), id: \.offset) { _, option in
+            durationOption(option.mode, title: L(option.label), selected: mode)
+        }
+        addTimeMenuItems
+        Divider()
+        Button("Custom Duration\u{2026}") { advancedDurationItem = item }
+        Button("Until a Time\u{2026}") { advancedUntilItem = item }
+    }
+
+    private func durationOption(_ mode: SessionMode, title: String, selected: SessionMode) -> some View {
+        Button { setManualDuration(mode) } label: {
+            if mode == selected { Label(title, systemImage: "checkmark") }
+            else { Text(title) }
+        }
+    }
+
+    /// A duration choice only updates a running manual session. Otherwise it
+    /// is saved until the explicit Start button is pressed.
+    private func setManualDuration(_ mode: SessionMode) {
+        guard preview == nil else { return }
+        let wasTimedSession = session.remaining != nil
+        if manualSessionRunning { model.mode = mode }
+        else { model.defaultMode = mode }
+        if manualSessionRunning {
+            confirmDurationChange(wasTimedSession: wasTimedSession)
+        } else if preview == nil {
+            timerConfirmation = TimerConfirmation(message: L("Duration saved: %@. Start a manual session to begin.", Self.modeLabel(mode)))
+        }
+    }
+
+    private func startUntil(hour: Int, minute: Int) {
+        let wasTimedSession = session.remaining != nil
+        model.startUntil(hour: hour, minute: minute)
+        confirmDurationChange(wasTimedSession: wasTimedSession)
+    }
+
+    private func remainingDurationLabel(_ remaining: TimeInterval) -> String {
+        Self.modeLabel(.timed(duration: (remaining / 60).rounded(.up) * 60))
+    }
+
+    /// A successful change gets feedback without requiring an extra click.
+    /// Saving a duration while idle must never claim a timer is running.
+    private func confirmDurationChange(wasTimedSession: Bool) {
+        guard preview == nil, !session.pausedByBattery, !session.pausedByThermal else { return }
+        let message: String
+        if let remaining = session.remaining {
+            message = L(wasTimedSession ? "Timer updated to %@" : "Timer started for %@", remainingDurationLabel(remaining))
+        } else if !session.isActive {
+            message = L("Duration saved: %@. Start a manual session to begin.", Self.modeLabel(model.defaultMode))
+        } else if session.hasManualSession {
+            message = L("Duration set to %@", Self.modeLabel(session.mode))
+        } else {
+            return
+        }
+        timerConfirmation = TimerConfirmation(message: message)
+    }
+
+    @ViewBuilder
+    private var addTimeMenuItems: some View {
+        if let remaining = session.remaining, remaining > 0 {
+            Divider()
+            Button("Add 15 minutes") { addSessionTime(15 * 60) }
+            Button("Add 1 hour") { addSessionTime(60 * 60) }
+        }
+    }
+
+    private func addSessionTime(_ interval: TimeInterval) {
+        guard preview == nil, model.addSessionTime(interval), let remaining = session.remaining else { return }
+        timerConfirmation = TimerConfirmation(message: L("Added %@. Timer updated to %@.", Self.shortDuration(interval), remainingDurationLabel(remaining)))
+    }
+
+    @ViewBuilder
     private func advancedTriggerRules(_ layout: MenuLayout) -> some View {
-        let states = (model.ruleStates() ?? []).filter { !layout.onlyActiveTriggers || $0.satisfied || $0.inGrace }
+        let states = (model.ruleStates() ?? []).filter { model.triggersPaused || !layout.onlyActiveTriggers || $0.satisfied || $0.inGrace }
         VStack(alignment: .leading, spacing: 5) {
             ForEach(Array(states.prefix(layout.maxTriggerRows).enumerated()), id: \.offset) { _, state in
                 HStack(spacing: 6) {
-                    Image(systemName: state.satisfied ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(state.inGrace ? Color.orange : (state.satisfied ? .green : .secondary))
-                        .accessibilityLabel(state.inGrace ? L("Met, in grace period") : (state.satisfied ? L("Met") : L("Not met")))
+                    Image(systemName: model.triggersPaused ? "pause.circle" : (state.satisfied ? "checkmark.circle.fill" : "circle"))
+                        .foregroundStyle(model.triggersPaused ? Color.secondary : (state.inGrace ? Color.orange : (state.satisfied ? .green : .secondary)))
+                        .accessibilityLabel(model.triggersPaused ? L("Paused") : (state.inGrace ? L("Met, in grace period") : (state.satisfied ? L("Met") : L("Not met"))))
                     Text(state.rule.label).lineLimit(1).truncationMode(.middle)
                     Spacer(minLength: 4)
-                    if let remaining = state.graceRemaining { Text(Self.graceCountdown(remaining)).monospacedDigit().foregroundStyle(.orange) }
+                    if !model.triggersPaused, let remaining = state.graceRemaining { Text(Self.graceCountdown(remaining)).monospacedDigit().foregroundStyle(.orange) }
                 }.font(type.caption)
-                if layout.showAgentDetails && !state.details.isEmpty { ruleDetailRows(state.details, limit: layout.maxAgentRows) }
+                if !model.triggersPaused && layout.showAgentDetails && !state.details.isEmpty { ruleDetailRows(state.details, limit: layout.maxAgentRows) }
             }
             if states.count > layout.maxTriggerRows { Text(L("+%d more", states.count - layout.maxTriggerRows)).font(type.caption2).foregroundStyle(.secondary) }
             if states.isEmpty { Text(layout.onlyActiveTriggers ? L("No matching triggers") : L("No conditions yet")).font(type.caption).foregroundStyle(.secondary) }
         }
     }
 
+    @ViewBuilder
+    private var automaticTriggerAction: some View {
+        Button {
+            if model.triggersPaused {
+                model.resumeTriggers()
+            } else {
+                model.pauseTriggers()
+                if session.isActive {
+                    timerConfirmation = TimerConfirmation(message: L("Triggers paused. Other activity is still keeping awake."))
+                }
+            }
+        } label: {
+            Text(model.triggersPaused ? L("Resume all triggers") : L("Pause all triggers"))
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        Text("Only automatic triggers are affected.")
+            .font(type.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
+    private var legacyTriggerAction: some View {
+        if !session.liveLeases.isEmpty {
+            Button("End Automation Leases") { model.endAutomationLeases() }
+        } else if model.triggersPaused {
+            Button("Resume Triggers") { model.resumeTriggers() }
+        } else {
+            Button("Pause Triggers") { model.pauseTriggers() }
+        }
+    }
+
     /// The existing adaptive layout. Custom section choices never affect it.
     @ViewBuilder
     private var standardMenuSections: some View {
-        if model.triggersEnabled && !model.triggersPaused {
-            triggerSummary
-                .transition(.opacity)
-        }
-
-        Divider()
-
-        if model.triggersEnabled && !model.triggersPaused {
-            // Pausing means "let my Mac sleep", so live automation
-            // leases come first: the row offers ending them, and only
-            // once none are live does it offer the pause itself.
-            if session.liveLeases.isEmpty {
-                Text("Activation is controlled by triggers.\nEdit them in Preferences.")
-                    .font(type.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("Pause Triggers") { model.pauseTriggers() }
-                    .prominentActionStyle()
-                    .frame(maxWidth: .infinity)
-            } else {
-                Text("Activation is controlled by triggers.\nEnd the automation leases before pausing.")
-                    .font(type.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("End Automation Leases") { model.endAutomationLeases() }
-                    .prominentActionStyle()
-                    .frame(maxWidth: .infinity)
-            }
+        if model.separateSessionControls {
+            separateStandardSessionControls
         } else {
-            if model.triggersEnabled {
-                Text("Triggers paused. Controlling manually for now.")
-                    .font(type.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            switchRow("Keep awake", isOn: Binding(
-                get: { session.isActive },
-                set: { _ in model.toggleManual() }
-            ))
-
-            LabeledContent("For") {
-                Menu(Self.modeLabel(model.mode)) {
-                    ForEach(Array(Self.durationOptions.enumerated()), id: \.offset) { _, option in
-                        Button(L(option.label)) { model.mode = option.mode }
-                    }
-                    Divider()
-                    Button("Custom Duration\u{2026}") { showCustomDuration = true }
-                    Button("Until a Time\u{2026}") { showUntilTime = true }
-                }
-                .fixedSize()
-            }
-            .popover(isPresented: $showCustomDuration) {
-                CustomDurationEditor(initial: model.mode.duration ?? 60 * 60) {
-                    model.mode = .timed(duration: $0)
-                }
-            }
-            .popover(isPresented: $showUntilTime) {
-                UntilTimeEditor(isActive: session.isActive) { hour, minute in
-                    model.startUntil(hour: hour, minute: minute)
-                }
-            }
-
-            if session.isActive && !model.quickStopDurations.isEmpty {
-                // The three short defaults share a line with the label;
-                // four shortcuts, or compound durations ("1 h 30 min",
-                // wordier in some languages), get the full panel width
-                // on their own row so the buttons never clip.
-                if quickStopButtonsFitInline {
-                    LabeledContent("Stop in") { quickStopButtons }
-                } else {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Stop in")
-                        quickStopButtons
-                    }
-                }
-            }
-
-            if model.triggersEnabled {
-                Button("Resume Triggers") { model.resumeTriggers() }
-                    .prominentActionStyle()
-                    .frame(maxWidth: .infinity)
-            }
+            legacyStandardSessionControls
         }
 
         // The option toggles and app entries fold away behind the "Show
@@ -731,6 +931,88 @@ struct MenuBarContent: View {
             Divider()
 
             appEntries
+        }
+    }
+
+    @ViewBuilder
+    private var separateStandardSessionControls: some View {
+        if model.triggersEnabled {
+            VStack(alignment: .leading, spacing: 10) {
+                sessionSectionHeading(L("Automatic triggers"), status: automaticTriggersStatus, active: !model.triggersPaused)
+                triggerSummary
+                    .opacity(model.triggersPaused ? 0.5 : 1)
+                if model.triggersPaused {
+                    Text("All triggers are paused.")
+                        .font(type.caption).foregroundStyle(.secondary)
+                }
+                automaticTriggerAction
+            }
+            Divider()
+        }
+
+        advancedDurationControl(.manualOverride, showsSessionControls: true, showsHeading: true)
+
+        if manualSessionRunning && session.isActive && !model.quickStopDurations.isEmpty {
+            if quickStopButtonsFitInline {
+                LabeledContent("End manual session in") { quickStopButtons }
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("End manual session in")
+                    quickStopButtons
+                }
+            }
+        }
+
+    }
+
+    @ViewBuilder
+    private var legacyStandardSessionControls: some View {
+        if model.triggersEnabled && !model.triggersPaused {
+            triggerSummary.transition(.opacity)
+        }
+
+        Divider()
+
+        if model.triggersEnabled && !model.triggersPaused {
+            if session.liveLeases.isEmpty {
+                Text(manualSessionRunning ? L("Manual sessions and triggers work independently.") : L("Activation is controlled by triggers.\nEdit them in Preferences."))
+                    .font(type.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Pause Triggers") { model.pauseTriggers() }
+                    .prominentActionStyle().frame(maxWidth: .infinity)
+            } else {
+                Text(manualSessionRunning ? L("Manual sessions and triggers work independently.") : L("Activation is controlled by triggers.\nEnd the automation leases before pausing."))
+                    .font(type.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("End Automation Leases") { model.endAutomationLeases() }
+                    .prominentActionStyle().frame(maxWidth: .infinity)
+            }
+            if manualSessionRunning {
+                Button("Stop manual session") { toggleManualSession() }
+                    .frame(maxWidth: .infinity)
+            }
+        } else {
+            if model.triggersEnabled {
+                Text("Triggers paused. Controlling manually for now.")
+                    .font(type.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            switchRow("Keep awake", isOn: Binding(get: { manualSessionRunning }, set: { _ in toggleManualSession() }))
+            legacyDurationControl(.duration, alwaysStart: false)
+            if manualSessionRunning && session.isActive && !model.quickStopDurations.isEmpty {
+                if quickStopButtonsFitInline {
+                    LabeledContent("Stop in") { quickStopButtons }
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Stop in")
+                        quickStopButtons
+                    }
+                }
+            }
+            if model.triggersEnabled {
+                Button("Resume Triggers") { model.resumeTriggers() }
+                    .prominentActionStyle().frame(maxWidth: .infinity)
+            }
         }
     }
 
@@ -990,7 +1272,11 @@ struct MenuBarContent: View {
     }
 
     private func quickStopButton(_ duration: TimeInterval) -> some View {
-        Button(Self.shortDuration(duration)) { model.stopSessionIn(duration) }
+        Button(Self.shortDuration(duration)) {
+            let wasTimedSession = session.remaining != nil
+            model.stopSessionIn(duration)
+            confirmDurationChange(wasTimedSession: wasTimedSession)
+        }
             .buttonStyle(.bordered)
             .controlSize(.small)
             .lineLimit(1)
@@ -1035,7 +1321,7 @@ struct MenuBarContent: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text((session.pausedByBattery || session.pausedByThermal)
                     ? L("Paused")
-                    : (session.isActive ? L("Brewing") : L("Idle")))
+                    : (session.isActive ? L("Keeping awake") : L("Keep awake is off")))
                     .font(type.headline)
                     .contentTransition(.opacity)
                 Text(statusDetail)
@@ -1111,10 +1397,9 @@ struct MenuBarContent: View {
 
     // MARK: - Duration editors
 
-    /// Popover behind "Custom Duration…": hour/minute steppers that set the
-    /// session duration (used the next time it starts, or restarting a running
-    /// session, exactly like picking a preset duration).
-    private struct CustomDurationEditor: View {
+    /// Hour/minute editor shared by the menu's session duration and the
+    /// quick-stop shortcuts in Preferences. The caller decides what to save.
+    struct CustomDurationEditor: View {
         @State private var hours: Int
         @State private var minutes: Int
         let apply: (TimeInterval) -> Void
@@ -1133,8 +1418,8 @@ struct MenuBarContent: View {
                 Stepper("\(hours) h", value: $hours, in: 0...48)
                 Stepper("\(minutes) min", value: $minutes, in: 0...55, step: 5)
                 Button("Set Duration") {
-                    apply(TimeInterval(hours * 3600 + minutes * 60))
                     dismiss()
+                    apply(TimeInterval(hours * 3600 + minutes * 60))
                 }
                 .prominentActionStyle()
                 .frame(maxWidth: .infinity)
@@ -1188,14 +1473,27 @@ struct MenuBarContent: View {
             }
             return L("Running hot, letting the Mac cool down")
         }
-        if model.triggersEnabled && !model.triggersPaused {
-            return model.triggerSummary() ?? L("No conditions yet")
-        }
-        guard session.isActive else { return L("System can sleep") }
-        if let remaining = session.remaining {
-            return L("Stops in %@", MenuBarLabel.format(remaining))
-        }
+        if !model.separateSessionControls && !(manualSessionRunning && (session.triggerActive || !session.liveLeases.isEmpty)) {
+            if model.triggersEnabled && !model.triggersPaused {
+                return model.triggerSummary() ?? L("No conditions yet")
+            }
+            guard session.isActive else { return L("System can sleep") }
+            if let remaining = session.remaining { return L("Stops in %@", MenuBarLabel.format(remaining)) }
             return L("Awake for %@", MenuBarLabel.format(preview == nil ? panel.elapsed : session.elapsed))
+        }
+        if manualSessionRunning {
+            if session.triggerActive { return L("Manual session + automatic triggers") }
+            if !session.liveLeases.isEmpty { return L("Manual session + automation") }
+            if let remaining = session.remaining {
+                return L("Manual: %@ remaining", MenuBarLabel.format(remaining))
+            }
+            return L("Manual: no time limit")
+        }
+        if session.isLeaseHeld { return L("Kept awake by automation") }
+        if model.triggersEnabled && !model.triggersPaused {
+            return L("Automatic: %@", model.triggerSummary() ?? L("No conditions yet"))
+        }
+        return L("No manual session running")
     }
 
     /// A compact line naming another process that's holding the Mac awake, so an
@@ -1210,7 +1508,7 @@ struct MenuBarContent: View {
                     .foregroundStyle(.secondary)
                     .font(type.caption)
                     .accessibilityHidden(true)
-                Text("\(held.processName): \(held.effect.lowercased())")
+                Text(L("Other apps: %@", "\(held.processName): \(held.effect.lowercased())"))
                     .font(type.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -1302,6 +1600,11 @@ struct MenuBarContent: View {
                         .foregroundStyle(.secondary)
                         .padding(.leading, 22)
                 }
+                Button { model.endAutomationLeases() } label: {
+                    Text("End Automation Leases").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .font(type.caption)
             }
         }
     }
@@ -1360,20 +1663,20 @@ struct MenuBarContent: View {
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(Array(states.enumerated()), id: \.offset) { _, state in
                     HStack(spacing: 6) {
-                        Image(systemName: state.satisfied ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(state.inGrace ? Color.orange : (state.satisfied ? Color.green : Color.secondary))
+                        Image(systemName: model.triggersPaused ? "pause.circle" : (state.satisfied ? "checkmark.circle.fill" : "circle"))
+                            .foregroundStyle(model.triggersPaused ? Color.secondary : (state.inGrace ? Color.orange : (state.satisfied ? Color.green : Color.secondary)))
                             .font(type.caption)
                             .contentTransition(.symbolEffect(.replace))
                             .animation(.snappy(duration: 0.25), value: state.satisfied)
                             .animation(.snappy(duration: 0.25), value: state.inGrace)
-                            .accessibilityLabel(state.inGrace ? L("Met, in grace period") : (state.satisfied ? L("Met") : L("Not met")))
+                            .accessibilityLabel(model.triggersPaused ? L("Paused") : (state.inGrace ? L("Met, in grace period") : (state.satisfied ? L("Met") : L("Not met"))))
                         Text(state.rule.label)
                             .font(type.caption)
-                            .foregroundStyle(state.satisfied ? .primary : .secondary)
+                            .foregroundStyle(!model.triggersPaused && state.satisfied ? .primary : .secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Spacer(minLength: 4)
-                        if let remaining = state.graceRemaining {
+                        if !model.triggersPaused, let remaining = state.graceRemaining {
                             Text(Self.graceCountdown(remaining))
                                 .font(type.caption2.monospacedDigit())
                                 .foregroundStyle(.orange)
@@ -1381,7 +1684,7 @@ struct MenuBarContent: View {
                                 .animation(.linear(duration: 0.2), value: remaining)
                         }
                     }
-                    if !state.details.isEmpty {
+                    if !model.triggersPaused && !state.details.isEmpty {
                         ruleDetailRows(state.details)
                     }
                 }

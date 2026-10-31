@@ -52,8 +52,9 @@ struct MenuBarLabel: View {
                 Text(remainingText)
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.primary)
-                    .onReceive(tick) { _ in remainingText = Self.format(session.remaining) }
-                    .onAppear { remainingText = Self.format(session.remaining) }
+                    .onReceive(tick) { _ in refreshRemainingText() }
+                    .onAppear { refreshRemainingText() }
+                    .onChange(of: hasOtherDemand) { _, _ in refreshRemainingText() }
             }
         }
         .accessibilityLabel(accessibilityText)
@@ -71,6 +72,7 @@ struct MenuBarLabel: View {
                         .onAppear { refreshCustomText(layout) }
                         .onChange(of: layout) { _, new in refreshCustomText(new) }
                         .onChange(of: session.isActive) { _, _ in refreshCustomText(layout) }
+                        .onChange(of: hasOtherDemand) { _, _ in refreshCustomText(layout) }
                 }
             }
         }
@@ -79,15 +81,35 @@ struct MenuBarLabel: View {
     private func refreshCustomText(_ layout: MenuLayout) {
         let status = session.pausedByBattery || session.pausedByThermal
             ? L("Paused") : (session.isActive ? L("Brewing") : L("Idle"))
+        if session.pausedByBattery || session.pausedByThermal {
+            customText = status
+            return
+        }
         switch layout.menuBarTextStyle {
-        case .existing: customText = Self.format(session.remaining)
+        case .existing: customText = manualTimerText(Self.format(session.remaining))
         case .iconOnly: customText = ""
-        case .remaining: customText = session.remaining.map { Self.format($0) } ?? status
+        case .remaining: customText = session.remaining.map { manualTimerText(Self.format($0)) } ?? status
         case .elapsed: customText = session.isActive ? Self.format(session.elapsed) : status
         case .endTime:
-            customText = session.remaining.map { Date().addingTimeInterval($0).formatted(date: .omitted, time: .shortened) } ?? status
+            customText = session.remaining.map {
+                manualTimerText(Date().addingTimeInterval($0).formatted(date: .omitted, time: .shortened))
+            } ?? status
         case .status: customText = status
         }
+    }
+
+    /// A manual deadline does not end Keepresso's other reasons to keep awake.
+    /// Name the timer whenever a plain countdown could imply otherwise.
+    private var hasOtherDemand: Bool {
+        session.triggerActive || !session.liveLeases.isEmpty
+    }
+
+    private func manualTimerText(_ text: String) -> String {
+        hasOtherDemand ? L("Manual %@", text) : text
+    }
+
+    private func refreshRemainingText() {
+        remainingText = manualTimerText(Self.format(session.remaining))
     }
 
     private var icon: NSImage {
@@ -97,6 +119,10 @@ struct MenuBarLabel: View {
 
     private var accessibilityText: String {
         if session.pausedByBattery { return L("Keepresso: paused, battery low") }
+        if session.isActive, hasOtherDemand, let remaining = session.remaining {
+            return L("Keepresso: brewing") + ". "
+                + L("Manual timer: %@ remaining", Self.format(remaining))
+        }
         return session.isActive ? L("Keepresso: brewing") : L("Keepresso: idle")
     }
 

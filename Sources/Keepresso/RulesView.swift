@@ -447,7 +447,9 @@ struct RulesView: View {
     private var networkDevicesItems: some View {
         Section("Network") {
             Button("VPN connected") { model.addRule(.vpnConnected) }
-            if location.isAuthorized {
+            if location.isLoading {
+                ProgressView().controlSize(.small)
+            } else if location.isAuthorized {
                 if let ssid = model.currentSSID() {
                     Button(L("On current Wi-Fi (%@)", ssid)) { model.addRule(.wifiSSID(ssid)) }
                 } else {

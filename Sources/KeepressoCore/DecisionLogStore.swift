@@ -260,7 +260,9 @@ public enum AwakeStatsAggregator {
 
         for event in sorted {
             if event.began {
-                openStart = event
+                // A manual request can join an already active trigger or lease.
+                // Its history entry must not discard the earlier awake period.
+                if openStart == nil { openStart = event }
                 let day = calendar.startOfDay(for: event.date)
                 dayReasons[day, default: [:]][event.reason, default: 0] += 1
             } else if let start = openStart {

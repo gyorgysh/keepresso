@@ -212,3 +212,134 @@ import Testing
         #expect(layout.hiddenItems == [.duration])
     }
 }
+
+@Test func defaultTriggerActionFollowsItsRulesInTheTriggerSection() throws {
+    let layout = MenuLayout()
+    #expect(layout.placements.isEmpty)
+    #expect(layout.placement(of: .triggerAction) == .triggers)
+    #expect(layout.items(in: .triggers) == [.triggersToggle, .triggerSummary, .triggerRules, .triggerAction])
+    #expect(layout.items(in: .manualSession) == [.manualToggle, .duration, .manualOverride, .quickStop])
+    let object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(layout)) as? [String: Any])
+    #expect(object["layoutVersion"] as? Int == 3)
+    let missingPlacements = try JSONDecoder().decode(MenuLayout.self, from: Data("{}".utf8))
+    #expect(missingPlacements.placement(of: .triggerAction) == .triggers)
+}
+
+@Test func untouchedLegacyMenuProfilesMoveTheirTriggerAction() throws {
+    for profile in MenuLayoutProfile.allCases {
+        let legacy = legacyMenuLayout(profile)
+        for version in [nil, 1] as [Int?] {
+            let data = try encodedLegacyMenuLayout(legacy, version: version)
+            let restored = try JSONDecoder().decode(MenuLayout.self, from: data)
+            #expect(restored == MenuLayout.profile(profile))
+            #expect(restored.placement(of: .triggerAction) == .triggers)
+            #expect(restored.items(in: .triggers).last == .triggerAction)
+            #expect(try JSONDecoder().decode(MenuLayout.self, from: JSONEncoder().encode(restored)) == restored)
+        }
+    }
+}
+
+@Test func legacyAdaptiveMenuLayoutsRepairOnlySessionControlRelationships() throws {
+    let baseline = legacyMenuLayout(.balanced)
+    var wide = baseline
+    wide.panelWidth = 360
+    var reordered = baseline
+    reordered.moveSection(.manualSession, by: -1)
+    var placed = baseline
+    placed.moveItem(.triggerRules, to: .manualSession)
+    var hidden = baseline
+    hidden.hiddenItems.insert(.triggerRules)
+    for layout in [wide, reordered, placed, hidden] {
+        let restored = try JSONDecoder().decode(MenuLayout.self, from: encodedLegacyMenuLayout(layout))
+        var expected = layout
+        expected.placements.removeValue(forKey: .triggerAction)
+        expected.itemOrder.removeAll { $0 == .quickStop }
+        let manual = try #require(expected.itemOrder.firstIndex(of: .manualOverride))
+        expected.itemOrder.insert(.quickStop, at: manual + 1)
+        #expect(restored == expected)
+        #expect(restored.placement(of: .triggerAction) == .triggers)
+    }
+}
+
+@Test func versionTwoAdaptiveMenuPreservesCustomWidthOrderAndVisibility() throws {
+    var layout = legacyMenuLayout(.balanced)
+    layout.panelWidth = 360
+    layout.moveSection(.help, by: -1)
+    layout.moveItem(.triggerRules, by: -1)
+    layout.hiddenItems.insert(.leaseStatus)
+    layout.compactItems.remove(.otherApps)
+    layout.collapsedSections.insert(.activity)
+    let restored = try JSONDecoder().decode(MenuLayout.self, from: encodedLegacyMenuLayout(layout, version: 2))
+    var expected = layout
+    expected.placements.removeValue(forKey: .triggerAction)
+    expected.itemOrder.removeAll { $0 == .quickStop }
+    let manual = try #require(expected.itemOrder.firstIndex(of: .manualOverride))
+    expected.itemOrder.insert(.quickStop, at: manual + 1)
+    #expect(restored == expected)
+    #expect(restored.items(in: .manualSession) == [.manualToggle, .duration, .manualOverride, .quickStop])
+}
+
+@Test func legacyAdaptiveMenuKeepsTriggerActionVisibleWhenTriggerSectionHidden() throws {
+    var layout = legacyMenuLayout(.balanced)
+    layout.hiddenSections.insert(.triggers)
+    let restored = try JSONDecoder().decode(MenuLayout.self, from: encodedLegacyMenuLayout(layout, version: 2))
+    var expected = layout
+    expected.itemOrder.removeAll { $0 == .quickStop }
+    let manual = try #require(expected.itemOrder.firstIndex(of: .manualOverride))
+    expected.itemOrder.insert(.quickStop, at: manual + 1)
+    #expect(restored == expected)
+    #expect(restored.placement(of: .triggerAction) == .manualSession)
+    #expect(restored.groups(expanded: true).flatMap(\.items).contains(.triggerAction))
+}
+
+@Test func legacyIndependentMenuPreservesManualActionAndQuickStopOrder() throws {
+    var layout = legacyMenuLayout(.balanced)
+    layout.adaptiveSessionControls = false
+    for version in [nil, 1, 2] as [Int?] {
+        let data = try encodedLegacyMenuLayout(layout, version: version)
+        #expect(try JSONDecoder().decode(MenuLayout.self, from: data) == layout)
+    }
+}
+
+@Test func legacyAdaptiveMenuPreservesQuickStopsPlacedOutsideManualSection() throws {
+    var layout = legacyMenuLayout(.balanced)
+    layout.placements[.quickStop] = .quickSettings
+    let restored = try JSONDecoder().decode(MenuLayout.self, from: encodedLegacyMenuLayout(layout, version: 2))
+    var expected = layout
+    expected.placements.removeValue(forKey: .triggerAction)
+    #expect(restored == expected)
+}
+
+@Test func versionTwoAdaptiveMenuKeepsQuickStopsAlreadyAfterManualControls() throws {
+    var layout = legacyMenuLayout(.balanced)
+    layout.itemOrder.removeAll { $0 == .quickStop }
+    layout.itemOrder.append(.quickStop)
+    let restored = try JSONDecoder().decode(MenuLayout.self, from: encodedLegacyMenuLayout(layout, version: 2))
+    var expected = layout
+    expected.placements.removeValue(forKey: .triggerAction)
+    #expect(restored == expected)
+}
+
+@Test func versionedMenuLayoutsRetainExplicitLegacyPlacements() throws {
+    let layout = legacyMenuLayout(.balanced)
+    let data = try JSONEncoder().encode(layout)
+    #expect(try JSONDecoder().decode(MenuLayout.self, from: data) == layout)
+    let currentData = try encodedLegacyMenuLayout(layout, version: 3)
+    #expect(try JSONDecoder().decode(MenuLayout.self, from: currentData) == layout)
+    let futureData = try encodedLegacyMenuLayout(layout, version: 4)
+    #expect(try JSONDecoder().decode(MenuLayout.self, from: futureData) == layout)
+}
+
+private func legacyMenuLayout(_ profile: MenuLayoutProfile) -> MenuLayout {
+    var layout = MenuLayout.profile(profile)
+    layout.itemOrder = MenuItem.allCases
+    layout.placements[.triggerAction] = .manualSession
+    return layout
+}
+
+private func encodedLegacyMenuLayout(_ layout: MenuLayout, version: Int? = nil) throws -> Data {
+    var object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(layout)) as? [String: Any])
+    if let version { object["layoutVersion"] = version }
+    else { object.removeValue(forKey: "layoutVersion") }
+    return try JSONSerialization.data(withJSONObject: object)
+}

@@ -23,8 +23,8 @@ private func intentModel() throws -> AppModel {
 }
 
 /// "Start Keeping Awake", optionally for a set number of minutes. Runs through
-/// the same path as `keepresso://start`, so it pauses triggers first and the
-/// session actually sticks.
+/// the same path as `keepresso://start`, adding a manual session alongside
+/// automatic triggers and automation leases.
 struct StartKeepingAwakeIntent: AppIntent {
     static let title: LocalizedStringResource = "Start Keeping Awake"
     static let description = IntentDescription(

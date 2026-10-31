@@ -112,7 +112,9 @@ struct HotspotPreferencesSection: View {
                 }
                 Label(status, systemImage: "personalhotspot")
                     .font(.caption).foregroundStyle(.secondary)
-                if !location.isAuthorized {
+                if location.isLoading {
+                    ProgressView().controlSize(.small)
+                } else if !location.isAuthorized {
                     HStack {
                         Text("Allow Location access to find Wi-Fi networks.")
                         Spacer()

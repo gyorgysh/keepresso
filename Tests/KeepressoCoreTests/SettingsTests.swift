@@ -72,6 +72,47 @@ import Foundation
     #expect(try JSONDecoder().decode(KeepressoSettings.self, from: data).menuPanelExpanded == false)
 }
 
+@Test func separateSessionControlsUseFreshInstallDefaultWithoutChangingExistingUsers() throws {
+    let suite = "keepresso.tests.session-controls.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let store = UserDefaultsSettingsStore(defaults: defaults, key: "settings")
+
+    // The first launch enables the redesigned controls and persists the choice.
+    #expect(!store.hasStoredSettings)
+    let fresh = store.load().withFreshInstallDefaults(hasStoredSettings: store.hasStoredSettings)
+    #expect(fresh.separateSessionControls)
+    store.save(fresh)
+    #expect(store.load().withFreshInstallDefaults(hasStoredSettings: store.hasStoredSettings).separateSessionControls)
+
+    // A settings blob from before this option existed keeps the previous UI.
+    defaults.set(Data(#"{"triggersEnabled":true}"#.utf8), forKey: "settings")
+    let upgraded = store.load().withFreshInstallDefaults(hasStoredSettings: store.hasStoredSettings)
+    #expect(!upgraded.separateSessionControls)
+    #expect(upgraded.triggersEnabled)
+
+    // A corrupt saved blob is still an existing install, not a fresh install.
+    defaults.set(Data("invalid JSON".utf8), forKey: "settings")
+    #expect(!store.load().withFreshInstallDefaults(hasStoredSettings: store.hasStoredSettings).separateSessionControls)
+}
+
+@Test(arguments: [true, false])
+func separateSessionControlsChoiceSurvivesSaveAndReload(enabled: Bool) throws {
+    var settings = KeepressoSettings.default
+    settings.separateSessionControls = enabled
+    let data = try JSONEncoder().encode(settings)
+    let loaded = try JSONDecoder().decode(KeepressoSettings.self, from: data)
+        .withFreshInstallDefaults(hasStoredSettings: true)
+    #expect(loaded.separateSessionControls == enabled)
+}
+
+@Test func malformedSeparateSessionControlsKeepsOtherSettings() throws {
+    let json = #"{"separateSessionControls":"yes","triggersEnabled":true}"#
+    let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: Data(json.utf8))
+    #expect(!decoded.separateSessionControls)
+    #expect(decoded.triggersEnabled)
+}
+
 @Test func menuCustomizationIsOptInAndRoundTrips() throws {
     // A settings blob from before menu customization keeps the standard menu.
     let json = """
