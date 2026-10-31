@@ -15,7 +15,23 @@ public final class SessionController {
     /// Whether a session is currently keeping the Mac awake.
     public private(set) var isActive: Bool = false
 
-    /// Duration policy for the active (or most recently configured) session.
+    /// A manual keep-awake request, independent of automatic triggers and
+    /// leases. Retained during safety pauses until stopped or its timer ends.
+    public private(set) var hasManualSession = false
+
+    /// Whether the trigger gate requested keep-awake on the last reconcile.
+    /// Safety pauses can suspend assertions while this demand remains true.
+    public private(set) var triggerActive = false
+
+    /// The manual countdown's origin, separate from the uninterrupted awake
+    /// period's `startedAt` when other demand already keeps the Mac awake.
+    private var manualStartedAt: Date?
+
+    /// Explicit source removal ends silently if reconciliation finds no other
+    /// demand. Scoped to a single manual-stop or trigger-change reconcile.
+    private var explicitStopCause: SessionCause?
+
+    /// Duration policy for the manual (or most recently configured) request.
     public private(set) var mode: SessionMode = .indefinite
 
     /// What to keep awake. Editable while idle or active; changes take effect on
@@ -25,18 +41,13 @@ public final class SessionController {
     /// When the active session began, or `nil` while idle.
     public private(set) var startedAt: Date?
 
-    /// When set, live triggers own activation: every ``reconcile(now:systemIdleSeconds:)``
-    /// turns the session on or off to match the gate, and manual ``toggle()`` /
-    /// ``start(mode:options:)`` only hold until the next tick. While gated the
-    /// timed-``mode`` cap is ignored, a condition-gated session isn't time-boxed.
-    /// Leave `nil` for the classic manual toggle.
-    public var triggerGate: TriggerEvaluating? {
-        didSet {
-            // Triggers own activation from here: a manual session a safety
-            // pause remembered must not resume underneath the gate later.
-            if triggerGate != nil { safetyPausedManual = nil }
-        }
-    }
+    /// Live triggers contribute demand alongside manual sessions and leases.
+    /// Adding, removing, or pausing the gate never changes manual demand.
+    public var triggerGate: TriggerEvaluating?
+
+    /// Called once after a timed manual session reaches its deadline, even
+    /// when triggers or leases keep the aggregate session running.
+    public var onTimedSessionEnd: (() -> Void)?
 
     /// When set, automation leases are one more demand source, considered in
     /// both manual and trigger mode: any live lease keeps the Mac awake, and
@@ -48,14 +59,11 @@ public final class SessionController {
     public private(set) var liveLeases: [LeaseSummary] = []
 
     /// True while the running session's only demand is leases: its end is
-    /// attributed to the lease, the timed cap and ``stopIn(_:)`` don't apply,
-    /// and assertions are capped at `.system`. A manual ``start(mode:options:cause:)``
-    /// takes ownership back.
+    /// attributed to the lease and assertions are capped at `.system`. A
+    /// manual request can join it at any time with its own duration policy.
     private var leaseHeld = false
 
-    /// Whether the running session is sustained by leases alone, for hosts
-    /// that must choose between stopping a session and handing it over (the
-    /// app's trigger pause, the menu's explicit lease stop).
+    /// Whether the running session is sustained by leases alone.
     public var isLeaseHeld: Bool { leaseHeld }
 
     /// The last reconcile instant that saw live lease demand, so a lease end
@@ -277,10 +285,9 @@ public final class SessionController {
 
     /// A manual session a safety pause (battery or thermal) force-stopped,
     /// remembered so ``reconcile`` restarts it when the pause lifts. Only
-    /// manual sessions need this: trigger-gated and lease-held sessions
-    /// reactivate through the gate and lease demand on the next tick, and
-    /// recording them would fight that ownership. Any explicit `start` or
-    /// `stop` clears it, so user intent always wins over the remembered pause.
+    /// manual sessions need this: automatic sources reactivate through their
+    /// own demand. A manual request can coexist with either source. Explicit
+    /// `start`, `stop`, or `stopManualSession` supersedes the remembered pause.
     /// Options are not part of it: the session resumes with the live
     /// ``options``, so a setting changed during the pause is kept.
     private var safetyPausedManual: (
@@ -380,18 +387,22 @@ public final class SessionController {
         // A restart within the debounce window cancels a pending end action
         // (the session is back on, so sleep/lock would fight the user).
         cancelPendingEndAction()
-        // A manual start takes ownership: lease expiry no longer ends the
-        // session, and the timed cap applies again.
+        // A manual request joins the automatic sources already running.
         leaseHeld = false
         // Fresh user intent supersedes anything a safety pause remembered.
         safetyPausedManual = nil
-        let restarted = isActive
+        let restarted = hasManualSession
+        let resetSession = !isActive || (restarted && !triggerActive && liveLeases.isEmpty)
         if let options { self.options = options }
         self.mode = mode
-        self.startedAt = now()
+        self.manualStartedAt = now()
+        self.hasManualSession = true
+        if resetSession { self.startedAt = manualStartedAt }
         self.isActive = true
-        remindersFired = 0
-        lastActivityPokeAt = nil
+        if resetSession {
+            remindersFired = 0
+            lastActivityPokeAt = nil
+        }
         armEndingSoon(remaining: mode.duration)
         log.record(
             began: true,
@@ -407,19 +418,58 @@ public final class SessionController {
     /// `startedAt` and the reminder counters so the session continues rather
     /// than restarting. Works on indefinite and timed sessions alike:
     /// re-invoking replaces the countdown, shortening or extending it to
-    /// exactly `interval` ahead. Ignored while idle or while triggers own
-    /// activation (a gated session isn't time-boxed).
+    /// exactly `interval` ahead. Ignored without a running manual request.
     public func stopIn(_ interval: TimeInterval) {
-        guard isActive, triggerGate == nil, !leaseHeld, interval > 0, let startedAt else { return }
+        guard isActive, hasManualSession, interval.isFinite, interval > 0,
+              let manualStartedAt else { return }
         let instant = now()
-        mode = .timed(duration: instant.timeIntervalSince(startedAt) + interval)
+        mode = .timed(duration: instant.timeIntervalSince(manualStartedAt) + interval)
         armEndingSoon(remaining: interval)
         reconcile(now: instant)
     }
 
+    /// Extend a running manual timer without resetting its start or reminders.
+    /// Indefinite, expired, and paused manual sessions cannot be extended.
+    /// Returns whether the requested time was added.
+    @discardableResult
+    public func addTime(_ interval: TimeInterval) -> Bool {
+        guard isActive, hasManualSession, interval.isFinite, interval > 0,
+              let remaining, remaining > 0,
+              remaining + interval <= SessionMode.maxTimedMinutes * 60 else { return false }
+        stopIn(remaining + interval)
+        return true
+    }
+
     /// End the current session and release all assertions.
     public func stop(cause: SessionCause = .manual) {
+        cancelPendingEndAction()
         stop(reason: cause == .manual ? L("Stopped manually") : L("Stopped by a command"))
+    }
+
+    /// End only the manual request. Satisfied triggers and live leases keep
+    /// running without releasing assertions or restarting the awake period.
+    public func stopManualSession(cause: SessionCause = .manual) {
+        guard hasManualSession else { return }
+        cancelPendingEndAction()
+        hasManualSession = false
+        manualStartedAt = nil
+        safetyPausedManual = nil
+        endingSoonFired = false
+        explicitStopCause = cause
+        defer { explicitStopCause = nil }
+        reconcile(now: now())
+    }
+
+    /// Apply a user-requested trigger change without treating removal of
+    /// the last demand as a natural end. Tick fresh leases once, so an expired
+    /// lease cached by the UI cannot turn an explicit pause into a sleep or
+    /// lock action. Manual sessions and surviving leases continue in place.
+    public func setTriggerGate(_ gate: TriggerEvaluating?, cause: SessionCause = .manual) {
+        triggerGate = gate
+        cancelPendingEndAction()
+        explicitStopCause = cause
+        defer { explicitStopCause = nil }
+        reconcile(now: now())
     }
 
     /// What effects a stop may fire beyond releasing assertions.
@@ -444,7 +494,8 @@ public final class SessionController {
     private func stop(
         reason: String,
         effects: StopEffects = .none,
-        notice: (title: String, body: String)? = nil
+        notice: (title: String, body: String)? = nil,
+        clearManualDemand: Bool = true
     ) {
         let wasActive = isActive
         let kind: SessionEventKind? = {
@@ -463,6 +514,10 @@ public final class SessionController {
             )
         }
         isActive = false
+        if clearManualDemand {
+            hasManualSession = false
+            manualStartedAt = nil
+        }
         startedAt = nil
         leaseHeld = false
         remindersFired = 0
@@ -491,24 +546,22 @@ public final class SessionController {
     }
 
     /// Force-stop for a safety pause (battery or thermal), remembering a
-    /// manual session so the pause lifting restarts it. Trigger-gated and
-    /// lease-held sessions reactivate through the gate and lease demand, so
-    /// only a session the manual toggle owns is recorded; anything else would
-    /// fight that ownership on resume.
+    /// manual request so the pause lifting resumes its original deadline and
+    /// awake-period counters even when triggers or leases coexist with it.
     private func safetyStop(
         reason: String,
         effects: StopEffects,
         notice: (title: String, body: String)?,
         resumeReason: String
     ) {
-        let manualOwned = triggerGate == nil && !leaseHeld
+        let manualOwned = hasManualSession
         let snapshot = (
             mode: mode,
             startedAt: startedAt,
             remindersFired: remindersFired,
             reason: resumeReason
         )
-        stop(reason: reason, effects: effects, notice: notice)
+        stop(reason: reason, effects: effects, notice: notice, clearManualDemand: false)
         if manualOwned { safetyPausedManual = snapshot }
     }
 
@@ -537,7 +590,7 @@ public final class SessionController {
         remindersFired = paused.remindersFired
         lastActivityPokeAt = nil
         armEndingSoon(remaining: paused.mode.duration.map {
-            $0 - instant.timeIntervalSince(startedAt ?? instant)
+            $0 - instant.timeIntervalSince(manualStartedAt ?? instant)
         })
         log.record(
             began: true,
@@ -617,14 +670,15 @@ public final class SessionController {
         return max(0, now().timeIntervalSince(startedAt))
     }
 
-    /// Seconds remaining in a timed session, or `nil` for indefinite/idle or a
-    /// trigger-gated session (gating ignores the timed cap, so there's nothing
-    /// counting down, see ``reconcile(now:systemIdleSeconds:battery:thermal:)``).
+    /// Seconds remaining in the manual timer, including while automatic
+    /// sources also run or a safety pause suspends assertions.
     public var remaining: TimeInterval? {
-        guard triggerGate == nil, !leaseHeld, isActive, let total = mode.duration, let startedAt
+        guard hasManualSession, let total = mode.duration, let manualStartedAt
         else { return nil }
-        return max(0, total - now().timeIntervalSince(startedAt))
+        return max(0, total - now().timeIntervalSince(manualStartedAt))
     }
+
+    public var manualRemaining: TimeInterval? { remaining }
 
     /// Whether ``reconcile(now:systemIdleSeconds:battery:thermal:)`` can currently
     /// use a HID idle reading. True when the screen-saver yield is configured, or
@@ -705,12 +759,32 @@ public final class SessionController {
         }
 
         // Tick leases first so expiry runs and the menu's rows stay fresh
-        // even when a safety pause below early-returns (the same reason those
-        // paths call `triggerGate?.tick()`).
+        // even when a safety pause below early-returns. Trigger state advances
+        // here for the same reason.
         let summaries = leases?.tick(now: instant) ?? []
         if summaries != liveLeases { liveLeases = summaries }
         let leaseDemand = !summaries.isEmpty
         if leaseDemand { lastLeaseDemandAt = instant }
+        triggerGate?.tick()
+        triggerActive = triggerGate?.isSatisfied() ?? false
+
+        // A manual timer always advances, including during a safety pause.
+        // Expiring this source must not tear down an uninterrupted automatic
+        // session, nor resurrect an overdue manual request after recovery.
+        let manualOverdue: TimeInterval?
+        if hasManualSession, let duration = mode.duration, let manualStartedAt,
+           instant.timeIntervalSince(manualStartedAt) >= duration {
+            manualOverdue = instant.timeIntervalSince(manualStartedAt) - duration
+            hasManualSession = false
+            self.manualStartedAt = nil
+            safetyPausedManual = nil
+            endingSoonFired = false
+        } else {
+            manualOverdue = nil
+        }
+        defer {
+            if manualOverdue != nil { onTimedSessionEnd?() }
+        }
 
         switch battery {
         case .discharging(let percent):
@@ -727,9 +801,6 @@ public final class SessionController {
                 // Stay paused until charge clears the cutoff by the resume margin,
                 // so a reading hovering at the threshold doesn't restart every tick.
                 guard percent >= threshold + Self.batteryResumeMargin else {
-                    // Keep trigger state advancing so the rule list stays live
-                    // and the first post-resume decision isn't hours stale.
-                    triggerGate?.tick()
                     return
                 }
                 pausedByBattery = false
@@ -758,7 +829,6 @@ public final class SessionController {
         } else if pausedByBattery {
             // No reading (an internal reconcile from start/stop): hold the
             // latch rather than activating for one tick and dying on the next.
-            triggerGate?.tick()
             return
         }
 
@@ -787,89 +857,57 @@ public final class SessionController {
                         )
                     }
                 }
-                triggerGate?.tick()
                 return
             case .clear:
                 pausedByThermal = false
             case .unknown:
                 if pausedByThermal {
-                    triggerGate?.tick()
                     return
                 }
             }
         }
 
-        // A lifted safety pause restarts the manual session it stopped ahead
-        // of the chain below, so an overdue timed deadline still ends on
-        // this same tick through the normal expiry path instead of holding
-        // assertions for a tick past it. No gate (it reactivates on its own)
-        // and no leases (they take precedence): with either present, the
-        // remembered session stays out of the way.
-        if triggerGate == nil, !isActive, !leaseDemand, let paused = safetyPausedManual {
+        // Resume a surviving manual request with its original aggregate
+        // elapsed/reminder state. Its own deadline was checked above.
+        if !isActive, hasManualSession, let paused = safetyPausedManual {
             resumeSafetyPausedSession(paused, at: instant)
         }
 
-        if let triggerGate {
-            // Triggers own activation, leases union in; the timed cap doesn't
-            // apply. Ownership (`leaseHeld`) tracks what sustains the session
-            // while demand lasts, so the eventual drop is attributed to the
-            // right source.
-            triggerGate.tick()
-            let gateOn = triggerGate.isSatisfied()
-            let want = gateOn || leaseDemand
-            if want, isActive { leaseHeld = !gateOn }
-            if want, !isActive {
-                if gateOn {
-                    leaseHeld = false
+        let wasLeaseHeld = leaseHeld
+        let want = hasManualSession || triggerActive || leaseDemand
+        if want {
+            cancelPendingEndAction()
+            if !isActive {
+                if hasManualSession {
+                    // Manual requests normally activate through start() or a
+                    // safety resume; this also handles an outstanding request
+                    // when its remembered aggregate state was superseded.
+                    isActive = true
+                    startedAt = instant
+                    remindersFired = 0
+                    lastActivityPokeAt = nil
+                } else if triggerActive {
                     setActive(true, at: instant)
                 } else {
                     beginLeaseSession(at: instant)
                 }
-            } else if !want, isActive {
-                if leaseHeld {
-                    stop(
-                        reason: L("Automation lease ended"),
-                        effects: leaseEndEffects(at: instant)
-                    )
-                } else {
-                    setActive(false, at: instant)
-                }
             }
-        } else if isActive, !leaseHeld, let total = mode.duration, let startedAt,
-                  instant.timeIntervalSince(startedAt) >= total {
-            // A deadline noticed long after it passed (Mac slept across it)
-            // still ends the session and may notify, but must not fire the
-            // end action: waking the lid would immediately re-sleep the
-            // display or lock the screen.
-            let overdue = instant.timeIntervalSince(startedAt) - total
-            let fireAction = overdue <= Self.endActionStaleGrace
-            stop(
-                reason: L("Timed session ended"),
-                effects: fireAction
-                    ? .natural(kind: .sessionEnded)
-                    : .safetyPause(kind: .sessionEnded)
-            )
-            // Live leases carry the awake state straight through the expiry:
-            // the timed session ends normally (log, optional notice), then a
-            // lease session begins in the same tick, cancelling the pending
-            // end action before it can fire mid-lease.
-            if leaseDemand {
-                beginLeaseSession(at: instant)
+            leaseHeld = !hasManualSession && !triggerActive && leaseDemand
+        } else if isActive {
+            if let cause = explicitStopCause {
+                stop(reason: cause == .manual ? L("Stopped manually") : L("Stopped by a command"))
+            } else if let overdue = manualOverdue {
+                stop(
+                    reason: L("Timed session ended"),
+                    effects: overdue <= Self.endActionStaleGrace
+                        ? .natural(kind: .sessionEnded)
+                        : .safetyPause(kind: .sessionEnded)
+                )
+            } else if wasLeaseHeld {
+                stop(reason: L("Automation lease ended"), effects: leaseEndEffects(at: instant))
             } else {
-                flushPendingEndAction(at: instant)
-                return
+                setActive(false, at: instant)
             }
-        } else if !isActive, leaseDemand {
-            // A safety pause never reaches this point (the latches above
-            // early-return), so activating on lease demand is always safe.
-            beginLeaseSession(at: instant)
-        } else if isActive, leaseHeld, !leaseDemand {
-            stop(
-                reason: L("Automation lease ended"),
-                effects: leaseEndEffects(at: instant)
-            )
-            flushPendingEndAction(at: instant)
-            return
         }
 
         let desired = desiredAssertions(systemIdleSeconds: systemIdleSeconds, display: effectiveDisplay)
@@ -1185,13 +1223,13 @@ public final class SessionController {
 
     /// Post the "ending soon" heads-up once a timed session's remaining time
     /// drops inside ``endingSoonNotice``. One-shot per arming (see
-    /// ``armEndingSoon(remaining:)``); never fires for indefinite or
-    /// trigger-gated sessions.
+    /// ``armEndingSoon(remaining:)``). Only announces a stop when the manual
+    /// timer is the sole demand; automatic work may outlast that timer.
     private func maybeNotifyEndingSoon(at instant: Date) {
-        guard isActive, triggerGate == nil, !leaseHeld, !endingSoonFired,
+        guard isActive, hasManualSession, !triggerActive, liveLeases.isEmpty, !endingSoonFired,
               let notice = endingSoonNotice, notice > 0,
-              let total = mode.duration, let startedAt else { return }
-        let remaining = total - instant.timeIntervalSince(startedAt)
+              let total = mode.duration, let manualStartedAt else { return }
+        let remaining = total - instant.timeIntervalSince(manualStartedAt)
         guard remaining <= notice else { return }
         endingSoonFired = true
         // Round up to a whole minute for display: the first tick inside the
@@ -1231,7 +1269,8 @@ public final class SessionController {
     /// would undo one tick later. No-op unless a session is active with a
     /// live lease and not already lease-held.
     public func handOffToLeases() {
-        guard isActive, !leaseHeld, !liveLeases.isEmpty else { return }
+        guard isActive, !hasManualSession, triggerGate == nil,
+              !leaseHeld, !liveLeases.isEmpty else { return }
         leaseHeld = true
     }
 
@@ -1305,7 +1344,7 @@ public final class SessionController {
         // unattended work has nobody watching the screen.
         if leaseHeld { return [.system] }
         var kinds: Set<PowerAssertionKind> = []
-        if options.preventSystemSleep { kinds.insert(.system) }
+        if options.preventSystemSleep || !liveLeases.isEmpty { kinds.insert(.system) }
         // A panel inside a closed lid with nothing external is not worth
         // holding awake, so the display assertion stands down. Clamshell
         // (``.lidShutWithExternal``) keeps the assertion so the external can

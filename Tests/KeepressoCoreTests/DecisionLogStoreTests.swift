@@ -119,3 +119,15 @@ import Foundation
     )
     #expect(stats.totalHeldSeconds == 600)
 }
+
+@Test func overlappingSourceStartsPreserveTheWholeAwakePeriod() {
+    let start = Date(timeIntervalSince1970: 1_000)
+    let end = start.addingTimeInterval(120)
+    let events = [
+        PersistedSessionEvent(date: start, began: true, reason: "Trigger matched"),
+        PersistedSessionEvent(date: start.addingTimeInterval(60), began: true, reason: "Manual session started"),
+        PersistedSessionEvent(date: end, began: false, reason: "Last source ended"),
+    ]
+    let stats = AwakeStatsAggregator.summarize(events: events, now: end, dayCount: 1)
+    #expect(stats.totalHeldSeconds == 120)
+}

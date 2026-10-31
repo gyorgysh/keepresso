@@ -5,9 +5,11 @@ import Foundation
 /// In-memory power-assertion backend that records the last applied set.
 private final class FakeAssertions: PowerAsserting {
     private(set) var held: Set<PowerAssertionKind> = []
+    private(set) var applied: [Set<PowerAssertionKind>] = []
     /// When set, those kinds are requested but never held (create failure).
     var refuse: Set<PowerAssertionKind> = []
     func apply(_ kinds: Set<PowerAssertionKind>, reason: String) {
+        applied.append(kinds)
         held = kinds.subtracting(refuse)
     }
 }
@@ -939,6 +941,31 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
     #expect(abs((controller.remaining ?? -1) - 90) < 0.001)
 }
 
+@MainActor
+@Test func updatingTimedSessionRestartsCountdownFromTheSelectedDuration() {
+    let (controller, fake, clock) = makeController()
+    controller.start(mode: .timed(duration: 4 * 60 * 60))
+    clock.advance(60 * 60)
+
+    controller.start(mode: .timed(duration: 8 * 60 * 60))
+    #expect(controller.isActive)
+    #expect(abs((controller.remaining ?? -1) - 8 * 60 * 60) < 0.001)
+    #expect(controller.elapsed == 0)
+
+    // The original four-hour deadline must no longer end this session.
+    clock.advance(3 * 60 * 60)
+    controller.reconcile()
+    #expect(controller.isActive)
+    #expect(abs((controller.remaining ?? -1) - 5 * 60 * 60) < 0.001)
+    #expect(!fake.held.isEmpty)
+
+    clock.advance(5 * 60 * 60)
+    controller.reconcile()
+    #expect(!controller.isActive)
+    #expect(controller.remaining == nil)
+    #expect(fake.held.isEmpty)
+}
+
 /// A gate whose decision the test flips directly.
 private final class StubGate: TriggerEvaluating {
     var satisfied: Bool
@@ -986,20 +1013,23 @@ private final class StubGate: TriggerEvaluating {
 }
 
 @MainActor
-@Test func gatedSessionHasNoRemainingEvenWithLeftoverTimedMode() {
+@Test func addingTriggersPreservesTheManualCountdown() {
     let (controller, _, clock) = makeController()
     controller.start(mode: .timed(duration: 3600)) // a 1h manual session
     clock.advance(10)
     #expect(controller.remaining != nil) // counting down while manual
 
-    controller.triggerGate = StubGate(true) // triggers take over mid-session
+    controller.triggerGate = StubGate(true)
     controller.reconcile()
-    #expect(controller.isActive) // gate holds it on
-    #expect(controller.remaining == nil) // but no countdown: gating isn't time-boxed
+    #expect(controller.isActive)
+    #expect(controller.hasManualSession)
+    #expect(controller.triggerActive)
+    #expect(controller.remaining == 3590)
+    #expect(controller.manualRemaining == controller.remaining)
 }
 
 @MainActor
-@Test func gatedSessionIgnoresTimedExpiry() {
+@Test func triggersKeepAwakeAfterTheManualTimerExpires() {
     let (controller, fake, clock) = makeController()
     let gate = StubGate(true)
     controller.triggerGate = gate
@@ -1007,7 +1037,9 @@ private final class StubGate: TriggerEvaluating {
 
     clock.advance(120) // well past the timed cap
     controller.reconcile()
-    #expect(controller.isActive) // gate still owns activation
+    #expect(controller.isActive) // the independent trigger still holds
+    #expect(!controller.hasManualSession)
+    #expect(controller.remaining == nil)
     #expect(fake.held == [.system])
 }
 
@@ -1171,7 +1203,7 @@ private final class StubGate: TriggerEvaluating {
 }
 
 @MainActor
-@Test func enablingTriggersDiscardsRememberedManualSession() {
+@Test func changingTriggersPreservesRememberedManualSession() {
     let (controller, fake, _) = makeController()
     controller.pauseBelowBatteryPercent = 20
     controller.start()
@@ -1179,17 +1211,17 @@ private final class StubGate: TriggerEvaluating {
     controller.reconcile(battery: .discharging(15))
     #expect(controller.pausedByBattery)
 
-    // Triggers take ownership mid-pause but stay unsatisfied: nothing runs.
+    // Changing the gate cannot discard the independent manual request.
     controller.triggerGate = StubGate(false)
     controller.reconcile(battery: .onAC)
-    #expect(controller.isActive == false)
+    #expect(controller.isActive)
+    #expect(controller.hasManualSession)
 
-    // Triggers go away again: the manual session remembered from before the
-    // trigger era must not resume underneath the user's back.
     controller.triggerGate = nil
     controller.reconcile(battery: .onAC)
-    #expect(controller.isActive == false)
-    #expect(fake.held.isEmpty)
+    #expect(controller.isActive)
+    #expect(controller.hasManualSession)
+    #expect(fake.held == [.system])
 }
 
 @MainActor
@@ -1486,7 +1518,59 @@ private final class FakeReminder: ReminderNotifying {
 }
 
 @MainActor
-@Test func stopInIsIgnoredWhileIdleGatedOrNonPositive() {
+@Test func addTimeExtendsTheDeadlineWithoutRestartingTheSession() {
+    let (controller, fake, clock) = makeController()
+    controller.start(mode: .timed(duration: 60 * 60))
+    let startedAt = controller.startedAt
+    clock.advance(10 * 60)
+    let events = controller.log.events.count
+
+    #expect(controller.addTime(15 * 60))
+    #expect(controller.startedAt == startedAt)
+    #expect(abs(controller.elapsed - 10 * 60) < 0.001)
+    #expect(abs((controller.remaining ?? -1) - 65 * 60) < 0.001)
+    #expect(controller.log.events.count == events)
+
+    clock.advance(50 * 60)
+    controller.reconcile()
+    #expect(controller.isActive) // the original one-hour deadline is gone
+    #expect(abs((controller.remaining ?? -1) - 15 * 60) < 0.001)
+
+    #expect(controller.addTime(60 * 60))
+    #expect(abs((controller.remaining ?? -1) - 75 * 60) < 0.001)
+    clock.advance(75 * 60)
+    controller.reconcile()
+    #expect(!controller.isActive)
+    #expect(fake.held.isEmpty)
+}
+
+@MainActor
+@Test func addTimeRejectsSessionsWithoutARunningManualTimerAndInvalidAmounts() {
+    let (controller, _, clock) = makeController()
+    #expect(!controller.addTime(60)) // idle
+    controller.start()
+    #expect(!controller.addTime(60)) // indefinite
+
+    controller.start(mode: .timed(duration: 60))
+    for interval in [0, -1, Double.nan, Double.infinity, SessionMode.maxTimedMinutes * 60] {
+        #expect(!controller.addTime(interval))
+    }
+    #expect(controller.remaining == 60)
+
+    controller.stopManualSession()
+    controller.triggerGate = StubGate(true)
+    controller.reconcile()
+    #expect(!controller.addTime(60)) // trigger demand has no manual timer
+    controller.triggerGate = nil
+    controller.start(mode: .timed(duration: 60))
+    clock.advance(60)
+    #expect(!controller.addTime(60)) // an expired timer cannot be revived
+    controller.reconcile()
+    #expect(!controller.isActive)
+}
+
+@MainActor
+@Test func stopInIsIgnoredWithoutManualDemandOrForNonPositiveIntervals() {
     let (controller, _, _) = makeController()
     controller.stopIn(15 * 60) // idle: nothing to convert
     #expect(controller.isActive == false)
@@ -1496,9 +1580,10 @@ private final class FakeReminder: ReminderNotifying {
     controller.stopIn(0) // non-positive: ignored
     #expect(controller.remaining == nil)
 
+    controller.stopManualSession()
     controller.triggerGate = StubGate(true)
     controller.reconcile()
-    controller.stopIn(15 * 60) // gated sessions aren't time-boxed
+    controller.stopIn(15 * 60) // trigger demand has no manual timer
     #expect(controller.mode == .indefinite)
 }
 
@@ -1649,9 +1734,11 @@ private func leaseSummary(
     clock.advance(61)
     controller.reconcile()
 
-    // The timed session ended and a lease session took over in the same tick.
+    // The manual source expires without ending the aggregate awake period.
     #expect(controller.isActive)
-    #expect(controller.log.events.last?.kind == .leaseAcquired)
+    #expect(!controller.hasManualSession)
+    #expect(controller.isLeaseHeld)
+    #expect(controller.log.events.count == 1)
     #expect(controller.remaining == nil)
     #expect(fake.held == [.system])
 
@@ -1751,6 +1838,7 @@ private func leaseSummary(
     provider.summaries = [leaseSummary()]
     controller.reconcile()
     controller.stopIn(60)
+    #expect(!controller.addTime(60))
     #expect(controller.remaining == nil)
 
     clock.advance(120)
@@ -1848,4 +1936,459 @@ private func leaseSummary(
     controller.reconcile()
     #expect(controller.isActive == false)
     #expect(controller.log.events.last?.kind == .leaseReleased)
+}
+
+// MARK: - Independent manual and automatic demand
+
+@MainActor
+@Test func manualStartSurvivesAnUnsatisfiedTriggerGate() {
+    let (controller, fake, clock) = makeController()
+    let gate = StubGate(false)
+    controller.triggerGate = gate
+    controller.start(mode: .timed(duration: 60))
+    clock.advance(10)
+    controller.reconcile()
+    #expect(controller.hasManualSession)
+    #expect(!controller.triggerActive)
+    #expect(controller.remaining == 50)
+    #expect(controller.isActive)
+    #expect(fake.held == [.system])
+
+    gate.satisfied = true
+    controller.reconcile()
+    gate.satisfied = false
+    controller.reconcile()
+    #expect(controller.isActive)
+    #expect(controller.hasManualSession)
+}
+
+@MainActor
+@Test func stoppingManualDemandPreservesTriggersAndElapsedTime() {
+    let (controller, fake, clock) = makeController()
+    let gate = StubGate(true)
+    controller.triggerGate = gate
+    controller.reconcile()
+    let begun = controller.startedAt
+    clock.advance(30)
+    controller.start(mode: .timed(duration: 60))
+    #expect(controller.startedAt == begun)
+    #expect(controller.remaining == 60) // anchored to manual start
+    clock.advance(10)
+    let ticks = gate.ticks
+    controller.stopManualSession()
+    #expect(gate.ticks == ticks + 1)
+    #expect(!controller.hasManualSession)
+    #expect(controller.remaining == nil)
+    #expect(controller.triggerActive)
+    #expect(controller.isActive)
+    #expect(controller.startedAt == begun)
+    #expect(controller.elapsed == 40)
+    #expect(fake.held == [.system])
+    #expect(fake.applied.allSatisfy { !$0.isEmpty })
+
+    gate.satisfied = false
+    controller.reconcile()
+    #expect(!controller.isActive)
+}
+
+@MainActor
+@Test func stoppingManualDemandPreservesLeaseAndCapsItsAssertions() {
+    let (controller, fake, clock) = makeController()
+    let provider = FakeLeaseProvider()
+    controller.leases = provider
+    provider.summaries = [leaseSummary()]
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    let begun = controller.startedAt
+    #expect(!controller.isLeaseHeld)
+    #expect(fake.held == [.system, .display])
+    clock.advance(10)
+    let ticks = provider.ticks
+    controller.stopManualSession()
+    #expect(provider.ticks == ticks + 1)
+    #expect(!controller.hasManualSession)
+    #expect(controller.isActive)
+    #expect(controller.isLeaseHeld)
+    #expect(controller.startedAt == begun)
+    #expect(fake.held == [.system])
+    #expect(fake.applied.allSatisfy { !$0.isEmpty })
+}
+
+@MainActor
+@Test func manualExpiryWithAutomaticDemandHasNoAggregateEndEffects() {
+    let clock = Clock()
+    let fake = FakeAssertions()
+    let reminder = FakeReminder()
+    let endActor = RecordingEndActor()
+    let controller = SessionController(assertions: fake, reminder: reminder, endActor: endActor, now: { clock.now })
+    controller.triggerGate = StubGate(true)
+    controller.notifyOnEnd = true
+    controller.endAction = .sleepMac
+    var ends = 0
+    controller.onTimedSessionEnd = { ends += 1 }
+    controller.start(mode: .timed(duration: 60))
+    let begun = controller.startedAt
+    let logged = controller.log.events.count
+    clock.advance(60)
+    controller.reconcile()
+    #expect(!controller.hasManualSession)
+    #expect(controller.isActive)
+    #expect(controller.startedAt == begun)
+    #expect(controller.log.events.count == logged)
+    #expect(reminder.notices.isEmpty)
+    #expect(fake.held == [.system])
+    #expect(fake.applied.allSatisfy { !$0.isEmpty })
+    #expect(ends == 1)
+    clock.advance(SessionController.endActionDebounce)
+    controller.reconcile()
+    #expect(ends == 1)
+    #expect(endActor.performed.isEmpty)
+}
+
+@MainActor
+@Test func manualTimerCanBeChangedWhileTriggersAreSatisfied() {
+    let (controller, _, clock) = makeController()
+    controller.triggerGate = StubGate(true)
+    controller.start()
+    let begun = controller.startedAt
+    clock.advance(30)
+    controller.stopIn(60)
+    #expect(controller.remaining == 60)
+    #expect(controller.addTime(60))
+    #expect(controller.remaining == 120)
+    #expect(controller.startedAt == begun)
+    clock.advance(120)
+    controller.reconcile()
+    #expect(controller.isActive)
+    #expect(!controller.hasManualSession)
+}
+
+@MainActor
+@Test func removingTriggerGateDoesNotStopManualDemand() {
+    let (controller, fake, _) = makeController()
+    controller.triggerGate = StubGate(true)
+    controller.start()
+    controller.triggerGate = nil
+    controller.reconcile()
+    #expect(!controller.triggerActive)
+    #expect(controller.hasManualSession)
+    #expect(controller.isActive)
+    #expect(fake.held == [.system])
+}
+
+@MainActor
+@Test func mixedDemandSafetyPauseRestoresTheOriginalManualDeadline() {
+    let (controller, fake, clock) = makeController()
+    controller.triggerGate = StubGate(true)
+    controller.pauseBelowBatteryPercent = 20
+    controller.start(mode: .timed(duration: 60), options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    clock.advance(10)
+    controller.reconcile(battery: .discharging(10))
+    #expect(controller.hasManualSession)
+    #expect(controller.triggerActive)
+    #expect(!controller.isActive)
+    #expect(controller.manualRemaining == 50)
+    controller.triggerGate = nil
+    clock.advance(10)
+    controller.reconcile(battery: .onAC)
+    #expect(controller.isActive)
+    #expect(controller.hasManualSession)
+    #expect(controller.remaining == 40)
+    #expect(fake.held == [.system, .display])
+    clock.advance(40)
+    controller.reconcile()
+    #expect(!controller.isActive)
+}
+
+@MainActor
+@Test func mixedManualAndTriggerDemandResumesWithOptionsChangedDuringBatteryPause() {
+    let (controller, fake, clock) = makeController()
+    controller.triggerGate = StubGate(true)
+    controller.pauseBelowBatteryPercent = 20
+    controller.start(mode: .timed(duration: 60))
+    clock.advance(10)
+    controller.reconcile(battery: .discharging(10))
+    #expect(!controller.isActive)
+    #expect(controller.hasManualSession)
+    #expect(controller.triggerActive)
+
+    // Changes made during the pause must apply to both sources on recovery,
+    // while the manual timer keeps its original deadline.
+    controller.options.preventDisplaySleep = true
+    controller.options.activityOnlyWhileBrewing = false
+    clock.advance(10)
+    controller.reconcile(battery: .onAC)
+    #expect(controller.isActive)
+    #expect(controller.hasManualSession)
+    #expect(controller.triggerActive)
+    #expect(controller.manualRemaining == 40)
+    #expect(controller.options.activityOnlyWhileBrewing == false)
+    #expect(fake.held == [.system, .display])
+
+    clock.advance(40)
+    controller.reconcile()
+    #expect(controller.isActive)
+    #expect(!controller.hasManualSession)
+    #expect(controller.triggerActive)
+    #expect(fake.held == [.system, .display])
+}
+
+@MainActor
+@Test func expiredManualDemandDoesNotReturnOverALeaseAfterThermalPause() {
+    let (controller, fake, clock) = makeController()
+    let provider = FakeLeaseProvider()
+    provider.summaries = [leaseSummary()]
+    controller.leases = provider
+    controller.pauseWhenHot = true
+    var ends = 0
+    controller.onTimedSessionEnd = { ends += 1 }
+    controller.start(mode: .timed(duration: 60))
+    controller.reconcile(thermal: .hot)
+    #expect(!controller.isActive)
+    #expect(controller.hasManualSession)
+
+    controller.options.preventDisplaySleep = true
+    clock.advance(60)
+    controller.reconcile(thermal: .hot)
+    #expect(!controller.hasManualSession)
+    #expect(ends == 1)
+    #expect(fake.held.isEmpty)
+
+    controller.reconcile(thermal: .clear)
+    #expect(controller.isActive)
+    #expect(controller.isLeaseHeld)
+    #expect(!controller.hasManualSession)
+    #expect(controller.options.preventDisplaySleep)
+    #expect(fake.held == [.system]) // lease-only demand never holds the display
+    #expect(ends == 1)
+
+    provider.summaries = []
+    controller.reconcile()
+    #expect(!controller.isActive)
+    #expect(!controller.hasManualSession)
+    #expect(fake.held.isEmpty)
+}
+
+@MainActor
+@Test func manualDeadlineExpiresWhileSafetyPausedAndNeverResurrects() {
+    let (controller, fake, clock) = makeController()
+    let gate = StubGate(true)
+    controller.triggerGate = gate
+    controller.pauseWhenHot = true
+    var ends = 0
+    controller.onTimedSessionEnd = { ends += 1 }
+    controller.start(mode: .timed(duration: 60))
+    controller.reconcile(thermal: .hot)
+    #expect(controller.hasManualSession)
+    clock.advance(60)
+    controller.reconcile(thermal: .hot)
+    #expect(!controller.hasManualSession)
+    #expect(ends == 1)
+    #expect(!controller.isActive)
+    #expect(fake.held.isEmpty)
+    controller.reconcile(thermal: .clear)
+    #expect(controller.isActive) // surviving trigger, not the expired manual
+    #expect(ends == 1)
+    gate.satisfied = false
+    controller.reconcile()
+    #expect(!controller.isActive)
+}
+
+@MainActor
+@Test func stoppingManualDemandDuringSafetyPauseDoesNotResumeIt() {
+    let (controller, fake, _) = makeController()
+    controller.triggerGate = StubGate(false)
+    controller.pauseBelowBatteryPercent = 20
+    controller.start()
+    controller.reconcile(battery: .discharging(10))
+    controller.stopManualSession()
+    #expect(!controller.hasManualSession)
+    controller.reconcile(battery: .onAC)
+    #expect(!controller.isActive)
+    #expect(fake.held.isEmpty)
+}
+
+@MainActor
+@Test func explicitStopCancelsAPendingNaturalEndAction() {
+    let clock = Clock()
+    let endActor = RecordingEndActor()
+    let controller = SessionController(assertions: FakeAssertions(), endActor: endActor, now: { clock.now })
+    controller.endAction = .sleepMac
+    controller.start(mode: .timed(duration: 60))
+    clock.advance(60)
+    controller.reconcile()
+    #expect(!controller.isActive)
+    controller.stop()
+    clock.advance(SessionController.endActionDebounce)
+    controller.reconcile()
+    #expect(endActor.performed.isEmpty)
+}
+
+@MainActor
+@Test func leaseDemandKeepsSystemAwakeAlongsideDisplayOnlyManualSession() {
+    let (controller, fake, _) = makeController()
+    let provider = FakeLeaseProvider()
+    controller.leases = provider
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: false, preventDisplaySleep: true))
+    #expect(fake.held == [.display])
+    provider.summaries = [leaseSummary()]
+    controller.reconcile()
+    #expect(controller.hasManualSession)
+    #expect(!controller.isLeaseHeld)
+    #expect(fake.held == [.system, .display])
+    provider.summaries = []
+    controller.reconcile()
+    #expect(fake.held == [.display])
+}
+
+@MainActor
+@Test func manualExpiryDoesNotResetTheAggregateReminderCounter() {
+    let clock = Clock()
+    let reminder = FakeReminder()
+    let provider = FakeLeaseProvider()
+    let controller = SessionController(assertions: FakeAssertions(), reminder: reminder, now: { clock.now })
+    controller.leases = provider
+    provider.summaries = [leaseSummary()]
+    controller.reminderAfter = 30
+    controller.start(mode: .timed(duration: 60))
+    let begun = controller.startedAt
+    clock.advance(30)
+    controller.reconcile()
+    #expect(reminder.notices.count == 1)
+    clock.advance(30)
+    controller.reconcile()
+    #expect(!controller.hasManualSession)
+    #expect(controller.isLeaseHeld)
+    #expect(controller.startedAt == begun)
+    #expect(controller.elapsed == 60)
+    clock.advance(30)
+    controller.reconcile()
+    #expect(reminder.notices.count == 1)
+}
+
+@MainActor
+@Test func stoppingTheLastManualSourceEndsSilently() {
+    let clock = Clock()
+    let reminder = FakeReminder()
+    let endActor = RecordingEndActor()
+    let fake = FakeAssertions()
+    let controller = SessionController(assertions: fake, reminder: reminder, endActor: endActor, now: { clock.now })
+    controller.notifyOnEnd = true
+    controller.endAction = .sleepMac
+    controller.start(mode: .timed(duration: 60))
+    controller.stopManualSession()
+    #expect(!controller.isActive)
+    #expect(!controller.hasManualSession)
+    #expect(fake.held.isEmpty)
+    #expect(controller.log.events.last?.reason == "Stopped manually")
+    clock.advance(SessionController.endActionDebounce)
+    controller.reconcile()
+    #expect(reminder.notices.isEmpty)
+    #expect(endActor.performed.isEmpty)
+}
+
+@MainActor
+@Test func totalStopClearsManualDemandAndAutomaticDemandMayReassert() {
+    let (controller, fake, _) = makeController()
+    let gate = StubGate(true)
+    controller.triggerGate = gate
+    controller.start()
+    controller.stop()
+    #expect(!controller.hasManualSession)
+    #expect(!controller.isActive)
+    #expect(fake.held.isEmpty)
+    controller.reconcile()
+    #expect(controller.triggerActive)
+    #expect(controller.isActive)
+    gate.satisfied = false
+    controller.reconcile()
+    #expect(!controller.isActive) // no hidden manual request remains
+}
+
+@MainActor
+@Test func explicitTriggerPauseWithAnExpiredCachedLeaseEndsSilently() {
+    let clock = Clock()
+    let reminder = FakeReminder()
+    let endActor = RecordingEndActor()
+    let fake = FakeAssertions()
+    let provider = FakeLeaseProvider()
+    let controller = SessionController(assertions: fake, reminder: reminder, endActor: endActor, now: { clock.now })
+    controller.leases = provider
+    controller.triggerGate = StubGate(true)
+    controller.endAction = .sleepMac
+    controller.notifyOnEnd = true
+    provider.summaries = [leaseSummary()]
+    controller.reconcile()
+    #expect(!controller.liveLeases.isEmpty)
+    // The lease expires between UI ticks; liveLeases still contains its row.
+    provider.summaries = []
+    clock.advance(1)
+    let ticks = provider.ticks
+    controller.setTriggerGate(nil)
+    #expect(provider.ticks == ticks + 1)
+    #expect(!controller.isActive)
+    #expect(controller.liveLeases.isEmpty)
+    #expect(fake.held.isEmpty)
+    #expect(controller.log.events.last?.reason == "Stopped manually")
+    clock.advance(SessionController.endActionDebounce)
+    controller.reconcile()
+    #expect(reminder.notices.isEmpty)
+    #expect(endActor.performed.isEmpty)
+}
+
+@MainActor
+@Test func explicitTriggerChangesPreserveManualDemandAndItsDeadline() {
+    let (controller, fake, clock) = makeController()
+    let gate = StubGate(true)
+    controller.setTriggerGate(gate)
+    let begun = controller.startedAt
+    clock.advance(10)
+    controller.start(mode: .timed(duration: 60))
+    clock.advance(10)
+    controller.setTriggerGate(nil)
+    #expect(controller.hasManualSession)
+    #expect(controller.isActive)
+    #expect(!controller.triggerActive)
+    #expect(controller.remaining == 50)
+    #expect(controller.startedAt == begun)
+    #expect(fake.applied.allSatisfy { !$0.isEmpty })
+    let ticks = gate.ticks
+    controller.setTriggerGate(gate)
+    #expect(gate.ticks == ticks + 1)
+    #expect(controller.remaining == 50)
+    #expect(controller.hasManualSession)
+}
+
+@MainActor
+@Test func explicitNilTriggerGateCancelsAnAlreadyPendingEndAction() {
+    let clock = Clock()
+    let endActor = RecordingEndActor()
+    let controller = SessionController(assertions: FakeAssertions(), endActor: endActor, now: { clock.now })
+    let gate = StubGate(true)
+    controller.triggerGate = gate
+    controller.endAction = .sleepMac
+    controller.reconcile()
+    gate.satisfied = false
+    controller.reconcile() // a natural trigger drop schedules the action
+    #expect(!controller.isActive)
+    controller.setTriggerGate(nil)
+    controller.setTriggerGate(nil) // nil -> nil remains safe and idempotent
+    clock.advance(SessionController.endActionDebounce)
+    controller.reconcile()
+    #expect(endActor.performed.isEmpty)
+}
+
+@MainActor
+@Test func updatingManualTimerPreservesAnAutomaticAwakePeriod() {
+    let (controller, _, clock) = makeController()
+    controller.triggerGate = StubGate(true)
+    controller.reconcile()
+    let awakeSince = controller.startedAt
+    clock.advance(20)
+    controller.start(mode: .timed(duration: 60))
+    clock.advance(10)
+    controller.start(mode: .timed(duration: 120))
+    #expect(controller.startedAt == awakeSince)
+    #expect(controller.elapsed == 30)
+    #expect(controller.remaining == 120)
+    #expect(controller.triggerActive)
 }

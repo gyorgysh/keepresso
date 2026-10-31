@@ -253,6 +253,7 @@ final class AppModel {
             let held = states.filter(\.satisfied).map(\.rule.label)
             return held.isEmpty ? nil : held.joined(separator: ", ")
         }
+
     }
 
     // MARK: - Connection fallback and closed-lid power
@@ -421,22 +422,11 @@ final class AppModel {
 
     // MARK: - Manual activation
 
-    /// Flip keep-awake by hand (the global hotkey and the menu switch), starting
-    /// with the saved duration.
-    ///
-    /// If triggers are actively gating the session, pause them first, the same
-    /// in-memory pause the menu's Pause Triggers uses and that ``handle(_:)``
-    /// applies to URL and widget commands. Without it a bare start/stop here
-    /// would be undone by the gate on the very next reconcile (once a second),
-    /// so a hotkey press would appear to spring back. After pausing, the menu
-    /// shows "Triggers paused / Resume Triggers" and control stays manual until
-    /// the user resumes or relaunches (the pause isn't persisted). The pause is
-    /// a no-op when triggers are off or already paused, so the menu switch (only
-    /// reachable in those states) behaves exactly as before.
+    /// Global hotkey: stop all Keepresso demand while active, or start a
+    /// manual session while idle. The menu's manual controls have narrower scope.
     func toggleManual() {
-        let wasActive = session.isActive
-        pauseTriggers()
-        if wasActive {
+        if session.isActive || session.hasManualSession {
+            pauseTriggers()
             revokeLeases()
             session.stop()
         } else {
@@ -444,28 +434,23 @@ final class AppModel {
         }
     }
 
-    /// Take manual control from trigger gating and begin a session with an
-    /// explicit duration. This is the customized menu path for requests such
-    /// as "keep awake for three hours regardless of the current triggers."
-    func startManualOverride(mode: SessionMode) {
-        pauseTriggers()
+    /// A manual session adds its own keep-awake request alongside automatic
+    /// triggers and automation leases.
+    func startManualSession(mode: SessionMode) {
         settings.defaultMode = mode
         persist()
         session.start(mode: mode)
     }
 
-    /// Start (or restart) a session running until the next occurrence of a
-    /// wall-clock time. The duration is computed here, at start, so it always
-    /// lands on the chosen time; the choice is deliberately not persisted as
-    /// the default mode (a saved "until 18:00" would go stale by tomorrow).
+    /// End only the manual request; other demand remains uninterrupted.
+    func stopManualSession() {
+        session.stopManualSession()
+    }
+
+    /// Start a manual session ending at the next occurrence of a wall-clock time.
+    /// The choice is not persisted as a duration because it would go stale.
     func startUntil(hour: Int, minute: Int) {
         guard let mode = SessionMode.until(hour: hour, minute: minute) else { return }
-        // Take manual ownership first, exactly like `toggleManual` and the URL
-        // command path. Without this, starting while trigger gating is active
-        // but unsatisfied makes `start()`'s synchronous reconcile immediately
-        // release the session (triggers not met) and fire the end action, so
-        // asking to "keep awake until 18:00" could instead sleep or lock the Mac.
-        pauseTriggers()
         session.start(mode: mode)
     }
 
@@ -561,16 +546,23 @@ final class AppModel {
 
     // MARK: - Session mode (manual sessions)
 
-    /// The saved duration used to seed the custom layout's manual timer.
-    var defaultMode: SessionMode { settings.defaultMode }
-
-    /// The chosen duration. While idle it reflects the saved default (so the
-    /// picker shows it before activating); while active it restarts the session.
-    var mode: SessionMode {
-        get { session.isActive ? session.mode : settings.defaultMode }
+    /// Selecting a duration configures the next manual session without taking
+    /// control from triggers or restarting an automation lease.
+    var defaultMode: SessionMode {
+        get { settings.defaultMode }
         set {
             settings.defaultMode = newValue
-            if session.isActive { session.start(mode: newValue) }
+            persist()
+        }
+    }
+
+    /// The manual duration: saved while idle, or applied to the running manual
+    /// request. Automatic demand never changes this choice.
+    var mode: SessionMode {
+        get { session.hasManualSession ? session.mode : settings.defaultMode }
+        set {
+            settings.defaultMode = newValue
+            if session.hasManualSession { session.start(mode: newValue) }
             persist()
         }
     }
@@ -581,62 +573,26 @@ final class AppModel {
         get { settings.triggersEnabled }
         set {
             settings.triggersEnabled = newValue
-            triggersPaused = false // always starts unpaused
-            // Stop on both transitions: turning gating on hands activation to
-            // the gate; turning it off would otherwise leave a gate-held
-            // session running as a "manual" one with a stale duration. Leases
-            // are their own demand source, though: a lease-held session
-            // survives the flip untouched, and turning gating off while
-            // leases are live hands the session to them instead of stopping
-            // it out from under the agent's work.
-            if !session.isLeaseHeld {
-                if !newValue, session.isActive, !session.liveLeases.isEmpty {
-                    session.handOffToLeases()
-                } else {
-                    session.stop()
-                }
-            }
-            applyTriggerGate()
+            triggersPaused = false
+            applyTriggerGate(cause: .manual)
             persist()
         }
     }
 
-    /// Whether trigger gating is temporarily suspended in favor of the manual
-    /// toggle. In-memory only (not part of ``KeepressoSettings``): quitting and
-    /// relaunching Keepresso always comes back unpaused.
+    /// In-memory pause of automatic conditions only. Manual sessions and
+    /// automation leases retain their independent requests.
     private(set) var triggersPaused = false
 
-    /// Suspend trigger gating and stop the session right away: pausing is
-    /// meant to answer "let my Mac sleep for now", not just hand the wheel to
-    /// the manual toggle while leaving it brewing. Control reverts to the
-    /// manual toggle (so it can be turned back on by hand) until
-    /// ``resumeTriggers()``. No-op if triggers aren't on or already paused.
-    ///
-    /// `cause` labels the stop in the decision log. It defaults to `.manual`
-    /// (the menu's Pause Triggers button); ``handle(_:)`` passes `.command` so a
-    /// URL / Shortcuts / widget stop that has to pause a trigger-held session
-    /// first isn't misattributed as a manual stop.
     func pauseTriggers(cause: SessionCause = .manual) {
         guard settings.triggersEnabled, !triggersPaused else { return }
         triggersPaused = true
-        applyTriggerGate()
-        // Live leases are their own demand source with their own explicit
-        // end control (the menu offers "End Automation Leases" before this
-        // while any are live): hand the session to them instead of a stop
-        // that lease demand would flap right back on the next tick.
-        if session.isActive, !session.liveLeases.isEmpty {
-            session.handOffToLeases()
-            session.reconcile()
-        } else {
-            session.stop(cause: cause)
-        }
+        applyTriggerGate(cause: cause)
     }
 
-    /// Hand activation back to the trigger engine. No-op if not currently paused.
     func resumeTriggers() {
         guard triggersPaused else { return }
         triggersPaused = false
-        applyTriggerGate()
+        applyTriggerGate(cause: .manual)
     }
 
     var combine: CombineMode {
@@ -711,16 +667,21 @@ final class AppModel {
     @ObservationIgnored private let gate: TriggerGateController
 
     /// Rebuild (or tear down) the controller's gate to match current settings,
-    /// then wire it to the session (nil while paused, so the manual toggle owns
-    /// activation). The reuse of live triggers across rebuilds lives in
+    /// then wire it to the session (nil while paused). Manual requests remain
+    /// independent. The reuse of live triggers across rebuilds lives in
     /// ``TriggerGateController``.
-    private func applyTriggerGate() {
+    private func applyTriggerGate(cause: SessionCause? = nil) {
         gate.rebuild(
             rules: settings.ruleSet.rules,
             combine: settings.ruleSet.combine,
             enabled: settings.triggersEnabled
         )
-        session.triggerGate = (settings.triggersEnabled && !triggersPaused) ? gate.engine : nil
+        let engine = (settings.triggersEnabled && !triggersPaused) ? gate.engine : nil
+        if let cause {
+            session.setTriggerGate(engine, cause: cause)
+        } else {
+            session.triggerGate = engine
+        }
     }
 
     /// Live satisfaction of each saved rule, aligned with ``rules`` order, or
@@ -736,7 +697,7 @@ final class AppModel {
         func conditions(_ count: Int) -> String {
             L(count == 1 ? "%d condition" : "%d conditions", count)
         }
-        if session.isActive {
+        if session.triggerActive {
             // The per-condition list is shown right below, so summarize by count
             // instead of repeating each label.
             let held = states.filter(\.satisfied).count
@@ -998,16 +959,9 @@ final class AppModel {
         let now = Date()
         if let last = lastAutomationHoldAt, now.timeIntervalSince(last) < 60 { return true }
         lastAutomationHoldAt = now
-        // Open a fixed hold window, unless triggers own activation: a plain
-        // session would be released by the gate on the next reconcile (the same
-        // reason the manual wake-and-brew path skips when triggers are on). With
-        // triggers on, the wake still happened and a scheduled agent's own lease
-        // can hold the Mac for the run.
-        // Open a fixed hold window (and say so) only when we actually can:
-        // with triggers on, the gate would release a plain session, so we don't
-        // start one and don't claim a hold we didn't open. A scheduled agent's
-        // own lease covers the run in that case.
-        if !triggersEnabled, !session.isActive {
+        // Preserve an existing manual request; otherwise open an independent
+        // hold so an unmatched trigger cannot cut a scheduled run short.
+        if !session.hasManualSession {
             session.start(mode: .timed(duration: config.holdSeconds), cause: .command)
             notifier.notify(
                 title: L("Awake for a scheduled run"),
@@ -1227,10 +1181,7 @@ final class AppModel {
             applyPreset(preset)
             return
         }
-        if triggersEnabled {
-            // Gate owns activation; just ensure triggers are live.
-            return
-        }
+        guard !session.hasManualSession else { return }
         let mode: SessionMode = {
             if let duration = config.sessionDurationSeconds, duration > 0 {
                 return .timed(duration: duration)
@@ -1247,6 +1198,11 @@ final class AppModel {
     /// changes only the live session, never the default duration.
     func stopSessionIn(_ interval: TimeInterval) {
         session.stopIn(interval)
+    }
+
+    /// Add to the current countdown without changing the saved duration.
+    func addSessionTime(_ interval: TimeInterval) -> Bool {
+        session.addTime(interval)
     }
 
     /// The menu's quick-stop shortcut durations, kept normalized.
@@ -1677,18 +1633,16 @@ final class AppModel {
 
     // MARK: - Start on launch
 
-    /// Whether a manual session starts as soon as the app launches (when
-    /// triggers aren't gating activation).
+    /// Whether a manual session starts as soon as the app launches.
     var startOnLaunch: Bool {
         get { settings.startOnLaunch }
         set { settings.startOnLaunch = newValue; persist() }
     }
 
-    /// Start a manual session at launch if the user asked for it. Skipped when
-    /// triggers own activation (the gate would fight it) or a session is already
-    /// running. Called once from the app delegate after relocation.
+    /// Start the requested manual session alongside any automatic conditions.
+    /// Called once from the app delegate after relocation.
     func startOnLaunchIfNeeded() {
-        guard settings.startOnLaunch, !settings.triggersEnabled, !session.isActive else { return }
+        guard settings.startOnLaunch, !session.hasManualSession else { return }
         session.start(mode: settings.defaultMode)
     }
 
@@ -1735,6 +1689,15 @@ final class AppModel {
         get { settings.menuPanelExpanded }
         set {
             settings.menuPanelExpanded = newValue
+            persist()
+        }
+    }
+
+    /// Whether the menu presents manual and automatic sessions separately.
+    var separateSessionControls: Bool {
+        get { settings.separateSessionControls }
+        set {
+            settings.separateSessionControls = newValue
             persist()
         }
     }
@@ -1789,12 +1752,9 @@ final class AppModel {
         if settings.triggersEnabled {
             triggersPaused = false
             applyTriggerGate()
+            session.reconcile()
             persist()
         } else {
-            // Route through the setter so a manual session is stopped silently
-            // before gating takes over. Setting the flag directly would let the
-            // next reconcile end it with natural-end effects (notification,
-            // configured sleep/lock action) the user never asked for.
             triggersEnabled = true
         }
     }
@@ -1860,10 +1820,8 @@ final class AppModel {
     /// piecemeal setters elsewhere each re-derive only their own slice; this is
     /// the one path that swaps the lot at once (import).
     ///
-    /// Ends any running session first: the new config takes over cleanly, the
-    /// same reason the ``triggersEnabled`` setter stops (a gate-held session
-    /// must not linger as a manual one with a stale duration once the rules
-    /// that were holding it are gone).
+    /// Import explicitly replaces the whole configuration, so it ends the
+    /// current manual session and leases before applying the new settings.
     private func apply(_ newSettings: KeepressoSettings) {
         session.stop()
         revokeLeases()
@@ -1930,7 +1888,9 @@ final class AppModel {
     /// per-tick recomputation lands on the same instant and doesn't defeat the
     /// change check.
     func syncWidgetState() {
-        let endsAt = session.remaining.map {
+        // The shared deadline describes aggregate keep-awake. A concurrent
+        // trigger or lease can outlast the manual timer, so it has no fixed end.
+        let endsAt = (session.isActive && !session.triggerActive && session.liveLeases.isEmpty ? session.remaining : nil).map {
             Date(timeIntervalSinceReferenceDate: (Date().timeIntervalSinceReferenceDate + $0).rounded())
         }
         widgetSync.write(
@@ -2011,8 +1971,7 @@ final class AppModel {
         leaseEngine.revokeAll(now: Date())
     }
 
-    /// The menu's explicit lease stop, offered ahead of Pause Triggers while
-    /// leases are live: revoke every lease so clients hear "revoked" on
+    /// The menu's explicit lease stop: revoke every lease so clients hear "revoked" on
     /// their next heartbeat. A lease-held session stops silently (a user
     /// gesture, not a natural end, so no end action fires); a trigger-held
     /// one just loses its lease rows on the immediate reconcile.
@@ -2172,12 +2131,8 @@ final class AppModel {
 
     // MARK: - URL scheme commands
 
-    /// Handle a `keepresso://` command from ``URLCommand/parse(_:)``. Acts like
-    /// the manual toggle/duration picker. When trigger gating is on it pauses
-    /// triggers first (the same in-memory pause as the menu's Pause Triggers,
-    /// nothing persisted): otherwise the gate would silently override the
-    /// command on the next once-a-second reconcile, turning it into a no-op
-    /// with no feedback to the script that fired it.
+    /// Start adds manual demand. Global Stop and Toggle-off stop all demand;
+    /// source-specific controls in the menu operate independently.
     func handle(_ command: URLCommand) {
         // The automation doorbell is not a session command: it must not
         // pause triggers or touch the session, only process pending
@@ -2196,21 +2151,16 @@ final class AppModel {
             syncWidgetState()
             return
         }
-        // Capture before pausing: pauseTriggers() stops the session. Pass
-        // .command so pausing a trigger-held session logs the stop as the
-        // command that caused it, not "Stopped manually".
-        let wasActive = session.isActive
-        pauseTriggers(cause: .command)
         switch command {
         case .start(let mode):
             session.start(mode: mode, cause: .command)
         case .stop:
+            pauseTriggers(cause: .command)
             revokeLeases()
             session.stop(cause: .command)
         case .toggle:
-            // Mirror toggleManual(), using the saved default duration rather
-            // than the controller's in-memory mode (never seeded after launch).
-            if wasActive {
+            if session.isActive || session.hasManualSession {
+                pauseTriggers(cause: .command)
                 revokeLeases()
                 session.stop(cause: .command)
             } else {

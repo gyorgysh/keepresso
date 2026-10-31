@@ -331,6 +331,7 @@ private struct GeneralTab: View {
     @State private var lidRowShakes = 0
     /// The result of the last export/import, shown inline under the buttons.
     @State private var transferNote: TransferNote?
+    @State private var customQuickStop: TimeInterval?
 
     /// A one-line outcome for the settings backup buttons.
     private struct TransferNote { let message: String; let isError: Bool }
@@ -340,7 +341,7 @@ private struct GeneralTab: View {
     /// The duration presets offered by the quick-stop shortcut pickers.
     private static let quickStopOptions: [TimeInterval] = [
         5 * 60, 10 * 60, 15 * 60, 20 * 60, 30 * 60, 45 * 60,
-        60 * 60, 90 * 60, 2 * 60 * 60, 3 * 60 * 60, 4 * 60 * 60,
+        60 * 60, 90 * 60, 2 * 60 * 60, 3 * 60 * 60, 4 * 60 * 60, 8 * 60 * 60,
     ]
 
     /// The picker choices for one shortcut row: the shared presets plus the
@@ -355,6 +356,13 @@ private struct GeneralTab: View {
     /// The first preset not already used, seeding "Add Shortcut".
     private var nextFreeQuickStop: TimeInterval? {
         Self.quickStopOptions.first { !model.quickStopDurations.contains($0) }
+    }
+
+    private func replaceQuickStop(_ original: TimeInterval, with duration: TimeInterval) {
+        var durations = model.quickStopDurations
+        guard let index = durations.firstIndex(of: original) else { return }
+        durations[index] = duration
+        model.quickStopDurations = durations
     }
 
     var body: some View {
@@ -382,7 +390,7 @@ private struct GeneralTab: View {
                     set: { model.startOnLaunch = $0 }
                 ))
             } header: {
-                sectionHeader("Startup", info: L("\u{201C}Launch at login\u{201D} starts Keepresso itself when you log in, so the cup is always in the menu bar. \u{201C}Start keep-awake on launch\u{201D} goes further and begins a session right away, using the default duration, for an always-on Mac that shouldn't need a rule to stay up. It's ignored while triggers are controlling activation, since your conditions decide then."))
+                sectionHeader("Startup", info: L("Launch at login opens Keepresso when you log in. Start keep-awake on launch also starts a manual session using your saved duration, alongside any enabled triggers."))
             } footer: {
                 sectionFooter("Starts a session as soon as Keepresso launches.")
             }
@@ -516,6 +524,11 @@ private struct GeneralTab: View {
                     get: { model.showCountdownInMenuBar },
                     set: { model.showCountdownInMenuBar = $0 }
                 ))
+                Toggle("Separate manual and automatic controls", isOn: Binding(
+                    get: { model.separateSessionControls },
+                    set: { model.separateSessionControls = $0 }
+                ))
+                .help(L("Shows manual sessions and automatic triggers separately in the menu."))
                 Toggle("Customize menu sections", isOn: Binding(
                     get: { model.menuCustomizationEnabled },
                     set: { model.menuCustomizationEnabled = $0 }
@@ -538,14 +551,18 @@ private struct GeneralTab: View {
                         Picker(L("Shortcut %d", index + 1), selection: Binding(
                             get: { duration },
                             set: { newValue in
-                                var durations = model.quickStopDurations
-                                durations[index] = newValue
-                                model.quickStopDurations = durations
+                                if newValue == -1 {
+                                    customQuickStop = duration
+                                } else {
+                                    replaceQuickStop(duration, with: newValue)
+                                }
                             }
                         )) {
                             ForEach(quickStopChoices(including: duration), id: \.self) { option in
                                 Text(MenuBarContent.shortDuration(option)).tag(option)
                             }
+                            Divider()
+                            Text("Custom Duration\u{2026}").tag(TimeInterval(-1))
                         }
                         Button {
                             var durations = model.quickStopDurations
@@ -557,6 +574,15 @@ private struct GeneralTab: View {
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
                         .accessibilityLabel(L("Remove shortcut"))
+                    }
+                    .popover(isPresented: Binding(
+                        get: { customQuickStop == duration },
+                        set: { if !$0 { customQuickStop = nil } }
+                    )) {
+                        MenuBarContent.CustomDurationEditor(initial: duration) { newValue in
+                            customQuickStop = nil
+                            replaceQuickStop(duration, with: newValue)
+                        }
                     }
                 }
                 Button("Add Shortcut") {
@@ -1098,9 +1124,9 @@ private struct TriggersTab: View {
                     }
                 }
             } header: {
-                sectionHeader("Triggers", info: L("A trigger is a condition Keepresso watches, checked once a second. With triggers on, they take over: Keepresso starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The manual switch in the menu steps aside while they're active. \u{201C}Pause Triggers\u{201D} in the menu bar stops them temporarily without touching your rules."))
+                sectionHeader("Triggers", info: L("A trigger keeps your Mac awake while its conditions match. Manual sessions run alongside triggers. Pausing triggers leaves manual sessions and automation running."))
             } footer: {
-                sectionFooter("The listed conditions control the session instead of the manual switch.")
+                sectionFooter("Manual sessions and triggers work independently.")
             }
             if model.triggersEnabled {
                 Section {
@@ -1858,7 +1884,7 @@ private struct AutomationTab: View {
                     Text(L("2 hours")).tag(2 * 60 * 60 as TimeInterval)
                     Text(L("4 hours")).tag(4 * 60 * 60 as TimeInterval)
                 }
-                Text(L("When the Mac wakes near this schedule, Keepresso starts a session so it does not fall back asleep. Works best with triggers off for that window, or with a trigger that stays satisfied."))
+                Text(L("When the Mac wakes near this schedule, Keepresso starts a manual session alongside any enabled triggers so it does not fall back asleep."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

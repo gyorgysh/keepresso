@@ -67,7 +67,8 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   choose (keep awake until it finishes), **a game is in front**, or during a
   **scheduled time window** (weekdays 9:00-18:00, overnight hours). Combine
   conditions with **any** (OR) or **all** (AND). A one-click "Pause Triggers"
-  in the menu bar stops brewing without touching your rules.
+  in the menu bar pauses only automatic conditions. Manual sessions and automation
+  leases can keep the Mac awake independently.
 - 🤖 **Agent-aware.** The "AI agent is working" condition keeps the Mac awake
   while a coding agent (claude, cursor, codex, antigravity, gemini, grok, aider,
   goose, pi, hermes, kilo, opencode, dsh, muse, devin, qwen, kimi, and friends) is actually working, and lets it sleep once every
@@ -372,9 +373,13 @@ it for a compact context menu with the app entries: Preferences, Headless
 Setup, Gaming & Streaming, Keyboard Cleaner, Public Wi-Fi, About, Check for
 Updates, and Quit.
 
-- **Quick toggle.** Flip **Keep awake** on or off and pick a duration:
-  indefinitely, a preset (15 minutes, 1 hour, 4 hours), any custom duration, or
-  until a time of day. The cup fills and animates while brewing.
+- **Manual session.** Start or stop a manual keep-awake session and pick a
+  duration: indefinitely, a preset (15 minutes, 1 hour, 4 hours), any custom
+  duration, or until a time of day. The cup fills and animates while brewing.
+- **Separate session controls.** In Preferences > General > Menu bar, turn on
+  **Separate manual and automatic controls** to show manual sessions and
+  automatic triggers separately. It is on by default for new installations;
+  existing users keep the previous menu unless they enable it.
 - **Customize the menu.** Open **Customize Menu…** in Preferences > General >
   Menu bar for a live preview beside the editor. Enable **Customize menu
   sections**, then start with
@@ -455,8 +460,9 @@ open "keepresso://stop"
 open "keepresso://toggle"
 ```
 
-Either way, if triggers are on they pause first (same as the menu's Pause
-Triggers), so the command actually takes effect.
+Starting adds a manual session alongside automatic triggers. Stopping that manual
+session in the menu leaves automatic activity running. The global Stop command,
+or Toggle while active, pauses triggers and ends all Keepresso sessions and leases.
 
 ### The `keepresso` command-line tool
 

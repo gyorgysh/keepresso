@@ -78,8 +78,8 @@ public struct MenuLayoutGroup: Equatable, Identifiable, Sendable {
 /// customization being off, selects the standard menu.
 public struct MenuLayout: Codable, Equatable, Sendable {
     public var sectionOrder: [MenuLayoutSection] = MenuLayoutSection.allCases
-    public var itemOrder: [MenuItem] = MenuItem.allCases
-    public var placements: [MenuItem: MenuLayoutSection] = [.triggerAction: .manualSession]
+    public var itemOrder: [MenuItem] = Self.defaultItemOrder
+    public var placements: [MenuItem: MenuLayoutSection] = [:]
     public var hiddenSections: Set<MenuLayoutSection> = []
     public var hiddenItems: Set<MenuItem> = Self.balancedHiddenItems
     public var compactItems: Set<MenuItem> = [
@@ -106,6 +106,17 @@ public struct MenuLayout: Codable, Equatable, Sendable {
 
     public static let widthRange = 240...480
     public static let standardWidth = 280
+    private static let currentLayoutVersion = 3
+    private static let defaultItemOrder: [MenuItem] = {
+        var items = MenuItem.allCases.filter { $0 != .triggerAction && $0 != .quickStop }
+        if let manual = items.firstIndex(of: .manualOverride) {
+            items.insert(.quickStop, at: manual + 1)
+        }
+        if let rules = items.firstIndex(of: .triggerRules) {
+            items.insert(.triggerAction, at: rules + 1)
+        }
+        return items
+    }()
     public static let balancedHiddenItems: Set<MenuItem> = [
         .endTime, .triggerSummary, .systemSleep, .displaySleep, .keepActive,
         .screenSaverYield, .dimDisplay, .reminder, .endAction, .presets, .triggersToggle, .customize,
@@ -221,6 +232,7 @@ public struct MenuLayout: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
+        case layoutVersion
         case sectionOrder, itemOrder, placements, hiddenSections, hiddenItems, compactItems, collapsedSections
         case compactMode, compactSectionCount, showExpandToggle, showSectionTitles, showDividers
         case density, headerStyle, controlStyle, panelWidth, adaptiveSessionControls, showAgentDetails, onlyActiveTriggers, maxTriggerRows, maxAgentRows
@@ -263,10 +275,56 @@ public struct MenuLayout: Codable, Equatable, Sendable {
         onlyActiveTriggers = (try? c.decode(Bool.self, forKey: .onlyActiveTriggers)) ?? onlyActiveTriggers
         showMenuBarIcon = (try? c.decode(Bool.self, forKey: .showMenuBarIcon)) ?? showMenuBarIcon
         self = normalized()
+        let version = (try? c.decode(Int.self, forKey: .layoutVersion)) ?? 0
+        if version < 2 {
+            migrateLegacyTriggerAction()
+        }
+        if version < 3 {
+            migrateAdaptiveSessionControls()
+        }
     }
+
+    /// Old presets placed the trigger action below the manual duration. Only
+    /// recognizable, unchanged presets move automatically: the old format did
+    /// not distinguish default placements from deliberate customization.
+    private mutating func migrateLegacyTriggerAction() {
+        guard placements[.triggerAction] == .manualSession else { return }
+        for profile in MenuLayoutProfile.allCases {
+            var legacy = Self.profile(profile)
+            legacy.itemOrder = MenuItem.allCases
+            legacy.placements[.triggerAction] = .manualSession
+            if self == legacy.normalized() {
+                placements.removeValue(forKey: .triggerAction)
+                itemOrder = Self.defaultItemOrder
+                return
+            }
+        }
+    }
+
+    /// Adaptive menus now present manual sessions and automatic triggers as
+    /// independent controls. Repair those old relationships while retaining
+    /// every unrelated customization, including hidden trigger sections.
+    private mutating func migrateAdaptiveSessionControls() {
+        guard adaptiveSessionControls else { return }
+        if placements[.triggerAction] == .manualSession, !hiddenSections.contains(.triggers) {
+            placements.removeValue(forKey: .triggerAction)
+        }
+        if placement(of: .quickStop) == .manualSession,
+           placement(of: .manualOverride) == .manualSession,
+           let quickStop = itemOrder.firstIndex(of: .quickStop),
+           let manual = itemOrder.firstIndex(of: .manualOverride),
+           quickStop < manual {
+            itemOrder.remove(at: quickStop)
+            if let manual = itemOrder.firstIndex(of: .manualOverride) {
+                itemOrder.insert(.quickStop, at: manual + 1)
+            }
+        }
+    }
+
     public func encode(to encoder: Encoder) throws {
         let value = normalized()
         var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(Self.currentLayoutVersion, forKey: .layoutVersion)
         try c.encode(value.sectionOrder.map(\.rawValue), forKey: .sectionOrder)
         try c.encode(value.itemOrder.map(\.rawValue), forKey: .itemOrder)
         try c.encode(Dictionary(uniqueKeysWithValues: value.placements.map { ($0.key.rawValue, $0.value.rawValue) }), forKey: .placements)
