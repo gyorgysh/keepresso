@@ -17,15 +17,31 @@ final class PermissionChecksBuilder {
     /// Monotonic token; only the newest rebuild's async notification result is
     /// applied, so a slower earlier rebuild can't clobber a newer list.
     private var generation = 0
+    /// The rules of the last rebuild, so a late Location answer can redo it.
+    private var lastRules: [TriggerRule]?
+    private var locationObserver: NSObjectProtocol?
 
     init(readiness: SystemReadinessController) {
         self.readiness = readiness
+        // The Location status is read from a cache that fills asynchronously
+        // (see ``LocationAuthorization``), so rebuild once it lands or changes.
+        locationObserver = NotificationCenter.default.addObserver(
+            forName: LocationAuthorization.didChange,
+            object: LocationAuthorization.shared,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let rules = self.lastRules else { return }
+                self.rebuild(for: rules)
+            }
+        }
     }
 
     /// Rebuild the permission rows for the current rules. The login-item and the
     /// per-rule permission statuses read synchronously; the notification status
     /// is async, so it lands a moment later (guarded by ``generation``).
     func rebuild(for rules: [TriggerRule]) {
+        lastRules = rules
         var base = [loginItemCheck()]
         // One row per distinct permission the rule set actually needs, in the
         // permission enum's declared order (location, bluetooth, calendar).
@@ -67,7 +83,10 @@ final class PermissionChecksBuilder {
     }
 
     private func locationCheck() -> ReadinessCheck {
-        let status = CLLocationManager().authorizationStatus
+        // Never `CLLocationManager()` here: on the main thread it can hang for
+        // as long as locationd is unresponsive. A pending first answer reads
+        // as not yet authorized and the row updates when it arrives.
+        let status = LocationAuthorization.shared.status
         return makeCheck(
             id: "perm-location",
             title: L("Location access (Wi-Fi rules)"),

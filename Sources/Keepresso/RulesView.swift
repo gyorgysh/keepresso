@@ -453,8 +453,11 @@ struct RulesView: View {
                 } else {
                     Text("No Wi-Fi network joined").foregroundStyle(.secondary)
                 }
-            } else if location.canRequest {
+            } else if location.canRequest || location.isPending {
+                // Disabled while Core Location's first answer is pending,
+                // rather than claiming access was denied.
                 Button("Allow Wi-Fi access\u{2026}") { location.request() }
+                    .disabled(location.isPending)
             } else {
                 Text("Wi-Fi rules need Location access (System Settings ▸ Privacy)")
                     .foregroundStyle(.secondary)
