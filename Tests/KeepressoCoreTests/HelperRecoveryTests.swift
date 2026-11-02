@@ -104,6 +104,26 @@ import Testing
     #expect(pings == 8)
 }
 
+@Test @MainActor func helperRecoveryPostUpdateSettlingWaitsQuietlyForMinutes() async {
+    // The in-place update schedule: quiet 30 to 60 second waits for a few
+    // minutes while the old daemon image retires and launchd starts the new
+    // binary. A new helper answering late still clears instead of reading as
+    // broken.
+    let schedule = HelperRecoveryProbe.postUpdateSettlingDelays
+    #expect(schedule.allSatisfy { $0 == 30 || $0 == 60 })
+    #expect(schedule.reduce(0, +) >= 120)
+    var replies: [Int?] = [nil, nil, nil, nil, 12]
+    var waited: [TimeInterval] = []
+    let version = await HelperRecoveryProbe.version(
+        ping: { replies.isEmpty ? nil : replies.removeFirst() },
+        wait: { waited.append($0) },
+        delays: [0.0] + schedule
+    )
+    #expect(version == 12)
+    #expect(waited == Array(schedule.prefix(waited.count)))
+    #expect(replies.isEmpty)
+}
+
 @Test @MainActor func helperRecoveryDoesNotRetryAfterCancellation() async {
     var pings = 0
     let version = await HelperRecoveryProbe.version(

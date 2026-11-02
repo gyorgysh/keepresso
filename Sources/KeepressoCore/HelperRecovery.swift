@@ -40,6 +40,13 @@ public enum HelperInstallation {
 /// Any protocol reply proves liveness, including an older daemon waiting to
 /// retire. Protocol compatibility is evaluated separately by the caller.
 public enum HelperRecoveryProbe {
+    /// Quiet waits between post-update settlement pings (30 to 60 seconds,
+    /// a few minutes total). After an in-place update the old daemon image
+    /// can keep serving with a stale signature until it idles out, while
+    /// launchd starts the new binary. Pings during that window prove nothing
+    /// about the registration, so the caller waits these out instead of
+    /// calling the helper broken.
+    public static let postUpdateSettlingDelays: [TimeInterval] = [30, 30, 60, 60]
     @MainActor
     public static func version(
         ping: () async -> Int?,

@@ -2942,7 +2942,7 @@ final class AppModel {
     var helperRecoveryPhase: HelperRecoveryPhase {
         .resolve(installed: helperInstalled,
                  awaitingApproval: helper.awaitingApproval || helperApprovalRequired,
-                 checking: helper.isChecking || helperVerificationCount > 0,
+                 checking: helper.isChecking || helper.isWaitingForUpdatedHelper || helperVerificationCount > 0,
                  outdated: helper.daemonOutdated, hasReply: helper.daemonProtocolVersion != nil,
                  recoveryPending: helperRecoveryPending, recoveryExhausted: helperRecoveryFailed,
                  healthCheckCompleted: helper.hasCompletedHealthCheck)
@@ -3005,7 +3005,12 @@ final class AppModel {
                 // Quiet phase: no banner, no window. A dismissal after an
                 // escalation stays dismissed.
                 if escalated { return }
-                if i >= Self.helperQuietPolls {
+                // After an app update the helper can legitimately need a few
+                // minutes (the old image idles out while launchd starts the
+                // new binary), so hold the quiet phase through the manager's
+                // settlement window before offering a reinstall.
+                let quietLimit = self.helper.isWaitingForUpdatedHelper ? 36 : Self.helperQuietPolls
+                if i >= quietLimit {
                     self.helperRecoveryFailed = true
                     self.helperAttention = .broken
                     escalated = true

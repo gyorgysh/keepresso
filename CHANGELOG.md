@@ -3,7 +3,7 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
-## [1.29.0] - 2026-11-02
+## [1.29.0] - 2026-11-03
 
 ### Added
 
@@ -26,6 +26,9 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 - Preferences no longer freezes when Location Services stops responding.
   Reported by @alvst (#31).
+- Installing an update over the running app no longer leaves the helper
+  showing an error until you restart. Keepresso now waits quietly while the
+  new helper starts and clears the warning on its own.
 
 ## [1.28.0] - 2026-10-22
 

@@ -87,6 +87,15 @@ final class HelperManager {
     /// Single-flight guard for the stale-daemon watch (see ``watchDaemonUpdate()``).
     @ObservationIgnored private var daemonUpdateWatch: Task<Void, Never>?
     @ObservationIgnored private var daemonUpdateGeneration = 0
+    /// Quiet post-update settlement (see ``watchPostUpdateSettlement()``).
+    @ObservationIgnored private var postUpdateWatch: Task<Void, Never>?
+    @ObservationIgnored private var postUpdateGeneration = 0
+    /// One settling window per run: after it is spent, a still-silent daemon
+    /// is genuinely broken and the next check may say so.
+    @ObservationIgnored private var postUpdateSettlingSpent = false
+    /// True while the post-update window is open, so the UI can show
+    /// progress instead of a stale verdict.
+    private(set) var isWaitingForUpdatedHelper = false
     @ObservationIgnored private var recoverySuppressed = false
     /// One repair per app run: registration churn must never loop.
     @ObservationIgnored private var repairAttempted = false
@@ -262,6 +271,9 @@ final class HelperManager {
         healthCheck?.cancel(); healthCheck = nil; isChecking = false
         daemonUpdateGeneration &+= 1
         daemonUpdateWatch?.cancel(); daemonUpdateWatch = nil
+        postUpdateGeneration &+= 1
+        postUpdateWatch?.cancel(); postUpdateWatch = nil
+        isWaitingForUpdatedHelper = false
     }
 
     private func runHealthCheck() async -> HelperHealth {
@@ -273,6 +285,7 @@ final class HelperManager {
         if let version {
             daemonProtocolVersion = version
             lastError = nil
+            settlePostUpdateWindow()
             if version < HelperService.protocolVersion {
                 // An older daemon image is still serving: the app just
                 // updated and the pre-update process hasn't idled out yet.
@@ -308,6 +321,16 @@ final class HelperManager {
                 return .needsApproval
             }
         }
+        // Right after an app update, silence most likely means the old daemon
+        // image is still on its way out (its file was replaced, so its
+        // signature no longer validates) while launchd starts the new one.
+        // That is not a broken registration, so do not churn it and do not
+        // surface an error: wait quietly and clear the moment it answers.
+        if appUpdatedSinceLastRun, !postUpdateSettlingSpent, !recoverySuppressed {
+            lastError = nil
+            watchPostUpdateSettlement()
+            return .broken
+        }
         guard !repairAttempted else { return .broken }
         repairAttempted = true
         // register() may return alreadyRegistered; do not assume it refreshes
@@ -324,6 +347,7 @@ final class HelperManager {
         guard !Task.isCancelled else { return .notApplicable }
         if let version = repairedVersion {
             daemonProtocolVersion = version
+            settlePostUpdateWindow()
             if daemonOutdated { watchDaemonUpdate() }
             lastError = nil
             return .repaired
@@ -423,6 +447,55 @@ final class HelperManager {
                 if version >= HelperService.protocolVersion { return }
             }
         }
+    }
+
+    /// No answer right after an app update usually means the old daemon image
+    /// is still on its way out, not a broken registration. Keep pinging
+    /// quietly every 30 to 60 seconds for a few minutes and clear the error
+    /// the moment the new helper answers. No repair, no reinstall, no prompt
+    /// while the window is open.
+    func watchPostUpdateSettlement() {
+        guard postUpdateWatch == nil, !postUpdateSettlingSpent, !recoverySuppressed else { return }
+        postUpdateGeneration &+= 1
+        let generation = postUpdateGeneration
+        isWaitingForUpdatedHelper = true
+        postUpdateWatch = Task { [weak self] in
+            defer {
+                if self?.postUpdateGeneration == generation {
+                    self?.postUpdateWatch = nil
+                    self?.isWaitingForUpdatedHelper = false
+                }
+            }
+            for delay in HelperRecoveryProbe.postUpdateSettlingDelays {
+                guard let self, !Task.isCancelled, self.status == .enabled else { return }
+                try? await Task.sleep(for: .seconds(delay))
+                guard !Task.isCancelled, self.status == .enabled else { return }
+                guard let version = await self.pingedVersion() else { continue }
+                guard !Task.isCancelled else { return }
+                self.daemonProtocolVersion = version
+                self.lastError = nil
+                self.settlePostUpdateWindow()
+                if self.daemonOutdated { self.watchDaemonUpdate() }
+                return
+            }
+            // Still silent after a few minutes: the window is spent, so the
+            // next check may treat it as genuinely broken.
+            if let self, !Task.isCancelled, self.postUpdateGeneration == generation {
+                self.postUpdateSettlingSpent = true
+                if self.daemonProtocolVersion == nil, self.lastError == nil {
+                    self.lastError = L("The helper isn't responding. If an old copy of Keepresso is in the Trash, empty the Trash first: macOS keeps disabling the helper while one is there. Then reinstall the helper.")
+                }
+            }
+        }
+    }
+
+    /// The new helper answered through the normal check: the update settled,
+    /// so the quiet window can close without spending itself on a timeout.
+    private func settlePostUpdateWindow() {
+        postUpdateSettlingSpent = true
+        postUpdateGeneration &+= 1
+        postUpdateWatch?.cancel(); postUpdateWatch = nil
+        isWaitingForUpdatedHelper = false
     }
 
     /// One ping, for callers watching a recovery (the attention window's
