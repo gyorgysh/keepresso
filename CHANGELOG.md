@@ -3,53 +3,29 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
-## [Unreleased]
+## [1.29.0] - 2026-11-02
 
 ### Added
 
-- **Hermes Agent connection.** Hermes now has a Connect row under the "AI
-  agent is working" trigger, next to Claude Code, Cursor, Codex, Antigravity,
-  and Grok. Connecting installs a small Keepresso plugin into Hermes, so its
-  CLI and its messaging gateway (tasks from Telegram and other chats) report
-  exactly when each task is working, waiting for your approval, or done. Those
-  tasks follow the same rule as every other agent: its grace period, the
-  "count waiting as working" option, and any combined conditions. Concurrent
-  chats are tracked separately, and a task that stops reporting no longer
-  counts as working. Only ids, tool names, and the chat platform reach
-  Keepresso, never prompts or replies. Restart Hermes and its gateway after
-  connecting. Suggested by @licy-gh (#30).
-- **Qwen Code, Devin, and Kimi Code connections.** Each gets a Connect row
-  under the "AI agent is working" trigger. Connecting adds Keepresso's hooks
-  to that tool's own settings, leaving the rest of the file alone, so its
-  sessions report exactly when they are working, waiting for your approval,
-  or idle, instead of being guessed from CPU and file activity.
+- **Hermes Agent, Qwen Code, Devin, and Kimi Code.** Connect them from the
+  "AI agent is working" trigger so Keepresso knows exactly when they are
+  working, waiting for approval, or idle. Hermes also covers tasks sent
+  through its gateway, such as Telegram. Restart Hermes after connecting.
+  Suggested by @licy-gh (#30).
 
 ### Changed
 
-- **Automatic or Manual, at a glance.** With triggers set up, the menu now
-  shows one Automatic and Manual switch instead of separate Keep awake,
-  Start manual session, and Pause or Resume Triggers controls. Automatic lists
-  the conditions deciding, Manual shows the Keep awake switch and duration, and
-  switching to Manual sets the triggers aside without touching your rules.
-  Prompted by feedback from @alvst in #31.
-- **A clearer, warmer menu panel.** The panel's glass now blurs what is
-  behind it far more, with a neutral wash and a faint brew-colored glow, so
-  rows stay readable over busy windows. Soft steam drifts up the panel while
-  it brews, only while the panel is open, and never with Reduce Motion or in
-  Low Power Mode. The See-through slider in Preferences now works on macOS 27
-  as well.
-- **Lighter animations.** The cup's steam and the agent spinners now run in
-  Core Animation instead of redrawing the whole panel many times a second,
-  so an open panel uses a fraction of the CPU it did.
-- Automation leases now show as one card under the Automatic and Manual
-  switch, with their own End button.
+- **Automatic or Manual.** With triggers on, the menu has one switch instead
+  of separate Pause, Resume, and manual session controls. Prompted by
+  feedback from @alvst in #31.
+- **Easier to read menu**, with soft steam while brewing. The See-through
+  slider now works on macOS 27.
+- An open menu uses about a quarter of the CPU it did.
 
 ### Fixed
 
-- Opening Preferences could hang while macOS Location Services was
-  unresponsive. Location authorization now runs off the main thread, so
-  Preferences, the rules editor, and the Setup checks stay responsive while
-  the system check is pending. Reported by @alvst (#31).
+- Preferences no longer freezes when Location Services stops responding.
+  Reported by @alvst (#31).
 
 ## [1.28.0] - 2026-10-22
 
