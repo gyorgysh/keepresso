@@ -412,9 +412,9 @@ private struct GeneralTab: View {
             } footer: {
                 sectionFooter("Keepresso follows your system language by default.")
             }
-            // macOS 27+ owns the MenuBarExtra panel glass: the slider below
-            // has no visible effect there, so hide the whole section.
-            if !Self.systemManagesGlass {
+            // The slider sets Keepresso's own frost and wash under the panel,
+            // which show on every macOS, including 27 where the system draws
+            // the panel's glass itself.
             Section {
                 LabeledContent("See-through") {
                     HStack(spacing: 8) {
@@ -444,7 +444,6 @@ private struct GeneralTab: View {
                 sectionHeader("Appearance", info: L("How see-through the menu-bar dropdown is. Frosty (0%) backs its glass with blur and a wash of the window color, so text stays crisp on any wallpaper. Sliding toward 100% thins that backing away until the panel is the system's bare Liquid Glass, letting the desktop shine through, with some contrast cost on busy or very dark wallpapers. Changes apply instantly, only to the dropdown (windows like this one keep their standard look), and the system's Reduce Transparency accessibility setting always wins."))
             } footer: {
                 sectionFooter("The menu-bar dropdown's glass, from frosty to clear Liquid Glass.")
-            }
             }
             // High up on purpose: this is the one-time set-and-forget step that
             // makes every privileged switch below (and AWDL pausing) silent.
@@ -1051,13 +1050,6 @@ private struct GeneralTab: View {
     /// How long with no input before dim-don't-sleep dims the panel.
     private static let dimDefaultDelay: TimeInterval = 300
 
-    /// macOS 27+ manages MenuBarExtra panel translucency itself: the
-    /// See-through slider has no effect, so the Appearance section hides.
-    /// Runtime version check (not `#available`) so this compiles on older SDKs.
-    fileprivate static var systemManagesGlass: Bool {
-        ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 27
-    }
-
     /// On/off binding for dim-don't-sleep. Turning it on picks a sensible delay
     /// and clears the (never-surfaced) screen-saver yield, since after idle you
     /// either let the display sleep or dim it, not both.
@@ -1089,16 +1081,16 @@ private struct TriggersTab: View {
                 ))
                 if model.triggersEnabled && model.triggersPaused {
                     HStack(spacing: 6) {
-                        Text("Currently paused from the menu bar.")
+                        Text("Set to Manual in the menu bar.")
                             .font(.caption)
                             .foregroundStyle(.orange)
                         Spacer()
-                        Button("Resume") { model.resumeTriggers() }
+                        Button("Switch to Automatic") { model.resumeTriggers() }
                             .font(.caption)
                     }
                 }
             } header: {
-                sectionHeader("Triggers", info: L("A trigger is a condition Keepresso watches, checked once a second. With triggers on, they take over: Keepresso starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The manual switch in the menu steps aside while they're active. \u{201C}Pause Triggers\u{201D} in the menu bar stops them temporarily without touching your rules."))
+                sectionHeader("Triggers", info: L("A trigger is a condition Keepresso watches, checked once a second. With triggers on, they take over: Keepresso starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The menu then shows an Automatic and Manual switch: Manual sets the triggers aside without touching your rules, until you switch back or relaunch Keepresso."))
             } footer: {
                 sectionFooter("The listed conditions control the session instead of the manual switch.")
             }

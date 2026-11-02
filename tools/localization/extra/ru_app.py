@@ -512,6 +512,13 @@ APP.update({
     "Couldn't update the Hermes plugin.":
         "Не удалось обновить плагин Hermes.",
     "Couldn't update %@'s hooks.": "Не удалось обновить хуки: %@.",
+    "Automatic": "Авто",
+    "Manual": "Вручную",
+    "Keep awake mode": "Режим «Не засыпать»",
+    "Automatic or manual": "Авто или вручную",
+    "Set to Manual in the menu bar.": "В строке меню выбран режим «Вручную».",
+    "Switch to Automatic": "Переключить на «Авто»",
+    "A trigger is a condition Keepresso watches, checked once a second. With triggers on, they take over: Keepresso starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The menu then shows an Automatic and Manual switch: Manual sets the triggers aside without touching your rules, until you switch back or relaunch Keepresso.": "Триггер представляет собой условие, за которым следит Keepresso, проверяя его раз в секунду. Когда триггеры включены, они берут управление на себя: Keepresso начинает работать в тот момент, когда выполняются ваши условия, и останавливается, когда они перестают выполняться, поэтому вы никогда случайно не оставите Mac включённым. Затем в меню появляется переключатель «Авто» и «Вручную»: режим «Вручную» откладывает триггеры в сторону, не затрагивая ваши правила, пока вы не переключитесь обратно или не перезапустите Keepresso.",
 })
 
 # --- Agentic onboarding step (offers to connect the tools you have) ---

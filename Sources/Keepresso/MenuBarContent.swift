@@ -174,7 +174,7 @@ struct MenuBarContent: View {
         .animation(.snappy(duration: 0.25), value: model.helperAttention)
         .animation(.snappy(duration: 0.25), value: model.menuPanelExpanded)
         .animation(.snappy(duration: 0.25), value: model.menuCustomizationEnabled)
-        .glassPanelBackground()
+        .glassPanelBackground(brewing: session.isActive)
         .tint(.keepressoBrew)
         .font(type.body)
         .onAppear {
@@ -215,7 +215,11 @@ struct MenuBarContent: View {
             case .manualToggle, .duration:
                 return !layout.adaptiveSessionControls || !triggerControlled
             case .manualOverride:
-                return !layout.adaptiveSessionControls || triggerControlled
+                // In adaptive layouts the Automatic/Manual switch is the way
+                // into manual control; the shortcut stays only where the
+                // switch has been removed from the menu.
+                return !layout.adaptiveSessionControls
+                    || (triggerControlled && layout.hiddenItems.contains(.triggerAction))
             case .endTime: return session.isActive && session.remaining != nil
             case .otherApps: return panel.heldBy != nil
             case .quickStop:
@@ -229,7 +233,13 @@ struct MenuBarContent: View {
             case .lidPolicy: return model.machineHasBattery && (model.closedDisplayEnabled || model.closedDisplayOnlyWhileBrewing)
             case .batteryPause: return model.machineHasBattery
             case .batteryThreshold: return model.machineHasBattery && model.batteryAutoPauseEnabled
-            case .leaseStatus: return !session.liveLeases.isEmpty
+            case .leaseStatus:
+                // Shown in the banner under the mode switch instead, unless
+                // that item is out of sight: removed, or in a collapsed
+                // section, where the banner would be hidden with it.
+                return !session.liveLeases.isEmpty
+                    && (layout.hiddenItems.contains(.triggerAction)
+                        || layout.collapsedSections.contains(layout.placement(of: .triggerAction)))
             case .fanStatus: return model.fanBoostActivePercent != nil
             case .awdlStatus: return model.awdlStatus.isPausing && AWDLStatusStyle(model.awdlStatus) != nil
             case .presets: return !model.presets.isEmpty
@@ -259,7 +269,13 @@ struct MenuBarContent: View {
         .frame(height: min(advancedContentHeight ?? 280, maxHeight))
         .onPreferenceChange(MenuContentHeight.self) { height in
             if height > 0 && abs(height - (advancedContentHeight ?? 0)) > 0.5 {
-                advancedContentHeight = height
+                // Never animated: the panel window sizes itself from this
+                // frame, and an animated resize interrupted by the next
+                // change (flipping the mode switch quickly) can leave the
+                // window stuck at a stale, taller size.
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { advancedContentHeight = height }
             }
         }
         .background {
@@ -311,11 +327,7 @@ struct MenuBarContent: View {
             if model.triggersEnabled && model.triggersPaused && session.liveLeases.isEmpty
                 && !visible.contains(.triggerAction)
                 && !visible.isDisjoint(with: [.manualToggle, .duration, .manualOverride, .quickStop]) {
-                Button { model.resumeTriggers() } label: {
-                    Text("Resume Triggers").frame(maxWidth: .infinity)
-                }
-                .modifier(CustomMenuControlStyle(item: .triggerAction, style: layout.controlStyle))
-                .disabled(preview != nil)
+                modeSwitch.disabled(preview != nil)
             }
             if visible.isEmpty {
                 Button("Customize Menu…") { open(KeepressoApp.menuCustomizationWindowID) }
@@ -358,7 +370,11 @@ struct MenuBarContent: View {
                 .accessibilityValue(collapsed ? L("Show more") : L("Show less"))
             }
             if !collapsed {
-                ForEach(group.items) { item in
+                // The mode switch leads its group whatever the saved order:
+                // the controls under it belong to the mode it shows.
+                ForEach(group.items.contains(.triggerAction)
+                    ? [.triggerAction] + group.items.filter { $0 != .triggerAction }
+                    : group.items) { item in
                     advancedItem(item, layout: layout, combinesCaption: combinesCaption)
                         .modifier(CustomMenuControlStyle(item: item, style: layout.controlStyle))
                         .disabled(preview != nil).allowsHitTesting(preview == nil)
@@ -401,24 +417,12 @@ struct MenuBarContent: View {
         case .triggersToggle:
             switchRow("Activate by triggers", isOn: Binding(get: { model.triggersEnabled }, set: { model.triggersEnabled = $0 }))
         case .triggerAction:
-            if !session.liveLeases.isEmpty {
-                Button { model.endAutomationLeases() } label: {
-                    Text("End Automation Leases")
-                        .frame(maxWidth: .infinity)
-                }
-            } else if model.triggersPaused {
-                Button { model.resumeTriggers() } label: {
-                    Text("Resume Triggers")
-                        .frame(maxWidth: .infinity)
-                }
-            } else {
-                Button { model.pauseTriggers() } label: {
-                    Text("Pause Triggers")
-                        .frame(maxWidth: .infinity)
-                }
+            VStack(spacing: layout.density.spacing) {
+                if model.triggersEnabled { modeSwitch }
+                leaseBanner
             }
         case .triggerSummary:
-            Text(model.triggersPaused ? L("Triggers paused. Controlling manually for now.") : (model.triggerSummary() ?? L("No conditions yet"))).font(type.caption).foregroundStyle(.secondary)
+            Text(model.triggerSummary() ?? L("No conditions yet")).font(type.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         case .triggerRules: advancedTriggerRules(layout)
         case .systemSleep:
@@ -633,42 +637,22 @@ struct MenuBarContent: View {
     /// The existing adaptive layout. Custom section choices never affect it.
     @ViewBuilder
     private var standardMenuSections: some View {
+        Divider()
+
+        // With triggers set up, control is one of two modes, and the switch
+        // says which. Automatic shows the conditions deciding; Manual shows
+        // the controls you decide with. Without triggers there is only manual
+        // control, so there is nothing to switch.
+        if model.triggersEnabled {
+            modeSwitch
+        }
+
+        leaseBanner
+
         if model.triggersEnabled && !model.triggersPaused {
             triggerSummary
                 .transition(.opacity)
-        }
-
-        Divider()
-
-        if model.triggersEnabled && !model.triggersPaused {
-            // Pausing means "let my Mac sleep", so live automation
-            // leases come first: the row offers ending them, and only
-            // once none are live does it offer the pause itself.
-            if session.liveLeases.isEmpty {
-                Text("Activation is controlled by triggers.\nEdit them in Preferences.")
-                    .font(type.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("Pause Triggers") { model.pauseTriggers() }
-                    .prominentActionStyle()
-                    .frame(maxWidth: .infinity)
-            } else {
-                Text("Activation is controlled by triggers.\nEnd the automation leases before pausing.")
-                    .font(type.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("End Automation Leases") { model.endAutomationLeases() }
-                    .prominentActionStyle()
-                    .frame(maxWidth: .infinity)
-            }
         } else {
-            if model.triggersEnabled {
-                Text("Triggers paused. Controlling manually for now.")
-                    .font(type.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
             switchRow("Keep awake", isOn: Binding(
                 get: { session.isActive },
                 set: { _ in model.toggleManual() }
@@ -711,11 +695,6 @@ struct MenuBarContent: View {
                 }
             }
 
-            if model.triggersEnabled {
-                Button("Resume Triggers") { model.resumeTriggers() }
-                    .prominentActionStyle()
-                    .frame(maxWidth: .infinity)
-            }
         }
 
         // The option toggles and app entries fold away behind the "Show
@@ -1223,8 +1202,7 @@ struct MenuBarContent: View {
     /// Whether any live status caption exists, so the status card only
     /// appears when there is something to say.
     private var hasStatusLines: Bool {
-        !session.liveLeases.isEmpty
-            || model.fanBoostActivePercent != nil
+        model.fanBoostActivePercent != nil
             || (model.awdlStatus.isPausing && AWDLStatusStyle(model.awdlStatus) != nil)
     }
 
@@ -1237,7 +1215,6 @@ struct MenuBarContent: View {
         let _ = panel.tick
         if hasStatusLines {
             VStack(alignment: .leading, spacing: 6) {
-                leaseStatusLine
                 fanStatusLine
                 awdlStatusLine
             }
@@ -1245,6 +1222,30 @@ struct MenuBarContent: View {
             .padding(.horizontal, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .menuPreviewCard(preview: preview != nil)
+            .transition(.opacity)
+        }
+    }
+
+    /// Live automation leases as one card right under the mode switch. A
+    /// lease is a third source of keep-awake, separate from both modes, so it
+    /// says so there, with its own way to end it (the switch can't). Nothing
+    /// renders while no lease is live.
+    @ViewBuilder
+    private var leaseBanner: some View {
+        if !session.liveLeases.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                leaseStatusLine
+                Button("End Automation Leases") { model.endAutomationLeases() }
+                    .controlSize(.small)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                Color.keepressoBrew.opacity(0.08),
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
             .transition(.opacity)
         }
     }
@@ -1353,6 +1354,26 @@ struct MenuBarContent: View {
 
     // MARK: - Live trigger summary
 
+    /// Which of the two modes controls keeping awake while triggers are on.
+    private enum ControlMode: Hashable { case automatic, manual }
+
+    /// Automatic or Manual. Choosing Manual pauses the triggers (which also
+    /// stops a trigger-held session: Manual starts from "the Mac can sleep",
+    /// and Keep awake is one flip away). Choosing Automatic resumes them.
+    /// The pause stays in memory only, so a relaunch is always Automatic.
+    private var modeSwitch: some View {
+        Picker("Keep awake mode", selection: Binding(
+            get: { model.triggersPaused ? ControlMode.manual : .automatic },
+            set: { $0 == .manual ? model.pauseTriggers() : model.resumeTriggers() }
+        )) {
+            Text("Automatic").tag(ControlMode.automatic)
+            Text("Manual").tag(ControlMode.manual)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(maxWidth: .infinity)
+    }
+
     @ViewBuilder
     private var triggerSummary: some View {
         let _ = panel.tick // re-read live trigger state each tick
@@ -1420,7 +1441,8 @@ struct MenuBarContent: View {
                 HStack(spacing: 6) {
                     // Gated on visibility: SparkView's periodic timeline would
                     // otherwise keep ticking inside the closed panel.
-                    SparkView(agent: detail.agent, animated: detail.animated && panelVisible)
+                    SparkView(agent: detail.agent, animated: detail.animated && panelVisible,
+                              tint: detail.active ? accent : Color.secondary)
                         .foregroundStyle(detail.active ? accent : Color.secondary)
                     Text(detail.label)
                         .font(type.caption)

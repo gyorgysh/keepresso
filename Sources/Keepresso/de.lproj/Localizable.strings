@@ -477,6 +477,13 @@
 "Restart Hermes and its gateway to load the plugin." = "Starte Hermes und sein Gateway neu, um das Plugin zu laden.";
 "Couldn't update the Hermes plugin." = "Das Hermes-Plugin konnte nicht aktualisiert werden.";
 "Couldn't update %@'s hooks." = "Die Hooks von %@ konnten nicht aktualisiert werden.";
+"Automatic" = "Automatisch";
+"Manual" = "Manuell";
+"Keep awake mode" = "Wach-halten-Modus";
+"Automatic or manual" = "Automatisch oder manuell";
+"Set to Manual in the menu bar." = "In der Menüleiste auf Manuell gestellt.";
+"Switch to Automatic" = "Auf Automatisch umschalten";
+"A trigger is a condition Keepresso watches, checked once a second. With triggers on, they take over: Keepresso starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The menu then shows an Automatic and Manual switch: Manual sets the triggers aside without touching your rules, until you switch back or relaunch Keepresso." = "Ein Auslöser ist eine Bedingung, die Keepresso beobachtet und einmal pro Sekunde prüft. Sind Auslöser aktiviert, übernehmen sie: Keepresso beginnt zu brühen, sobald deine Bedingungen erfüllt sind, und stoppt, wenn sie es nicht mehr sind, sodass du den Mac nie versehentlich wach lässt. Das Menü zeigt dann einen Schalter Automatisch und Manuell: Manuell stellt die Auslöser beiseite, ohne deine Regeln zu verändern, bis du zurückschaltest oder Keepresso neu startest.";
 "Know exactly when an agent is working" = "Genau wissen, wann ein Agent arbeitet";
 "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look." = "Verbinde die Programmiertools, die du nutzt, und ihre Sitzungen melden sich selbst, statt dass Keepresso sie danach beurteilt, wie beschäftigt sie wirken.";
 "Connect" = "Verbinden";

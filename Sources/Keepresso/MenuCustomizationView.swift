@@ -29,7 +29,7 @@ extension MenuItem {
         case .quickStop: L("Stop in")
         case .manualOverride: L("Manual session")
         case .triggersToggle: L("Activate by triggers")
-        case .triggerAction: L("Pause / Resume Triggers")
+        case .triggerAction: L("Automatic or manual")
         case .triggerSummary: L("Trigger summary")
         case .triggerRules: L("Trigger conditions")
         case .systemSleep: L("Prevent system sleep")

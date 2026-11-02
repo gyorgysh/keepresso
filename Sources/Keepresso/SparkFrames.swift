@@ -15,17 +15,22 @@ import SwiftUI
 /// like the real thing. A `Shape` renders the same on every Mac, tints from
 /// the row's foreground style, and stays crisp at any size.
 ///
-/// Lives in the menu panel, which keeps its content alive while closed on
-/// current macOS, so the timeline would keep ticking unseen. The call site
-/// passes `animated: false` while the panel is off screen (see
-/// `WindowVisibilityReader`), and the panel body itself unmounts while
-/// closed, which drops the timeline entirely.
+/// Animated by Core Animation, not a SwiftUI timeline. Each frame is drawn
+/// once into a mask image (cached per tool), and a discrete keyframe
+/// animation steps a tinted layer through them in the render server. A
+/// timeline here made SwiftUI redraw the whole menu panel, every row of text
+/// included, at the spinner's rate. The call site still passes
+/// `animated: false` while the panel is off screen, and the panel body
+/// unmounts while closed, which drops the layer entirely.
 struct SparkView: View {
     /// The agent this row belongs to, or `nil`. Anything without a mark of its
     /// own falls back to the breathing dot.
     var agent: String?
-    /// False renders the rest dot with no timeline behind it.
+    /// False renders the rest dot with no animation behind it.
     var animated = true
+    /// The working mark's colour. A layer can't read SwiftUI's foreground
+    /// style, so the row passes the colour it would have set.
+    var tint: Color = .primary
 
     private var sprite: AgentSprite {
         switch agent {
@@ -45,10 +50,7 @@ struct SparkView: View {
         let sprite = sprite
         Group {
             if animated {
-                TimelineView(.periodic(from: .now, by: sprite.frameInterval)) { context in
-                    let tick = Int(context.date.timeIntervalSinceReferenceDate / sprite.frameInterval)
-                    sprite.frame(at: tick)
-                }
+                SpriteLayerView(sprite: sprite, tint: tint)
             } else {
                 RestDot()
             }
@@ -89,8 +91,19 @@ enum AgentSprite {
         }
     }
 
-    /// `tick` counts intervals since the reference date, so it is positive for
-    /// any date this runs at.
+    /// Frames in one full cycle.
+    var frameCount: Int {
+        switch self {
+        case .claudeSunburst: return SunburstPulse.frames.count
+        case .cursorDots: return CursorDots.frames.count
+        case .grokDots: return GrokDots.frames.count
+        case .breathingDot: return BreathingDot.frames.count
+        case .antigravityDots: return AntigravityDots.frames.count
+        }
+    }
+
+    /// `tick` counts frames from the start of the cycle; any non-negative
+    /// value works, it wraps.
     @ViewBuilder
     func frame(at tick: Int) -> some View {
         switch self {
@@ -357,5 +370,111 @@ struct DotMatrix: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Core Animation playback
+
+/// Each sprite's frames as white mask images, drawn once per sprite and
+/// backing scale, then reused by every row that shows that tool.
+@MainActor
+private enum SpriteMasks {
+    private static var cache: [String: [CGImage]] = [:]
+
+    static func frames(for sprite: AgentSprite, scale: CGFloat) -> [CGImage] {
+        let key = "\(sprite)-\(scale)"
+        if let cached = cache[key] { return cached }
+        let images = (0..<sprite.frameCount).compactMap { index -> CGImage? in
+            let renderer = ImageRenderer(content:
+                sprite.frame(at: index)
+                    .foregroundStyle(Color.white)
+                    .frame(width: 12, height: 12))
+            renderer.scale = scale
+            return renderer.cgImage
+        }
+        cache[key] = images
+        return images
+    }
+}
+
+/// A layer filled with the tint, masked by the sprite's current frame, the
+/// frames stepped by a repeating discrete keyframe animation.
+private struct SpriteLayerView: NSViewRepresentable {
+    var sprite: AgentSprite
+    var tint: Color
+
+    func makeNSView(context: Context) -> SpriteView { SpriteView() }
+
+    func updateNSView(_ view: SpriteView, context: Context) {
+        view.show(sprite, tint: NSColor(tint))
+    }
+}
+
+private final class SpriteView: NSView {
+    private let mask = CALayer()
+    private var sprite: AgentSprite?
+    private var tint: NSColor = .labelColor
+    private var scale: CGFloat = 0
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.mask = mask
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        mask.frame = bounds
+        CATransaction.commit()
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        restart()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyTint()
+    }
+
+    @MainActor func show(_ sprite: AgentSprite, tint: NSColor) {
+        self.tint = tint
+        applyTint()
+        guard sprite != self.sprite else { return }
+        self.sprite = sprite
+        restart()
+    }
+
+    private func applyTint() {
+        // Resolve dynamic colours against this view's appearance.
+        var color: CGColor?
+        effectiveAppearance.performAsCurrentDrawingAppearance { color = self.tint.cgColor }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer?.backgroundColor = color
+        CATransaction.commit()
+    }
+
+    @MainActor private func restart() {
+        guard let sprite else { return }
+        let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
+        self.scale = scale
+        let frames = SpriteMasks.frames(for: sprite, scale: scale)
+        mask.removeAllAnimations()
+        mask.contents = frames.first
+        guard frames.count > 1 else { return }
+        let step = CAKeyframeAnimation(keyPath: "contents")
+        step.values = frames
+        step.calculationMode = .discrete
+        step.duration = sprite.frameInterval * Double(frames.count)
+        step.repeatCount = .infinity
+        mask.add(step, forKey: "frames")
     }
 }

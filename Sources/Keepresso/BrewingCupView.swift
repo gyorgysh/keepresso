@@ -50,8 +50,8 @@ struct BrewingCupView: View {
     @State private var windowVisible = true
 
     /// One full rise-and-dissolve cycle per wisp, staggered thirds apart.
-    private static let loopDuration: TimeInterval = 3.4
-    private static let wispDelays: [TimeInterval] = [0, 1.15, 2.3]
+    static let loopDuration: TimeInterval = 3.4
+    static let wispDelays: [TimeInterval] = [0, 1.15, 2.3]
 
     var body: some View {
         VStack(spacing: 1 * scale) {
@@ -90,14 +90,11 @@ struct BrewingCupView: View {
     @ViewBuilder
     private var steam: some View {
         if steaming && windowVisible && !reduceMotion {
-            // `.periodic`, not `.animation`: the animation schedule hooks the
-            // display link and still evaluates at vsync even with a
-            // minimumInterval hint. Periodic is timer-backed at 30 Hz and
-            // drops entirely when this branch unmounts (window off screen).
-            TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { context in
-                let now = context.date.timeIntervalSinceReferenceDate
-                wisps { delay in Self.wispState(at: now, delay: delay) }
-            }
+            // Core Animation, not a timeline: the wisps move in the render
+            // server, so the app does no work per frame. A 30 Hz timeline
+            // here made SwiftUI redraw the whole menu panel, text included,
+            // thirty times a second. Unmounts with this branch.
+            CupSteamLayer(scale: scale)
         } else if steaming {
             // Reduce Motion, or the host window is off screen (a closed
             // `MenuBarExtra` panel keeps its content alive on current macOS):
@@ -121,29 +118,116 @@ struct BrewingCupView: View {
             }
         }
     }
+}
 
-    /// Opacity and vertical drift for one wisp at a moment in its loop,
-    /// keyframed to match the website mark: fade in while rising from below,
-    /// thin out past the midpoint, gone by the top.
-    static func wispState(at time: TimeInterval, delay: TimeInterval) -> (opacity: Double, rise: CGFloat) {
-        let phase = ((time + delay).truncatingRemainder(dividingBy: loopDuration)) / loopDuration
-        let keys: [(phase: Double, opacity: Double, rise: CGFloat)] = [
-            (0.00, 0.00, 2.5),
-            (0.30, 0.85, 0.0),
-            (0.65, 0.30, -2.5),
-            (1.00, 0.00, -4.0),
-        ]
-        for i in 0 ..< keys.count - 1 where phase <= keys[i + 1].phase {
-            let a = keys[i], b = keys[i + 1]
-            let t = (phase - a.phase) / (b.phase - a.phase)
-            // Ease in-out within each segment so the motion reads as drift, not ramps.
-            let eased = t * t * (3 - 2 * t)
-            return (
-                opacity: a.opacity + (b.opacity - a.opacity) * eased,
-                rise: a.rise + (b.rise - a.rise) * CGFloat(eased)
-            )
+/// The three wisps as shape layers, each on the website mark's keyframed loop
+/// (fade in while rising from below, thin out past the midpoint, gone by the
+/// top), staggered by its delay.
+private struct CupSteamLayer: NSViewRepresentable {
+    var scale: CGFloat
+
+    func makeNSView(context: Context) -> CupSteamView { CupSteamView() }
+
+    func updateNSView(_ view: CupSteamView, context: Context) {
+        view.scale = scale
+    }
+}
+
+private final class CupSteamView: NSView {
+    private let wisps = [CAShapeLayer(), CAShapeLayer(), CAShapeLayer()]
+    var scale: CGFloat = 1 {
+        didSet { if scale != oldValue { needsLayout = true } }
+    }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        // Top-left origin, so offsets read like the SwiftUI layout's.
+        layer?.isGeometryFlipped = true
+        for wisp in wisps {
+            wisp.fillColor = nil
+            wisp.lineCap = .round
+            wisp.opacity = 0
+            layer?.addSublayer(wisp)
         }
-        return (opacity: 0, rise: keys.last!.rise)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyColor()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window != nil { animate() }
+    }
+
+    override func layout() {
+        super.layout()
+        // The SwiftUI layout: three wisps 4 pt wide, 3.5 pt apart, bottom
+        // aligned and centered in the 22 x 9 pt steam area; the middle one
+        // taller.
+        let width = 4 * scale
+        let spacing = 3.5 * scale
+        let total = width * 3 + spacing * 2
+        let left = (bounds.width - total) / 2
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (index, wisp) in wisps.enumerated() {
+            let height = (index == 1 ? 8 : 6.5) * scale
+            let frame = CGRect(
+                x: left + CGFloat(index) * (width + spacing),
+                y: bounds.height - height, width: width, height: height)
+            wisp.frame = frame
+            wisp.lineWidth = 1.5 * scale
+            wisp.path = SteamWisp().path(in: CGRect(origin: .zero, size: frame.size)).cgPath
+        }
+        CATransaction.commit()
+        applyColor()
+        animate()
+    }
+
+    private func applyColor() {
+        var color: CGColor?
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            color = NSColor(Color.keepressoSteam).cgColor
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        wisps.forEach { $0.strokeColor = color }
+        CATransaction.commit()
+    }
+
+    private func animate() {
+        guard window != nil, bounds.width > 0 else { return }
+        let phases: [NSNumber] = [0, 0.30, 0.65, 1]
+        let ease = CAMediaTimingFunction(name: .easeInEaseOut)
+        for (index, wisp) in wisps.enumerated() {
+            let opacity = CAKeyframeAnimation(keyPath: "opacity")
+            opacity.values = [0, 0.85, 0.30, 0]
+            let rise = CAKeyframeAnimation(keyPath: "transform.translation.y")
+            rise.values = [2.5, 0, -2.5, -4].map { $0 * scale }
+            let group = CAAnimationGroup()
+            for keyframes in [opacity, rise] {
+                keyframes.keyTimes = phases
+                keyframes.timingFunctions = [ease, ease, ease]
+            }
+            group.animations = [opacity, rise]
+            group.duration = BrewingCupView.loopDuration
+            group.repeatCount = .infinity
+            // Anchored to media time zero, shifted by the wisp's delay so each
+            // runs that far ahead of the first. A fixed anchor means
+            // re-animating (a relayout, a reopened panel) continues the loop
+            // rather than restarting it.
+            group.beginTime = wisp.convertTime(0, from: nil) - BrewingCupView.wispDelays[index]
+            group.fillMode = .both
+            wisp.removeAllAnimations()
+            wisp.add(group, forKey: "steam")
+        }
     }
 }
 

@@ -512,6 +512,13 @@ APP.update({
     "Couldn't update the Hermes plugin.":
         "Não foi possível atualizar o plugin do Hermes.",
     "Couldn't update %@'s hooks.": "Não foi possível atualizar os hooks de %@.",
+    "Automatic": "Automático",
+    "Manual": "Manual",
+    "Keep awake mode": "Modo de manter acordado",
+    "Automatic or manual": "Automático ou manual",
+    "Set to Manual in the menu bar.": "Definido como Manual na barra de menus.",
+    "Switch to Automatic": "Mudar para Automático",
+    "A trigger is a condition Keepresso watches, checked once a second. With triggers on, they take over: Keepresso starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The menu then shows an Automatic and Manual switch: Manual sets the triggers aside without touching your rules, until you switch back or relaunch Keepresso.": "Um gatilho é uma condição que o Keepresso observa, verificada uma vez por segundo. Com os gatilhos ativados, eles assumem o controle: o Keepresso começa a funcionar no momento em que suas condições são atendidas e para quando deixam de ser, assim você nunca deixa o Mac acordado por acidente. O menu passa a mostrar um seletor Automático e Manual: Manual deixa os gatilhos de lado sem alterar suas regras, até você voltar ou reiniciar o Keepresso.",
 })
 
 # --- Agentic onboarding step (offers to connect the tools you have) ---

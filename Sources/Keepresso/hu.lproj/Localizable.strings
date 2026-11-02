@@ -477,6 +477,13 @@
 "Restart Hermes and its gateway to load the plugin." = "Indítsa újra a Hermest és a gatewayt a bővítmény betöltéséhez.";
 "Couldn't update the Hermes plugin." = "A Hermes bővítményt nem sikerült frissíteni.";
 "Couldn't update %@'s hooks." = "A(z) %@ hookjait nem sikerült frissíteni.";
+"Automatic" = "Automatikus";
+"Manual" = "Kézi";
+"Keep awake mode" = "Ébren tartás módja";
+"Automatic or manual" = "Automatikus vagy kézi";
+"Set to Manual in the menu bar." = "A menüsorban Kézi módra állítva.";
+"Switch to Automatic" = "Váltás automatikusra";
+"A trigger is a condition Keepresso watches, checked once a second. With triggers on, they take over: Keepresso starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The menu then shows an Automatic and Manual switch: Manual sets the triggers aside without touching your rules, until you switch back or relaunch Keepresso." = "A trigger egy olyan feltétel, amelyet a Keepresso figyel, másodpercenként ellenőrizve. Ha a triggerek be vannak kapcsolva, átveszik az irányítást: a Keepresso abban a pillanatban kezd főzni, amikor a feltételei teljesülnek, és leáll, amikor már nem, így soha nem hagyja véletlenül ébren a Macet. A menü ezután egy Automatikus és Kézi kapcsolót mutat: a Kézi félreteszi a triggereket a szabályok érintése nélkül, amíg vissza nem vált, vagy újra nem indítja a Keepresso alkalmazást.";
 "Know exactly when an agent is working" = "Pontosan tudja, mikor dolgozik egy ügynök";
 "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look." = "Csatlakoztassa a használt kódolóeszközöket, és a munkameneteik önmaguktól jeleznek, ahelyett hogy a Keepresso aszerint ítélné meg őket, mennyire elfoglaltnak tűnnek.";
 "Connect" = "Csatlakoztatás";

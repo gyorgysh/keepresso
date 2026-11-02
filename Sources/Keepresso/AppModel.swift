@@ -425,11 +425,11 @@ final class AppModel {
     /// with the saved duration.
     ///
     /// If triggers are actively gating the session, pause them first, the same
-    /// in-memory pause the menu's Pause Triggers uses and that ``handle(_:)``
+    /// in-memory pause the menu's Manual mode uses and that ``handle(_:)``
     /// applies to URL and widget commands. Without it a bare start/stop here
     /// would be undone by the gate on the very next reconcile (once a second),
     /// so a hotkey press would appear to spring back. After pausing, the menu
-    /// shows "Triggers paused / Resume Triggers" and control stays manual until
+    /// is in Manual mode and control stays manual until
     /// the user resumes or relaunches (the pause isn't persisted). The pause is
     /// a no-op when triggers are off or already paused, so the menu switch (only
     /// reachable in those states) behaves exactly as before.
@@ -613,7 +613,7 @@ final class AppModel {
     /// ``resumeTriggers()``. No-op if triggers aren't on or already paused.
     ///
     /// `cause` labels the stop in the decision log. It defaults to `.manual`
-    /// (the menu's Pause Triggers button); ``handle(_:)`` passes `.command` so a
+    /// (the menu switching to Manual); ``handle(_:)`` passes `.command` so a
     /// URL / Shortcuts / widget stop that has to pause a trigger-held session
     /// first isn't misattributed as a manual stop.
     func pauseTriggers(cause: SessionCause = .manual) {
@@ -2011,7 +2011,7 @@ final class AppModel {
         leaseEngine.revokeAll(now: Date())
     }
 
-    /// The menu's explicit lease stop, offered ahead of Pause Triggers while
+    /// The menu's explicit lease stop, offered beside the mode switch while
     /// leases are live: revoke every lease so clients hear "revoked" on
     /// their next heartbeat. A lease-held session stops silently (a user
     /// gesture, not a natural end, so no end action fires); a trigger-held
@@ -2174,7 +2174,7 @@ final class AppModel {
 
     /// Handle a `keepresso://` command from ``URLCommand/parse(_:)``. Acts like
     /// the manual toggle/duration picker. When trigger gating is on it pauses
-    /// triggers first (the same in-memory pause as the menu's Pause Triggers,
+    /// triggers first (the same in-memory pause as the menu's Manual mode,
     /// nothing persisted): otherwise the gate would silently override the
     /// command on the next once-a-second reconcile, turning it into a no-op
     /// with no feedback to the script that fired it.

@@ -66,8 +66,9 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   large download, upload, or sync), a **download is in progress** in a folder you
   choose (keep awake until it finishes), **a game is in front**, or during a
   **scheduled time window** (weekdays 9:00-18:00, overnight hours). Combine
-  conditions with **any** (OR) or **all** (AND). A one-click "Pause Triggers"
-  in the menu bar stops brewing without touching your rules.
+  conditions with **any** (OR) or **all** (AND). An Automatic and Manual
+  switch in the menu bar shows which one is in control, and Manual sets the
+  triggers aside without touching your rules.
 - 🤖 **Agent-aware.** The "AI agent is working" condition keeps the Mac awake
   while a coding agent (claude, cursor, codex, antigravity, gemini, grok, aider,
   goose, pi, hermes, kilo, opencode, dsh, muse, devin, qwen, kimi, and friends) is actually working, and lets it sleep once every

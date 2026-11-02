@@ -390,6 +390,336 @@ private struct GlassReadabilityPlate: View {
     }
 }
 
+/// The menu panel's backing, tuned so text over a busy window stays readable.
+///
+/// The thin SwiftUI material it replaces blurred too little: text in the
+/// window behind the panel read straight through the rows. Three layers fix
+/// that without losing the glass:
+///
+/// 1. A behind-window `NSVisualEffectView`, the material macOS itself puts
+///    under window backgrounds. Its blur is far wider than a SwiftUI material,
+///    so background detail dissolves into colour instead of showing as text.
+/// 2. A neutral wash (black in dark mode, white in light) that sets a floor
+///    under the text contrast whatever the desktop's brightness.
+/// 3. A faint warm glow from the top, the brew colour, a little stronger
+///    while brewing. It is a tint, not decoration: it keeps the panel from
+///    reading as grey while leaving the rows neutral.
+///
+/// All three are static. The window server composites the blur, nothing here
+/// animates or ticks, and when the panel is closed its window is off screen,
+/// so the backing costs nothing at all.
+///
+/// The Appearance slider still applies: at 100% see-through the frost and
+/// wash fall to a floor and the panel is close to the bare system glass.
+/// Reduce Transparency gets an opaque window background.
+private struct MenuPanelPlate: View {
+    var brewing: Bool
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        if reduceTransparency {
+            Color(nsColor: .windowBackgroundColor)
+        } else {
+            let clarity = GlassClarity.shared.value
+            let dark = colorScheme == .dark
+            ZStack {
+                BehindWindowFrost()
+                    .opacity(1 - 0.7 * clarity)
+                (dark ? Color.black : Color.white)
+                    .opacity((dark ? 0.32 : 0.38) * (1 - 0.75 * clarity))
+                EllipticalGradient(
+                    stops: [
+                        .init(color: Color.keepressoBrew.opacity((dark ? 0.16 : 0.08) * (brewing ? 1 : 0.55)), location: 0),
+                        .init(color: Color.keepressoBrew.opacity((dark ? 0.05 : 0.025) * (brewing ? 1 : 0.55)), location: 0.55),
+                        .init(color: .clear, location: 1),
+                    ],
+                    center: UnitPoint(x: 0.5, y: 0),
+                    startRadiusFraction: 0,
+                    endRadiusFraction: 0.9
+                )
+                PanelSteam(brewing: brewing, dark: dark)
+            }
+        }
+    }
+}
+
+/// Steam drifting up the panel while it brews.
+///
+/// Built so the app does no work per frame. A seamless steam texture is
+/// generated once, on the CPU, when the panel opens (a few milliseconds),
+/// and Core Animation slides two copies of it upward at different speeds.
+/// Core Animation runs those animations in the render server, so the app
+/// itself sits idle while the steam moves. An earlier Metal shader version
+/// redrew the effect in the app 24 times a second and cost a third of a core.
+///
+/// It stops entirely when it isn't seen: the panel's views exist only while
+/// the panel is open, the animations are removed whenever the session isn't
+/// brewing, and Reduce Motion and Low Power Mode keep it off.
+private struct PanelSteam: View {
+    var brewing: Bool
+    var dark: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+
+    var body: some View {
+        SteamLayerView(running: brewing && !reduceMotion && !lowPower, dark: dark)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
+                lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+            }
+    }
+}
+
+private struct SteamLayerView: NSViewRepresentable {
+    var running: Bool
+    var dark: Bool
+
+    func makeNSView(context: Context) -> SteamView { SteamView() }
+
+    func updateNSView(_ view: SteamView, context: Context) {
+        view.update(running: running, dark: dark)
+    }
+}
+
+/// The layer tree behind ``PanelSteam``: a container faded toward the top,
+/// holding two drifting layers of the same tile at different speeds,
+/// mirrored, and strengths, so the wisps never visibly repeat.
+private final class SteamView: NSView {
+    private let container = CALayer()
+    private let fade = CAGradientLayer()
+    private let drifts = [CALayer(), CALayer()]
+    private var running = false
+    private var dark: Bool?
+    private var tile: CGImage?
+    /// The size the tiles were last laid out for. Layout passes at the same
+    /// size (frequent, as the panel's rows change) leave the steam moving.
+    private var builtSize: CGSize = .zero
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.addSublayer(container)
+        container.opacity = 0
+        container.mask = fade
+        // Thickest at the bottom, gone before the header.
+        fade.colors = [NSColor.black.cgColor, NSColor.black.withAlphaComponent(0.6).cgColor, NSColor.clear.cgColor]
+        fade.locations = [0, 0.45, 0.85]
+        fade.startPoint = CGPoint(x: 0.5, y: 0)
+        fade.endPoint = CGPoint(x: 0.5, y: 1)
+        for (index, drift) in drifts.enumerated() {
+            drift.opacity = index == 0 ? 1 : 0.6
+            container.addSublayer(drift)
+        }
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        container.frame = bounds
+        fade.frame = bounds
+        CATransaction.commit()
+        if bounds.size != builtSize { rebuild() }
+    }
+
+    func update(running: Bool, dark: Bool) {
+        if self.dark != dark {
+            self.dark = dark
+            tile = SteamTexture.make(dark: dark)
+            rebuild()
+        }
+        guard running != self.running else { return }
+        self.running = running
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(1.2)
+        container.opacity = running ? 1 : 0
+        CATransaction.setCompletionBlock { [weak self] in
+            // Faded out: drop the animations so nothing moves unseen.
+            guard let self, !self.running else { return }
+            self.drifts.forEach { $0.removeAllAnimations() }
+        }
+        CATransaction.commit()
+        if running { animate() }
+    }
+
+    /// Lays each drift out as a column of tiles tall enough to scroll one
+    /// tile's height over the whole panel, then restarts the motion.
+    private func rebuild() {
+        guard let tile, bounds.width > 0, bounds.height > 0 else { return }
+        builtSize = bounds.size
+        let width = bounds.width
+        let tileHeight = max(width * CGFloat(tile.height) / CGFloat(tile.width), bounds.height)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (index, drift) in drifts.enumerated() {
+            drift.sublayers?.forEach { $0.removeFromSuperlayer() }
+            drift.frame = CGRect(x: 0, y: -tileHeight, width: width, height: tileHeight * 2 + bounds.height)
+            for row in 0..<3 {
+                let piece = CALayer()
+                piece.contents = tile
+                piece.contentsGravity = .resize
+                piece.frame = CGRect(x: 0, y: CGFloat(row) * tileHeight, width: width, height: tileHeight)
+                // The second layer runs mirrored, so it never lines up with
+                // the first.
+                if index == 1 { piece.setAffineTransform(CGAffineTransform(scaleX: -1, y: 1)) }
+                drift.addSublayer(piece)
+            }
+        }
+        CATransaction.commit()
+        if running { animate() }
+    }
+
+    private func animate() {
+        guard bounds.height > 0, let first = drifts.first?.sublayers?.first else { return }
+        let tileHeight = first.frame.height
+        for (index, drift) in drifts.enumerated() {
+            drift.removeAllAnimations()
+            // Anchored to media time zero, not now: a restart (a resize, the
+            // brew starting again) picks the loop up where it would have
+            // been, instead of snapping every wisp back to the start.
+            let anchor = drift.convertTime(0, from: nil)
+            let rise = CABasicAnimation(keyPath: "transform.translation.y")
+            rise.fromValue = 0
+            rise.toValue = tileHeight
+            rise.duration = index == 0 ? 26 : 41
+            rise.repeatCount = .infinity
+            rise.beginTime = anchor
+            drift.add(rise, forKey: "rise")
+            let sway = CABasicAnimation(keyPath: "transform.translation.x")
+            sway.fromValue = index == 0 ? -8 : 10
+            sway.toValue = index == 0 ? 8 : -10
+            sway.duration = index == 0 ? 9 : 13
+            sway.autoreverses = true
+            sway.repeatCount = .infinity
+            sway.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            sway.beginTime = anchor
+            drift.add(sway, forKey: "sway")
+        }
+    }
+}
+
+/// A small, vertically seamless image of soft wisps: domain-warped value
+/// noise whose lattice wraps in y, so stacked copies join without a seam.
+/// Generated once per appearance and stretched to the panel, where its
+/// softness is the point.
+private enum SteamTexture {
+    static let width = 96
+    static let height = 192
+    /// Lattice cells across one tile height at the first octave. Every later
+    /// octave doubles it, so all of them wrap at the tile's edge.
+    static let period = 6
+
+    static func make(dark: Bool) -> CGImage? {
+        // White in the dark; brew-tinted in the light, where white vanishes.
+        // Resolved for the mode being built, not whatever appearance happens
+        // to be current while this runs.
+        var tint = NSColor.orange
+        NSAppearance(named: dark ? .darkAqua : .aqua)?.performAsCurrentDrawingAppearance {
+            tint = NSColor(Color.keepressoBrew).usingColorSpace(.deviceRGB) ?? .orange
+        }
+        let mix = dark ? 0.30 : 0.75
+        let red = 1 - (1 - Double(tint.redComponent)) * mix
+        let green = 1 - (1 - Double(tint.greenComponent)) * mix
+        let blue = 1 - (1 - Double(tint.blueComponent)) * mix
+        let peak = dark ? 0.10 : 0.12
+
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        for y in 0..<height {
+            for x in 0..<width {
+                let u = Double(x) / Double(width) * 3
+                let v = Double(y) / Double(height) * Double(period)
+                // The warp only scales x: scaling y would break the wrap, and
+                // a warp that wraps itself keeps the warped noise seamless.
+                let warpX = fbm(u * 0.7, v)
+                let warpY = fbm(u * 0.7 + 5.2, v)
+                let n = fbm(u + warpX * 1.6, v + warpY * 1.6)
+                let wisps = smoothstep(0.50, 0.80, n)
+                // Soft at the sides of the panel.
+                let side = smoothstep(0, 0.12, Double(x) / Double(width))
+                    * smoothstep(1, 0.88, Double(x) / Double(width))
+                let alpha = wisps * side * peak
+                let offset = (y * width + x) * 4
+                pixels[offset] = UInt8(min(255, red * alpha * 255))
+                pixels[offset + 1] = UInt8(min(255, green * alpha * 255))
+                pixels[offset + 2] = UInt8(min(255, blue * alpha * 255))
+                pixels[offset + 3] = UInt8(min(255, alpha * 255))
+            }
+        }
+        return pixels.withUnsafeMutableBytes { buffer -> CGImage? in
+            CGContext(
+                data: buffer.baseAddress, width: width, height: height,
+                bitsPerComponent: 8, bytesPerRow: width * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )?.makeImage()
+        }
+    }
+
+    private static func smoothstep(_ edge0: Double, _ edge1: Double, _ x: Double) -> Double {
+        let t = min(1, max(0, (x - edge0) / (edge1 - edge0)))
+        return t * t * (3 - 2 * t)
+    }
+
+    private static func hash(_ x: Int, _ y: Int) -> Double {
+        var h = UInt32(truncatingIfNeeded: x &* 374_761_393 &+ y &* 668_265_263)
+        h = (h ^ (h >> 13)) &* 1_274_126_177
+        return Double(h ^ (h >> 16)) / Double(UInt32.max)
+    }
+
+    /// Value noise whose y lattice wraps every `wrap` cells.
+    private static func noise(_ x: Double, _ y: Double, wrap: Int) -> Double {
+        let cellX = Int(floor(x)), cellY = Int(floor(y))
+        var fx = x - floor(x), fy = y - floor(y)
+        fx = fx * fx * (3 - 2 * fx)
+        fy = fy * fy * (3 - 2 * fy)
+        func at(_ cx: Int, _ cy: Int) -> Double {
+            hash(cx, ((cy % wrap) + wrap) % wrap)
+        }
+        let top = at(cellX, cellY) + (at(cellX + 1, cellY) - at(cellX, cellY)) * fx
+        let bottom = at(cellX, cellY + 1) + (at(cellX + 1, cellY + 1) - at(cellX, cellY + 1)) * fx
+        return top + (bottom - top) * fy
+    }
+
+    /// Four octaves. The y input is in units of first-octave cells, so octave
+    /// `o` wraps at `period << o` cells, exactly one tile height.
+    private static func fbm(_ x: Double, _ y: Double) -> Double {
+        var value = 0.0, amplitude = 0.5, frequency = 1.0
+        for octave in 0..<4 {
+            value += amplitude * noise(x * frequency + Double(octave) * 17.1, y * frequency,
+                                       wrap: period << octave)
+            frequency *= 2
+            amplitude *= 0.5
+        }
+        return value
+    }
+}
+
+/// The system's under-window-background material, blending with whatever is
+/// behind the window. A background only: it never takes a click.
+private struct BehindWindowFrost: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = PassthroughEffectView()
+        view.material = .underWindowBackground
+        view.blendingMode = .behindWindow
+        // Always active: the panel is never the key window, and following
+        // the window's state would grey the frost out while it is open.
+        view.state = .active
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
+
+    private final class PassthroughEffectView: NSVisualEffectView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+}
+
 extension View {
     /// A translucent "glass" surface behind a view. On macOS 26+ this is the real
     /// Liquid Glass material, tinted faintly toward the window background color
@@ -443,8 +773,8 @@ extension View {
     /// Appearance slider: at 100% the plate all but vanishes and the panel
     /// is the system's bare Liquid Glass, at 0% it is fully frosty. The
     /// default sits at the halfway 50%.
-    func glassPanelBackground() -> some View {
-        background(GlassReadabilityPlate().ignoresSafeArea())
+    func glassPanelBackground(brewing: Bool = false) -> some View {
+        background(MenuPanelPlate(brewing: brewing).ignoresSafeArea())
     }
 
     /// A translucent glass background for a whole window that stays readable on

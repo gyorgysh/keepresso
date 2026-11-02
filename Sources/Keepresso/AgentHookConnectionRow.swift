@@ -74,7 +74,9 @@ struct AgentHookConnectionRow: View {
     }
     private var subtitle: LocalizedStringKey {
         switch tool {
-        case .claudeCode, .grok, .qwen, .devin, .kimi: return "CLI sessions"
+        // Claude Code also runs inside the Claude desktop app, which reads
+        // the same settings file, like Codex inside ChatGPT.
+        case .grok, .qwen, .devin, .kimi: return "CLI sessions"
         case .hermes: return "CLI and gateway sessions"
         default: return "App and CLI sessions"
         }

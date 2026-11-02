@@ -24,6 +24,26 @@ Versions follow [Semantic Versioning](https://semver.org).
   sessions report exactly when they are working, waiting for your approval,
   or idle, instead of being guessed from CPU and file activity.
 
+### Changed
+
+- **Automatic or Manual, at a glance.** With triggers set up, the menu now
+  shows one Automatic and Manual switch instead of separate Keep awake,
+  Start manual session, and Pause or Resume Triggers controls. Automatic lists
+  the conditions deciding, Manual shows the Keep awake switch and duration, and
+  switching to Manual sets the triggers aside without touching your rules.
+  Prompted by feedback from @alvst in #31.
+- **A clearer, warmer menu panel.** The panel's glass now blurs what is
+  behind it far more, with a neutral wash and a faint brew-colored glow, so
+  rows stay readable over busy windows. Soft steam drifts up the panel while
+  it brews, only while the panel is open, and never with Reduce Motion or in
+  Low Power Mode. The See-through slider in Preferences now works on macOS 27
+  as well.
+- **Lighter animations.** The cup's steam and the agent spinners now run in
+  Core Animation instead of redrawing the whole panel many times a second,
+  so an open panel uses a fraction of the CPU it did.
+- Automation leases now show as one card under the Automatic and Manual
+  switch, with their own End button.
+
 ### Fixed
 
 - Opening Preferences could hang while macOS Location Services was

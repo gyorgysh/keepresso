@@ -477,6 +477,13 @@
 "Restart Hermes and its gateway to load the plugin." = "请重新启动 Hermes 及其网关以加载插件。";
 "Couldn't update the Hermes plugin." = "无法更新 Hermes 插件。";
 "Couldn't update %@'s hooks." = "无法更新 %@ 的钩子。";
+"Automatic" = "自动";
+"Manual" = "手动";
+"Keep awake mode" = "保持唤醒模式";
+"Automatic or manual" = "自动或手动";
+"Set to Manual in the menu bar." = "已在菜单栏中设为手动。";
+"Switch to Automatic" = "切换到自动";
+"A trigger is a condition Keepresso watches, checked once a second. With triggers on, they take over: Keepresso starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The menu then shows an Automatic and Manual switch: Manual sets the triggers aside without touching your rules, until you switch back or relaunch Keepresso." = "触发条件是 Keepresso 持续监视的一种状态，每秒检查一次。触发条件开启后会接管控制：一旦满足条件，Keepresso 便立即开始运行，条件不再满足时便停止，这样你就不会不小心让 Mac 一直保持唤醒。此时菜单中会显示“自动”和“手动”开关：选择“手动”会在不改动规则的情况下搁置触发条件，直到你切换回来或重新启动 Keepresso。";
 "Know exactly when an agent is working" = "准确知道智能体何时在工作";
 "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look." = "连接你使用的编程工具，让它们的会话自行报告状态，而不是让 Keepresso 通过它们看起来有多忙来判断。";
 "Connect" = "连接";

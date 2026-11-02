@@ -592,6 +592,13 @@ APP.update({
     "Restart Hermes and its gateway to load the plugin.": "Riavvia Hermes e il suo gateway per caricare il plugin.",
     "Couldn't update the Hermes plugin.": "Impossibile aggiornare il plugin di Hermes.",
     "Couldn't update %@'s hooks.": "Impossibile aggiornare gli hook di %@.",
+    "Automatic": "Auto",
+    "Manual": "Manuale",
+    "Keep awake mode": "Modalità Tieni sveglio",
+    "Automatic or manual": "Auto o manuale",
+    "Set to Manual in the menu bar.": "Impostato su Manuale nella barra dei menu.",
+    "Switch to Automatic": "Passa ad Auto",
+    "A trigger is a condition Keepresso watches, checked once a second. With triggers on, they take over: Keepresso starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The menu then shows an Automatic and Manual switch: Manual sets the triggers aside without touching your rules, until you switch back or relaunch Keepresso.": "Un attivatore è una condizione che Keepresso monitora, controllata una volta al secondo. Con gli attivatori attivi, prendono il controllo: Keepresso inizia a essere in infusione nel momento in cui le tue condizioni sono soddisfatte e si ferma quando non lo sono più, così non lasci mai il Mac sveglio per errore. Il menu mostra quindi un selettore Auto e Manuale: Manuale mette da parte gli attivatori senza toccare le tue regole, finché non torni indietro o riavvii Keepresso.",
 })
 
 # --- Agentic onboarding step (offers to connect the tools you have) ---

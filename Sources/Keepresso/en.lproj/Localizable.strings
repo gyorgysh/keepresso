@@ -477,6 +477,13 @@
 "Restart Hermes and its gateway to load the plugin." = "Restart Hermes and its gateway to load the plugin.";
 "Couldn't update the Hermes plugin." = "Couldn't update the Hermes plugin.";
 "Couldn't update %@'s hooks." = "Couldn't update %@'s hooks.";
+"Automatic" = "Automatic";
+"Manual" = "Manual";
+"Keep awake mode" = "Keep awake mode";
+"Automatic or manual" = "Automatic or manual";
+"Set to Manual in the menu bar." = "Set to Manual in the menu bar.";
+"Switch to Automatic" = "Switch to Automatic";
+"A trigger is a condition Keepresso watches, checked once a second. With triggers on, they take over: Keepresso starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The menu then shows an Automatic and Manual switch: Manual sets the triggers aside without touching your rules, until you switch back or relaunch Keepresso." = "A trigger is a condition Keepresso watches, checked once a second. With triggers on, they take over: Keepresso starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The menu then shows an Automatic and Manual switch: Manual sets the triggers aside without touching your rules, until you switch back or relaunch Keepresso.";
 "Know exactly when an agent is working" = "Know exactly when an agent is working";
 "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look." = "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look.";
 "Connect" = "Connect";

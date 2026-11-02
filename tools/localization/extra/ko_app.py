@@ -500,6 +500,13 @@ APP.update({
     "Restart Hermes and its gateway to load the plugin.": "Hermes와 게이트웨이를 다시 시작하여 플러그인을 로드하세요.",
     "Couldn't update the Hermes plugin.": "Hermes 플러그인을 업데이트할 수 없습니다.",
     "Couldn't update %@'s hooks.": "%@ 후크를 업데이트할 수 없습니다.",
+    "Automatic": "자동",
+    "Manual": "수동",
+    "Keep awake mode": "깨어 있게 유지 모드",
+    "Automatic or manual": "자동 또는 수동",
+    "Set to Manual in the menu bar.": "메뉴 막대에서 수동으로 설정되어 있습니다.",
+    "Switch to Automatic": "자동으로 전환",
+    "A trigger is a condition Keepresso watches, checked once a second. With triggers on, they take over: Keepresso starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The menu then shows an Automatic and Manual switch: Manual sets the triggers aside without touching your rules, until you switch back or relaunch Keepresso.": "트리거는 Keepresso가 감시하는 조건으로, 1초에 한 번씩 확인됩니다. 트리거를 켜면 트리거가 제어권을 가져갑니다. 조건이 충족되는 순간 Keepresso가 작동을 시작하고 조건이 더 이상 충족되지 않으면 중지되므로, 실수로 Mac을 켜진 상태로 방치하는 일이 없습니다. 그러면 메뉴에 자동과 수동 스위치가 표시됩니다. 수동을 선택하면 규칙을 건드리지 않고 트리거를 한쪽으로 치워 두며, 다시 전환하거나 Keepresso를 다시 실행할 때까지 유지됩니다.",
 })
 
 # --- Agentic onboarding step (offers to connect the tools you have) ---

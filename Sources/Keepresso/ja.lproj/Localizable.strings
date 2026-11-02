@@ -477,6 +477,13 @@
 "Restart Hermes and its gateway to load the plugin." = "Hermes とそのゲートウェイを再起動して、プラグインを読み込んでください。";
 "Couldn't update the Hermes plugin." = "Hermes のプラグインを更新できませんでした。";
 "Couldn't update %@'s hooks." = "%@ のフックを更新できませんでした。";
+"Automatic" = "自動";
+"Manual" = "手動";
+"Keep awake mode" = "スリープ防止モード";
+"Automatic or manual" = "自動または手動";
+"Set to Manual in the menu bar." = "メニューバーで手動に設定されています。";
+"Switch to Automatic" = "自動に切り替える";
+"A trigger is a condition Keepresso watches, checked once a second. With triggers on, they take over: Keepresso starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The menu then shows an Automatic and Manual switch: Manual sets the triggers aside without touching your rules, until you switch back or relaunch Keepresso." = "トリガーとは、Keepresso が監視する条件で、1 秒ごとに確認されます。トリガーがオンのときはトリガーが主導権を持ちます。条件が満たされた瞬間に Keepresso はスリープ防止を開始し、満たされなくなると停止するため、うっかり Mac を起きたままにしてしまうことがありません。その後、メニューに自動と手動のスイッチが表示されます。手動にすると、ルールを変更せずにトリガーが脇に置かれ、自動に戻すか Keepresso を再起動するまで続きます。";
 "Know exactly when an agent is working" = "エージェントが作業中かを正確に把握";
 "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look." = "使っているコーディングツールを接続すると、セッションが自分で状態を報告するようになり、Keepresso が忙しさの見た目だけで判断することはなくなります。";
 "Connect" = "接続";
