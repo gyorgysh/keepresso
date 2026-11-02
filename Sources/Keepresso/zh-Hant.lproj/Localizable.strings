@@ -473,6 +473,10 @@
 "Grok's hooks file couldn't be read, so it was left untouched." = "無法讀取 Grok 的掛鉤檔案，因此未作變動。";
 "Couldn't update Grok's hooks file." = "無法更新 Grok 的掛鉤檔案。";
 "Reload hooks in a running Grok session (/hooks, then r) or start a new one." = "在執行中的 Grok 工作階段重新載入掛鉤（/hooks，然後 r），或開始新的工作階段。";
+"CLI and gateway sessions" = "CLI 和閘道工作階段";
+"Restart Hermes and its gateway to load the plugin." = "請重新啟動 Hermes 及其閘道以載入外掛程式。";
+"Couldn't update the Hermes plugin." = "無法更新 Hermes 外掛程式。";
+"Couldn't update %@'s hooks." = "無法更新 %@ 的掛鉤。";
 "Know exactly when an agent is working" = "確切知道智能體何時在工作";
 "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look." = "連接您使用的編碼工具，讓其工作階段自行回報狀態，而不是由 Keepresso 依忙碌程度來判斷。";
 "Connect" = "連接";

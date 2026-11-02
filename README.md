@@ -74,8 +74,8 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   session goes quiet, after a grace you choose. Agents that stream a transcript
   to disk prove their work directly, even through long zero-CPU network waits.
   The rest are judged on the CPU of their processes and tool calls against each
-  session's own learned idle level. **Claude Code, Cursor, Codex, Grok, and
-  Antigravity** can report their state exactly, via an opt-in hook integration
+  session's own learned idle level. **Claude Code, Cursor, Codex, Grok,
+  Antigravity, Hermes Agent, Qwen Code, Devin, and Kimi Code** can report their state exactly, via an opt-in hook integration
   you connect in one click: a session is working when the tool says it is, a
   pending permission prompt counts as working (so the Mac waits for your
   answer), and background subagents count too. That covers the agents built into

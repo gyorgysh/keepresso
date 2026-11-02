@@ -21,7 +21,7 @@ struct AgentHookConnectionRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(verbatim: tool.displayName).font(compact ? .caption.weight(.medium) : .callout.weight(.medium))
                     if !compact {
-                        Text(tool == .claudeCode || tool == .grok ? "CLI sessions" : "App and CLI sessions")
+                        Text(subtitle)
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -35,6 +35,10 @@ struct AgentHookConnectionRow: View {
                         .fixedSize(horizontal: false, vertical: true)
                 } else if tool == .grok && !compact {
                     Text("Reload hooks in a running Grok session (/hooks, then r) or start a new one.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if tool == .hermes && !compact {
+                    Text("Restart Hermes and its gateway to load the plugin.")
                         .font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -68,6 +72,13 @@ struct AgentHookConnectionRow: View {
                 .font(.caption).foregroundStyle(.orange)
         }
     }
+    private var subtitle: LocalizedStringKey {
+        switch tool {
+        case .claudeCode, .grok, .qwen, .devin, .kimi: return "CLI sessions"
+        case .hermes: return "CLI and gateway sessions"
+        default: return "App and CLI sessions"
+        }
+    }
     private var assetName: String {
         switch tool {
         case .claudeCode: return "brand_claude_code"
@@ -75,6 +86,10 @@ struct AgentHookConnectionRow: View {
         case .codex: return "brand_codex"
         case .antigravity: return "brand_antigravity"
         case .grok: return "brand_grok"
+        case .hermes: return "brand_hermes"
+        case .qwen: return "brand_qwen"
+        case .devin: return "brand_devin"
+        case .kimi: return "brand_kimi"
         }
     }
 }
@@ -87,6 +102,8 @@ extension AppModel {
         case .codex: removeCodexHooks()
         case .antigravity: removeAntigravityHooks()
         case .grok: removeGrokHooks()
+        case .hermes: removeHermesPlugin()
+        case .qwen, .devin, .kimi: tool.compatTool.map(removeCompatHooks)
         }
     }
     func hookError(for tool: AgentTool) -> String? {
@@ -96,6 +113,8 @@ extension AppModel {
         case .codex: return codexHooksError
         case .antigravity: return antigravityHooksError
         case .grok: return grokHooksError
+        case .hermes: return hermesHooksError
+        case .qwen, .devin, .kimi: return tool.compatTool.flatMap { compatHooksErrors[$0] }
         }
     }
 }

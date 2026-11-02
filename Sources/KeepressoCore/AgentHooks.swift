@@ -134,10 +134,12 @@ public enum AgentHooks {
     /// catch-all the app renders as "using <name>".
     static func detailToken(forTool tool: String) -> String? {
         switch tool {
-        case "Bash", "run_terminal_command": return "running-command"
-        case "Edit", "Write", "MultiEdit", "NotebookEdit", "search_replace": return "editing"
+        case "Bash", "run_terminal_command", "run_shell_command", "exec": return "running-command"
+        case "Edit", "Write", "MultiEdit", "NotebookEdit", "search_replace", "edit", "write_file":
+            return "editing"
         case "Read", "read_file": return "reading"
-        case "Grep", "Glob", "grep", "list_dir": return "searching"
+        case "Grep", "Glob", "grep", "list_dir", "grep_search", "glob", "list_directory":
+            return "searching"
         case "Task", "Agent", "spawn_subagent": return "subagent"
         case "WebFetch", "WebSearch", "web_fetch", "web_search": return "browsing"
         default:
@@ -223,20 +225,42 @@ public enum AgentHooks {
     /// Code's native install executes `~/.local/share/claude/versions/N.N.N`,
     /// so its comm is the bare version number). Pure over the injected
     /// closures; the depth cap and visited set bound races on reused pids.
+    ///
+    /// With `foldsWrapper`, a match whose direct parent is the same agent is
+    /// walked past to that parent: a launcher that re-execs itself (Devin runs
+    /// `devin` under `devin`) is one session, and the `ps` scan keeps the
+    /// outer process, so the join key has to be that one. Opt-in, because a
+    /// direct same-name parent means something else for other tools (a codex
+    /// process under Codex Desktop's `codex app-server` is not one session).
+    ///
+    /// `alsoMatches` adds to the name test for tools the comm and path can't
+    /// identify (Qwen Code runs as a generic `node`); a pid it accepts is
+    /// reported as the first of `agents`.
     public static func findAgentAncestor(
         startingAt pid: Int32,
         agents: [String] = PSAgentActivityMonitor.agentCommands,
         depthLimit: Int = 20,
         parentOf: (Int32) -> Int32? = defaultParentOf,
         commandOf: (Int32) -> String? = defaultCommandOf,
-        pathOf: (Int32) -> String? = defaultPathOf
+        pathOf: (Int32) -> String? = defaultPathOf,
+        foldsWrapper: Bool = false,
+        alsoMatches: (Int32) -> Bool = { _ in false }
     ) -> AncestorMatch? {
+        func agentNamed(_ pid: Int32) -> String? {
+            agentMatch(comm: commandOf(pid), path: pathOf(pid), agents: agents)
+                ?? (alsoMatches(pid) ? agents.first : nil)
+        }
         var visited: Set<Int32> = []
         var current = pid
         var depth = 0
         while current > 1, depth < depthLimit, visited.insert(current).inserted {
-            if let agent = agentMatch(
-                comm: commandOf(current), path: pathOf(current), agents: agents) {
+            if let agent = agentNamed(current) {
+                while foldsWrapper, depth < depthLimit, let parent = parentOf(current), parent > 1,
+                      !visited.contains(parent), agentNamed(parent) == agent {
+                    visited.insert(parent)
+                    current = parent
+                    depth += 1
+                }
                 return AncestorMatch(
                     agentPid: current,
                     agentCommand: agent,
@@ -566,12 +590,15 @@ public enum AgentHooks {
     }
 
     /// Records to delete when the user removes Claude Code's hooks.
-    /// Cursor, Codex, Antigravity, and Grok share this folder and keep writing.
+    /// Cursor, Codex, Antigravity, Grok, Hermes, Qwen Code, Devin, and Kimi
+    /// share this folder and keep writing.
     public static func shouldPurgeOnClaudeUninstall(_ record: HookRecord) -> Bool {
         !CursorHooks.ownsRecord(record)
             && !CodexHooks.ownsRecord(record)
             && !AntigravityHooks.ownsRecord(record)
             && !GrokHooks.ownsRecord(record)
+            && !HermesHooks.ownsRecord(record)
+            && !CompatHooks.ownsRecord(record)
     }
 
     /// Applies one hook invocation end to end: decode the stdin payload,
@@ -767,9 +794,14 @@ public enum AgentHooks {
         // (that bundle, that binary), so it carries the same guarantee against
         // a reused pid.
         if let path, AntigravityHooks.isEditorHostPath(path) { return true }
-        return agentMatch(
+        if agentMatch(
             comm: defaultCommandOf(pid), path: path,
-            agents: PSAgentActivityMonitor.agentCommands) != nil
+            agents: PSAgentActivityMonitor.agentCommands) != nil {
+            return true
+        }
+        // Qwen Code runs as a generic `node`; only its argv names it, which
+        // is as specific a test as the `ps` scan's own.
+        return defaultArgumentsOf(pid).map(PSAgentActivityMonitor.isQwenCodeCommand) ?? false
     }
 
     // MARK: - settings.json install/remove
@@ -790,6 +822,39 @@ public enum AgentHooks {
     /// or ignore one.
     static let matcherEvents: Set<String> = ["PreToolUse", "PostToolUse"]
 
+    /// How one tool's Claude-format settings file takes Keepresso's entries.
+    ///
+    /// Qwen Code and Devin read hooks in Claude Code's exact JSON shape, from
+    /// their own settings files, so they share this installer, inspector, and
+    /// remover. What differs is spelled out here: the subcommand their hooks
+    /// call, the marker that tells their entries apart from Claude's, the
+    /// events they emit, and the timeout in the tool's own unit (Qwen counts
+    /// milliseconds, where Claude and Devin count seconds).
+    public struct SettingsFormat: Sendable {
+        public var subcommand: String
+        public var marker: String
+        public var events: [String]
+        public var matcherEvents: Set<String>
+        public var timeout: Int
+
+        public init(
+            subcommand: String, marker: String, events: [String],
+            matcherEvents: Set<String>, timeout: Int
+        ) {
+            self.subcommand = subcommand
+            self.marker = marker
+            self.events = events
+            self.matcherEvents = matcherEvents
+            self.timeout = timeout
+        }
+
+        /// Claude Code. Its marker and command spelling are frozen: released
+        /// versions must keep recognizing each other's entries.
+        public static let claude = SettingsFormat(
+            subcommand: "agent-hook", marker: hookMarker, events: installedEvents,
+            matcherEvents: AgentHooks.matcherEvents, timeout: 5)
+    }
+
     /// `~/.claude/settings.json`, Claude Code's user-level settings.
     public static func claudeSettingsURL(fileManager: FileManager = .default) -> URL {
         fileManager.homeDirectoryForCurrentUser
@@ -805,10 +870,12 @@ public enum AgentHooks {
     /// the app is deleted can't be hijacked by an unrelated `keepresso` on
     /// PATH. The trailing `:` pins exit 0: a missing CLI must never disturb
     /// the session.
-    public static func hookCommand(event: String, cliPath: String) -> String {
+    public static func hookCommand(
+        event: String, cliPath: String, format: SettingsFormat = .claude
+    ) -> String {
         "c=\(shellSingleQuoted(cliPath)); [ -x \"$c\" ] || "
             + "c=/Applications/Keepresso.app/Contents/Helpers/keepresso; "
-            + "\"$c\" agent-hook \(event); : # \(hookMarker)"
+            + "\"$c\" \(format.subcommand) \(event); : # \(format.marker)"
     }
 
     /// POSIX single-quoting: everything inside is literal, an embedded single
@@ -873,31 +940,33 @@ public enum AgentHooks {
     /// Reads a settings file and reports the state of our install event by
     /// event. Pure: the expected command is derived from `cliPath`, so the
     /// caller decides what "current" means.
-    public static func inspect(_ data: Data?, cliPath: String) -> HookInstallReport {
+    public static func inspect(
+        _ data: Data?, cliPath: String, format: SettingsFormat = .claude
+    ) -> HookInstallReport {
         var report = HookInstallReport()
         guard let data, !data.isEmpty,
               let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let hooks = root["hooks"] as? [String: Any] else {
-            report.missing = Set(installedEvents)
+            report.missing = Set(format.events)
             return report
         }
         for (event, value) in hooks {
             guard let groups = value as? [Any] else { continue }
-            let ours = groups.flatMap { keepressoCommands(in: $0) }
+            let ours = groups.flatMap { keepressoCommands(in: $0, marker: format.marker) }
             guard !ours.isEmpty else { continue }
-            guard installedEvents.contains(event) else {
+            guard format.events.contains(event) else {
                 report.orphaned.insert(event)
                 continue
             }
             if ours.count > 1 {
                 report.duplicated.insert(event)
-            } else if ours[0] != hookCommand(event: event, cliPath: cliPath) {
+            } else if ours[0] != hookCommand(event: event, cliPath: cliPath, format: format) {
                 report.stale.insert(event)
             } else {
                 report.healthy.insert(event)
             }
         }
-        report.missing = Set(installedEvents)
+        report.missing = Set(format.events)
             .subtracting(report.healthy)
             .subtracting(report.duplicated)
             .subtracting(report.stale)
@@ -930,7 +999,9 @@ public enum AgentHooks {
     /// dropped). Existing Keepresso entries are replaced, making a
     /// re-install idempotent and self-healing for a stale baked path.
     /// `nil` input (no settings.json yet) starts from an empty object.
-    public static func installHooks(into data: Data?, cliPath: String) throws -> Data {
+    public static func installHooks(
+        into data: Data?, cliPath: String, format: SettingsFormat = .claude
+    ) throws -> Data {
         var root = try parseRoot(data)
         var hooks = root["hooks"] as? [String: Any] ?? [:]
         // Sweep our entries out of every event first, not only the ones about
@@ -943,28 +1014,30 @@ public enum AgentHooks {
             // our commands is the exact test: an array's length can stay the
             // same while our entry is stripped out of a group beside a sibling
             // we left alone.
-            guard groups.contains(where: { !keepressoCommands(in: $0).isEmpty }) else { continue }
-            let kept = stripKeepressoEntries(groups)
+            guard groups.contains(where: {
+                !keepressoCommands(in: $0, marker: format.marker).isEmpty
+            }) else { continue }
+            let kept = stripKeepressoEntries(groups, marker: format.marker)
             if kept.isEmpty {
                 hooks.removeValue(forKey: event)
             } else {
                 hooks[event] = kept
             }
         }
-        for event in installedEvents {
+        for event in format.events {
             var groups = (hooks[event] as? [Any]) ?? []
             var entry: [String: Any] = [
                 "hooks": [
                     [
                         "type": "command",
-                        "command": hookCommand(event: event, cliPath: cliPath),
+                        "command": hookCommand(event: event, cliPath: cliPath, format: format),
                         // Our CLI answers in milliseconds; a tight timeout
                         // means even a wedged disk can't stall a session.
-                        "timeout": 5,
+                        "timeout": format.timeout,
                     ] as [String: Any],
                 ],
             ]
-            if matcherEvents.contains(event) { entry["matcher"] = "*" }
+            if format.matcherEvents.contains(event) { entry["matcher"] = "*" }
             groups.append(entry)
             hooks[event] = groups
         }
@@ -974,12 +1047,14 @@ public enum AgentHooks {
 
     /// Removes exactly the entries carrying ``hookMarker``, pruning emptied
     /// arrays and objects; everything else is left untouched.
-    public static func removeHooks(from data: Data?) throws -> Data {
+    public static func removeHooks(
+        from data: Data?, format: SettingsFormat = .claude
+    ) throws -> Data {
         var root = try parseRoot(data)
         if var hooks = root["hooks"] as? [String: Any] {
             for (event, value) in hooks {
                 guard let groups = value as? [Any] else { continue }
-                let kept = stripKeepressoEntries(groups)
+                let kept = stripKeepressoEntries(groups, marker: format.marker)
                 if kept.isEmpty {
                     hooks.removeValue(forKey: event)
                 } else {
@@ -999,11 +1074,13 @@ public enum AgentHooks {
     /// A file with our entries in it is only ``HookInstallState/installed``
     /// when every event we install is present, current, and there exactly
     /// once; anything else is repairable drift rather than a green tick.
-    public static func hookInstallState(of data: Data?, cliPath: String) -> HookInstallState {
+    public static func hookInstallState(
+        of data: Data?, cliPath: String, format: SettingsFormat = .claude
+    ) -> HookInstallState {
         guard let data, !data.isEmpty else { return .notInstalled }
         guard let object = try? JSONSerialization.jsonObject(with: data),
               object is [String: Any] else { return .unreadable }
-        let report = inspect(data, cliPath: cliPath)
+        let report = inspect(data, cliPath: cliPath, format: format)
         if report.isAbsent { return .notInstalled }
         return report.isHealthy ? .installed : .needsRepair(report)
     }
@@ -1020,13 +1097,13 @@ public enum AgentHooks {
     /// our own entry un-stripped, so the next install appended a second copy
     /// that fired twice and could never be removed. Anything unrecognised is
     /// carried through untouched.
-    static func stripKeepressoEntries(_ groups: [Any]) -> [Any] {
+    static func stripKeepressoEntries(_ groups: [Any], marker: String = hookMarker) -> [Any] {
         groups.compactMap { element -> Any? in
             guard let group = element as? [String: Any] else { return element }
             guard let inner = group["hooks"] as? [Any] else { return group }
             let foreign = inner.filter { entry in
                 guard let entry = entry as? [String: Any] else { return true }
-                return !((entry["command"] as? String)?.contains(hookMarker) ?? false)
+                return !((entry["command"] as? String)?.contains(marker) ?? false)
             }
             guard !foreign.isEmpty else { return nil }
             var kept = group
@@ -1037,12 +1114,12 @@ public enum AgentHooks {
 
     /// Our own commands inside one matcher group, walked element by element
     /// so an unrecognised sibling can neither hide our entry nor be lost.
-    static func keepressoCommands(in element: Any) -> [String] {
+    static func keepressoCommands(in element: Any, marker: String = hookMarker) -> [String] {
         guard let group = element as? [String: Any],
               let inner = group["hooks"] as? [Any] else { return [] }
         return inner.compactMap { entry in
             guard let entry = entry as? [String: Any] else { return nil }
-            return (entry["command"] as? String).flatMap { $0.contains(hookMarker) ? $0 : nil }
+            return (entry["command"] as? String).flatMap { $0.contains(marker) ? $0 : nil }
         }
     }
 

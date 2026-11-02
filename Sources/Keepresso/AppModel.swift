@@ -2436,6 +2436,8 @@ final class AppModel {
         case .codex: return codexPresent
         case .antigravity: return antigravityPresent
         case .grok: return grokPresent
+        case .hermes: return hermesPresent
+        case .qwen, .devin, .kimi: return tool.compatTool.map(compatPresent.contains) ?? false
         }
     }
 
@@ -2446,6 +2448,8 @@ final class AppModel {
         case .codex: return codexHooks
         case .antigravity: return antigravityHooks
         case .grok: return grokHooks
+        case .hermes: return hermesHooks
+        case .qwen, .devin, .kimi: return tool.compatTool.flatMap { compatHooks[$0] } ?? .notInstalled
         }
     }
 
@@ -2456,16 +2460,20 @@ final class AppModel {
         case .codex: installCodexHooks()
         case .antigravity: installAntigravityHooks()
         case .grok: installGrokHooks()
+        case .hermes: installHermesPlugin()
+        case .qwen, .devin, .kimi: tool.compatTool.map(installCompatHooks)
         }
     }
 
-    /// Re-read every tool's install state. Cheap: five small file reads.
+    /// Re-read every tool's install state. Cheap: a few small file reads.
     func refreshAgentHookStatuses() {
         refreshClaudeHooksStatus()
         refreshCursorHooksStatus()
         refreshCodexHooksStatus()
         refreshAntigravityHooksStatus()
         refreshGrokHooksStatus()
+        refreshHermesPluginStatus()
+        refreshCompatHooksStatus()
     }
 
     /// Tools already repaired once this run.
@@ -2608,6 +2616,181 @@ final class AppModel {
         } catch {
             grokHooksError = L("Couldn't update Grok's hooks file.")
             return false
+        }
+    }
+
+    // MARK: - Qwen Code, Devin, and Kimi Code hooks
+
+    /// Install state for the three tools whose hooks follow Claude Code's
+    /// model (see ``CompatHooks``). Qwen and Devin keep them in a JSON
+    /// settings file in Claude's exact shape; Kimi in `[[hooks]]` tables in
+    /// its `config.toml`. All three read user-level hooks without a trust
+    /// step, so "installed" means firing from the next session on.
+    private(set) var compatHooks: [CompatHooks.Tool: AgentHooks.HookInstallState] = [:]
+    private(set) var compatHooksErrors: [CompatHooks.Tool: String] = [:]
+    private(set) var compatPresent: Set<CompatHooks.Tool> = []
+
+    func refreshCompatHooksStatus() {
+        for tool in CompatHooks.Tool.allCases {
+            let agentTool = tool.agentTool
+            if agentTool.isPresent() { compatPresent.insert(tool) } else { compatPresent.remove(tool) }
+            do {
+                let data = try AgentHooks.readSettings(at: tool.configURL())
+                compatHooks[tool] = tool == .kimi
+                    ? KimiHooksFile.hookInstallState(of: data, cliPath: Self.bundledCLIPath)
+                    : AgentHooks.hookInstallState(
+                        of: data, cliPath: Self.bundledCLIPath, format: tool.settingsFormat)
+                autoRepairIfNeeded(agentTool)
+            } catch {
+                compatHooks[tool] = .unreadable
+            }
+        }
+    }
+
+    func installCompatHooks(_ tool: CompatHooks.Tool) {
+        mutateCompatHooks(tool) { existing in
+            tool == .kimi
+                ? try KimiHooksFile.installHooks(into: existing, cliPath: Self.bundledCLIPath)
+                : try AgentHooks.installHooks(
+                    into: existing, cliPath: Self.bundledCLIPath, format: tool.settingsFormat)
+        }
+    }
+
+    func removeCompatHooks(_ tool: CompatHooks.Tool) {
+        let removed = mutateCompatHooks(tool) { existing in
+            tool == .kimi
+                ? try KimiHooksFile.removeHooks(from: existing)
+                : try AgentHooks.removeHooks(from: existing, format: tool.settingsFormat)
+        }
+        if removed { AgentHooks.purgeRecords(where: tool.ownsRecord) }
+    }
+
+    @discardableResult
+    private func mutateCompatHooks(
+        _ tool: CompatHooks.Tool, _ transform: (Data?) throws -> Data
+    ) -> Bool {
+        let url = tool.configURL()
+        defer { refreshCompatHooksStatus() }
+        do {
+            let updated = try transform(try AgentHooks.readSettings(at: url))
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Self.writePreservingPermissions(updated, to: url.resolvingSymlinksInPath())
+            compatHooksErrors[tool] = nil
+            return true
+        } catch is AgentHooks.SettingsUnreadableError {
+            compatHooksErrors[tool] = nil
+            return false
+        } catch {
+            compatHooksErrors[tool] = L("Couldn't update %@'s hooks.", tool.agentTool.displayName)
+            return false
+        }
+    }
+
+    // MARK: - Hermes plugin
+
+    /// Where the Hermes install stands: Keepresso's plugin folder written and
+    /// current, and the plugin enabled in Hermes' config. A Hermes process
+    /// that was already running (the gateway especially) loads it only after
+    /// a restart.
+    private(set) var hermesHooks: AgentHooks.HookInstallState = .notInstalled
+    private(set) var hermesHooksError: String?
+    private(set) var hermesPresent = false
+    /// A `hermes plugins` command is running. The state reads "not enabled"
+    /// until it finishes, which must not count as drift worth repairing.
+    @ObservationIgnored private var hermesCLIRunning = false
+
+    func refreshHermesPluginStatus() {
+        hermesPresent = AgentTool.hermes.isPresent()
+        let directory = HermesHooks.pluginDirectoryURL()
+        var files: [String: Data?] = [:]
+        for name in HermesHooks.pluginFiles(cliPath: Self.bundledCLIPath).keys {
+            files[name] = try? Data(contentsOf: directory.appendingPathComponent(name))
+        }
+        let config = (try? Data(contentsOf: HermesHooks.configURL()))
+            .map { String(decoding: $0, as: UTF8.self) }
+        hermesHooks = HermesHooks.installState(
+            files: files,
+            enabled: HermesHooks.isEnabled(inConfig: config),
+            cliPath: Self.bundledCLIPath)
+        if !hermesCLIRunning { autoRepairIfNeeded(.hermes) }
+    }
+
+    /// Write the plugin, then let Hermes enable it: its own CLI owns the
+    /// YAML edit, and `--no-allow-tool-override` keeps the command from
+    /// prompting (the plugin replaces no tools). The CLI is Python and takes
+    /// a second or two to start, so it runs off the main thread.
+    func installHermesPlugin() {
+        // A Remove still finishing would delete what this writes; the click
+        // lands once that command is done (Repair is offered again).
+        guard !hermesCLIRunning else { return }
+        let directory = HermesHooks.pluginDirectoryURL()
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            for (name, contents) in HermesHooks.pluginFiles(cliPath: Self.bundledCLIPath) {
+                try Data(contents.utf8).write(to: directory.appendingPathComponent(name), options: .atomic)
+            }
+        } catch {
+            hermesHooksError = L("Couldn't update the Hermes plugin.")
+            refreshHermesPluginStatus()
+            return
+        }
+        hermesHooksError = nil
+        refreshHermesPluginStatus()
+        guard !HermesHooks.isEnabled(inConfig: (try? Data(contentsOf: HermesHooks.configURL()))
+            .map { String(decoding: $0, as: UTF8.self) }) else { return }
+        runHermesCLI(["plugins", "enable", HermesHooks.pluginName, "--no-allow-tool-override"])
+    }
+
+    /// Disable the plugin in Hermes, then delete Keepresso's folder and drop
+    /// its records. The order matters: Hermes refuses to disable a plugin
+    /// whose folder is already gone. The user's other plugins and settings
+    /// are left alone.
+    func removeHermesPlugin() {
+        let finish = { [weak self] in
+            guard let self else { return }
+            let directory = HermesHooks.pluginDirectoryURL()
+            do {
+                if FileManager.default.fileExists(atPath: directory.path) {
+                    try FileManager.default.removeItem(at: directory)
+                }
+                AgentHooks.purgeRecords(where: HermesHooks.ownsRecord)
+                // A failed disable leaves only a harmless enabled entry (see
+                // below), so a completed removal is not an error.
+                self.hermesHooksError = nil
+            } catch {
+                self.hermesHooksError = L("Couldn't update the Hermes plugin.")
+            }
+            self.refreshHermesPluginStatus()
+        }
+        // Without a Hermes CLI the enabled entry stays behind, which is
+        // harmless: Hermes skips a listed plugin that has no folder.
+        guard HermesHooks.hermesCommand() != nil else { return finish() }
+        runHermesCLI(["plugins", "disable", HermesHooks.pluginName], then: finish)
+    }
+
+    private func runHermesCLI(_ arguments: [String], then completion: (@MainActor () -> Void)? = nil) {
+        guard let command = HermesHooks.hermesCommand() else {
+            hermesHooksError = L("Couldn't update the Hermes plugin.")
+            return
+        }
+        hermesCLIRunning = true
+        Task.detached {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: command[0])
+            process.arguments = Array(command.dropFirst()) + arguments
+            process.standardInput = FileHandle.nullDevice
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            let succeeded = (try? process.run()) != nil && {
+                process.waitUntilExit()
+                return process.terminationStatus == 0
+            }()
+            await MainActor.run {
+                self.hermesCLIRunning = false
+                self.hermesHooksError = succeeded ? nil : L("Couldn't update the Hermes plugin.")
+                if let completion { completion() } else { self.refreshHermesPluginStatus() }
+            }
         }
     }
 

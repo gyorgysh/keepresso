@@ -473,6 +473,10 @@
 "Grok's hooks file couldn't be read, so it was left untouched." = "Die Hooks-Datei von Grok konnte nicht gelesen werden und blieb unangetastet.";
 "Couldn't update Grok's hooks file." = "Die Hooks-Datei von Grok konnte nicht aktualisiert werden.";
 "Reload hooks in a running Grok session (/hooks, then r) or start a new one." = "Lade Hooks in einer laufenden Grok-Sitzung neu (/hooks, dann r) oder starte eine neue.";
+"CLI and gateway sessions" = "CLI- und Gateway-Sitzungen";
+"Restart Hermes and its gateway to load the plugin." = "Starte Hermes und sein Gateway neu, um das Plugin zu laden.";
+"Couldn't update the Hermes plugin." = "Das Hermes-Plugin konnte nicht aktualisiert werden.";
+"Couldn't update %@'s hooks." = "Die Hooks von %@ konnten nicht aktualisiert werden.";
 "Know exactly when an agent is working" = "Genau wissen, wann ein Agent arbeitet";
 "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look." = "Verbinde die Programmiertools, die du nutzt, und ihre Sitzungen melden sich selbst, statt dass Keepresso sie danach beurteilt, wie beschäftigt sie wirken.";
 "Connect" = "Verbinden";

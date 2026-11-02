@@ -291,6 +291,22 @@ func runGrokHook(event: String) -> Never {
     exit(0)
 }
 
+/// The Hermes variant. Its caller is Keepresso's own plugin, which discards
+/// our output and never waits on more than a short timeout.
+func runHermesHook(event: String) -> Never {
+    let payload = FileHandle.standardInput.readDataToEndOfFile()
+    HermesHooks.handle(event: event, payloadData: payload, parentPid: getppid())
+    exit(0)
+}
+
+/// The Qwen Code, Devin, and Kimi Code variant. All three fail open on a
+/// silent exit 0.
+func runCompatHook(tool: CompatHooks.Tool, event: String) -> Never {
+    let payload = FileHandle.standardInput.readDataToEndOfFile()
+    CompatHooks.handle(tool: tool, event: event, payloadData: payload, parentPid: getppid())
+    exit(0)
+}
+
 // MARK: - Entry
 
 let request: CLIRequest
@@ -321,6 +337,10 @@ case .codexHook(let event):
     runCodexHook(event: event)
 case .grokHook(let event):
     runGrokHook(event: event)
+case .hermesHook(let event):
+    runHermesHook(event: event)
+case .compatHook(let tool, let event):
+    runCompatHook(tool: tool, event: event)
 case .lease(let command):
     runLease(command)
 case .wake(let command):

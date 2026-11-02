@@ -473,6 +473,10 @@
 "Grok's hooks file couldn't be read, so it was left untouched." = "A Grok hookfájlja nem olvasható, ezért érintetlen maradt.";
 "Couldn't update Grok's hooks file." = "A Grok hookfájlját nem sikerült frissíteni.";
 "Reload hooks in a running Grok session (/hooks, then r) or start a new one." = "Töltse újra a hookokat egy futó Grok munkamenetben (/hooks, majd r), vagy indítson egy újat.";
+"CLI and gateway sessions" = "Parancssoros és gateway-munkamenetek";
+"Restart Hermes and its gateway to load the plugin." = "Indítsa újra a Hermest és a gatewayt a bővítmény betöltéséhez.";
+"Couldn't update the Hermes plugin." = "A Hermes bővítményt nem sikerült frissíteni.";
+"Couldn't update %@'s hooks." = "A(z) %@ hookjait nem sikerült frissíteni.";
 "Know exactly when an agent is working" = "Pontosan tudja, mikor dolgozik egy ügynök";
 "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look." = "Csatlakoztassa a használt kódolóeszközöket, és a munkameneteik önmaguktól jeleznek, ahelyett hogy a Keepresso aszerint ítélné meg őket, mennyire elfoglaltnak tűnnek.";
 "Connect" = "Csatlakoztatás";

@@ -588,6 +588,10 @@ APP.update({
     "Couldn't update Grok's hooks file.": "Impossibile aggiornare il file degli hook di Grok.",
     "Reload hooks in a running Grok session (/hooks, then r) or start a new one.":
         "Ricarica gli hook in una sessione Grok in corso (/hooks, poi r) o avviane una nuova.",
+    "CLI and gateway sessions": "Sessioni CLI e gateway",
+    "Restart Hermes and its gateway to load the plugin.": "Riavvia Hermes e il suo gateway per caricare il plugin.",
+    "Couldn't update the Hermes plugin.": "Impossibile aggiornare il plugin di Hermes.",
+    "Couldn't update %@'s hooks.": "Impossibile aggiornare gli hook di %@.",
 })
 
 # --- Agentic onboarding step (offers to connect the tools you have) ---

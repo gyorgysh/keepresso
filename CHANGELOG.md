@@ -3,6 +3,34 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Added
+
+- **Hermes Agent connection.** Hermes now has a Connect row under the "AI
+  agent is working" trigger, next to Claude Code, Cursor, Codex, Antigravity,
+  and Grok. Connecting installs a small Keepresso plugin into Hermes, so its
+  CLI and its messaging gateway (tasks from Telegram and other chats) report
+  exactly when each task is working, waiting for your approval, or done. Those
+  tasks follow the same rule as every other agent: its grace period, the
+  "count waiting as working" option, and any combined conditions. Concurrent
+  chats are tracked separately, and a task that stops reporting no longer
+  counts as working. Only ids, tool names, and the chat platform reach
+  Keepresso, never prompts or replies. Restart Hermes and its gateway after
+  connecting. Suggested by @licy-gh (#30).
+- **Qwen Code, Devin, and Kimi Code connections.** Each gets a Connect row
+  under the "AI agent is working" trigger. Connecting adds Keepresso's hooks
+  to that tool's own settings, leaving the rest of the file alone, so its
+  sessions report exactly when they are working, waiting for your approval,
+  or idle, instead of being guessed from CPU and file activity.
+
+### Fixed
+
+- Opening Preferences could hang while macOS Location Services was
+  unresponsive. Location authorization now runs off the main thread, so
+  Preferences, the rules editor, and the Setup checks stay responsive while
+  the system check is pending. Reported by @alvst (#31).
+
 ## [1.28.0] - 2026-10-22
 
 ### Added

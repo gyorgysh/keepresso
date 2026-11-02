@@ -115,5 +115,6 @@ private func mac(_ paths: String...) -> (String) -> Bool {
     #expect(all == AgentTool.allCases)
     #expect(all == AgentTool.setupTools(present: { _ in true }, connected: { _ in true }))
     #expect(AgentTool.allCases.map(\.displayName)
-        == ["Claude Code", "Cursor", "Codex", "Antigravity", "Grok"])
+        == ["Claude Code", "Cursor", "Codex", "Antigravity", "Grok", "Hermes Agent",
+            "Qwen Code", "Devin", "Kimi Code"])
 }

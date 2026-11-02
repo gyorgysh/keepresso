@@ -496,6 +496,10 @@ APP.update({
     "Grok's hooks file couldn't be read, so it was left untouched.": "Grok 후크 파일을 읽을 수 없어 그대로 두었습니다.",
     "Couldn't update Grok's hooks file.": "Grok 후크 파일을 업데이트할 수 없습니다.",
     "Reload hooks in a running Grok session (/hooks, then r) or start a new one.": "실행 중인 Grok 세션에서 후크를 다시 로드하세요(/hooks, 그다음 r) 또는 새 세션을 시작하세요.",
+    "CLI and gateway sessions": "CLI 및 게이트웨이 세션",
+    "Restart Hermes and its gateway to load the plugin.": "Hermes와 게이트웨이를 다시 시작하여 플러그인을 로드하세요.",
+    "Couldn't update the Hermes plugin.": "Hermes 플러그인을 업데이트할 수 없습니다.",
+    "Couldn't update %@'s hooks.": "%@ 후크를 업데이트할 수 없습니다.",
 })
 
 # --- Agentic onboarding step (offers to connect the tools you have) ---

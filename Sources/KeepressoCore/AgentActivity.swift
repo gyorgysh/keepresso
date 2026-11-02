@@ -403,7 +403,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring, @unchecked S
         // Sessions that exist only as hook records (an IDE's built-in
         // agent) are appended last: they have no process, so none of
         // the cwd, evidence, or origin decoration above applies.
-        sessions.append(contentsOf: join.unclaimed.compactMap { record in
+        sessions.append(contentsOf: HermesHooks.withoutCoveredPresence(join.unclaimed).compactMap { record in
             guard var session = Self.hookOnlySession(from: record) else { return nil }
             if record.agent == "codex",
                let written = Self.codexRolloutWrite(forSessionId: record.sessionId) {
@@ -471,7 +471,8 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring, @unchecked S
     }
 
     /// Drop evidence-only host process sessions whose pid is named as
-    /// `ownerPid` by a live IDE hook record. Hooks then own the working
+    /// `ownerPid` by a live IDE hook record, and `ps`-detected Hermes
+    /// processes its plugin reports for. Hooks then own the working
     /// signal for that editor; conversation-DB freshness on the host cannot
     /// keep the trigger on after Stop.
     static func suppressingHookCoveredEvidenceHosts(
@@ -480,7 +481,15 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring, @unchecked S
     ) -> [AgentSession] {
         let hosts = Set(hookRecords.compactMap(\.ownerPid))
         guard !hosts.isEmpty else { return sessions }
-        return sessions.filter { !($0.evidenceOnly && hosts.contains($0.pid)) }
+        // Hermes' plugin anchors its turn rows to the Hermes process, which
+        // the `ps` scan can also detect on its own (CPU + state-db writes).
+        // The plugin keeps a presence record for as long as it is loaded, so
+        // its turns own that process outright, idle included.
+        let hermesHosts = Set(hookRecords.filter(HermesHooks.ownsRecord).compactMap(\.ownerPid))
+        return sessions.filter {
+            !($0.evidenceOnly && hosts.contains($0.pid))
+                && !($0.agent == "hermes" && hermesHosts.contains($0.pid))
+        }
     }
 
     /// The result of joining hook records onto `ps`-detected sessions.
@@ -742,7 +751,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring, @unchecked S
         home: String = NSHomeDirectory(),
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> Date? {
-        let root = environment["HERMES_HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? "\(home)/.hermes"
+        let root = HermesHooks.hermesHome(home: home, environment: environment)
         var newest = newestSqliteStoreWrite(in: root, basename: "state.db")
         let profiles = "\(root)/profiles"
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: profiles) else {
