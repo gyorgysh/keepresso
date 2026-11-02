@@ -61,10 +61,10 @@
 "Screen Sharing is off. You might want to enable it to view a headless Mac's screen." = "Udostępnianie ekranu jest wyłączone. Warto je włączyć, aby zobaczyć ekran Maca bez monitora.";
 "Couldn't confirm Screen Sharing. If you want remote viewing, enable it in System Settings." = "Nie udało się potwierdzić stanu udostępniania ekranu. Jeśli chcesz mieć podgląd zdalny, włącz je w Ustawieniach systemowych.";
 "Enable it in System Settings ▸ General ▸ Sharing." = "Włącz w Ustawieniach systemowych ▸ Ogólne ▸ Udostępnianie.";
-"Run AI agents on this Mac with MyAgens" = "Uruchamiaj agentów AI na tym Macu za pomocą MyAgens";
-"MyAgens lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely." = "MyAgens pozwala agentom AI obsługiwać Maca i pomagać w twojej pracy, co jest przydatne na stale włączonym komputerze, do którego łączysz się głównie zdalnie.";
-"Learn more about MyAgens:" = "Dowiedz się więcej o MyAgens:";
-"GitHub" = "GitHub";
+"Run AI agents on this Mac with tokenstat.ai" = "Uruchamiaj agentów AI na tym Macu za pomocą tokenstat.ai";
+"tokenstat.ai lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely." = "tokenstat.ai pozwala agentom AI obsługiwać Maca i pomagać w twojej pracy, co jest przydatne na stale włączonym komputerze, do którego łączysz się głównie zdalnie.";
+"Learn more about tokenstat.ai:" = "Dowiedz się więcej o tokenstat.ai:";
+"tokenstat.ai" = "tokenstat.ai";
 "Read more" = "Czytaj dalej";
 "Wake for network access" = "Wybudzaj przy dostępie przez sieć";
 "The Mac wakes when accessed over the network." = "Mac budzi się po uzyskaniu dostępu przez sieć.";

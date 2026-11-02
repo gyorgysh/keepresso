@@ -61,10 +61,10 @@
 "Screen Sharing is off. You might want to enable it to view a headless Mac's screen." = "Screen Sharing is off. You might want to enable it to view a headless Mac's screen.";
 "Couldn't confirm Screen Sharing. If you want remote viewing, enable it in System Settings." = "Couldn't confirm Screen Sharing. If you want remote viewing, enable it in System Settings.";
 "Enable it in System Settings ▸ General ▸ Sharing." = "Enable it in System Settings ▸ General ▸ Sharing.";
-"Run AI agents on this Mac with MyAgens" = "Run AI agents on this Mac with MyAgens";
-"MyAgens lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely." = "MyAgens lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely.";
-"Learn more about MyAgens:" = "Learn more about MyAgens:";
-"GitHub" = "GitHub";
+"Run AI agents on this Mac with tokenstat.ai" = "Run AI agents on this Mac with tokenstat.ai";
+"tokenstat.ai lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely." = "tokenstat.ai lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely.";
+"Learn more about tokenstat.ai:" = "Learn more about tokenstat.ai:";
+"tokenstat.ai" = "tokenstat.ai";
 "Read more" = "Read more";
 "Wake for network access" = "Wake for network access";
 "The Mac wakes when accessed over the network." = "The Mac wakes when accessed over the network.";

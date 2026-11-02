@@ -101,7 +101,7 @@ struct CheckRow: View {
         "auto-login": "person.fill",
         "remote-login": "apple.terminal.fill",
         "screen-sharing": "display",
-        "tip-myagens": "sparkles",
+        "tip-tokenstat": "sparkles",
         "perm-login-item": "power",
         "perm-location": "location.fill",
         "perm-calendar": "calendar",
@@ -175,7 +175,7 @@ struct CheckRow: View {
     }
 
     /// "Open Settings" for a System Settings deep link, otherwise a neutral
-    /// "Learn more" (e.g. the MyAgens tip points at a web page).
+    /// "Learn more" (e.g. the tokenstat.ai tip points at a web page).
     private func linkLabel(for url: URL) -> String {
         url.scheme?.hasPrefix("x-apple") == true ? L("Open Settings") : L("Learn more")
     }

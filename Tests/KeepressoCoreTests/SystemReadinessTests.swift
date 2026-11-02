@@ -163,13 +163,12 @@ private let headlessReadySnapshot = SystemSnapshot(
 
 // MARK: - Standing tip
 
-@Test func myAgensSuggestionIsATipWithLinks() {
-    let tip = ReadinessCheck.myAgensSuggestion()
+@Test func tokenstatSuggestionIsATipWithLink() {
+    let tip = ReadinessCheck.tokenstatSuggestion()
     #expect(tip.status == .tip)
     let links = tip.remediation?.links ?? []
-    #expect(links.count == 2)
-    #expect(links.contains { $0.url.absoluteString == "https://github.com/gyorgysh/myagens" })
-    #expect(links.contains { $0.url.absoluteString == "https://gyorgy.sh/blog/myagens" })
+    #expect(links.count == 1)
+    #expect(links.contains { $0.url.absoluteString == "https://tokenstat.ai" })
     #expect(tip.remediation?.command == nil) // links, not a shell command
 }
 
@@ -181,15 +180,15 @@ private let headlessReadySnapshot = SystemSnapshot(
     let controller = SystemReadinessController(probe: probe)
     #expect(controller.checks.isEmpty) // nothing until refresh
     await controller.refresh()
-    // 7 system checks + the standing MyAgens tip.
+    // 7 system checks + the standing tokenstat.ai tip.
     #expect(controller.checks.count == 8)
     #expect(controller.checks.filter { $0.status != .tip }.allSatisfy { $0.status == .ok })
-    #expect(controller.checks.last?.id == "tip-myagens") // tip after the system checks
+    #expect(controller.checks.last?.id == "tip-tokenstat") // tip after the system checks
 }
 
 @MainActor
 @Test func tipsAreConsecutive() async {
-    // SSH + Screen Sharing off → both tips; the MyAgens tip should sit right after them.
+    // SSH + Screen Sharing off → both tips; the tokenstat.ai tip should sit right after them.
     let probe = FakeProbe(SystemSnapshot(
         pmset: pmsetHeadlessReady, fileVault: "FileVault is Off.", autoLoginUser: "mini",
         remoteLogin: false, screenSharing: false
@@ -198,7 +197,7 @@ private let headlessReadySnapshot = SystemSnapshot(
     await controller.refresh()
     let ids = controller.checks.map(\.id)
     let i = ids.firstIndex(of: "remote-login")!
-    #expect(Array(ids[i...(i + 2)]) == ["remote-login", "screen-sharing", "tip-myagens"])
+    #expect(Array(ids[i...(i + 2)]) == ["remote-login", "screen-sharing", "tip-tokenstat"])
 }
 
 @MainActor
@@ -211,7 +210,7 @@ private let headlessReadySnapshot = SystemSnapshot(
     ]
     // 7 system + 1 tip + 1 permission.
     #expect(controller.checks.count == 9)
-    #expect(controller.checks.contains { $0.id == "tip-myagens" })
+    #expect(controller.checks.contains { $0.id == "tip-tokenstat" })
     #expect(controller.checks.last?.id == "perm-login-item") // permission checks come last
     // A later system refresh keeps the permission checks in place.
     await controller.refresh()

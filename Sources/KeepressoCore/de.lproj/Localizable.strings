@@ -61,10 +61,10 @@
 "Screen Sharing is off. You might want to enable it to view a headless Mac's screen." = "Die Bildschirmfreigabe ist deaktiviert. Um den Bildschirm eines Macs ohne Monitor zu sehen, solltest du sie aktivieren.";
 "Couldn't confirm Screen Sharing. If you want remote viewing, enable it in System Settings." = "Die Bildschirmfreigabe konnte nicht bestätigt werden. Für Fernansicht aktiviere sie in den Systemeinstellungen.";
 "Enable it in System Settings ▸ General ▸ Sharing." = "Aktiviere es in Systemeinstellungen ▸ Allgemein ▸ Freigabe.";
-"Run AI agents on this Mac with MyAgens" = "Führe KI-Agenten auf diesem Mac mit MyAgens aus";
-"MyAgens lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely." = "Mit MyAgens können KI-Agenten deinen Mac bedienen und dir bei der Arbeit helfen, praktisch auf einem dauerhaft laufenden Rechner, den du meist per Fernzugriff nutzt.";
-"Learn more about MyAgens:" = "Mehr über MyAgens erfahren:";
-"GitHub" = "GitHub";
+"Run AI agents on this Mac with tokenstat.ai" = "Führe KI-Agenten auf diesem Mac mit tokenstat.ai aus";
+"tokenstat.ai lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely." = "Mit tokenstat.ai können KI-Agenten deinen Mac bedienen und dir bei der Arbeit helfen, praktisch auf einem dauerhaft laufenden Rechner, den du meist per Fernzugriff nutzt.";
+"Learn more about tokenstat.ai:" = "Mehr über tokenstat.ai erfahren:";
+"tokenstat.ai" = "tokenstat.ai";
 "Read more" = "Weiterlesen";
 "Wake for network access" = "Aktivieren bei Netzwerkzugriff";
 "The Mac wakes when accessed over the network." = "Der Mac wacht auf, wenn über das Netzwerk auf ihn zugegriffen wird.";

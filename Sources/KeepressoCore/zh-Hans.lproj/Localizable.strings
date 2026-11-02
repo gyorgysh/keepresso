@@ -61,10 +61,10 @@
 "Screen Sharing is off. You might want to enable it to view a headless Mac's screen." = "屏幕共享已关闭。若要查看无显示器 Mac 的屏幕，建议开启它。";
 "Couldn't confirm Screen Sharing. If you want remote viewing, enable it in System Settings." = "无法确认屏幕共享状态。若需要远程查看，请在“系统设置”中开启。";
 "Enable it in System Settings ▸ General ▸ Sharing." = "在“系统设置 ▸ 通用 ▸ 共享”中开启它。";
-"Run AI agents on this Mac with MyAgens" = "使用 MyAgens 在这台 Mac 上运行 AI 智能体";
-"MyAgens lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely." = "MyAgens 让 AI 智能体操作你的 Mac 并协助工作，这对于一台常开、主要远程访问的机器很方便。";
-"Learn more about MyAgens:" = "详细了解 MyAgens：";
-"GitHub" = "GitHub";
+"Run AI agents on this Mac with tokenstat.ai" = "使用 tokenstat.ai 在这台 Mac 上运行 AI 智能体";
+"tokenstat.ai lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely." = "tokenstat.ai 让 AI 智能体操作你的 Mac 并协助工作，这对于一台常开、主要远程访问的机器很方便。";
+"Learn more about tokenstat.ai:" = "详细了解 tokenstat.ai：";
+"tokenstat.ai" = "tokenstat.ai";
 "Read more" = "阅读更多";
 "Wake for network access" = "网络访问时唤醒";
 "The Mac wakes when accessed over the network." = "通过网络访问时，Mac 会唤醒。";

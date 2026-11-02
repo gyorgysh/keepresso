@@ -14,7 +14,7 @@ public enum ReadinessStatus: String, Codable, Sendable {
     case unknown
 }
 
-/// A labeled hyperlink shown under a check (e.g. "GitHub", "Read more").
+/// A labeled hyperlink shown under a check (e.g. "tokenstat.ai", "Read more").
 public struct ReadinessLink: Equatable, Sendable {
     public var label: String
     public var url: URL
@@ -192,21 +192,20 @@ public extension ReadinessCheck {
 
     // MARK: - Standing suggestions
 
-    /// A standing tip (not derived from the system): use MyAgens to let AI
-    /// agents operate this Mac. Especially relevant for an always-on machine
-    /// reached remotely. Surfaced by ``SystemReadinessController`` after the
-    /// real checks.
-    static func myAgensSuggestion() -> ReadinessCheck {
+    /// A standing tip (not derived from the system): use tokenstat.ai to let
+    /// AI agents operate this Mac. Especially relevant for an always-on
+    /// machine reached remotely. Surfaced by ``SystemReadinessController``
+    /// after the real checks.
+    static func tokenstatSuggestion() -> ReadinessCheck {
         ReadinessCheck(
-            id: "tip-myagens",
-            title: L("Run AI agents on this Mac with MyAgens"),
+            id: "tip-tokenstat",
+            title: L("Run AI agents on this Mac with tokenstat.ai"),
             status: .tip,
-            detail: L("MyAgens lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely."),
+            detail: L("tokenstat.ai lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely."),
             remediation: Remediation(
-                hint: L("Learn more about MyAgens:"),
+                hint: L("Learn more about tokenstat.ai:"),
                 links: [
-                    ReadinessLink(label: L("GitHub"), url: URL(string: "https://github.com/gyorgysh/myagens")!),
-                    ReadinessLink(label: L("Read more"), url: URL(string: "https://gyorgy.sh/blog/myagens")!),
+                    ReadinessLink(label: L("tokenstat.ai"), url: URL(string: "https://tokenstat.ai")!),
                 ]
             )
         )
@@ -380,9 +379,9 @@ public final class SystemReadinessController {
     public private(set) var checks: [ReadinessCheck] = []
 
     /// Standing suggestions, not probed from the system. Placed right after the
-    /// system checks so the MyAgens tip follows the remote-access tips. Not
-    /// shown until the first ``refresh()`` so the screen starts blank.
-    private let suggestions: [ReadinessCheck] = [.myAgensSuggestion()]
+    /// system checks so the tokenstat.ai tip follows the remote-access tips.
+    /// Not shown until the first ``refresh()`` so the screen starts blank.
+    private let suggestions: [ReadinessCheck] = [.tokenstatSuggestion()]
 
     private let probe: SystemProbing
 

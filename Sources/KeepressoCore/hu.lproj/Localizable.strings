@@ -61,10 +61,10 @@
 "Screen Sharing is off. You might want to enable it to view a headless Mac's screen." = "A képernyőmegosztás ki van kapcsolva. Érdemes lehet bekapcsolni egy monitor nélküli Mac képernyőjének megtekintéséhez.";
 "Couldn't confirm Screen Sharing. If you want remote viewing, enable it in System Settings." = "Nem sikerült megerősíteni a képernyőmegosztást. Ha távoli megtekintést szeretne, kapcsolja be a Rendszerbeállításokban.";
 "Enable it in System Settings ▸ General ▸ Sharing." = "Kapcsolja be a Rendszerbeállítások ▸ Általános ▸ Megosztás menüben.";
-"Run AI agents on this Mac with MyAgens" = "Futtasson AI-ügynököket ezen a Macen a MyAgens segítségével";
-"MyAgens lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely." = "A MyAgens lehetővé teszi, hogy AI-ügynökök kezeljék a Macet és segítsenek a munkájában, ami hasznos egy folyamatosan bekapcsolt, többnyire távolról elért gépen.";
-"Learn more about MyAgens:" = "Tudjon meg többet a MyAgensről:";
-"GitHub" = "GitHub";
+"Run AI agents on this Mac with tokenstat.ai" = "Futtasson AI-ügynököket ezen a Macen a tokenstat.ai segítségével";
+"tokenstat.ai lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely." = "A tokenstat.ai lehetővé teszi, hogy AI-ügynökök kezeljék a Macet és segítsenek a munkájában, ami hasznos egy folyamatosan bekapcsolt, többnyire távolról elért gépen.";
+"Learn more about tokenstat.ai:" = "Tudjon meg többet a tokenstat.ai-ről:";
+"tokenstat.ai" = "tokenstat.ai";
 "Read more" = "Tovább";
 "Wake for network access" = "Ébredés hálózati hozzáféréskor";
 "The Mac wakes when accessed over the network." = "A Mac felébred, ha a hálózaton keresztül elérik.";

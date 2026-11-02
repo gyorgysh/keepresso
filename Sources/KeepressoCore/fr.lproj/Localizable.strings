@@ -61,10 +61,10 @@
 "Screen Sharing is off. You might want to enable it to view a headless Mac's screen." = "Le partage d’écran est désactivé. Vous pouvez l’activer pour voir l’écran d’un Mac sans moniteur.";
 "Couldn't confirm Screen Sharing. If you want remote viewing, enable it in System Settings." = "Impossible de confirmer le partage d’écran. Pour la visualisation à distance, activez-le dans Réglages Système.";
 "Enable it in System Settings ▸ General ▸ Sharing." = "Activez-le dans Réglages Système ▸ Général ▸ Partage.";
-"Run AI agents on this Mac with MyAgens" = "Exécutez des agents IA sur ce Mac avec MyAgens";
-"MyAgens lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely." = "MyAgens permet à des agents IA de piloter votre Mac et de vous aider dans votre travail, pratique sur une machine toujours allumée que vous atteignez surtout à distance.";
-"Learn more about MyAgens:" = "En savoir plus sur MyAgens :";
-"GitHub" = "GitHub";
+"Run AI agents on this Mac with tokenstat.ai" = "Exécutez des agents IA sur ce Mac avec tokenstat.ai";
+"tokenstat.ai lets AI agents operate your Mac and help with your work, which is handy on an always-on machine you mostly reach remotely." = "tokenstat.ai permet à des agents IA de piloter votre Mac et de vous aider dans votre travail, pratique sur une machine toujours allumée que vous atteignez surtout à distance.";
+"Learn more about tokenstat.ai:" = "En savoir plus sur tokenstat.ai :";
+"tokenstat.ai" = "tokenstat.ai";
 "Read more" = "En savoir plus";
 "Wake for network access" = "Réactivation pour l’accès réseau";
 "The Mac wakes when accessed over the network." = "Le Mac se réactive lorsqu’on y accède via le réseau.";
