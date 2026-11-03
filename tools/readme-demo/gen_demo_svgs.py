@@ -187,6 +187,20 @@ def switch(sc, cy, on_windows, flips=()):
             f'<g class="{knob}"><circle cx="{x + 10.5}" cy="{cy}" r="8.5" fill="#fff" filter="url(#knob)"/></g>')
 
 
+def segmented(y, manual):
+    """The Automatic/Manual mode switch, centred, top edge at y."""
+    x, w, h = 100, 160, 25
+    half = w / 2
+    sel_x = x + half if manual else x
+    out = (f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="8" fill="{CTL}"/>'
+           f'<rect x="{sel_x + 1.5}" y="{y + 1.5}" width="{half - 3}" height="{h - 3}" rx="6.5" fill="{SW_ON}"/>')
+    for i, label in enumerate(("Automatic", "Manual")):
+        on = (i == 1) == manual
+        out += text(x + half * i + half / 2, y + 17, label, size=12.4, fill="#fff" if on else TEXT,
+                    weight=600 if on else 500, anchor="middle")
+    return out
+
+
 # Drawn agent marks, ported from the site (SparkFrames.swift geometry).
 def _ray(r):
     o = 6 * r
@@ -375,7 +389,6 @@ def scene_manual():
     OFF = 10.4
     on_w = [(ON, OFF)]
     off_w = invert(on_w, sc.L)
-    hour_w = [(CHIP, OFF)]
 
     on, off, steam = sc.vis(on_w), sc.vis(off_w), sc.vis(on_w, 0.4)
     mb_on, mb_off, mb_steam = sc.vis(on_w), sc.vis(off_w), sc.vis(on_w, 0.4)
@@ -394,14 +407,16 @@ def scene_manual():
 
     rows = ""
     y = P + 96
+    # Mode switch: triggers set up, Manual chosen
+    rows += segmented(y + 4, manual=True)
+    y += 34
     # Keep awake
     rows += text(42, y + 22, "Keep awake") + switch(sc, y + 18, on_w)
-    # For [select]
+    # For [menu]: a Stop in shortcut ends the session early, the mode label stays
     rows += text(42, y + 54, "For")
-    rows += f'<rect x="70" y="{y + 39}" width="104" height="22" rx="7" fill="{CTL}"/>'
-    rows += text(80, y + 54.5, "Indefinitely", size=12.2, cls=sc.vis(invert(hour_w, sc.L), 0.15))
-    rows += text(80, y + 54.5, "1 hour", size=12.2, cls=sc.vis(hour_w, 0.15))
-    rows += (f'<g transform="translate(158 {y + 46})" fill="none" stroke="{DIM}" stroke-width="2" '
+    rows += f'<rect x="216" y="{y + 39}" width="104" height="22" rx="7" fill="{CTL}"/>'
+    rows += text(298, y + 54.5, "Indefinitely", size=12.2, anchor="end")
+    rows += (f'<g transform="translate(303 {y + 46})" fill="none" stroke="{DIM}" stroke-width="2" '
              f'stroke-linecap="round"><path d="m1.5 3 3 2.6 3-2.6"/></g>')
     # Stop in chips (only while brewing)
     chips = text(42, y + 86, "Stop in")
@@ -420,15 +435,7 @@ def scene_manual():
     # Lower menu slides up while Stop in is collapsed (the real menu's height fade)
     lower = f'<path d="M40 {y + 104.5}H320" stroke="{HAIR}"/>'
     lower += text(42, y + 128, "Keep awake with lid closed") + info(213, y + 124) + switch(sc, y + 124, [])
-    lower += text(42, y + 160, "Pause on low battery") + info(178, y + 156) + switch(sc, y + 156, [(0, sc.L)])
-    sy = y + 188
-    lower += (f'<g transform="translate(42 {sy - 6})" fill="none" stroke="{DIM}" stroke-width="1.3">'
-             f'<rect x=".5" y=".5" width="17" height="10" rx="2.5"/><path d="M19.5 3.5v4" stroke-linecap="round"/>'
-             f'<rect x="2.5" y="2.5" width="4" height="6" rx="1" fill="{DIM}" stroke="none"/></g>')
-    lower += f'<rect x="72" y="{sy - 2}" width="196" height="4" rx="2" fill="rgba(255,255,255,.12)"/>'
-    lower += f'<rect x="72" y="{sy - 2}" width="34" height="4" rx="2" fill="{SW_ON}"/>'
-    lower += f'<circle cx="106" cy="{sy}" r="8" fill="#e8e8ea" filter="url(#knob)"/>'
-    lower += text(318, sy + 4.5, "20%", size=12.8, fill=SUB, anchor="end")
+    lower += text(42, y + 160, "Pause on low battery") + info(178, y + 156) + switch(sc, y + 156, [])
     shift = sc.track([(0, -32), (ON, -32, "ease-in-out"), (ON + 0.35, 0), (OFF, 0, "ease-in-out"), (OFF + 0.35, -32)],
                      lambda v: f"transform:translateY({v}px)")
     rows += g(lower, shift)
@@ -483,9 +490,9 @@ def scene_triggers():
     rows += check(50, y + 130, sc.vis([(NET_ON, NET_OFF)], 0.2)) + ring(50, y + 130, sc.vis(invert([(NET_ON, NET_OFF)], sc.L), 0.2))
     rows += text(66, y + 134.5, "Network above 1 MB/s")
     rows += ring(50, y + 156) + text(66, y + 160.5, "Downloading in “Downloads”")
-    # Button
-    rows += (f'<rect x="125" y="{y + 176}" width="110" height="25" rx="9" fill="{BTN}"/>'
-             + text(180, y + 193, "Pause Triggers", size=12.3, fill=BTNTX, weight=700, anchor="middle"))
+    # Mode switch on Automatic, below the conditions it hands control to
+    rows += f'<path d="M40 {y + 168.5}H320" stroke="{HAIR}"/>'
+    rows += segmented(y + 175, manual=False)
 
     body = (chrome_top("SMART TRIGGERS", "Awake only while it matters.", clock_text("Thu 09:41"))
             + menubar_cup(mb_on, mb_off, mb_steam)
@@ -505,16 +512,24 @@ def scene_lid():
     titles = title_pair("Brewing", "Held by 1 condition")
 
     y = P + 96
-    rows = ""
-    rows += check(50, y + 14) + text(66, y + 18.5, "AI agent working (+300s)")
+    rows = check(50, y + 14) + text(66, y + 18.5, "AI agent working (+300s)")
     rows += agent_row(sc, y + 40, "claude", "Claude app", "claude", [(0, sc.L)])
-    rows += agent_row(sc, y + 61, "codex", "s001", "rest", [])
-    rows += f'<path d="M40 {y + 76.5}H320" stroke="{HAIR}"/>'
-    rows += text(42, y + 101, "Keep awake with lid closed") + info(213, y + 97) + switch(sc, y + 97, lid_w)
-    rows += text(42, y + 123, "Stays awake on battery too. The display", size=11.7, fill=SUB)
-    rows += text(42, y + 138, "turns off when the lid closes.", size=11.7, fill=SUB)
-    rows += text(42, y + 166, "Only while brewing") + info(164, y + 162) + switch(sc, y + 162, [(0, sc.L)])
-    rows += text(42, y + 198, "Pause on low battery") + info(178, y + 194) + switch(sc, y + 194, [(0, sc.L)])
+    rows += f'<path d="M40 {y + 52.5}H320" stroke="{HAIR}"/>'
+    rows += segmented(y + 60, manual=False)
+    y += 36
+    rows += f'<path d="M40 {y + 58.5}H320" stroke="{HAIR}"/>'
+    rows += text(42, y + 80, "Keep awake with lid closed") + info(213, y + 76) + switch(sc, y + 76, lid_w)
+    # The caption only shows while the mode is on, the row below makes room.
+    rows += g(text(42, y + 102, "Stays awake on battery too. The display turns", size=11.7, fill=SUB)
+              + text(42, y + 117, "off when the lid closes. Turn it off before", size=11.7, fill=SUB)
+              + text(42, y + 132, "putting it in a bag.", size=11.7, fill=SUB),
+              sc.vis([(LID_ON + 0.2, LID_OFF - 0.1)], 0.3))
+    # "Only while brewing" stays off: when on, it drives the lid switch itself.
+    below = text(42, y + 160, "Only while brewing") + info(164, y + 156) + switch(sc, y + 156, [])
+    shift = sc.track([(0, -48), (LID_ON, -48, "ease-in-out"), (LID_ON + 0.35, 0),
+                      (LID_OFF, 0, "ease-in-out"), (LID_OFF + 0.35, -48)],
+                     lambda v: f"transform:translateY({v}px)")
+    rows += g(below, shift)
 
     # Display off: the whole card dims, the work keeps going in the dark.
     dark_w = [(DARK, LIGHT)]
@@ -532,7 +547,7 @@ def scene_lid():
     clock = (clock_text("Thu 09:41", sc.vis([(0, LIGHT - 0.4), (11.7, sc.L)], 0.3))
              + clock_text("Thu 11:56", sc.vis([(LIGHT - 0.4, 11.7)], 0.3)))
 
-    tog = (306, y + 100)
+    tog = (306, y + 79)
     rest = (262, P + 300)
     move = sc.move([(0, *rest), (0.6, *rest), (1.5, *tog), (2.3, *tog), (3.2, *rest),
                     (9.6, *rest), (10.5, *tog)])
