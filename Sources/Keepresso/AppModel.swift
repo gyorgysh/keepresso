@@ -2293,7 +2293,7 @@ final class AppModel {
         do {
             claudeHooks = AgentHooks.hookInstallState(
                 of: try AgentHooks.readSettings(at: AgentHooks.claudeSettingsURL()),
-                cliPath: Self.bundledCLIPath)
+                cliPath: Self.bundledCLIPath, format: Self.claudeHookFormat())
             autoRepairIfNeeded(.claudeCode)
         } catch {
             // An existing file we can't read must report as unreadable, not
@@ -2305,12 +2305,25 @@ final class AppModel {
     }
 
     /// Merge Keepresso's hook entries into `~/.claude/settings.json` so
-    /// Claude Code sessions report exact working/waiting/idle edges. Runs
-    /// only on an explicit click, never from merely opening a window.
+    /// Claude Code sessions report exact working/waiting/idle edges. Runs on
+    /// the user's Connect click, or from ``autoRepairIfNeeded(_:)`` for a
+    /// connection that already exists; never to create one on its own.
     func installClaudeHooks() {
+        let format = Self.claudeHookFormat()
         mutateClaudeSettings { existing in
-            try AgentHooks.installHooks(into: existing, cliPath: Self.bundledCLIPath)
+            try AgentHooks.installHooks(into: existing, cliPath: Self.bundledCLIPath, format: format)
         }
+    }
+
+    /// The Claude Code hook set for this Mac. Newer events are only written
+    /// when every Claude Code installed here understands them: before
+    /// 2.1.101 an unknown event name made Claude Code ignore the whole
+    /// settings file. Re-read on every check, so an upgrade adds the event
+    /// and a downgrade takes it out again through the normal repair.
+    private static func claudeHookFormat() -> AgentHooks.SettingsFormat {
+        let versions = ClaudeCodeVersions.detect(
+            home: FileManager.default.homeDirectoryForCurrentUser.path)
+        return .claude(includingStopFailure: versions.supportsStopFailure)
     }
 
     /// Remove exactly Keepresso's hook entries, leaving everything else in
@@ -2405,10 +2418,7 @@ final class AppModel {
         let url = AntigravityHooks.hooksURL()
         defer { refreshAntigravityHooksStatus() }
         do {
-            let updated = try transform(try AgentHooks.readSettings(at: url))
-            try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Self.writePreservingPermissions(updated, to: url.resolvingSymlinksInPath())
+            try Self.updateConfigFile(at: url, transform)
             antigravityHooksError = nil
             return true
         } catch is AgentHooks.SettingsUnreadableError {
@@ -2463,6 +2473,17 @@ final class AppModel {
         case .hermes: installHermesPlugin()
         case .qwen, .devin, .kimi: tool.compatTool.map(installCompatHooks)
         }
+    }
+
+    /// Whether this copy is the installed app, in /Applications or
+    /// ~/Applications. Repair bakes the running copy's CLI path into every
+    /// connected tool's config, so a dev build or a stray copy launched once
+    /// must not rewrite them all (and send Codex users back to approve their
+    /// hooks) just by starting.
+    static var runsFromApplicationsFolder: Bool {
+        let path = Bundle.main.bundleURL.standardizedFileURL.path
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return path.hasPrefix("/Applications/") || path.hasPrefix(home + "/Applications/")
     }
 
     /// Re-read every tool's install state. Cheap: a few small file reads.
@@ -2540,10 +2561,7 @@ final class AppModel {
         let url = CodexHooks.hooksURL()
         defer { refreshCodexHooksStatus() }
         do {
-            let updated = try transform(try AgentHooks.readSettings(at: url))
-            try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Self.writePreservingPermissions(updated, to: url.resolvingSymlinksInPath())
+            try Self.updateConfigFile(at: url, transform)
             codexHooksError = nil
             return true
         } catch is AgentHooks.SettingsUnreadableError {
@@ -2604,10 +2622,7 @@ final class AppModel {
         let url = GrokHooks.hooksURL()
         defer { refreshGrokHooksStatus() }
         do {
-            let updated = try transform(try AgentHooks.readSettings(at: url))
-            try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Self.writePreservingPermissions(updated, to: url.resolvingSymlinksInPath())
+            try Self.updateConfigFile(at: url, transform)
             grokHooksError = nil
             return true
         } catch is AgentHooks.SettingsUnreadableError {
@@ -2672,10 +2687,7 @@ final class AppModel {
         let url = tool.configURL()
         defer { refreshCompatHooksStatus() }
         do {
-            let updated = try transform(try AgentHooks.readSettings(at: url))
-            try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Self.writePreservingPermissions(updated, to: url.resolvingSymlinksInPath())
+            try Self.updateConfigFile(at: url, transform)
             compatHooksErrors[tool] = nil
             return true
         } catch is AgentHooks.SettingsUnreadableError {
@@ -2799,10 +2811,7 @@ final class AppModel {
         let url = CursorHooks.hooksURL()
         defer { refreshCursorHooksStatus() }
         do {
-            let updated = try transform(try AgentHooks.readSettings(at: url))
-            try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Self.writePreservingPermissions(updated, to: url.resolvingSymlinksInPath())
+            try Self.updateConfigFile(at: url, transform)
             cursorHooksError = nil
             return true
         } catch is AgentHooks.SettingsUnreadableError {
@@ -2838,6 +2847,26 @@ final class AppModel {
         }
     }
 
+    /// Rewrites an agent tool's config file through `transform`, using
+    /// ``ConfigFileUpdate`` so a save the tool itself makes mid-update is
+    /// merged rather than overwritten. A symlinked file (dotfiles setups) is
+    /// resolved so the atomic write replaces the real file, not the link.
+    /// Throws ``AgentHooks/SettingsUnreadableError`` for a file that exists
+    /// but can't be read: treating that as absence would replace the user's
+    /// whole config with just our hooks.
+    private static func updateConfigFile(
+        at url: URL, _ transform: (Data?) throws -> Data
+    ) throws {
+        try ConfigFileUpdate.apply(
+            read: { try AgentHooks.readSettings(at: url) },
+            write: { data in
+                try FileManager.default.createDirectory(
+                    at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try writePreservingPermissions(data, to: url.resolvingSymlinksInPath())
+            },
+            transform: transform)
+    }
+
     /// Rewrites `~/.claude/settings.json` through `transform` and reports
     /// whether the write landed, so callers can gate follow-up cleanup on it.
     @discardableResult
@@ -2849,12 +2878,7 @@ final class AppModel {
             // unreadable" and throws on the latter: treating a read failure
             // as absence would make the atomic write below replace the
             // user's whole settings file with just our hooks.
-            let updated = try transform(try AgentHooks.readSettings(at: url))
-            try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            // Resolve a symlinked settings.json (dotfiles setups) so the
-            // atomic write replaces the real file, not the link.
-            try Self.writePreservingPermissions(updated, to: url.resolvingSymlinksInPath())
+            try Self.updateConfigFile(at: url, transform)
             claudeHooksError = nil
             return true
         } catch is AgentHooks.SettingsUnreadableError {

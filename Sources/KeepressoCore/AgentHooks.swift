@@ -121,7 +121,10 @@ public enum AgentHooks {
             // ("waiting for your input"): a session at rest.
             let approval = message?.range(of: "permission", options: .caseInsensitive) != nil
             return .set(.waiting, detail: approval ? "waiting-approval" : nil)
-        case "Stop":
+        case "Stop", "StopFailure":
+            // StopFailure fires instead of Stop when an API error (a rate
+            // limit, an auth failure) ends the turn. Without it the record
+            // stays `working` while the agent process lives.
             return .set(.idle, detail: nil)
         case "SessionEnd":
             return .end
@@ -811,12 +814,21 @@ public enum AgentHooks {
     /// must keep recognizing each other's entries.
     public static let hookMarker = "__keepresso_hook"
 
-    /// The events we install hooks for: exactly the set ``reduce(event:toolName:)``
-    /// maps, nothing speculative.
+    /// The events we install hooks for on any Claude Code. ``reduce(event:toolName:)``
+    /// maps these plus ``stopFailureEvent``, which is installed separately and
+    /// only for new enough Claude Code. Never add it here.
     public static let installedEvents = [
         "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
         "PermissionRequest", "Notification", "Stop", "SessionEnd",
     ]
+
+    /// Fires instead of Stop when an API error ends the turn. Only added
+    /// when every Claude Code on the Mac knows it (see
+    /// ``ClaudeCodeVersions/supportsStopFailure``): before 2.1.101, an event
+    /// name Claude Code didn't recognize made it ignore the whole settings
+    /// file, so writing it for an older install would cost the user their
+    /// entire configuration.
+    public static let stopFailureEvent = "StopFailure"
 
     /// Events whose settings entries take a tool `matcher`; the others reject
     /// or ignore one.
@@ -853,6 +865,16 @@ public enum AgentHooks {
         public static let claude = SettingsFormat(
             subcommand: "agent-hook", marker: hookMarker, events: installedEvents,
             matcherEvents: AgentHooks.matcherEvents, timeout: 5)
+
+        /// Claude Code, with StopFailure when every install on the Mac
+        /// supports it. Switching back to ``claude`` after a downgrade
+        /// reports the StopFailure entry as orphaned, so repair removes it.
+        public static func claude(includingStopFailure: Bool) -> SettingsFormat {
+            guard includingStopFailure else { return .claude }
+            var format = SettingsFormat.claude
+            format.events.append(stopFailureEvent)
+            return format
+        }
     }
 
     /// `~/.claude/settings.json`, Claude Code's user-level settings.

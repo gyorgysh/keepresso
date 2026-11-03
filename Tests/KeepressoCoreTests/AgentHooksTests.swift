@@ -13,6 +13,8 @@ import Foundation
     #expect(AgentHooks.reduce(event: "UserPromptSubmit", toolName: nil) == .set(.working, detail: nil))
     #expect(AgentHooks.reduce(event: "PostToolUse", toolName: "Bash") == .set(.working, detail: nil))
     #expect(AgentHooks.reduce(event: "Stop", toolName: nil) == .set(.idle, detail: nil))
+    // An API error ends the turn with StopFailure in place of Stop.
+    #expect(AgentHooks.reduce(event: "StopFailure", toolName: nil) == .set(.idle, detail: nil))
     #expect(AgentHooks.reduce(event: "SessionEnd", toolName: nil) == .end)
     #expect(AgentHooks.reduce(event: "PermissionRequest", toolName: nil) == .set(.waiting, detail: "waiting-approval"))
     // A permission prompt fires PermissionRequest and a Notification in no

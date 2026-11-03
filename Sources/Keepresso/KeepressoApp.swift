@@ -258,6 +258,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // record goes stale after an app update plus a reboot); check it now,
         // and repair the registration, before the first engage fails on it.
         model.verifyHelper()
+        // Check the agent hook installs now rather than only when Preferences
+        // opens, so an update's new or changed hook events reach tools the
+        // user already connected. Repairs only; never connects a new tool.
+        // Only the installed copy does this at launch (see
+        // runsFromApplicationsFolder).
+        if AppModel.runsFromApplicationsFolder {
+            model.refreshAgentHookStatuses()
+        }
         ticker.start()
         // Register the global keep-awake toggle shortcut, if the user set one.
         model.registerHotKey()
