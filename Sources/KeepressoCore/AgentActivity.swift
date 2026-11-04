@@ -113,7 +113,8 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring, @unchecked S
     /// terminal agents are listed by their actual command names instead
     /// (cursor-agent, agy).
     public static let agentCommands = [
-        "claude", "codex", "gemini", "grok", "agy", "aider", "goose",
+        "claude", "codex", "gemini", "grok", "agy", "aider", "goose", "omp",
+        "cline", "zcode",
         "cursor-agent", "opencode", "opencode2", "amp", "copilot", "droid",
         "auggie", "qwen", "kimi", "pi", "hermes", "kilo", "dsh", "muse", "devin",
     ]

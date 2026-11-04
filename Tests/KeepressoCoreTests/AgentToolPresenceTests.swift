@@ -53,6 +53,16 @@ private func mac(_ paths: String...) -> (String) -> Bool {
         #expect(AgentTool.grok.isPresent(home: "/Users/x", exists: mac(path)),
                 "expected \(path) to prove Grok is installed")
     }
+    let omp: [String] = [
+        "/Users/x/.omp/agent",
+        "/Users/x/.local/bin/omp",
+        "/opt/homebrew/bin/omp",
+        "/usr/local/bin/omp",
+    ]
+    for path in omp {
+        #expect(AgentTool.omp.isPresent(home: "/Users/x", exists: mac(path)),
+                "expected \(path) to prove OMP is installed")
+    }
 }
 
 @Test func oneToolsEvidenceNeverProvesTheOther() {
@@ -115,6 +125,6 @@ private func mac(_ paths: String...) -> (String) -> Bool {
     #expect(all == AgentTool.allCases)
     #expect(all == AgentTool.setupTools(present: { _ in true }, connected: { _ in true }))
     #expect(AgentTool.allCases.map(\.displayName)
-        == ["Claude Code", "Cursor", "Codex", "Antigravity", "Grok", "Hermes Agent",
+        == ["Claude Code", "Cursor", "Codex", "Antigravity", "Grok", "Oh My Pi (OMP)", "Hermes Agent",
             "Qwen Code", "Devin", "Kimi Code"])
 }

@@ -299,6 +299,26 @@ func runHermesHook(event: String) -> Never {
     exit(0)
 }
 
+/// The OMP extension passes the current session identity directly, avoiding
+/// a JSON/stdin round trip. The command stays silent and fail-open.
+func runOMPHook(
+    event: String,
+    sessionId: String,
+    cwd: String,
+    willContinue: Bool,
+    awaitingAsyncWork: Bool
+) -> Never {
+    OMPHooks.handle(
+        event: event,
+        sessionId: sessionId,
+        cwd: cwd,
+        willContinue: willContinue,
+        awaitingAsyncWork: awaitingAsyncWork,
+        parentPid: getppid()
+    )
+    exit(0)
+}
+
 /// The Qwen Code, Devin, and Kimi Code variant. All three fail open on a
 /// silent exit 0.
 func runCompatHook(tool: CompatHooks.Tool, event: String) -> Never {
@@ -339,6 +359,14 @@ case .grokHook(let event):
     runGrokHook(event: event)
 case .hermesHook(let event):
     runHermesHook(event: event)
+case .ompHook(let event, let sessionId, let cwd, let willContinue, let awaitingAsyncWork):
+    runOMPHook(
+        event: event,
+        sessionId: sessionId,
+        cwd: cwd,
+        willContinue: willContinue,
+        awaitingAsyncWork: awaitingAsyncWork
+    )
 case .compatHook(let tool, let event):
     runCompatHook(tool: tool, event: event)
 case .lease(let command):

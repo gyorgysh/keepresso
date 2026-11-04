@@ -14,6 +14,7 @@ public enum AgentTool: CaseIterable, Sendable {
     case codex
     case antigravity
     case grok
+    case omp
     case hermes
     case qwen
     case devin
@@ -76,6 +77,13 @@ public enum AgentTool: CaseIterable, Sendable {
                 "/opt/homebrew/bin/grok",
                 "/usr/local/bin/grok",
             ]
+        case .omp:
+            return [
+                "\(home)/.omp/agent",
+                "\(home)/.local/bin/omp",
+                "/opt/homebrew/bin/omp",
+                "/usr/local/bin/omp",
+            ]
         case .hermes:
             return [
                 "\(home)/.hermes",
@@ -116,6 +124,7 @@ public enum AgentTool: CaseIterable, Sendable {
         case .codex: return "Codex"
         case .antigravity: return "Antigravity"
         case .grok: return "Grok"
+        case .omp: return "Oh My Pi (OMP)"
         case .hermes: return "Hermes Agent"
         case .qwen: return "Qwen Code"
         case .devin: return "Devin"

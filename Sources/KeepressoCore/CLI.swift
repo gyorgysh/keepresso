@@ -31,6 +31,14 @@ public enum CLIRequest: Equatable, Sendable {
     case grokHook(event: String)
     /// Record a Hermes plugin event delivered on stdin. Hidden likewise.
     case hermesHook(event: String)
+    /// Record an Oh My Pi extension event. Hidden likewise.
+    case ompHook(
+        event: String,
+        sessionId: String,
+        cwd: String,
+        willContinue: Bool,
+        awaitingAsyncWork: Bool
+    )
     /// Record a Qwen Code, Devin, or Kimi Code hook event delivered on
     /// stdin. Hidden likewise.
     case compatHook(tool: CompatHooks.Tool, event: String)
@@ -192,6 +200,27 @@ public enum CLIRequest: Equatable, Sendable {
                 throw CLIUsageError("hermes-hook takes exactly one event name")
             }
             return .hermesHook(event: arguments[1])
+        case "omp-hook":
+            guard arguments.count == 6 else {
+                throw CLIUsageError("omp-hook takes an event, session id, working directory, and two continuation flags")
+            }
+            guard !arguments[2].isEmpty else {
+                throw CLIUsageError("omp-hook needs a session id")
+            }
+            func flag(_ value: String) throws -> Bool {
+                switch value {
+                case "0": return false
+                case "1": return true
+                default: throw CLIUsageError("omp-hook continuation flags must be 0 or 1")
+                }
+            }
+            return .ompHook(
+                event: arguments[1],
+                sessionId: arguments[2],
+                cwd: arguments[3],
+                willContinue: try flag(arguments[4]),
+                awaitingAsyncWork: try flag(arguments[5])
+            )
         case "lease":
             return .lease(try parseLease(Array(arguments.dropFirst())))
         case "wake":

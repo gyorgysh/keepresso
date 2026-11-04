@@ -64,6 +64,15 @@ import Foundation
     #expect(throws: CLIUsageError.self) { try CLIRequest.parse(["grok-hook", "A", "B"]) }
 }
 
+@Test func parsesOmpHook() throws {
+    #expect(try CLIRequest.parse(["omp-hook", "agent-start", "session", "/repo", "0", "0"])
+        == .ompHook(event: "agent-start", sessionId: "session", cwd: "/repo", willContinue: false, awaitingAsyncWork: false))
+    #expect(try CLIRequest.parse(["omp-hook", "agent-end", "session", "/repo", "1", "1"])
+        == .ompHook(event: "agent-end", sessionId: "session", cwd: "/repo", willContinue: true, awaitingAsyncWork: true))
+    #expect(throws: CLIUsageError.self) { try CLIRequest.parse(["omp-hook", "agent-start"]) }
+    #expect(throws: CLIUsageError.self) { try CLIRequest.parse(["omp-hook", "agent-start", "session", "/repo", "yes", "0"]) }
+}
+
 // MARK: - URL building round-trips through the app-side parser
 
 @Test func startURLRoundTripsThroughURLCommand() {
