@@ -16,6 +16,7 @@
 
 <p align="center">
   <a href="https://github.com/gyorgysh/keepresso/actions/workflows/ci.yml"><img src="https://github.com/gyorgysh/keepresso/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/gyorgysh/keepresso/releases"><img src="https://img.shields.io/github/downloads/gyorgysh/keepresso/total" alt="Total GitHub release downloads"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-blue" alt="macOS 14+">
   <img src="https://img.shields.io/badge/Swift-SwiftUI-orange" alt="Swift + SwiftUI">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPLv3-green" alt="GPL-3.0 License"></a>
