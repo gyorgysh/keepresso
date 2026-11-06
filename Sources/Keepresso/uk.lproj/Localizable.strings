@@ -777,6 +777,7 @@
 "Tools" = "Інструменти";
 "Help" = "Довідка";
 "Update available…" = "Доступне оновлення…";
+"Updates" = "Оновлення";
 "Keepresso could not switch it off, so it stayed running instead of quitting." = "Keepresso не вдалося його вимкнути, тому програма залишилася запущеною замість того, щоб вийти.";
 "Enter your administrator password to switch the sleep override off before Keepresso quits." = "Введіть пароль адміністратора, щоб вимкнути блокування сну, перш ніж Keepresso вийде.";
 "Enter your administrator password to switch closed-display mode off before Keepresso quits." = "Введіть пароль адміністратора, щоб вимкнути режим закритої кришки, перш ніж Keepresso вийде.";

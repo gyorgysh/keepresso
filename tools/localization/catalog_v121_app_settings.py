@@ -133,3 +133,11 @@ APP["Update available…"] = {
     "tr": "Güncelleme mevcut…", "pl": "Dostępna aktualizacja…",
     "uk": "Доступне оновлення…", "zh-Hant": "有可用更新…",
 }
+
+APP["Updates"] = {
+    "hu": "Frissítések", "es": "Actualizaciones", "fr": "Mises à jour",
+    "de": "Updates", "zh-Hans": "更新", "it": "Aggiornamenti",
+    "ja": "アップデート", "ko": "업데이트", "ru": "Обновления",
+    "pt-BR": "Atualizações", "tr": "Güncellemeler", "pl": "Aktualizacje",
+    "uk": "Оновлення", "zh-Hant": "更新",
+}

@@ -366,6 +366,8 @@ private struct GeneralTab: View {
                     Text(updater.updateAvailable ? L("Update available…") : L("Check for Updates…"))
                 }
                 .disabled(!updater.canCheckForUpdates)
+            } header: {
+                Text("Updates")
             }
 
             Section {

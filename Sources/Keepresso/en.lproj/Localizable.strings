@@ -777,6 +777,7 @@
 "Tools" = "Tools";
 "Help" = "Help";
 "Update available…" = "Update available…";
+"Updates" = "Updates";
 "Keepresso could not switch it off, so it stayed running instead of quitting." = "Keepresso could not switch it off, so it stayed running instead of quitting.";
 "Enter your administrator password to switch the sleep override off before Keepresso quits." = "Enter your administrator password to switch the sleep override off before Keepresso quits.";
 "Enter your administrator password to switch closed-display mode off before Keepresso quits." = "Enter your administrator password to switch closed-display mode off before Keepresso quits.";

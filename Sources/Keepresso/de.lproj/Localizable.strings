@@ -777,6 +777,7 @@
 "Tools" = "Werkzeuge";
 "Help" = "Hilfe";
 "Update available…" = "Update verfügbar…";
+"Updates" = "Updates";
 "Keepresso could not switch it off, so it stayed running instead of quitting." = "Keepresso konnte es nicht ausschalten und blieb deshalb aktiv, statt beendet zu werden.";
 "Enter your administrator password to switch the sleep override off before Keepresso quits." = "Gib dein Administratorpasswort ein, um die Ruhezustandssperre auszuschalten, bevor Keepresso beendet wird.";
 "Enter your administrator password to switch closed-display mode off before Keepresso quits." = "Gib dein Administratorpasswort ein, um den Modus bei geschlossenem Display auszuschalten, bevor Keepresso beendet wird.";

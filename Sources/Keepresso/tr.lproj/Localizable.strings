@@ -777,6 +777,7 @@
 "Tools" = "Araçlar";
 "Help" = "Yardım";
 "Update available…" = "Güncelleme mevcut…";
+"Updates" = "Güncellemeler";
 "Keepresso could not switch it off, so it stayed running instead of quitting." = "Keepresso bunu kapatamadı, bu yüzden çıkmak yerine çalışmaya devam etti.";
 "Enter your administrator password to switch the sleep override off before Keepresso quits." = "Keepresso çıkmadan önce uyku devre dışı bırakmayı kapatmak üzere yönetici parolanızı girin.";
 "Enter your administrator password to switch closed-display mode off before Keepresso quits." = "Keepresso çıkmadan önce kapalı ekran modunu kapatmak üzere yönetici parolanızı girin.";

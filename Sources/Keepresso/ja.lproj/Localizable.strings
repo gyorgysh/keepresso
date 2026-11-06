@@ -777,6 +777,7 @@
 "Tools" = "ツール";
 "Help" = "ヘルプ";
 "Update available…" = "アップデートがあります…";
+"Updates" = "アップデート";
 "Keepresso could not switch it off, so it stayed running instead of quitting." = "Keepresso はオフにできなかったため、終了せずに実行を続けました。";
 "Enter your administrator password to switch the sleep override off before Keepresso quits." = "Keepresso が終了する前にスリープの無効化をオフにするため、管理者パスワードを入力してください。";
 "Enter your administrator password to switch closed-display mode off before Keepresso quits." = "Keepresso が終了する前にクラムシェルモードをオフにするため、管理者パスワードを入力してください。";
