@@ -84,7 +84,9 @@ public enum HelperService {
     }
 
     /// The Team ID from this process's own code signature, or `nil` when
-    /// unsigned or ad-hoc signed (local dev builds).
+    /// unsigned or ad-hoc signed (local dev builds). Security.framework may
+    /// synchronously evaluate timestamp certificate trust while reading this
+    /// information. Call off the main thread, including for metadata checks.
     public static func selfTeamIdentifier() -> String? {
         var codeRef: SecCode?
         guard SecCodeCopySelf([], &codeRef) == errSecSuccess, let code = codeRef else { return nil }
