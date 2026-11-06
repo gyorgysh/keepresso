@@ -12,6 +12,11 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- Stop showing Claude Code as working after an API error ends its turn, when
+  the installed Claude Code versions support the error hook.
+- Keep development copies from automatically rewriting agent connections
+  when opening Preferences, Rules, or Welcome.
+- Leave unchanged agent settings files alone during connection updates.
 - Keep the background steam moving continuously when switching between
   Automatic and Manual or expanding and collapsing the menu.
 - Run the helper's signing check off the main thread and only when a repair

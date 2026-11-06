@@ -7,7 +7,8 @@ import Foundation
 /// between our read and our write, writing our transform of the old contents
 /// would silently drop its change. So the file is read again just before the
 /// write, and when it moved, the transform is redone on the new contents.
-/// After a few tries it gives up and writes nothing.
+/// After a few tries it gives up and writes nothing. This is best-effort:
+/// an uncoordinated writer can still change the file after the final read.
 public enum ConfigFileUpdate {
     /// The file kept changing under us on every attempt.
     public struct KeptChangingError: Error, Equatable {
@@ -29,6 +30,7 @@ public enum ConfigFileUpdate {
             let original = try read()
             let updated = try transform(original)
             guard try read() == original else { continue }
+            guard updated != original else { return }
             try write(updated)
             return
         }

@@ -176,3 +176,25 @@ private typealias V = ClaudeCodeVersions.Version
     let command = (stopFailure[0]["hooks"] as? [[String: Any]])?.first?["command"] as? String
     #expect(command == "say failed")
 }
+
+@Test func versionRejectsSignedAndNonDigitComponents() {
+    for value in ["+2.1.300", "2.+1.300", "2.1.-1", "-2.1.300", "2. 1.300", "2.１.300"] {
+        #expect(V(value) == nil)
+    }
+}
+
+@Test func unreadableInstallDirectoriesVetoNewHookEvents() {
+    let launcher = "\(home)/.local/bin/claude"
+    let target = "\(home)/.local/share/claude/versions/2.1.317"
+    for directory in ["\(home)/Library/Application Support/Claude/claude-code", "\(home)/.nvm/versions/node"] {
+        let access = ClaudeCodeVersions.FileAccess(
+            exists: { $0 == launcher || $0 == directory },
+            resolve: { $0 == launcher ? target : $0 },
+            list: { _ in nil },
+            read: { _ in nil })
+        let found = ClaudeCodeVersions.detect(home: home, files: access)
+        #expect(found.known == [V(2, 1, 317)])
+        #expect(found.unknownCount == 1)
+        #expect(!found.supportsStopFailure)
+    }
+}
