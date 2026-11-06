@@ -86,10 +86,20 @@ final class StatusItemBridge: NSObject {
     /// delegate and dismisses its panel when the session ends.
     /// Older systems (or a missing session) retain the window-close fallback.
     func dismissPanel(from item: NSStatusItem? = nil) {
+        // Resolve the public macOS 27 API by selector so Xcode 26's SDK can
+        // still build the app. A runtime availability check alone cannot
+        // hide declarations missing from the build SDK.
+        let sessionSelector = NSSelectorFromString("expandedInterfaceSession")
+        let cancelSelector = NSSelectorFromString("cancel")
         if #available(macOS 27.0, *),
-           let session = (item ?? resolveStatusItem())?.expandedInterfaceSession {
-            session.cancel()
-        } else if let panel = panelWindow, panel.isVisible {
+           let item = item ?? resolveStatusItem(),
+           item.responds(to: sessionSelector),
+           let session = item.perform(sessionSelector)?.takeUnretainedValue() as? NSObject,
+           session.responds(to: cancelSelector) {
+            session.perform(cancelSelector)
+            return
+        }
+        if let panel = panelWindow, panel.isVisible {
             panel.close()
         }
     }
