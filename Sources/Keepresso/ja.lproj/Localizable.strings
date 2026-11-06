@@ -776,6 +776,7 @@
 "Install a small helper service so closed-display mode, Keyboard Cleaner, the thermal fan boost, AWDL pausing, and DNS flush work without password prompts. macOS will ask you to allow it in System Settings, once. Nothing else changes." = "小さなヘルパーサービスをインストールすると、クラムシェルモード、キーボードクリーナー、熱によるファン増速、AWDL の一時停止、DNS フラッシュがパスワードの要求なしで動作します。macOS はシステム設定で一度だけ許可を求めます。ほかには何も変わりません。";
 "Tools" = "ツール";
 "Help" = "ヘルプ";
+"Update available…" = "アップデートがあります…";
 "Keepresso could not switch it off, so it stayed running instead of quitting." = "Keepresso はオフにできなかったため、終了せずに実行を続けました。";
 "Enter your administrator password to switch the sleep override off before Keepresso quits." = "Keepresso が終了する前にスリープの無効化をオフにするため、管理者パスワードを入力してください。";
 "Enter your administrator password to switch closed-display mode off before Keepresso quits." = "Keepresso が終了する前にクラムシェルモードをオフにするため、管理者パスワードを入力してください。";

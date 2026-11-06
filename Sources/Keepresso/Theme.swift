@@ -297,7 +297,7 @@ struct WindowPlacement: NSViewRepresentable {
     static func repairIfWedged(_ window: NSWindow?, attempts: Int) {
         guard attempts > 0 else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak window] in
-            guard let window, window.isVisible else { return }
+            guard let window, window.isVisible, window.canBecomeKey else { return }
             let trulyActive = NSRunningApplication.current.isActive
             if NSApp.isActive && !trulyActive {
                 NSApp.deactivate()
@@ -335,7 +335,7 @@ private struct PanelKeyAssert: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak view] in
-            guard let window = view?.window, window.isVisible, !window.isKeyWindow else { return }
+            guard let window = view?.window, window.isVisible, window.canBecomeKey, !window.isKeyWindow else { return }
             window.makeKey()
         }
         return view
@@ -549,29 +549,40 @@ private final class SteamView: NSView {
     }
 
     /// Lays each drift out as a column of tiles tall enough to scroll one
-    /// tile's height over the whole panel, then restarts the motion.
+    /// tile's height over the whole panel. Height changes reveal more of
+    /// the same moving texture instead of stretching it and restarting it.
     private func rebuild() {
         guard let tile, bounds.width > 0, bounds.height > 0 else { return }
         builtSize = bounds.size
         let width = bounds.width
-        let tileHeight = max(width * CGFloat(tile.height) / CGFloat(tile.width), bounds.height)
+        let tileHeight = width * CGFloat(tile.height) / CGFloat(tile.width)
+        let rowCount = Int(ceil(bounds.height / tileHeight)) + 2
+        let widthChanged = drifts.first?.bounds.width != width
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for (index, drift) in drifts.enumerated() {
-            drift.sublayers?.forEach { $0.removeFromSuperlayer() }
-            drift.frame = CGRect(x: 0, y: -tileHeight, width: width, height: tileHeight * 2 + bounds.height)
-            for row in 0..<3 {
-                let piece = CALayer()
+            // Do not assign frame while a transform animation is active.
+            // Keep the bottom origin and texture scale independent of height.
+            drift.bounds = CGRect(x: 0, y: 0, width: width, height: tileHeight * CGFloat(rowCount))
+            drift.anchorPoint = .zero
+            drift.position = CGPoint(x: 0, y: -tileHeight)
+            while (drift.sublayers?.count ?? 0) > rowCount {
+                drift.sublayers?.last?.removeFromSuperlayer()
+            }
+            while (drift.sublayers?.count ?? 0) < rowCount {
+                drift.addSublayer(CALayer())
+            }
+            for (row, piece) in (drift.sublayers ?? []).enumerated() {
                 piece.contents = tile
                 piece.contentsGravity = .resize
                 piece.frame = CGRect(x: 0, y: CGFloat(row) * tileHeight, width: width, height: tileHeight)
                 // The second layer runs mirrored, so it never lines up with
                 // the first.
                 if index == 1 { piece.setAffineTransform(CGAffineTransform(scaleX: -1, y: 1)) }
-                drift.addSublayer(piece)
             }
         }
         CATransaction.commit()
+        if widthChanged { drifts.forEach { $0.removeAllAnimations() } }
         if running { animate() }
     }
 
@@ -579,11 +590,11 @@ private final class SteamView: NSView {
         guard bounds.height > 0, let first = drifts.first?.sublayers?.first else { return }
         let tileHeight = first.frame.height
         for (index, drift) in drifts.enumerated() {
-            drift.removeAllAnimations()
-            // Anchored to media time zero, not now: a restart (a resize, the
-            // brew starting again) picks the loop up where it would have
-            // been, instead of snapping every wisp back to the start.
-            let anchor = drift.convertTime(0, from: nil)
+            guard drift.animation(forKey: "rise") == nil else { continue }
+            // Use a fixed, nonzero media-time origin so a width change or
+            // resumed brew keeps its phase. Core Animation interprets a
+            // zero beginTime as "start now" when the animation is added.
+            let anchor = drift.convertTime(1, from: nil)
             let rise = CABasicAnimation(keyPath: "transform.translation.y")
             rise.fromValue = 0
             rise.toValue = tileHeight

@@ -11,7 +11,7 @@ struct KeepressoApp: App {
         MenuBarExtra {
             MenuBarContent(model: appDelegate.model, updater: appDelegate.updater, bridge: appDelegate.statusItemBridge)
         } label: {
-            MenuBarLabelView(model: appDelegate.model, bridge: appDelegate.statusItemBridge)
+            MenuBarLabelView(updater: appDelegate.updater, model: appDelegate.model, bridge: appDelegate.statusItemBridge)
         }
         .menuBarExtraStyle(.window)
 
@@ -49,7 +49,7 @@ struct KeepressoApp: App {
         .handlesExternalEvents(matching: [])
 
         Window("Preferences", id: Self.preferencesWindowID) {
-            PreferencesView(model: appDelegate.model)
+            PreferencesView(updater: appDelegate.updater, model: appDelegate.model)
         }
         .windowResizability(.contentSize)
         .handlesExternalEvents(matching: [])
@@ -104,36 +104,45 @@ struct KeepressoApp: App {
 /// where the user closes it without confirming (a language-switch relaunch),
 /// doesn't burn the first run.
 private struct MenuBarLabelView: View {
+    let updater: any Updating
     @Bindable var model: AppModel
     let bridge: StatusItemBridge
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        MenuBarLabel(session: model.session, showCountdown: model.showCountdownInMenuBar,
-                     presentation: model.advancedMenuLayout)
-            .task {
-                // The context menu's window entries need openWindow, which
-                // only exists inside SwiftUI; this is the app's one always
-                // alive view, so it lends its environment to the bridge.
-                bridge.openWindow = { openWindow(id: $0) }
-                guard !model.hasOnboarded else { return }
-                // First launch from a DMG: this instance is about to copy
-                // itself to /Applications and quit. Flashing the welcome here
-                // would persist hasOnboarded into the shared defaults and the
-                // relaunched copy, the one fresh installs actually keep,
-                // would never show it.
-                guard !AppRelocator.isRelocating else { return }
-                NSApp.activate(ignoringOtherApps: true)
-                openWindow(id: KeepressoApp.welcomeWindowID)
+        HStack(spacing: 3) {
+            MenuBarLabel(session: model.session, showCountdown: model.showCountdownInMenuBar,
+                         presentation: model.advancedMenuLayout)
+            // MenuBarExtra extracts text and images from its label; a shape
+            // overlay is not a reliable status-item indicator.
+            if updater.updateAvailable {
+                Text(verbatim: "↑").accessibilityLabel(L("Update available…"))
             }
-            // The helper self-heal got stuck on a step only the user can do:
-            // walk them through it. This view is the app's one always-alive
-            // view, so the edge is caught no matter what else is open.
-            .onChange(of: model.helperAttention) { _, attention in
-                guard attention != nil else { return }
-                NSApp.activate(ignoringOtherApps: true)
-                openWindow(id: KeepressoApp.helperWindowID)
-            }
+        }
+        .help(updater.updateAvailable ? L("Update available…") : "Keepresso")
+        .task {
+            // The context menu's window entries need openWindow, which
+            // only exists inside SwiftUI; this is the app's one always
+            // alive view, so it lends its environment to the bridge.
+            bridge.openWindow = { openWindow(id: $0) }
+            guard !model.hasOnboarded else { return }
+            // First launch from a DMG: this instance is about to copy
+            // itself to /Applications and quit. Flashing the welcome here
+            // would persist hasOnboarded into the shared defaults and the
+            // relaunched copy, the one fresh installs actually keep,
+            // would never show it.
+            guard !AppRelocator.isRelocating else { return }
+            NSApp.activate(ignoringOtherApps: true)
+            openWindow(id: KeepressoApp.welcomeWindowID)
+        }
+        // The helper self-heal got stuck on a step only the user can do:
+        // walk them through it. This view is the app's one always-alive
+        // view, so the edge is caught no matter what else is open.
+        .onChange(of: model.helperAttention) { _, attention in
+            guard attention != nil else { return }
+            NSApp.activate(ignoringOtherApps: true)
+            openWindow(id: KeepressoApp.helperWindowID)
+        }
     }
 }
 

@@ -3,6 +3,22 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [1.30.0] - Unreleased
+
+### Added
+
+- Check for Updates in Preferences > General. Available updates also appear
+  in the menu, with an indicator beside the menu-bar cup.
+
+### Fixed
+
+- Keep the background steam moving continuously when switching between
+  Automatic and Manual or expanding and collapsing the menu.
+- Run the helper's signing check off the main thread and only when a repair
+  is needed, instead of during startup.
+- End the menu-bar panel's tracking session when dismissing it on macOS 27.
+  Skip focus attempts on windows that cannot receive keyboard input.
+
 ## [1.29.0] - 2026-11-03
 
 ### Added

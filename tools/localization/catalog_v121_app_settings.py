@@ -123,3 +123,13 @@ APP = {
         "it": "Aiuto", "ja": "ヘルプ", "ko": "도움말", "ru": "Справка", "pt-BR": "Ajuda", "tr": "Yardım", "pl": "Pomoc", "uk": "Довідка", "zh-Hant": "說明",
     },
 }
+
+APP["Update available…"] = {
+    "hu": "Frissítés érhető el…", "es": "Actualización disponible…",
+    "fr": "Mise à jour disponible…", "de": "Update verfügbar…",
+    "zh-Hans": "有可用更新…", "it": "Aggiornamento disponibile…",
+    "ja": "アップデートがあります…", "ko": "업데이트 사용 가능…",
+    "ru": "Доступно обновление…", "pt-BR": "Atualização disponível…",
+    "tr": "Güncelleme mevcut…", "pl": "Dostępna aktualizacja…",
+    "uk": "Доступне оновлення…", "zh-Hant": "有可用更新…",
+}

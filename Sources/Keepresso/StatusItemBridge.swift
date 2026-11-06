@@ -77,8 +77,21 @@ final class StatusItemBridge: NSObject {
               event.window === button.window
         else { return event }
         contextMouseUp = event.type == .rightMouseDown ? .rightMouseUp : .leftMouseUp
-        if let panel = panelWindow, panel.isVisible { panel.close() }
+        dismissPanel(from: item)
         return nil
+    }
+
+    /// Ask AppKit's tracking session to dismiss the interface on macOS 27,
+    /// rather than closing its window directly. SwiftUI owns the session
+    /// delegate and dismisses its panel when the session ends.
+    /// Older systems (or a missing session) retain the window-close fallback.
+    func dismissPanel(from item: NSStatusItem? = nil) {
+        if #available(macOS 27.0, *),
+           let session = (item ?? resolveStatusItem())?.expandedInterfaceSession {
+            session.cancel()
+        } else if let panel = panelWindow, panel.isVisible {
+            panel.close()
+        }
     }
 
     /// Find our status item behind `MenuBarExtra`: the app's only
@@ -97,11 +110,12 @@ final class StatusItemBridge: NSObject {
         return nil
     }
 
-    /// Present the menu directly. Sending performClick to SwiftUI's button
+    /// Present the menu after dismissal was requested on mouse-down. Do not
+    /// cancel the same session again on mouse-up while it is finishing.
+    /// Sending performClick to SwiftUI's button
     /// can invoke its panel action as well as menu tracking on macOS 27.
     private func showContextMenu(from item: NSStatusItem) {
         guard let button = item.button else { return }
-        if let panel = panelWindow, panel.isVisible { panel.close() }
         let menu = buildMenu()
         button.highlight(true)
         defer { button.highlight(false) }
@@ -117,6 +131,12 @@ final class StatusItemBridge: NSObject {
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
+        if updater.updateAvailable {
+            let update = entry(L("Update available…"), #selector(checkForUpdates))
+            update.isEnabled = updater.canCheckForUpdates
+            menu.addItem(update)
+            menu.addItem(.separator())
+        }
         menu.addItem(entry(L("Preferences…"), #selector(openPreferences), key: ","))
         let tools = NSMenuItem(title: L("Tools"), action: nil, keyEquivalent: "")
         let toolsMenu = NSMenu()
