@@ -116,11 +116,11 @@ final class AppModel {
         self.gate = TriggerGateController(factory: factory)
         let notifier = UserNotificationReminder()
         self.notifier = notifier
-        // The privileged seams route through the helper daemon whenever it's
-        // installed (silent XPC, no prompt) and fall back to the original
-        // osascript admin prompts otherwise. The availability box is the
-        // thread-safe bridge: the manager writes it, the detached-task
-        // closures read it at each engage.
+        // Explicit manual privileged actions keep their announced osascript
+        // fallback. Automatic watchdogs are helper-only: a background session
+        // change must never open a password dialog when the helper is missing
+        // or its code signature no longer matches. The availability box is the
+        // thread-safe bridge: the manager writes it, detached tasks read it.
         let helperClient = XPCHelperClient()
         self.helperClient = helperClient
         let helperManager = HelperManager(
@@ -143,14 +143,16 @@ final class AppModel {
             launcher: RoutedSleepWatchdog(
                 daemon: HelperDaemonSleepWatchdog(helper: helperClient),
                 fallback: OsascriptSleepWatchdog(),
-                helperInstalled: helperInstalled
+                helperInstalled: helperInstalled,
+                allowAdminPromptFallback: false
             )
         )
         self.awdl = AWDLWatchdogController(
             launcher: RoutedAWDLWatchdog(
                 daemon: HelperDaemonAWDLWatchdog(helper: helperClient),
                 fallback: OsascriptAWDLWatchdog(),
-                helperInstalled: helperInstalled
+                helperInstalled: helperInstalled,
+                allowAdminPromptFallback: false
             )
         )
         self.keyboardLock = KeyboardLockController(
@@ -2430,6 +2432,41 @@ final class AppModel {
         }
     }
 
+    // MARK: - Oh My Pi extension
+
+    /// OMP is detected natively with no setup. This optional extension lets
+    /// the shared activity trigger use exact session lifecycle edges.
+    private(set) var ompHooks: AgentHooks.HookInstallState = .notInstalled
+    private(set) var ompHooksError: String?
+    private(set) var ompPresent = false
+
+    func refreshOMPHooksStatus() {
+        ompPresent = AgentTool.omp.isPresent()
+        ompHooks = OMPHooks.installState(cliPath: Self.bundledCLIPath)
+        autoRepairIfNeeded(.omp)
+    }
+
+    func installOMPExtension() {
+        defer { refreshOMPHooksStatus() }
+        do {
+            try OMPHooks.install(cliPath: Self.bundledCLIPath)
+            ompHooksError = nil
+        } catch {
+            ompHooksError = L("Couldn't update OMP's Keepresso extension.")
+        }
+    }
+
+    func removeOMPExtension() {
+        defer { refreshOMPHooksStatus() }
+        do {
+            try OMPHooks.remove()
+            AgentHooks.purgeRecords(where: OMPHooks.ownsRecord)
+            ompHooksError = nil
+        } catch {
+            ompHooksError = L("Couldn't remove OMP's Keepresso extension.")
+        }
+    }
+
     // MARK: - Agent tools, addressed uniformly
 
     /// The tools the agentic setup step should list, and their live state.
@@ -2446,6 +2483,7 @@ final class AppModel {
         case .codex: return codexPresent
         case .antigravity: return antigravityPresent
         case .grok: return grokPresent
+        case .omp: return ompPresent
         case .hermes: return hermesPresent
         case .qwen, .devin, .kimi: return tool.compatTool.map(compatPresent.contains) ?? false
         }
@@ -2458,6 +2496,7 @@ final class AppModel {
         case .codex: return codexHooks
         case .antigravity: return antigravityHooks
         case .grok: return grokHooks
+        case .omp: return ompHooks
         case .hermes: return hermesHooks
         case .qwen, .devin, .kimi: return tool.compatTool.flatMap { compatHooks[$0] } ?? .notInstalled
         }
@@ -2470,6 +2509,7 @@ final class AppModel {
         case .codex: installCodexHooks()
         case .antigravity: installAntigravityHooks()
         case .grok: installGrokHooks()
+        case .omp: installOMPExtension()
         case .hermes: installHermesPlugin()
         case .qwen, .devin, .kimi: tool.compatTool.map(installCompatHooks)
         }
@@ -2491,6 +2531,7 @@ final class AppModel {
         refreshCodexHooksStatus()
         refreshAntigravityHooksStatus()
         refreshGrokHooksStatus()
+        refreshOMPHooksStatus()
         refreshHermesPluginStatus()
         refreshCompatHooksStatus()
     }

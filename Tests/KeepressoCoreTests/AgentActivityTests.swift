@@ -56,6 +56,16 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     #expect(match("/bin/ps -axww") == nil)
     #expect(match("node server.js") == nil)
     #expect(match("/Users/x/.kimi-code/bin/kimi") == "kimi")
+    // OMP and the current Cline and ZCode CLIs use exact, standalone names.
+    #expect(match("omp --resume") == "omp")
+    #expect(match("/opt/homebrew/bin/cline --tui") == "cline")
+    #expect(match("zcode") == "zcode")
+    // Existing popular harnesses remain recognized.
+    #expect(match("gemini") == "gemini")
+    #expect(match("grok") == "grok")
+    #expect(match("opencode") == "opencode")
+    #expect(match("pi") == "pi")
+    #expect(match("grep omp notes.txt") == nil)
 }
 
 @Test func qwenCodeBundledNodeProcessesFoldIntoOneSession() {
@@ -347,6 +357,59 @@ private let bionicHostCommand =
 @Test func sessionLabelUsesTTYWithPidFallback() {
     #expect(session(pid: 812, cpu: 0).label == "claude (s003)")
     #expect(session(pid: 812, tty: nil, cpu: 0).label == "claude (pid 812)")
+}
+
+@Test func ompSessionsKeepIndependentWorkingAndWaitingStates() {
+    let monitor = FakeAgentActivity([
+        AgentSession(pid: 101, agent: "omp", tty: "s001", cpuPercent: 0, hookState: .working),
+        AgentSession(pid: 202, agent: "omp", tty: "s002", cpuPercent: 0, hookState: .waiting, hookDetail: "waiting"),
+    ])
+    let trigger = AgentActivityTrigger(monitor: monitor)
+
+    trigger.tick()
+    #expect(trigger.sessionStates.map(\.isWorking) == [true, false])
+    #expect(trigger.isSatisfied())
+
+    // The first OMP process has yielded to the user; the second is still
+    // working, so the shared agent condition remains active.
+    monitor.current = AgentSnapshot(sessions: [
+        AgentSession(pid: 101, agent: "omp", tty: "s001", cpuPercent: 0, hookState: .waiting, hookDetail: "waiting"),
+        AgentSession(pid: 202, agent: "omp", tty: "s002", cpuPercent: 0, hookState: .working),
+    ])
+    trigger.tick()
+    #expect(trigger.sessionStates.map(\.isWorking) == [false, true])
+    #expect(trigger.isSatisfied())
+    #expect(!trigger.justWentIdle)
+
+    // With exact waiting edges, both sessions yield to
+    // Keepresso's regular idle/grace behavior.
+    monitor.current = AgentSnapshot(sessions: [
+        AgentSession(pid: 101, agent: "omp", tty: "s001", cpuPercent: 0, hookState: .waiting, hookDetail: "waiting"),
+        AgentSession(pid: 202, agent: "omp", tty: "s002", cpuPercent: 0, hookState: .waiting, hookDetail: "waiting"),
+    ])
+    trigger.tick()
+    #expect(trigger.sessionStates.map(\.isWorking) == [false, false])
+    #expect(!trigger.isSatisfied())
+    #expect(trigger.justWentIdle)
+}
+
+@Test func stoppedOmpProcessDropsItsSessionAndEmitsOnlyOneIdleEdge() {
+    let monitor = FakeAgentActivity([
+        AgentSession(pid: 303, agent: "omp", tty: "s003", cpuPercent: 0, hookState: .working),
+    ])
+    let trigger = AgentActivityTrigger(monitor: monitor)
+
+    trigger.tick()
+    #expect(trigger.isSatisfied())
+
+    monitor.current = .empty
+    trigger.tick()
+    #expect(trigger.sessionStates.isEmpty)
+    #expect(!trigger.isSatisfied())
+    #expect(trigger.justWentIdle)
+
+    trigger.tick()
+    #expect(!trigger.justWentIdle)
 }
 
 @Test func sessionLabelPrefersClassifiedOrigin() {

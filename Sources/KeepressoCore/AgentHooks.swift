@@ -593,7 +593,7 @@ public enum AgentHooks {
     }
 
     /// Records to delete when the user removes Claude Code's hooks.
-    /// Cursor, Codex, Antigravity, Grok, Hermes, Qwen Code, Devin, and Kimi
+    /// Cursor, Codex, Antigravity, Grok, Hermes, OMP, Qwen Code, Devin, and Kimi
     /// share this folder and keep writing.
     public static func shouldPurgeOnClaudeUninstall(_ record: HookRecord) -> Bool {
         !CursorHooks.ownsRecord(record)
@@ -601,6 +601,7 @@ public enum AgentHooks {
             && !AntigravityHooks.ownsRecord(record)
             && !GrokHooks.ownsRecord(record)
             && !HermesHooks.ownsRecord(record)
+            && !OMPHooks.ownsRecord(record)
             && !CompatHooks.ownsRecord(record)
     }
 
