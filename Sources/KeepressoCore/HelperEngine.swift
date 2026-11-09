@@ -210,6 +210,11 @@ public final class HelperEngine: @unchecked Sendable {
     /// Clients holding the Keyboard Cleaner remap.
     private var keyboardHolders: Set<Int> = []
     private var lowPowerHolders: [LowPowerProfile: Set<Int>] = [:]
+    /// Low Power profiles whose restore failed in this daemon life. Same rule
+    /// as ``sleepRestoreOwed``: only these retry on a release by a client that
+    /// held nothing, so an unrelated connection teardown never rewrites the
+    /// user's power mode from a stale marker.
+    private var lowPowerRestoreOwed: Set<LowPowerProfile> = []
     private let lowPower: BatteryLowPowerControlling
     /// Consecutive failed fan writes; past the cap the engine surrenders the
     /// hold instead of fighting the firmware forever.
@@ -519,8 +524,12 @@ public final class HelperEngine: @unchecked Sendable {
             lowPowerHolders[profile, default: []].insert(client)
             return true
         }
-        lowPowerHolders[profile]?.remove(client)
-        return !(lowPowerHolders[profile]?.isEmpty ?? true) || restoreLowPower(profile: profile)
+        let wasHolder = lowPowerHolders[profile]?.remove(client) != nil
+        guard lowPowerHolders[profile]?.isEmpty ?? true else { return true }
+        guard wasHolder || lowPowerRestoreOwed.contains(profile) else { return true }
+        let ok = restoreLowPower(profile: profile)
+        if ok { lowPowerRestoreOwed.remove(profile) } else { lowPowerRestoreOwed.insert(profile) }
+        return ok
     }
 
     private func restoreLowPower(profile: LowPowerProfile) -> Bool {

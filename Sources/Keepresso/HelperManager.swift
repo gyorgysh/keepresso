@@ -225,7 +225,11 @@ final class HelperManager {
            let findings = await inspectRecords(), findings.daemonState != .missing {
             lastError = L("Removed. System Settings may keep showing Keepresso under App Background Activity until macOS refreshes its list; restarting the Mac clears the leftover row.")
         }
-        return status == .notRegistered || status == .notFound
+        let removed = status == .notRegistered || status == .notFound
+        // A helper that is still registered keeps its automatic health
+        // checks: suppression is for a service that is actually going away.
+        if !removed { recoverySuppressed = false }
+        return removed
     }
 
     /// Verify that an installed daemon actually responds, and repair its

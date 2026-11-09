@@ -1042,3 +1042,30 @@ private final class PowerModeCommandStub: HelperCommandRunning, @unchecked Senda
     #expect(control.adapterWrites == [1])
     #expect(state.markers().isEmpty)
 }
+
+@Test func staleLowPowerMarkerIsNotRestoredByAnUnrelatedDisconnect() {
+    let control = FakeBatteryLowPower(); control.mode = 1
+    let state = FakeRestoreState()
+    // A marker left by an earlier daemon life, whose restore did not land.
+    state.set(.batteryLowPower, value: "0")
+    let engine = HelperEngine(runner: FakeRunner(), state: state, lowPower: control)
+    // A health-check connection that never held Low Power goes away. The
+    // user's current mode must not be rewritten from the stale marker.
+    engine.clientDisconnected(7)
+    #expect(control.writes.isEmpty)
+    #expect(control.mode == 1)
+}
+
+@Test func failedLowPowerRestoreRetriesOnTheNextRelease() {
+    let control = FakeBatteryLowPower(); control.mode = 0
+    let state = FakeRestoreState()
+    let engine = HelperEngine(runner: FakeRunner(), state: state, lowPower: control)
+    #expect(engine.setLowPowerHold(client: 1, holding: true))
+    control.succeed = false
+    #expect(!engine.setLowPowerHold(client: 1, holding: false))
+    control.succeed = true
+    // Owed in this life: a release by anyone now settles it.
+    #expect(engine.setLowPowerHold(client: 1, holding: false))
+    #expect(control.mode == 0)
+    #expect(state.markers().isEmpty)
+}
