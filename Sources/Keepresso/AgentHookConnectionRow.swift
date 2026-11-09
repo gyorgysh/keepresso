@@ -9,47 +9,52 @@ struct AgentHookConnectionRow: View {
     @Environment(\.colorScheme) private var colorScheme
     private var state: AgentHooks.HookInstallState { model.hookState(of: tool) }
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
                 Image(assetName)
                     .renderingMode(.template).resizable().scaledToFit()
                     .foregroundStyle(tool == .claudeCode ? Color.keepressoBrew : Color.primary)
-                    .frame(width: compact ? 20 : 24, height: compact ? 20 : 24)
-                    .padding(7)
-                    .background(.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
+                    .frame(width: compact ? 20 : 16, height: compact ? 20 : 16)
+                    .padding(compact ? 7 : 5)
+                    .background(.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: compact ? 8 : 6))
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 1) {
                     Text(verbatim: tool.displayName).font(compact ? .caption.weight(.medium) : .callout.weight(.medium))
                     if !compact {
-                        Text(subtitle)
-                            .font(.caption).foregroundStyle(.secondary)
+                        // The after-install step replaces the scope line, so a
+                        // connected tool still takes two lines, not three.
+                        Group {
+                            if let installedNote { Text(installedNote) } else { Text(subtitle) }
+                        }
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer(minLength: 8)
                 control
             }
-            if case .installed = state {
-                if tool == .codex {
-                    Text("Approve new hooks in Codex before they can run.")
-                        .font(.caption).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else if tool == .grok && !compact {
-                    Text("Reload hooks in a running Grok session (/hooks, then r) or start a new one.")
-                        .font(.caption).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else if tool == .hermes && !compact {
-                    Text("Restart Hermes and its gateway to load the plugin.")
-                        .font(.caption).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+            if compact, let installedNote, tool == .codex {
+                Text(installedNote)
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if let error = model.hookError(for: tool) {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(.orange)
             }
         }
-        .padding(.vertical, compact ? 2 : 4)
+        .padding(.vertical, compact ? 2 : 0)
         .accessibilityElement(children: .contain)
+    }
+    /// What the user still has to do in the tool itself once connected.
+    private var installedNote: LocalizedStringKey? {
+        guard case .installed = state else { return nil }
+        switch tool {
+        case .codex: return "Approve new hooks in Codex before they can run."
+        case .grok: return "Reload hooks in a running Grok session (/hooks, then r) or start a new one."
+        case .hermes: return "Restart Hermes and its gateway to load the plugin."
+        default: return nil
+        }
     }
     @ViewBuilder private var control: some View {
         switch state {
