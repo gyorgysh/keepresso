@@ -11,7 +11,8 @@ struct AgentHookConnectionRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                toolIcon
+                Image(assetName)
+                    .renderingMode(.template).resizable().scaledToFit()
                     .foregroundStyle(tool == .claudeCode ? Color.keepressoBrew : Color.primary)
                     .frame(width: compact ? 20 : 16, height: compact ? 20 : 16)
                     .padding(compact ? 7 : 5)
@@ -86,21 +87,14 @@ struct AgentHookConnectionRow: View {
         default: return "App and CLI sessions"
         }
     }
-    @ViewBuilder private var toolIcon: some View {
-        if let assetName {
-            Image(assetName).renderingMode(.template).resizable().scaledToFit()
-        } else {
-            Image(systemName: "terminal").resizable().scaledToFit().padding(2)
-        }
-    }
-    private var assetName: String? {
+    private var assetName: String {
         switch tool {
         case .claudeCode: return "brand_claude_code"
         case .cursor: return "brand_cursor"
         case .codex: return "brand_codex"
         case .antigravity: return "brand_antigravity"
         case .grok: return "brand_grok"
-        case .omp: return nil
+        case .omp: return "brand_omp"
         case .hermes: return "brand_hermes"
         case .qwen: return "brand_qwen"
         case .devin: return "brand_devin"
