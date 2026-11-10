@@ -155,7 +155,15 @@ struct MenuBarContent: View {
     /// The interactive panel. Only mounted while ``panelVisible`` is true.
     @ViewBuilder
     private var panelBody: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 12) {
+            if updater.updateAvailable {
+                Button("Update available…", systemImage: "arrow.down.circle") {
+                    updater.checkForUpdates()
+                }
+                .disabled(!updater.canCheckForUpdates)
+                .buttonStyle(.menuRow)
+                Divider()
+            }
             if let layout = advancedMenuLayout {
                 advancedPanel(layout)
             } else {
@@ -988,16 +996,16 @@ struct MenuBarContent: View {
     /// forward. Keepresso is an `LSUIElement` agent, so opening a sibling
     /// `Window` scene doesn't deactivate it: the `.window`-style panel keeps key
     /// status and the new window orders behind it (the user-reported "menu stays
-    /// open behind Preferences" bug). Close the registered panel before opening:
+    /// open behind Preferences" bug). Dismiss the panel before opening:
     /// the customization window can still be key while the popup is visible.
     /// a panel closed afterwards is still holding key status during the
     /// handoff, which is one way the new window ends up drawn inactive (gray
     /// controls) until the app is refocused by hand. `@Environment(\.dismiss)`
-    /// isn't reliable for this panel across macOS versions, so target the
-    /// `NSWindow` directly.
+    /// isn't reliable for this panel across macOS versions, so ask the bridge
+    /// to end AppKit's status-item session (or close the legacy panel).
     private func open(_ id: String) {
         guard preview == nil else { return }
-        bridge.panelWindow?.close()
+        bridge.dismissPanel()
         NSApp.activate(ignoringOtherApps: true)
         openWindow(id: id)
     }

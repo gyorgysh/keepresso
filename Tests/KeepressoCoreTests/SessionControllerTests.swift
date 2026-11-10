@@ -509,6 +509,141 @@ private final class FakeBrightness: BrightnessControlling {
     ])
 }
 
+/// Models HID idle time the way the real system reports it: a posted key or
+/// mouse event resets it, just like real input does.
+@MainActor
+private final class IdleResettingActivity: ActivitySimulating {
+    let clock: Clock
+    var lastInput: Date
+    private(set) var pokeTimes: [Date] = []
+    init(clock: Clock) { self.clock = clock; lastInput = clock.now }
+    var idle: TimeInterval { clock.now.timeIntervalSince(lastInput) }
+    nonisolated func poke(_: ActivityPokeKind) {
+        MainActor.assumeIsolated {
+            pokeTimes.append(clock.now)
+            lastInput = clock.now
+        }
+    }
+}
+
+@MainActor
+@Test func keepActiveHIDPokeDoesNotCountItsOwnIdleResetAsInput() {
+    // GitHub #35: the key poke resets HID idle, which read as the user being
+    // back, re-armed the poke, and fired it every ~11 s instead of every 60 s.
+    let clock = Clock()
+    let activity = IdleResettingActivity(clock: clock)
+    let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(
+        preventSystemSleep: true,
+        simulateUserActivity: true,
+        activitySimulationMethod: .f15
+    ))
+    let start = clock.now
+    for _ in 0..<180 {
+        clock.advance(1)
+        controller.reconcile(systemIdleSeconds: activity.idle)
+    }
+    let offsets = activity.pokeTimes.map { $0.timeIntervalSince(start) }
+    #expect(offsets == [0, 60, 120, 180])
+}
+
+@MainActor
+@Test func keepActiveStillSeesRealInputAfterItsOwnPoke() {
+    let clock = Clock()
+    let activity = IdleResettingActivity(clock: clock)
+    let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(
+        preventSystemSleep: true,
+        simulateUserActivity: true,
+        activitySimulationMethod: .f15
+    ))
+    #expect(activity.pokeTimes.count == 1)
+    let start = clock.now
+
+    // The user types 30 s after the poke, then walks away.
+    for second in 1...100 {
+        clock.advance(1)
+        if second == 30 { activity.lastInput = clock.now }
+        controller.reconcile(systemIdleSeconds: activity.idle)
+    }
+    // Real input re-arms, so the next poke lands once they have been idle
+    // past the threshold, not a full interval after the first poke.
+    let offsets = activity.pokeTimes.map { $0.timeIntervalSince(start) }
+    #expect(offsets.first == 0)
+    #expect(offsets.dropFirst().first == 30 + SessionController.activityIdleThreshold)
+}
+
+@MainActor
+@Test func keepActiveIdleOnlyModeKeepsItsCadenceAfterAHIDPoke() {
+    // Once the idle wait has passed, the poke repeats on the method's
+    // interval. Its own idle reset must not restart the wait.
+    let clock = Clock()
+    let activity = IdleResettingActivity(clock: clock)
+    let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
+    var options = SleepPreventionOptions(
+        preventSystemSleep: true,
+        simulateUserActivity: true,
+        activitySimulationMethod: .f15
+    )
+    options.activityPokeIdleMinutes = 2
+    controller.start(options: options)
+    let start = clock.now
+    for _ in 0..<300 {
+        clock.advance(1)
+        controller.reconcile(systemIdleSeconds: activity.idle)
+    }
+    let offsets = activity.pokeTimes.map { $0.timeIntervalSince(start) }
+    #expect(offsets == [120, 180, 240, 300])
+}
+
+@MainActor
+@Test func keepActiveHIDPokeDoesNotBrightenADimmedPanel() {
+    // The poke's idle reset must not read as the user coming back to the
+    // dimmed display either, or the panel flashes to full every minute.
+    let clock = Clock()
+    let activity = IdleResettingActivity(clock: clock)
+    let brightness = FakeBrightness(level: 0.6)
+    let controller = SessionController(
+        assertions: FakeAssertions(), activity: activity, brightness: brightness, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(
+        preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 30, dimFloor: 0.2,
+        simulateUserActivity: true, activitySimulationMethod: .f15))
+    for _ in 0..<150 {
+        clock.advance(1)
+        controller.reconcile(systemIdleSeconds: activity.idle)
+    }
+    #expect(activity.pokeTimes.count == 3)
+    #expect(brightness.setLevels == [0.2])
+
+    // Real input still restores it.
+    activity.lastInput = clock.now
+    clock.advance(1)
+    controller.reconcile(systemIdleSeconds: activity.idle)
+    #expect(brightness.level == 0.6)
+}
+
+@MainActor
+@Test func keepActiveStartPokeDoesNotBringTheDimForward() {
+    // The start poke has no idle reading. The user just clicked Start, so
+    // their idle runs from zero, and the dim lands on time.
+    let clock = Clock()
+    let activity = IdleResettingActivity(clock: clock)
+    let brightness = FakeBrightness(level: 0.6)
+    let controller = SessionController(
+        assertions: FakeAssertions(), activity: activity, brightness: brightness, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(
+        preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 30, dimFloor: 0.2,
+        simulateUserActivity: true, activitySimulationMethod: .f15))
+    for _ in 0..<29 {
+        clock.advance(1)
+        controller.reconcile(systemIdleSeconds: activity.idle)
+    }
+    #expect(brightness.setLevels.isEmpty)
+    clock.advance(1)
+    controller.reconcile(systemIdleSeconds: activity.idle)
+    #expect(brightness.setLevels == [0.2])
+}
+
 @MainActor
 @Test func keepActiveSpecifiedKeyFallsBackUntilAKeyIsRecorded() {
     let clock = Clock()

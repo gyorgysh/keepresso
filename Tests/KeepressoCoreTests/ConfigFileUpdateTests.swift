@@ -53,3 +53,18 @@ private func appendX(_ data: Data?) -> Data {
     }
     #expect(!written)
 }
+
+@Test func unchangedConfigIsNotRewritten() throws {
+    let file = FakeFile(["settings"])
+    try ConfigFileUpdate.apply(read: file.read, write: { file.written.append($0) },
+                               transform: { $0 ?? Data() })
+    #expect(file.written.isEmpty)
+}
+
+@Test func noOpTransformStillRetriesConcurrentChanges() throws {
+    let file = FakeFile(["a", "b", "b", "b"])
+    try ConfigFileUpdate.apply(read: file.read, write: { file.written.append($0) }, transform: {
+        $0 == Data("a".utf8) ? Data("a".utf8) : Data("bx".utf8)
+    })
+    #expect(file.written == [Data("bx".utf8)])
+}

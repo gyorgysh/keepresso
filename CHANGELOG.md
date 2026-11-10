@@ -3,6 +3,34 @@
 All notable changes to Keepresso are documented here, grouped by release.
 Versions follow [Semantic Versioning](https://semver.org).
 
+## [1.30.0] - Unreleased
+
+### Added
+
+- Check for Updates in Preferences > General. Available updates also appear
+  in the menu, with an indicator beside the menu-bar cup.
+- Presence can send F13 to F20 with Control, Option, or Command, for example
+  Control+F18. Hold the modifier while recording the key. Chromium browsers
+  and Electron apps then stop drawing focus rings on each tap.
+  Suggested by @tsukinoko-kun (#34).
+
+### Fixed
+
+- Presence key and mouse methods tap every 60 seconds again instead of about
+  every 11 seconds. Their own tap no longer counts as you being back at the
+  Mac. Reported by @tsukinoko-kun (#35).
+- Stop showing Claude Code as working after an API error ends its turn, when
+  the installed Claude Code versions support the error hook.
+- Keep development copies from automatically rewriting agent connections
+  when opening Preferences, Rules, or Welcome.
+- Leave unchanged agent settings files alone during connection updates.
+- Keep the background steam moving continuously when switching between
+  Automatic and Manual or expanding and collapsing the menu.
+- Run the helper's signing check off the main thread and only when a repair
+  is needed, instead of during startup.
+- End the menu-bar panel's tracking session when dismissing it on macOS 27.
+  Skip focus attempts on windows that cannot receive keyboard input.
+
 ## [1.29.0] - 2026-11-03
 
 ### Added

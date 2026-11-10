@@ -178,6 +178,10 @@ public final class SessionController {
     /// (``activityPokeInterval``) rather than every reconcile. Kept across a
     /// stop so presence between sessions holds the same cadence.
     private var lastActivityPokeAt: Date?
+    /// The idle reading the last poke was taken against. A HID poke resets
+    /// the system's idle time itself, so later readings are read through
+    /// ``pokeAdjustedIdle(_:at:)`` to tell that reset from real input.
+    private var idleAtLastPoke: TimeInterval = 0
 
     /// Set when a session end action fires (sleep the display, lock, screen
     /// saver, sleep the Mac). Presence between sessions then holds until real
@@ -224,6 +228,13 @@ public final class SessionController {
     /// mouse movement) they already read as active, so there's nothing to fake
     /// and a cursor nudge would just be the "weird mouse movement" to avoid.
     static let activityIdleThreshold: TimeInterval = 10
+
+    /// How far an idle reading may trail the time since our own poke and
+    /// still be explained by it. The host samples idle and the clock
+    /// together, so they differ only by the moment the post takes to land.
+    /// Real input inside this half second after a poke reads as the poke
+    /// itself, until the next input.
+    static let pokeIdleSlack: TimeInterval = 0.5
 
     /// How many reminder intervals have already been surfaced this session, so
     /// the per-second ``reconcile(now:systemIdleSeconds:)`` fires each at most
@@ -872,7 +883,11 @@ public final class SessionController {
             return
         }
 
-        let desired = desiredAssertions(systemIdleSeconds: systemIdleSeconds, display: effectiveDisplay)
+        // Taken before this tick's poke: every idle consumer reads the user's
+        // idle, not the reset our own posted key or mouse event caused.
+        let userIdle = pokeAdjustedIdle(systemIdleSeconds, at: instant)
+        let ownPokeReset = systemIdleSeconds.map { idleResetIsOwnPoke($0, at: instant) } ?? false
+        let desired = desiredAssertions(systemIdleSeconds: userIdle, display: effectiveDisplay)
         assertions.apply(
             desired,
             reason: "Keepresso is brewing"
@@ -888,8 +903,10 @@ public final class SessionController {
 
         maybeRemind(at: instant)
         maybeNotifyEndingSoon(at: instant)
-        maybePokeActivity(at: instant, systemIdleSeconds: systemIdleSeconds, gameFrontmost: gameFrontmost)
-        maybeDim(systemIdleSeconds: systemIdleSeconds, display: effectiveDisplay)
+        maybePokeActivity(
+            at: instant, rawIdle: systemIdleSeconds, userIdle: userIdle,
+            ownPokeReset: ownPokeReset, gameFrontmost: gameFrontmost)
+        maybeDim(systemIdleSeconds: userIdle, display: effectiveDisplay)
         flushPendingEndAction(at: instant)
     }
 
@@ -1091,7 +1108,17 @@ public final class SessionController {
     /// is on, and unless a session is active while scoped to brewing
     /// (``SleepPreventionOptions/activityOnlyWhileBrewing``). Safety pauses
     /// return from reconcile before this runs, so they always silence it.
-    private func maybePokeActivity(at instant: Date, systemIdleSeconds: TimeInterval?, gameFrontmost: Bool) {
+    /// `systemIdleSeconds` is the raw reading, used by the between-sessions
+    /// hold (nothing is posted while it holds). `userIdle` is the same
+    /// reading through ``pokeAdjustedIdle(_:at:)``, used for every idle
+    /// decision after it.
+    private func maybePokeActivity(
+        at instant: Date,
+        rawIdle: TimeInterval?,
+        userIdle: TimeInterval?,
+        ownPokeReset: Bool,
+        gameFrontmost: Bool
+    ) {
         if isActive { presenceHeldUntilInput = false }
         guard options.simulateUserActivity,
               isActive || !options.activityOnlyWhileBrewing else { return }
@@ -1099,7 +1126,7 @@ public final class SessionController {
             // Between sessions, only the host's tick carries an idle reading.
             // An out-of-band reconcile (lease doorbell, ending leases) has
             // none and may land while the user is typing, so it never pokes.
-            guard let idle = systemIdleSeconds else { return }
+            guard let idle = rawIdle else { return }
             // An end action is about to fire: a poke now is undone by it, and
             // a posted event would only blur the input check below.
             guard pendingEndAction == nil else { return }
@@ -1131,12 +1158,14 @@ public final class SessionController {
             // the cadence: clearing it here would make every nil-idle
             // reconcile re-arm, and the next tick would poke immediately,
             // bypassing `pokeInterval` under a heartbeating agent.
-            guard let idle = systemIdleSeconds, idle >= needed else {
+            guard let idle = userIdle, idle >= needed else {
                 return
             }
-        } else if let idle = systemIdleSeconds, idle < Self.activityIdleThreshold {
+        } else if let idle = userIdle, idle < Self.activityIdleThreshold, !ownPokeReset {
             // Actively in use: nothing to fake. Arm the next poke to fire
             // promptly once they step away rather than a full interval later.
+            // A short reading our own poke explains is not use: the interval
+            // below holds the next poke instead.
             lastActivityPokeAt = nil
             return
         }
@@ -1144,7 +1173,34 @@ public final class SessionController {
         if let last = lastActivityPokeAt,
            instant.timeIntervalSince(last) < interval { return }
         lastActivityPokeAt = instant
+        // The user's idle at the poke, for ``pokeAdjustedIdle(_:at:)`` to
+        // carry on from. With no reading (the start poke, just after they
+        // clicked) that is zero.
+        idleAtLastPoke = userIdle ?? 0
         activity.poke(options.activityPokeKind)
+    }
+
+    /// The idle reading with our own poke taken out. A posted key or mouse
+    /// event resets HID idle just like a person would, so read raw it looks
+    /// like the user came back: that re-armed the poke and fired it again as
+    /// soon as idle passed ``activityIdleThreshold`` (GitHub #35). While the
+    /// reading keeps pace with the time since the poke, nothing else has
+    /// touched the Mac, so idle carries on from where it was at the poke.
+    /// A reading clearly below that is real input and passes through. Used
+    /// for the poke, dimming, and the screen saver allowance alike, so a
+    /// poke never brightens a dimmed panel either.
+    private func pokeAdjustedIdle(_ raw: TimeInterval?, at instant: Date) -> TimeInterval? {
+        guard let raw else { return nil }
+        guard idleResetIsOwnPoke(raw, at: instant), let last = lastActivityPokeAt else { return raw }
+        return max(raw, idleAtLastPoke + instant.timeIntervalSince(last))
+    }
+
+    /// Whether an idle reading is explained by our own last poke: it keeps
+    /// pace with the time since that poke, so nothing else touched the Mac.
+    private func idleResetIsOwnPoke(_ raw: TimeInterval, at instant: Date) -> Bool {
+        guard let last = lastActivityPokeAt else { return false }
+        let sincePoke = instant.timeIntervalSince(last)
+        return sincePoke >= 0 && raw + Self.pokeIdleSlack >= sincePoke
     }
 
     /// Surface the reminder once an active session crosses an interval boundary.

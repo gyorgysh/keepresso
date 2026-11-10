@@ -43,7 +43,10 @@ public enum HermesHooks {
         home: String = NSHomeDirectory(),
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> String {
-        environment["HERMES_HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? "\(home)/.hermes"
+        // Trimmed like CODEX_HOME and QWEN_HOME, so a blank value falls back.
+        environment["HERMES_HOME"]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .flatMap { $0.isEmpty ? nil : $0 } ?? "\(home)/.hermes"
     }
 
     public static func pluginDirectoryURL(

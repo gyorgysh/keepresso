@@ -776,6 +776,9 @@
 "Install a small helper service so closed-display mode, Keyboard Cleaner, the thermal fan boost, AWDL pausing, and DNS flush work without password prompts. macOS will ask you to allow it in System Settings, once. Nothing else changes." = "Installiere einen kleinen Hilfsdienst, damit Modus bei geschlossenem Display, Tastaturreiniger, thermischer Lüfter-Boost, AWDL-Pausierung und DNS-Leerung ohne Passwortabfragen funktionieren. macOS wird dich einmal bitten, ihn in den Systemeinstellungen zu erlauben. Sonst ändert sich nichts.";
 "Tools" = "Werkzeuge";
 "Help" = "Hilfe";
+"Update available…" = "Update verfügbar…";
+"Updates" = "Updates";
+"To keep browsers from showing focus rings, record F13 to F20 while holding Control, Option, or Command." = "Damit Browser keine Fokusringe anzeigen, zeichne F13 bis F20 auf, während du Control, Wahltaste oder Befehlstaste gedrückt hältst.";
 "Keepresso could not switch it off, so it stayed running instead of quitting." = "Keepresso konnte es nicht ausschalten und blieb deshalb aktiv, statt beendet zu werden.";
 "Enter your administrator password to switch the sleep override off before Keepresso quits." = "Gib dein Administratorpasswort ein, um die Ruhezustandssperre auszuschalten, bevor Keepresso beendet wird.";
 "Enter your administrator password to switch closed-display mode off before Keepresso quits." = "Gib dein Administratorpasswort ein, um den Modus bei geschlossenem Display auszuschalten, bevor Keepresso beendet wird.";

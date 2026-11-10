@@ -99,13 +99,6 @@ final class HelperManager {
     @ObservationIgnored private var recoverySuppressed = false
     /// One repair per app run: registration churn must never loop.
     @ObservationIgnored private var repairAttempted = false
-    /// Whether this build may rewrite the daemon registration. BTM refuses
-    /// team-less executables outright ("disallowed"), so an ad-hoc dev build
-    /// could never revive the daemon by re-registering; worse, its attempt
-    /// hijacks the record that belongs to the properly signed copy in
-    /// /Applications. Seen live: a Debug run re-registered the record and left
-    /// the real install pointing at DerivedData.
-    @ObservationIgnored private let canRepair = HelperService.selfTeamIdentifier() != nil
     /// Whether this copy may talk to Background Task Management at all.
     /// Reading `SMAppService.status` is not passive: BTM repoints the app's
     /// record at whichever same-signed copy contacted it last, so a Debug
@@ -232,7 +225,11 @@ final class HelperManager {
            let findings = await inspectRecords(), findings.daemonState != .missing {
             lastError = L("Removed. System Settings may keep showing Keepresso under App Background Activity until macOS refreshes its list; restarting the Mac clears the leftover row.")
         }
-        return status == .notRegistered || status == .notFound
+        let removed = status == .notRegistered || status == .notFound
+        // A helper that is still registered keeps its automatic health
+        // checks: suppression is for a service that is actually going away.
+        if !removed { recoverySuppressed = false }
+        return removed
     }
 
     /// Verify that an installed daemon actually responds, and repair its
@@ -300,7 +297,15 @@ final class HelperManager {
         }
         // A dev build stays hands-off: no repair, no attention window. The
         // installed release copy owns the registration.
-        guard canRepair else { return .notApplicable }
+        // Reading signing information can synchronously evaluate the CMS
+        // timestamp's certificate trust. Do this only when repair is needed,
+        // off the main actor, never while constructing the startup model.
+        // Keep the same Team ID check: ad-hoc builds must not take over the
+        // installed release's helper registration.
+        let canRepair = await Task.detached {
+            HelperService.selfTeamIdentifier() != nil
+        }.value
+        guard canRepair, !Task.isCancelled, !recoverySuppressed else { return .notApplicable }
         // Ask BTM's records what is actually wrong before churning the
         // registration; two of the states no re-register can fix. An old
         // copy of the app in the Trash keeps poisoning the record (BTM's

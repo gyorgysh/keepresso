@@ -123,3 +123,38 @@ APP = {
         "it": "Aiuto", "ja": "ヘルプ", "ko": "도움말", "ru": "Справка", "pt-BR": "Ajuda", "tr": "Yardım", "pl": "Pomoc", "uk": "Довідка", "zh-Hant": "說明",
     },
 }
+
+APP["Update available…"] = {
+    "hu": "Frissítés érhető el…", "es": "Actualización disponible…",
+    "fr": "Mise à jour disponible…", "de": "Update verfügbar…",
+    "zh-Hans": "有可用更新…", "it": "Aggiornamento disponibile…",
+    "ja": "アップデートがあります…", "ko": "업데이트 사용 가능…",
+    "ru": "Доступно обновление…", "pt-BR": "Atualização disponível…",
+    "tr": "Güncelleme mevcut…", "pl": "Dostępna aktualizacja…",
+    "uk": "Доступне оновлення…", "zh-Hant": "有可用更新…",
+}
+
+APP["Updates"] = {
+    "hu": "Frissítések", "es": "Actualizaciones", "fr": "Mises à jour",
+    "de": "Updates", "zh-Hans": "更新", "it": "Aggiornamenti",
+    "ja": "アップデート", "ko": "업데이트", "ru": "Обновления",
+    "pt-BR": "Atualizações", "tr": "Güncellemeler", "pl": "Aktualizacje",
+    "uk": "Оновлення", "zh-Hant": "更新",
+}
+
+APP["To keep browsers from showing focus rings, record F13 to F20 while holding Control, Option, or Command."] = {
+    "hu": "Hogy a böngészők ne jelenítsenek meg fókuszkeretet, a Control, az Option vagy a Command lenyomva tartása közben rögzítse az F13 és F20 közötti billentyűk egyikét.",
+    "es": "Para evitar que los navegadores muestren anillos de enfoque, graba una tecla de F13 a F20 mientras mantienes pulsada Control, Opción o Comando.",
+    "fr": "Pour éviter que les navigateurs affichent des anneaux de focus, enregistrez une touche de F13 à F20 en maintenant Contrôle, Option ou Commande.",
+    "de": "Damit Browser keine Fokusringe anzeigen, zeichne F13 bis F20 auf, während du Control, Wahltaste oder Befehlstaste gedrückt hältst.",
+    "zh-Hans": "为避免浏览器显示焦点环，请在按住 Control、Option 或 Command 的同时录制 F13 至 F20。",
+    "it": "Per evitare che i browser mostrino gli anelli di focus, registra un tasto da F13 a F20 tenendo premuto Control, Opzione o Comando.",
+    "ja": "ブラウザにフォーカスリングを表示させないには、Control、Option、Command のいずれかを押したまま F13 から F20 を記録してください。",
+    "ko": "브라우저에 포커스 링이 표시되지 않게 하려면 Control, Option 또는 Command를 누른 채 F13에서 F20까지의 키를 기록하세요.",
+    "ru": "Чтобы браузеры не показывали рамки фокуса, записывайте F13–F20 при зажатой клавише Control, Option или Command.",
+    "pt-BR": "Para evitar que os navegadores mostrem anéis de foco, grave F13 a F20 segurando Control, Option ou Command.",
+    "tr": "Tarayıcıların odak halkalarını göstermesini önlemek için Control, Option veya Command tuşunu basılı tutarak F13 ile F20 arasındaki bir tuşu kaydedin.",
+    "pl": "Aby przeglądarki nie pokazywały obrysów fokusu, zarejestruj klawisz od F13 do F20 z wciśniętym Control, Option lub Command.",
+    "uk": "Щоб браузери не показували рамки фокуса, записуйте клавішу від F13 до F20 із затиснутою клавішею Control, Option або Command.",
+    "zh-Hant": "若要避免瀏覽器顯示焦點外框，請在按住 Control、Option 或 Command 的同時錄製 F13 到 F20。",
+}

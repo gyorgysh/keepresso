@@ -42,7 +42,10 @@ public struct ClaudeCodeVersions: Equatable, Sendable {
             guard pieces.count >= 2, pieces.count <= 4 else { return nil }
             var parts: [Int] = []
             for piece in pieces {
-                guard !piece.isEmpty, piece.allSatisfy(\.isASCII), let n = Int(piece) else { return nil }
+                guard !piece.isEmpty,
+                      piece.utf8.allSatisfy({ (48...57).contains($0) }),
+                      let n = Int(piece)
+                else { return nil }
                 parts.append(n)
             }
             self.parts = parts
@@ -132,8 +135,13 @@ public struct ClaudeCodeVersions: Equatable, Sendable {
             "\(home)/.volta/bin/claude",
         ]
         let nvm = "\(home)/.nvm/versions/node"
-        for node in (files.list(nvm) ?? []).sorted() where !node.hasPrefix(".") {
-            launchers.append("\(nvm)/\(node)/bin/claude")
+        if let nodes = files.list(nvm) {
+            for node in nodes.sorted() where !node.hasPrefix(".") {
+                launchers.append("\(nvm)/\(node)/bin/claude")
+            }
+        } else if files.exists(nvm) {
+            // An unreadable directory may hide an older CLI sharing settings.
+            result.unknownCount += 1
         }
         for launcher in launchers where files.exists(launcher) {
             let target = files.resolve(launcher)
@@ -155,6 +163,8 @@ public struct ClaudeCodeVersions: Equatable, Sendable {
             } else if !entries.filter({ !$0.hasPrefix(".") }).isEmpty {
                 result.unknownCount += 1
             }
+        } else if files.exists(appDir) {
+            result.unknownCount += 1
         }
         return result
     }

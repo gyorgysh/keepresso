@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import CoreGraphics
 @testable import KeepressoCore
 
 @Test func activityPokeKindMatchesTheMethod() {
@@ -35,4 +36,60 @@ import Foundation
     #expect(ActivitySimulationMethod.mouseMove.rawValue == "mouseMove")
     #expect(ActivitySimulationMethod.f15KeyCode == 0x71)
     #expect(ActivitySimulationMethod.shiftKeyCode == 0x38)
+}
+
+@Test func specifiedKeyCarriesItsRecordedModifiers() {
+    var options = SleepPreventionOptions(
+        simulateUserActivity: true,
+        activitySimulationMethod: .specifiedKey,
+        activitySimulationKeyCode: 0x4F, // F18
+        activitySimulationKeyModifiers: [.control]
+    )
+    #expect(options.activityPokeKind == .key(0x4F, modifiers: [.control]))
+
+    // Any key outside F13 to F20 is sent bare: Command-Q every minute
+    // would quit the front app.
+    options.activitySimulationKeyCode = 0x0C // Q
+    options.activitySimulationKeyModifiers = [.command]
+    #expect(options.activityPokeKind == .key(0x0C))
+    options.activitySimulationKeyCode = 0x78 // F2
+    options.activitySimulationKeyModifiers = [.control]
+    #expect(options.activityPokeKind == .key(0x78))
+
+    // A modifier key carries its own flag: extra modifiers are dropped.
+    options.activitySimulationKeyCode = 0x3B // Control
+    #expect(options.activityPokeKind == .key(0x3B))
+
+    // The fixed methods never pick up the specified key's modifiers.
+    options.activitySimulationMethod = .f15
+    #expect(options.activityPokeKind == .key(ActivitySimulationMethod.f15KeyCode))
+}
+
+@Test func specifiedKeyModifiersRoundTripAndDecodeForgivingly() throws {
+    let options = SleepPreventionOptions(
+        activitySimulationMethod: .specifiedKey,
+        activitySimulationKeyCode: 0x4F,
+        activitySimulationKeyModifiers: [.control, .option]
+    )
+    let data = try JSONEncoder().encode(options)
+    #expect(try JSONDecoder().decode(SleepPreventionOptions.self, from: data) == options)
+
+    // An older blob has no modifiers field: none.
+    let old = Data(#"{"activitySimulationMethod":"specifiedKey","activitySimulationKeyCode":79}"#.utf8)
+    #expect(try JSONDecoder().decode(SleepPreventionOptions.self, from: old).activitySimulationKeyModifiers == [])
+
+    // Bits a newer build might add are masked off, a wrong type falls back.
+    let future = Data(#"{"activitySimulationKeyModifiers":255}"#.utf8)
+    #expect(try JSONDecoder().decode(SleepPreventionOptions.self, from: future).activitySimulationKeyModifiers == .all)
+    let wrong = Data(#"{"activitySimulationKeyModifiers":"control"}"#.utf8)
+    #expect(try JSONDecoder().decode(SleepPreventionOptions.self, from: wrong).activitySimulationKeyModifiers == [])
+}
+
+@Test func keyModifiersConvertThroughOneTable() {
+    let all: ActivityKeyModifiers = [.control, .option, .shift, .command]
+    #expect(all.symbols == "⌃⌥⇧⌘")
+    #expect(ActivityKeyModifiers(eventFlags: all.eventFlags) == all)
+    #expect(ActivityKeyModifiers([.control]).eventFlags == .maskControl)
+    #expect(ActivityKeyModifiers.acceptsModifiers(keyCode: 0x4F)) // F18
+    #expect(!ActivityKeyModifiers.acceptsModifiers(keyCode: 0x0C)) // Q
 }

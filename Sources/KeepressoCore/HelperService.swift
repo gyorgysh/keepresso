@@ -84,7 +84,9 @@ public enum HelperService {
     }
 
     /// The Team ID from this process's own code signature, or `nil` when
-    /// unsigned or ad-hoc signed (local dev builds).
+    /// unsigned or ad-hoc signed (local dev builds). Security.framework may
+    /// synchronously evaluate timestamp certificate trust while reading this
+    /// information. Call off the main thread, including for metadata checks.
     public static func selfTeamIdentifier() -> String? {
         var codeRef: SecCode?
         guard SecCodeCopySelf([], &codeRef) == errSecSuccess, let code = codeRef else { return nil }
@@ -560,80 +562,54 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func setLowPowerHold(_ holding: Bool) -> Bool {
-        guard let version = pingVersion() else { return false }
-        // See setSleepHold: the state change after `call` needs its own release.
-        defer { releaseConnectionUnlessHeld() }
-        guard version >= HelperService.lowPowerMinProtocol else {
-            if !holding {
-                // This daemon cannot hold this feature. Drop the stale want so
-                // its connection can retire; restoration still needs a newer
-                // daemon, so do not claim a confirmed release.
-                lock.lock()
-                wantsLowPowerHold = false
-                bumpGeneration(.lowPower)
-                lock.unlock()
-            }
-            return false
-        }
-        if holding {
-            lock.lock()
-            wantsLowPowerHold = true
-            lock.unlock()
-            let ok = call { proxy, done in proxy.setLowPowerHold(true, reply: done) }
-            if !ok {
-                lock.lock()
-                wantsLowPowerHold = false
-                bumpGeneration(.lowPower)
-                lock.unlock()
-            }
-            return ok
-        }
-        let ok = call { proxy, done in proxy.setLowPowerHold(false, reply: done) }
-        if ok {
-            lock.lock()
-            wantsLowPowerHold = false
-            bumpGeneration(.lowPower)
-            lock.unlock()
-        }
-        return ok
+        setProfileHold(
+            holding, kind: .lowPower, minProtocol: HelperService.lowPowerMinProtocol,
+            want: \.wantsLowPowerHold
+        ) { proxy, holding, done in proxy.setLowPowerHold(holding, reply: done) }
     }
 
     public func setAdapterLowPowerHold(_ holding: Bool) -> Bool {
+        setProfileHold(
+            holding, kind: .adapterLowPower, minProtocol: HelperService.adapterLowPowerMinProtocol,
+            want: \.wantsAdapterLowPowerHold
+        ) { proxy, holding, done in proxy.setAdapterLowPowerHold(holding, reply: done) }
+    }
+
+    /// Shared body of the two Low Power holds: a protocol-gated verb whose
+    /// wanted state keeps the connection (and the daemon's claim) alive.
+    private func setProfileHold(
+        _ holding: Bool,
+        kind: HoldKind,
+        minProtocol: Int,
+        want: ReferenceWritableKeyPath<XPCHelperClient, Bool>,
+        send: (HelperXPCProtocol, Bool, @escaping @Sendable (Bool) -> Void) -> Void
+    ) -> Bool {
         guard let version = pingVersion() else { return false }
         // See setSleepHold: the state change after `call` needs its own release.
         defer { releaseConnectionUnlessHeld() }
-        guard version >= HelperService.adapterLowPowerMinProtocol else {
-            if !holding {
-                // This daemon cannot hold this feature. Drop the stale want so
-                // its connection can retire; restoration still needs a newer
-                // daemon, so do not claim a confirmed release.
-                lock.lock()
-                wantsAdapterLowPowerHold = false
-                bumpGeneration(.adapterLowPower)
-                lock.unlock()
-            }
+        func dropWant() {
+            lock.lock()
+            self[keyPath: want] = false
+            bumpGeneration(kind)
+            lock.unlock()
+        }
+        guard version >= minProtocol else {
+            // This daemon cannot hold this feature. Drop a stale want so its
+            // connection can retire; restoration still needs a newer daemon,
+            // so do not claim a confirmed release.
+            if !holding { dropWant() }
             return false
         }
         if holding {
             lock.lock()
-            wantsAdapterLowPowerHold = true
+            self[keyPath: want] = true
             lock.unlock()
-            let ok = call { proxy, done in proxy.setAdapterLowPowerHold(true, reply: done) }
-            if !ok {
-                lock.lock()
-                wantsAdapterLowPowerHold = false
-                bumpGeneration(.adapterLowPower)
-                lock.unlock()
-            }
+            let ok = call { proxy, done in send(proxy, true, done) }
+            if !ok { dropWant() }
             return ok
         }
-        let ok = call { proxy, done in proxy.setAdapterLowPowerHold(false, reply: done) }
-        if ok {
-            lock.lock()
-            wantsAdapterLowPowerHold = false
-            bumpGeneration(.adapterLowPower)
-            lock.unlock()
-        }
+        let ok = call { proxy, done in send(proxy, false, done) }
+        if ok { dropWant() }
         return ok
     }
 

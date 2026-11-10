@@ -7,6 +7,7 @@ import KeepressoCore
 /// dropdown: keep-awake options, triggers, the reminder, disk keep-alive, and
 /// launch-at-login, grouped into tabs.
 struct PreferencesView: View {
+    let updater: any Updating
     @Bindable var model: AppModel
     @State private var section: Section = .general
     /// Closed Preferences windows stay alive on current macOS; unmount the
@@ -78,7 +79,7 @@ struct PreferencesView: View {
     @ViewBuilder
     private var content: some View {
         switch section {
-        case .general: GeneralTab(model: model)
+        case .general: GeneralTab(updater: updater, model: model)
         case .triggers: TriggersTab(model: model)
         case .reminder: ReminderTab(model: model)
         case .automation: AutomationTab(model: model)
@@ -324,6 +325,7 @@ private struct ActivityTab: View {
 // MARK: - General
 
 private struct GeneralTab: View {
+    let updater: any Updating
     @Bindable var model: AppModel
     @Environment(\.openWindow) private var openWindow
     @State private var launchAtLogin = LoginItem.isEnabled
@@ -359,6 +361,15 @@ private struct GeneralTab: View {
 
     var body: some View {
         Form {
+            Section {
+                Button { updater.checkForUpdates() } label: {
+                    Text(updater.updateAvailable ? L("Update available…") : L("Check for Updates…"))
+                }
+                .disabled(!updater.canCheckForUpdates)
+            } header: {
+                Text("Updates")
+            }
+
             Section {
                 Toggle("Prevent display sleep", isOn: optionBinding(\.preventDisplaySleep))
                 if session.options.preventDisplaySleep && model.brightnessSupported {
@@ -470,9 +481,9 @@ private struct GeneralTab: View {
                     }
                     if model.activitySimulationMethod == .specifiedKey {
                         LabeledContent("Key") {
-                            PresenceKeyRecorder(keyCode: Binding(
-                                get: { model.activitySimulationKeyCode },
-                                set: { model.activitySimulationKeyCode = $0 }
+                            PresenceKeyRecorder(key: Binding(
+                                get: { model.activitySimulationKey },
+                                set: { model.activitySimulationKey = $0 }
                             ))
                         }
                     }
@@ -677,6 +688,7 @@ private struct GeneralTab: View {
             L("Taps Shift every 60 s. Invisible, and nothing is typed.")
         case .specifiedKey:
             L("Taps the recorded key every 60 s. Prefer a function key or modifier.")
+                + " " + L("To keep browsers from showing focus rings, record F13 to F20 while holding Control, Option, or Command.")
         case .mouseMove:
             L("Posts a 1-pixel mouse move every 60 s. For software that watches the pointer.")
         }

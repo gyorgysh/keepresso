@@ -491,10 +491,20 @@ final class AppModel {
         }
     }
 
-    /// Virtual key for the specified-key keep-active method.
-    var activitySimulationKeyCode: Int? {
-        get { session.options.activitySimulationKeyCode }
-        set { updateOptions { $0.activitySimulationKeyCode = newValue } }
+    /// The specified-key keep-active method's key and its modifiers, set
+    /// together so a new recording never keeps the previous modifiers.
+    var activitySimulationKey: PresenceKey? {
+        get {
+            session.options.activitySimulationKeyCode.map {
+                PresenceKey(keyCode: $0, modifiers: session.options.activitySimulationEffectiveKeyModifiers)
+            }
+        }
+        set {
+            updateOptions {
+                $0.activitySimulationKeyCode = newValue?.keyCode
+                $0.activitySimulationKeyModifiers = newValue?.modifiers ?? []
+            }
+        }
     }
 
     /// Idle-only keep-active mode: poke only after this many idle minutes,
@@ -2519,9 +2529,7 @@ final class AppModel {
     /// must not rewrite them all (and send Codex users back to approve their
     /// hooks) just by starting.
     static var runsFromApplicationsFolder: Bool {
-        let path = Bundle.main.bundleURL.standardizedFileURL.path
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return path.hasPrefix("/Applications/") || path.hasPrefix(home + "/Applications/")
+        AppRelocator.runsFromApplications
     }
 
     /// Re-read every tool's install state. Cheap: a few small file reads.
@@ -2555,6 +2563,9 @@ final class AppModel {
     /// once rather than on every refresh. An unreadable file is never touched
     /// at all.
     private func autoRepairIfNeeded(_ tool: AgentTool) {
+        // Status reads also happen when Preferences, Rules, or Welcome opens.
+        // Keep development copies read-only there as well as at startup.
+        guard Self.runsFromApplicationsFolder else { return }
         guard case .needsRepair = hookState(of: tool) else { return }
         // Inserted before repairing: connecting refreshes status again, which
         // lands back here, and this is what stops it recurring.
@@ -2887,9 +2898,10 @@ final class AppModel {
     }
 
     /// Rewrites an agent tool's config file through `transform`, using
-    /// ``ConfigFileUpdate`` so a save the tool itself makes mid-update is
-    /// merged rather than overwritten. A symlinked file (dotfiles setups) is
-    /// resolved so the atomic write replaces the real file, not the link.
+    /// ``ConfigFileUpdate`` to retry changes detected before the write.
+    /// Other tools do not share a lock, so this is a best-effort merge.
+    /// A symlinked file (dotfiles setups) is resolved so the atomic write
+    /// replaces the real file, not the link.
     /// Throws ``AgentHooks/SettingsUnreadableError`` for a file that exists
     /// but can't be read: treating that as absence would replace the user's
     /// whole config with just our hooks.
