@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import CoreGraphics
 @testable import KeepressoCore
 
 @Test func activityPokeKindMatchesTheMethod() {
@@ -46,6 +47,15 @@ import Foundation
     )
     #expect(options.activityPokeKind == .key(0x4F, modifiers: [.control]))
 
+    // Any key outside F13 to F20 is sent bare: Command-Q every minute
+    // would quit the front app.
+    options.activitySimulationKeyCode = 0x0C // Q
+    options.activitySimulationKeyModifiers = [.command]
+    #expect(options.activityPokeKind == .key(0x0C))
+    options.activitySimulationKeyCode = 0x78 // F2
+    options.activitySimulationKeyModifiers = [.control]
+    #expect(options.activityPokeKind == .key(0x78))
+
     // A modifier key carries its own flag: extra modifiers are dropped.
     options.activitySimulationKeyCode = 0x3B // Control
     #expect(options.activityPokeKind == .key(0x3B))
@@ -73,4 +83,13 @@ import Foundation
     #expect(try JSONDecoder().decode(SleepPreventionOptions.self, from: future).activitySimulationKeyModifiers == .all)
     let wrong = Data(#"{"activitySimulationKeyModifiers":"control"}"#.utf8)
     #expect(try JSONDecoder().decode(SleepPreventionOptions.self, from: wrong).activitySimulationKeyModifiers == [])
+}
+
+@Test func keyModifiersConvertThroughOneTable() {
+    let all: ActivityKeyModifiers = [.control, .option, .shift, .command]
+    #expect(all.symbols == "⌃⌥⇧⌘")
+    #expect(ActivityKeyModifiers(eventFlags: all.eventFlags) == all)
+    #expect(ActivityKeyModifiers([.control]).eventFlags == .maskControl)
+    #expect(ActivityKeyModifiers.acceptsModifiers(keyCode: 0x4F)) // F18
+    #expect(!ActivityKeyModifiers.acceptsModifiers(keyCode: 0x0C)) // Q
 }

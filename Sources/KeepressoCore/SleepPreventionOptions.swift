@@ -122,12 +122,14 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
         }
     }
 
-    /// The modifiers the specified key is actually sent with. A modifier key
-    /// already carries its own flag, and adding others to it would post a
-    /// chord nobody recorded, so it gets none.
+    /// The modifiers the specified key is actually sent with. Only F13 to
+    /// F20 take them: on any other key a combination can be a shortcut the
+    /// front app acts on every minute, and a modifier key already carries
+    /// its own flag. Checked here, not just in the recorder, so imported
+    /// settings are held to the same rule.
     public var activitySimulationEffectiveKeyModifiers: ActivityKeyModifiers {
         guard let code = activitySimulationKeyCode,
-              !ActivityKeyModifiers.isModifierKey(code) else { return [] }
+              ActivityKeyModifiers.acceptsModifiers(keyCode: code) else { return [] }
         return activitySimulationKeyModifiers.intersection(.all)
     }
 

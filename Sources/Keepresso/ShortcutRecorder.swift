@@ -66,16 +66,14 @@ struct PresenceKey: Equatable {
 
     /// A menu-style label like "⌃F18".
     var displayString: String {
-        HotKeyShortcut.label(
-            keyName: HotKeyShortcut.keyName(for: keyCode) ?? L("Key %d", keyCode),
-            control: modifiers.contains(.control), option: modifiers.contains(.option),
-            shift: modifiers.contains(.shift), command: modifiers.contains(.command)
-        )
+        modifiers.symbols + (HotKeyShortcut.keyName(for: keyCode) ?? L("Key %d", keyCode))
     }
 }
 
-/// Records a virtual key for Keep me active's specified-key method, with any
-/// Control, Option, Shift, or Command held at the time (none required).
+/// Records a virtual key for Keep me active's specified-key method. Control,
+/// Option, Shift, or Command held at the time are recorded with F13 to F20
+/// only. Any other key pressed with a modifier is ignored, since it could be
+/// a shortcut (Command-Q) the poke would fire at the front app every minute.
 /// A modifier tapped on its own is recorded on release, so holding it while
 /// pressing another key records the combination instead. With several
 /// modifiers tapped and no key, the last one pressed is recorded (a modifier
@@ -124,7 +122,14 @@ struct PresenceKeyRecorder: View {
     private func handle(_ event: NSEvent) {
         if event.type == .keyDown {
             if event.keyCode == UInt16(kVK_Escape_) { stop(); return }
-            key = PresenceKey(keyCode: Int(event.keyCode), modifiers: Self.modifiers(of: event.modifierFlags))
+            let code = Int(event.keyCode)
+            let modifiers = Self.modifiers(of: event.modifierFlags)
+            if !modifiers.isEmpty, !ActivityKeyModifiers.acceptsModifiers(keyCode: code) {
+                // Swallowed (the monitor returns nil), so a Command-Q here
+                // never reaches the app either. Keep listening.
+                return
+            }
+            key = PresenceKey(keyCode: code, modifiers: modifiers)
             stop()
             return
         }
@@ -159,13 +164,9 @@ struct PresenceKeyRecorder: View {
         return modifiers(of: event.modifierFlags).contains(own)
     }
 
+    /// AppKit's modifier flags use the same bits as Core Graphics'.
     private static func modifiers(of flags: NSEvent.ModifierFlags) -> ActivityKeyModifiers {
-        var modifiers: ActivityKeyModifiers = []
-        if flags.contains(.shift) { modifiers.insert(.shift) }
-        if flags.contains(.control) { modifiers.insert(.control) }
-        if flags.contains(.option) { modifiers.insert(.option) }
-        if flags.contains(.command) { modifiers.insert(.command) }
-        return modifiers
+        ActivityKeyModifiers(eventFlags: CGEventFlags(rawValue: UInt64(flags.rawValue)))
     }
 }
 

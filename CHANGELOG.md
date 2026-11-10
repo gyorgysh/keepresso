@@ -9,9 +9,9 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 - Check for Updates in Preferences > General. Available updates also appear
   in the menu, with an indicator beside the menu-bar cup.
-- Presence can send the specified key with Control, Option, or Command, for
-  example Control+F18. Hold the modifier while recording the key. Chromium
-  browsers and Electron apps then stop drawing focus rings on each tap.
+- Presence can send F13 to F20 with Control, Option, or Command, for example
+  Control+F18. Hold the modifier while recording the key. Chromium browsers
+  and Electron apps then stop drawing focus rings on each tap.
   Suggested by @tsukinoko-kun (#34).
 
 ### Fixed

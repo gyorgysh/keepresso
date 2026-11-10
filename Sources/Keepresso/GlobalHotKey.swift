@@ -136,22 +136,8 @@ extension HotKeyShortcut {
     /// A menu-style label like "⌃⌥⌘K" for the Preferences recorder row.
     var displayString: String {
         guard modifierFlags >= 0 else { return "?" }
-        let flags = NSEvent.ModifierFlags(rawValue: UInt(modifierFlags))
-        return Self.label(
-            keyName: Self.keyName(for: keyCode) ?? "?",
-            control: flags.contains(.control), option: flags.contains(.option),
-            shift: flags.contains(.shift), command: flags.contains(.command)
-        )
-    }
-
-    /// A key name prefixed with modifier glyphs in the menu order (⌃⌥⇧⌘).
-    static func label(keyName: String, control: Bool, option: Bool, shift: Bool, command: Bool) -> String {
-        var parts = ""
-        if control { parts += "⌃" }
-        if option { parts += "⌥" }
-        if shift { parts += "⇧" }
-        if command { parts += "⌘" }
-        return parts + keyName
+        let flags = CGEventFlags(rawValue: UInt64(modifierFlags))
+        return ActivityKeyModifiers(eventFlags: flags).symbols + (Self.keyName(for: keyCode) ?? "?")
     }
 
     /// A readable name for the common virtual key codes. Letters and digits use

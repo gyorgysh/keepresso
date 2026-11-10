@@ -623,6 +623,28 @@ private final class IdleResettingActivity: ActivitySimulating {
 }
 
 @MainActor
+@Test func keepActiveStartPokeDoesNotBringTheDimForward() {
+    // The start poke has no idle reading. The user just clicked Start, so
+    // their idle runs from zero, and the dim lands on time.
+    let clock = Clock()
+    let activity = IdleResettingActivity(clock: clock)
+    let brightness = FakeBrightness(level: 0.6)
+    let controller = SessionController(
+        assertions: FakeAssertions(), activity: activity, brightness: brightness, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(
+        preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 30, dimFloor: 0.2,
+        simulateUserActivity: true, activitySimulationMethod: .f15))
+    for _ in 0..<29 {
+        clock.advance(1)
+        controller.reconcile(systemIdleSeconds: activity.idle)
+    }
+    #expect(brightness.setLevels.isEmpty)
+    clock.advance(1)
+    controller.reconcile(systemIdleSeconds: activity.idle)
+    #expect(brightness.setLevels == [0.2])
+}
+
+@MainActor
 @Test func keepActiveSpecifiedKeyFallsBackUntilAKeyIsRecorded() {
     let clock = Clock()
     let activity = FakeActivity()

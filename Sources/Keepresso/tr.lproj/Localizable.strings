@@ -778,7 +778,7 @@
 "Help" = "Yardım";
 "Update available…" = "Güncelleme mevcut…";
 "Updates" = "Güncellemeler";
-"Hold Control, Option, or Command while recording to send it with the key, so browsers don't show focus rings." = "Kayıt sırasında Control, Option veya Command tuşunu basılı tutarsanız tuşla birlikte gönderilir, böylece tarayıcılar odak halkası göstermez.";
+"To keep browsers from showing focus rings, record F13 to F20 while holding Control, Option, or Command." = "Tarayıcıların odak halkalarını göstermesini önlemek için Control, Option veya Command tuşunu basılı tutarak F13 ile F20 arasındaki bir tuşu kaydedin.";
 "Keepresso could not switch it off, so it stayed running instead of quitting." = "Keepresso bunu kapatamadı, bu yüzden çıkmak yerine çalışmaya devam etti.";
 "Enter your administrator password to switch the sleep override off before Keepresso quits." = "Keepresso çıkmadan önce uyku devre dışı bırakmayı kapatmak üzere yönetici parolanızı girin.";
 "Enter your administrator password to switch closed-display mode off before Keepresso quits." = "Keepresso çıkmadan önce kapalı ekran modunu kapatmak üzere yönetici parolanızı girin.";

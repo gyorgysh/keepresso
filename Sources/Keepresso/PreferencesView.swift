@@ -688,7 +688,7 @@ private struct GeneralTab: View {
             L("Taps Shift every 60 s. Invisible, and nothing is typed.")
         case .specifiedKey:
             L("Taps the recorded key every 60 s. Prefer a function key or modifier.")
-                + " " + L("Hold Control, Option, or Command while recording to send it with the key, so browsers don't show focus rings.")
+                + " " + L("To keep browsers from showing focus rings, record F13 to F20 while holding Control, Option, or Command.")
         case .mouseMove:
             L("Posts a 1-pixel mouse move every 60 s. For software that watches the pointer.")
         }

@@ -37,6 +37,7 @@ public enum ActivitySimulationMethod: String, Codable, CaseIterable, Sendable {
 /// (nothing is held down for other input). Chromium skips its focus-ring
 /// heuristic for a key pressed with Control, Option, or Command, so a combo
 /// like Control+F18 keeps browsers and Electron apps from drawing focus rings.
+/// Only F13 to F20 carry modifiers (see ``combinableKeyCodes``).
 /// Raw values are this app's own, stable for persistence.
 public struct ActivityKeyModifiers: OptionSet, Hashable, Codable, Sendable {
     public let rawValue: Int
@@ -70,6 +71,47 @@ public struct ActivityKeyModifiers: OptionSet, Hashable, Codable, Sendable {
     /// Fn). Such a key carries its own flag, so it is never sent with others.
     public static func isModifierKey(_ code: Int) -> Bool {
         modifier(forKeyCode: code) != nil || code == capsLockKeyCode || code == functionKeyCode
+    }
+
+    /// Carbon virtual key codes for F13 to F20, the only keys modifiers are
+    /// sent with. They have no default action with Control, Option, Shift,
+    /// or Command, while a combination on any other key can be a shortcut
+    /// (Command-Q, Control-C, Control-F2) fired at the front app every
+    /// minute.
+    public static let combinableKeyCodes: Set<Int> = [0x69, 0x6B, 0x71, 0x6A, 0x40, 0x4F, 0x50, 0x5A]
+
+    /// Whether modifiers may be sent with this key. See ``combinableKeyCodes``.
+    public static func acceptsModifiers(keyCode: Int) -> Bool {
+        combinableKeyCodes.contains(keyCode)
+    }
+
+    /// Each modifier with its Core Graphics flag and menu glyph, in menu
+    /// order (⌃⌥⇧⌘). The one table every conversion reads.
+    private static let table: [(ActivityKeyModifiers, CGEventFlags, String)] = [
+        (.control, .maskControl, "⌃"),
+        (.option, .maskAlternate, "⌥"),
+        (.shift, .maskShift, "⇧"),
+        (.command, .maskCommand, "⌘"),
+    ]
+
+    /// The modifiers set in Core Graphics event flags. AppKit's
+    /// `NSEvent.ModifierFlags` uses the same bits.
+    public init(eventFlags: CGEventFlags) {
+        self = Self.table.reduce(into: []) { result, row in
+            if eventFlags.contains(row.1) { result.insert(row.0) }
+        }
+    }
+
+    /// The Core Graphics flags for these modifiers.
+    public var eventFlags: CGEventFlags {
+        Self.table.reduce(into: []) { result, row in
+            if contains(row.0) { result.insert(row.1) }
+        }
+    }
+
+    /// Menu glyphs for these modifiers, like "⌃⌥".
+    public var symbols: String {
+        Self.table.filter { contains($0.0) }.map(\.2).joined()
     }
 }
 
@@ -173,7 +215,7 @@ public final class IOKitActivitySimulator: ActivitySimulating {
             ?? CGEventSource(stateID: .combinedSessionState)
         let down = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: true)
         let up = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: false)
-        down?.flags = Self.flags(for: code).union(Self.flags(for: modifiers))
+        down?.flags = Self.flags(for: code).union(modifiers.eventFlags)
         up?.flags = []
         down?.post(tap: .cghidEventTap)
         up?.post(tap: .cghidEventTap)
@@ -208,15 +250,7 @@ public final class IOKitActivitySimulator: ActivitySimulating {
     /// looks like a real tap rather than a bare code.
     private static func flags(for code: CGKeyCode) -> CGEventFlags {
         if Int(code) == ActivityKeyModifiers.capsLockKeyCode { return .maskAlphaShift }
-        return ActivityKeyModifiers.modifier(forKeyCode: Int(code)).map(flags(for:)) ?? []
+        return ActivityKeyModifiers.modifier(forKeyCode: Int(code))?.eventFlags ?? []
     }
 
-    private static func flags(for modifiers: ActivityKeyModifiers) -> CGEventFlags {
-        var flags: CGEventFlags = []
-        if modifiers.contains(.shift) { flags.insert(.maskShift) }
-        if modifiers.contains(.control) { flags.insert(.maskControl) }
-        if modifiers.contains(.option) { flags.insert(.maskAlternate) }
-        if modifiers.contains(.command) { flags.insert(.maskCommand) }
-        return flags
-    }
 }
