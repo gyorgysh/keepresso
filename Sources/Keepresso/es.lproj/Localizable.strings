@@ -779,6 +779,9 @@
 "Update available…" = "Actualización disponible…";
 "Updates" = "Actualizaciones";
 "To keep browsers from showing focus rings, record F13 to F20 while holding Control, Option, or Command." = "Para evitar que los navegadores muestren anillos de enfoque, graba una tecla de F13 a F20 mientras mantienes pulsada Control, Opción o Comando.";
+"Restart OMP to load the Keepresso extension." = "Reinicia OMP para cargar la extensión de Keepresso.";
+"Couldn't update the OMP extension." = "No se pudo actualizar la extensión de OMP.";
+"Another keepresso-agent-activity.ts is in OMP's extensions folder. Move it, then try again." = "Hay otro keepresso-agent-activity.ts en la carpeta de extensiones de OMP. Muévelo y vuelve a intentarlo.";
 "Keepresso could not switch it off, so it stayed running instead of quitting." = "Keepresso no pudo desactivarlo, así que siguió en ejecución en lugar de cerrarse.";
 "Enter your administrator password to switch the sleep override off before Keepresso quits." = "Introduce tu contraseña de administrador para desactivar la anulación de la suspensión antes de que Keepresso se cierre.";
 "Enter your administrator password to switch closed-display mode off before Keepresso quits." = "Introduce tu contraseña de administrador para desactivar el modo con pantalla cerrada antes de que Keepresso se cierre.";

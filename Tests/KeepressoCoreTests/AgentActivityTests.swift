@@ -56,6 +56,19 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     #expect(match("/bin/ps -axww") == nil)
     #expect(match("node server.js") == nil)
     #expect(match("/Users/x/.kimi-code/bin/kimi") == "kimi")
+    // OMP and the Cline CLI use exact, standalone names.
+    #expect(match("omp --resume") == "omp")
+    // A Bun or npm install runs OMP's script under the runtime.
+    #expect(match("bun /Users/x/.bun/bin/omp -p hello") == "omp")
+    #expect(match("node /usr/local/bin/omp") == "omp")
+    #expect(match("bun run dev") == nil)
+    #expect(match("/opt/homebrew/bin/cline --tui") == "cline")
+    // Existing popular harnesses remain recognized.
+    #expect(match("gemini") == "gemini")
+    #expect(match("grok") == "grok")
+    #expect(match("opencode") == "opencode")
+    #expect(match("pi") == "pi")
+    #expect(match("grep omp notes.txt") == nil)
 }
 
 @Test func qwenCodeBundledNodeProcessesFoldIntoOneSession() {

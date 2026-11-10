@@ -2440,6 +2440,50 @@ final class AppModel {
         }
     }
 
+    // MARK: - Oh My Pi extension
+
+    /// OMP is detected natively with no setup. This optional extension lets
+    /// the shared activity trigger use exact session lifecycle edges.
+    private(set) var ompHooks: AgentHooks.HookInstallState = .notInstalled
+    private(set) var ompHooksError: String?
+    private(set) var ompPresent = false
+
+    func refreshOMPHooksStatus() {
+        ompPresent = AgentTool.omp.isPresent()
+        ompHooks = OMPHooks.installState(cliPath: Self.bundledCLIPath)
+        autoRepairIfNeeded(.omp)
+    }
+
+    func installOMPExtension() {
+        defer { refreshOMPHooksStatus() }
+        do {
+            try OMPHooks.install(cliPath: Self.bundledCLIPath)
+            ompHooksError = nil
+        } catch {
+            ompHooksError = Self.ompExtensionError(error)
+        }
+    }
+
+    func removeOMPExtension() {
+        defer { refreshOMPHooksStatus() }
+        do {
+            try OMPHooks.remove()
+            AgentHooks.purgeRecords(where: OMPHooks.ownsRecord)
+            ompHooksError = nil
+        } catch {
+            ompHooksError = Self.ompExtensionError(error)
+        }
+    }
+
+    /// A file of the user's own at our extension's path blocks both connect
+    /// and remove. Say so, since only they can move it.
+    private static func ompExtensionError(_ error: Error) -> String {
+        if case OMPHooks.InstallError.extensionAlreadyOwnedByAnotherFile = error {
+            return L("Another keepresso-agent-activity.ts is in OMP's extensions folder. Move it, then try again.")
+        }
+        return L("Couldn't update the OMP extension.")
+    }
+
     // MARK: - Agent tools, addressed uniformly
 
     /// The tools the agentic setup step should list, and their live state.
@@ -2456,6 +2500,7 @@ final class AppModel {
         case .codex: return codexPresent
         case .antigravity: return antigravityPresent
         case .grok: return grokPresent
+        case .omp: return ompPresent
         case .hermes: return hermesPresent
         case .qwen, .devin, .kimi: return tool.compatTool.map(compatPresent.contains) ?? false
         }
@@ -2468,6 +2513,7 @@ final class AppModel {
         case .codex: return codexHooks
         case .antigravity: return antigravityHooks
         case .grok: return grokHooks
+        case .omp: return ompHooks
         case .hermes: return hermesHooks
         case .qwen, .devin, .kimi: return tool.compatTool.flatMap { compatHooks[$0] } ?? .notInstalled
         }
@@ -2480,6 +2526,7 @@ final class AppModel {
         case .codex: installCodexHooks()
         case .antigravity: installAntigravityHooks()
         case .grok: installGrokHooks()
+        case .omp: installOMPExtension()
         case .hermes: installHermesPlugin()
         case .qwen, .devin, .kimi: tool.compatTool.map(installCompatHooks)
         }
@@ -2501,6 +2548,7 @@ final class AppModel {
         refreshCodexHooksStatus()
         refreshAntigravityHooksStatus()
         refreshGrokHooksStatus()
+        refreshOMPHooksStatus()
         refreshHermesPluginStatus()
         refreshCompatHooksStatus()
     }

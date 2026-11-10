@@ -11,8 +11,7 @@ struct AgentHookConnectionRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                Image(assetName)
-                    .renderingMode(.template).resizable().scaledToFit()
+                toolIcon
                     .foregroundStyle(tool == .claudeCode ? Color.keepressoBrew : Color.primary)
                     .frame(width: compact ? 20 : 16, height: compact ? 20 : 16)
                     .padding(compact ? 7 : 5)
@@ -53,6 +52,7 @@ struct AgentHookConnectionRow: View {
         case .codex: return "Approve new hooks in Codex before they can run."
         case .grok: return "Reload hooks in a running Grok session (/hooks, then r) or start a new one."
         case .hermes: return "Restart Hermes and its gateway to load the plugin."
+        case .omp: return "Restart OMP to load the Keepresso extension."
         default: return nil
         }
     }
@@ -81,18 +81,26 @@ struct AgentHookConnectionRow: View {
         switch tool {
         // Claude Code also runs inside the Claude desktop app, which reads
         // the same settings file, like Codex inside ChatGPT.
-        case .grok, .qwen, .devin, .kimi: return "CLI sessions"
+        case .grok, .omp, .qwen, .devin, .kimi: return "CLI sessions"
         case .hermes: return "CLI and gateway sessions"
         default: return "App and CLI sessions"
         }
     }
-    private var assetName: String {
+    @ViewBuilder private var toolIcon: some View {
+        if let assetName {
+            Image(assetName).renderingMode(.template).resizable().scaledToFit()
+        } else {
+            Image(systemName: "terminal").resizable().scaledToFit().padding(2)
+        }
+    }
+    private var assetName: String? {
         switch tool {
         case .claudeCode: return "brand_claude_code"
         case .cursor: return "brand_cursor"
         case .codex: return "brand_codex"
         case .antigravity: return "brand_antigravity"
         case .grok: return "brand_grok"
+        case .omp: return nil
         case .hermes: return "brand_hermes"
         case .qwen: return "brand_qwen"
         case .devin: return "brand_devin"
@@ -109,6 +117,7 @@ extension AppModel {
         case .codex: removeCodexHooks()
         case .antigravity: removeAntigravityHooks()
         case .grok: removeGrokHooks()
+        case .omp: removeOMPExtension()
         case .hermes: removeHermesPlugin()
         case .qwen, .devin, .kimi: tool.compatTool.map(removeCompatHooks)
         }
@@ -120,6 +129,7 @@ extension AppModel {
         case .codex: return codexHooksError
         case .antigravity: return antigravityHooksError
         case .grok: return grokHooksError
+        case .omp: return ompHooksError
         case .hermes: return hermesHooksError
         case .qwen, .devin, .kimi: return tool.compatTool.flatMap { compatHooksErrors[$0] }
         }

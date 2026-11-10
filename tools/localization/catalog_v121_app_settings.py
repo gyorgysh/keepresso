@@ -158,3 +158,54 @@ APP["To keep browsers from showing focus rings, record F13 to F20 while holding 
     "uk": "Щоб браузери не показували рамки фокуса, записуйте клавішу від F13 до F20 із затиснутою клавішею Control, Option або Command.",
     "zh-Hant": "若要避免瀏覽器顯示焦點外框，請在按住 Control、Option 或 Command 的同時錄製 F13 到 F20。",
 }
+
+APP["Restart OMP to load the Keepresso extension."] = {
+    "hu": "Indítsa újra az OMP-t a Keepresso-bővítmény betöltéséhez.",
+    "es": "Reinicia OMP para cargar la extensión de Keepresso.",
+    "fr": "Redémarrez OMP pour charger l’extension Keepresso.",
+    "de": "Starte OMP neu, um die Keepresso-Erweiterung zu laden.",
+    "zh-Hans": "请重新启动 OMP 以加载 Keepresso 扩展。",
+    "it": "Riavvia OMP per caricare l’estensione di Keepresso.",
+    "ja": "OMP を再起動して、Keepresso 拡張機能を読み込んでください。",
+    "ko": "OMP를 다시 시작하여 Keepresso 확장 프로그램을 로드하세요.",
+    "ru": "Перезапустите OMP, чтобы загрузить расширение Keepresso.",
+    "pt-BR": "Reinicie o OMP para carregar a extensão do Keepresso.",
+    "tr": "Keepresso uzantısını yüklemek için OMP'yi yeniden başlatın.",
+    "pl": "Uruchom ponownie OMP, aby wczytać rozszerzenie Keepresso.",
+    "uk": "Перезапустіть OMP, щоб завантажити розширення Keepresso.",
+    "zh-Hant": "請重新啟動 OMP 以載入 Keepresso 擴充功能。",
+}
+
+APP["Couldn't update the OMP extension."] = {
+    "hu": "Az OMP-bővítményt nem sikerült frissíteni.",
+    "es": "No se pudo actualizar la extensión de OMP.",
+    "fr": "Impossible de mettre à jour l’extension OMP.",
+    "de": "Die OMP-Erweiterung konnte nicht aktualisiert werden.",
+    "zh-Hans": "无法更新 OMP 扩展。",
+    "it": "Impossibile aggiornare l’estensione di OMP.",
+    "ja": "OMP の拡張機能を更新できませんでした。",
+    "ko": "OMP 확장 프로그램을 업데이트할 수 없습니다.",
+    "ru": "Не удалось обновить расширение OMP.",
+    "pt-BR": "Não foi possível atualizar a extensão do OMP.",
+    "tr": "OMP uzantısı güncellenemedi.",
+    "pl": "Nie można zaktualizować rozszerzenia OMP.",
+    "uk": "Не вдалося оновити розширення OMP.",
+    "zh-Hant": "無法更新 OMP 擴充功能。",
+}
+
+APP["Another keepresso-agent-activity.ts is in OMP's extensions folder. Move it, then try again."] = {
+    "hu": "Az OMP bővítménymappájában már van egy keepresso-agent-activity.ts. Helyezze át, majd próbálja újra.",
+    "es": "Hay otro keepresso-agent-activity.ts en la carpeta de extensiones de OMP. Muévelo y vuelve a intentarlo.",
+    "fr": "Un autre fichier keepresso-agent-activity.ts se trouve dans le dossier des extensions d’OMP. Déplacez-le, puis réessayez.",
+    "de": "Im Erweiterungsordner von OMP liegt bereits eine andere keepresso-agent-activity.ts. Verschiebe sie und versuche es dann erneut.",
+    "zh-Hans": "OMP 的扩展文件夹中已有另一个 keepresso-agent-activity.ts。请将其移走，然后重试。",
+    "it": "Un altro keepresso-agent-activity.ts si trova nella cartella delle estensioni di OMP. Spostalo e riprova.",
+    "ja": "OMP の拡張機能フォルダに別の keepresso-agent-activity.ts があります。移動してから、もう一度お試しください。",
+    "ko": "OMP의 확장 프로그램 폴더에 다른 keepresso-agent-activity.ts가 있습니다. 파일을 옮긴 후 다시 시도하세요.",
+    "ru": "В папке расширений OMP уже есть другой файл keepresso-agent-activity.ts. Переместите его и повторите попытку.",
+    "pt-BR": "Há outro keepresso-agent-activity.ts na pasta de extensões do OMP. Mova-o e tente novamente.",
+    "tr": "OMP'nin uzantılar klasöründe başka bir keepresso-agent-activity.ts var. Onu taşıyın, sonra tekrar deneyin.",
+    "pl": "W folderze rozszerzeń OMP jest już inny plik keepresso-agent-activity.ts. Przenieś go i spróbuj ponownie.",
+    "uk": "У папці розширень OMP уже є інший файл keepresso-agent-activity.ts. Перемістіть його та спробуйте ще раз.",
+    "zh-Hant": "OMP 的擴充功能資料夾中已有另一個 keepresso-agent-activity.ts。請先移走它，然後再試一次。",
+}

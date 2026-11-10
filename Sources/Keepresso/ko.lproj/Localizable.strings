@@ -779,6 +779,9 @@
 "Update available…" = "업데이트 사용 가능…";
 "Updates" = "업데이트";
 "To keep browsers from showing focus rings, record F13 to F20 while holding Control, Option, or Command." = "브라우저에 포커스 링이 표시되지 않게 하려면 Control, Option 또는 Command를 누른 채 F13에서 F20까지의 키를 기록하세요.";
+"Restart OMP to load the Keepresso extension." = "OMP를 다시 시작하여 Keepresso 확장 프로그램을 로드하세요.";
+"Couldn't update the OMP extension." = "OMP 확장 프로그램을 업데이트할 수 없습니다.";
+"Another keepresso-agent-activity.ts is in OMP's extensions folder. Move it, then try again." = "OMP의 확장 프로그램 폴더에 다른 keepresso-agent-activity.ts가 있습니다. 파일을 옮긴 후 다시 시도하세요.";
 "Keepresso could not switch it off, so it stayed running instead of quitting." = "Keepresso가 이를 끄지 못해 종료되지 않고 계속 실행되었습니다.";
 "Enter your administrator password to switch the sleep override off before Keepresso quits." = "Keepresso가 종료되기 전에 잠자기 비활성화를 끄려면 관리자 암호를 입력하십시오.";
 "Enter your administrator password to switch closed-display mode off before Keepresso quits." = "Keepresso가 종료되기 전에 디스플레이 닫힘 모드를 끄려면 관리자 암호를 입력하십시오.";

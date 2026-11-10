@@ -72,19 +72,21 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   triggers aside without touching your rules.
 - 🤖 **Agent-aware.** The "AI agent is working" condition keeps the Mac awake
   while a coding agent (claude, cursor, codex, antigravity, gemini, grok, aider,
-  goose, pi, hermes, kilo, opencode, dsh, muse, devin, qwen, kimi, and friends) is actually working, and lets it sleep once every
+  goose, pi, omp, cline, hermes, kilo, opencode, dsh, muse, devin, qwen,
+  kimi, and friends) is actually working, and lets it sleep once every
   session goes quiet, after a grace you choose. Agents that stream a transcript
   to disk prove their work directly, even through long zero-CPU network waits.
   The rest are judged on the CPU of their processes and tool calls against each
   session's own learned idle level. **Claude Code, Cursor, Codex, Grok,
-  Antigravity, Hermes Agent, Qwen Code, Devin, and Kimi Code** can report their state exactly, via an opt-in hook integration
-  you connect in one click: a session is working when the tool says it is, a
+  Antigravity, Hermes Agent, Oh My Pi (OMP), Qwen Code, Devin, and Kimi Code**
+  can report their state exactly through an opt-in integration connected in one
+  click: a session is working when the tool says it is, a
   pending permission prompt counts as working (so the Mac waits for your
   answer), and background subagents count too. That covers the agents built into
   the Cursor and Antigravity apps, which run inside the editor and have no
   process of their own to watch, and each chat inside one editor is tracked on
   its own. The menu lists every session with a live working / idle state and
-  where it runs.
+  where it runs. OMP loads Keepresso's extension the next time it starts.
 - ⏰ **Wake for scheduled AI runs.** Keepresso reads the recurring tasks your
   local AI tools schedule (Claude Desktop routines, Codex automations,
   tokenstat.ai), wakes the

@@ -13,6 +13,10 @@ Versions follow [Semantic Versioning](https://semver.org).
   Control+F18. Hold the modifier while recording the key. Chromium browsers
   and Electron apps then stop drawing focus rings on each tap.
   Suggested by @tsukinoko-kun (#34).
+- **Oh My Pi (OMP).** Keepresso detects OMP sessions with no setup, however
+  OMP was installed. Connect it from the "AI agent is working" trigger for
+  exact working and waiting states, then restart OMP. The Cline CLI is
+  detected too. Contributed by @1tuz (#32).
 
 ### Fixed
 
