@@ -104,29 +104,23 @@ public final class HelperDaemonAWDLWatchdog: AWDLWatchdogLaunching, @unchecked S
 // MARK: - Routing
 
 /// Routes ``SleepWatchdogLaunching`` calls to the daemon backend while the
-/// helper is installed and, when explicitly allowed, to the osascript fallback
-/// otherwise. Automatic callers can disable that fallback so an unavailable
-/// helper never turns a background state change into an administrator prompt.
-/// The choice is re-made at each activation (`createFlag`), so installing the
-/// helper from Preferences takes effect on the next engage without a relaunch;
-/// releases go to whichever side could be holding (both are idempotent no-ops
-/// when idle).
+/// helper is installed and to the osascript fallback otherwise. The choice is
+/// re-made at each activation (`createFlag`), so installing the helper from
+/// Preferences takes effect on the next engage without a relaunch; releases go
+/// to whichever side could be holding (both are idempotent no-ops when idle).
 public final class RoutedSleepWatchdog: SleepWatchdogLaunching, @unchecked Sendable {
     private let daemon: HelperDaemonSleepWatchdog
     private let fallback: SleepWatchdogLaunching
     private let helperInstalled: @Sendable () -> Bool
-    private let allowAdminPromptFallback: Bool
 
     public init(
         daemon: HelperDaemonSleepWatchdog,
         fallback: SleepWatchdogLaunching,
-        helperInstalled: @escaping @Sendable () -> Bool,
-        allowAdminPromptFallback: Bool = true
+        helperInstalled: @escaping @Sendable () -> Bool
     ) {
         self.daemon = daemon
         self.fallback = fallback
         self.helperInstalled = helperInstalled
-        self.allowAdminPromptFallback = allowAdminPromptFallback
     }
 
     public func isFlagPresent() -> Bool {
@@ -134,8 +128,7 @@ public final class RoutedSleepWatchdog: SleepWatchdogLaunching, @unchecked Senda
     }
 
     public func createFlag() -> Bool {
-        if helperInstalled() { return daemon.createFlag() }
-        return allowAdminPromptFallback && fallback.createFlag()
+        helperInstalled() ? daemon.createFlag() : fallback.createFlag()
     }
 
     public func removeFlag() {
@@ -150,18 +143,11 @@ public final class RoutedSleepWatchdog: SleepWatchdogLaunching, @unchecked Senda
     }
 
     public func startHelper(appPID: Int32) -> SleepSettingResult {
-        if helperInstalled() { return daemon.startHelper(appPID: appPID) }
-        guard allowAdminPromptFallback else { return .failed(unavailableHelperMessage) }
-        return fallback.startHelper(appPID: appPID)
+        helperInstalled() ? daemon.startHelper(appPID: appPID) : fallback.startHelper(appPID: appPID)
     }
 
     public var engageFailureMessage: String {
-        if helperInstalled() { return daemon.engageFailureMessage }
-        return allowAdminPromptFallback ? fallback.engageFailureMessage : unavailableHelperMessage
-    }
-
-    private var unavailableHelperMessage: String {
-        L("The helper isn't responding; reinstall it.")
+        helperInstalled() ? daemon.engageFailureMessage : fallback.engageFailureMessage
     }
 }
 
@@ -170,18 +156,15 @@ public final class RoutedAWDLWatchdog: AWDLWatchdogLaunching, @unchecked Sendabl
     private let daemon: HelperDaemonAWDLWatchdog
     private let fallback: AWDLWatchdogLaunching
     private let helperInstalled: @Sendable () -> Bool
-    private let allowAdminPromptFallback: Bool
 
     public init(
         daemon: HelperDaemonAWDLWatchdog,
         fallback: AWDLWatchdogLaunching,
-        helperInstalled: @escaping @Sendable () -> Bool,
-        allowAdminPromptFallback: Bool = true
+        helperInstalled: @escaping @Sendable () -> Bool
     ) {
         self.daemon = daemon
         self.fallback = fallback
         self.helperInstalled = helperInstalled
-        self.allowAdminPromptFallback = allowAdminPromptFallback
     }
 
     public func isFlagPresent() -> Bool {
@@ -189,8 +172,7 @@ public final class RoutedAWDLWatchdog: AWDLWatchdogLaunching, @unchecked Sendabl
     }
 
     public func createFlag() -> Bool {
-        if helperInstalled() { return daemon.createFlag() }
-        return allowAdminPromptFallback && fallback.createFlag()
+        helperInstalled() ? daemon.createFlag() : fallback.createFlag()
     }
 
     public func removeFlag() {
@@ -201,18 +183,11 @@ public final class RoutedAWDLWatchdog: AWDLWatchdogLaunching, @unchecked Sendabl
     }
 
     public func startHelper(appPID: Int32) -> AWDLWatchdogStartResult {
-        if helperInstalled() { return daemon.startHelper(appPID: appPID) }
-        guard allowAdminPromptFallback else { return .failed(unavailableHelperMessage) }
-        return fallback.startHelper(appPID: appPID)
+        helperInstalled() ? daemon.startHelper(appPID: appPID) : fallback.startHelper(appPID: appPID)
     }
 
     public var engageFailureMessage: String {
-        if helperInstalled() { return daemon.engageFailureMessage }
-        return allowAdminPromptFallback ? fallback.engageFailureMessage : unavailableHelperMessage
-    }
-
-    private var unavailableHelperMessage: String {
-        L("The helper isn't responding; reinstall it.")
+        helperInstalled() ? daemon.engageFailureMessage : fallback.engageFailureMessage
     }
 }
 

@@ -129,22 +129,6 @@ private final class FakeFallbackSleepWatchdog: SleepWatchdogLaunching, @unchecke
     }
 }
 
-private final class FakeFallbackAWDLWatchdog: AWDLWatchdogLaunching, @unchecked Sendable {
-    var flagPresent = false
-    private(set) var startCalls = 0
-
-    func isFlagPresent() -> Bool { flagPresent }
-    func createFlag() -> Bool {
-        flagPresent = true
-        return true
-    }
-    func removeFlag() { flagPresent = false }
-    func startHelper(appPID: Int32) -> AWDLWatchdogStartResult {
-        startCalls += 1
-        return .started
-    }
-}
-
 private final class FakeFallbackSleepControl: SleepSettingControlling, @unchecked Sendable {
     var reading: Bool? = false
     private(set) var writes: [Bool] = []
@@ -195,44 +179,6 @@ private final class FakeFallbackSleepControl: SleepSettingControlling, @unchecke
 
     #expect(fallback.startCalls == 1)
     // Not installed and never held via the daemon: no XPC traffic at all.
-    #expect(client.calls.isEmpty)
-}
-
-@Test func automaticSleepWatchdogDoesNotPromptWhenHelperIsUnavailable() {
-    let client = HelperRoutingTestClient()
-    let fallback = FakeFallbackSleepWatchdog()
-    let routed = RoutedSleepWatchdog(
-        daemon: HelperDaemonSleepWatchdog(helper: client),
-        fallback: fallback,
-        helperInstalled: { false },
-        allowAdminPromptFallback: false
-    )
-
-    #expect(!routed.createFlag())
-    #expect(routed.startHelper(appPID: 1) == .failed("The helper isn't responding; reinstall it."))
-    #expect(routed.engageFailureMessage == "The helper isn't responding; reinstall it.")
-    #expect(!routed.isFlagPresent())
-    #expect(fallback.startCalls == 0)
-    #expect(!fallback.flagPresent)
-    #expect(client.calls.isEmpty)
-}
-
-@Test func automaticAWDLWatchdogDoesNotPromptWhenHelperIsUnavailable() {
-    let client = HelperRoutingTestClient()
-    let fallback = FakeFallbackAWDLWatchdog()
-    let routed = RoutedAWDLWatchdog(
-        daemon: HelperDaemonAWDLWatchdog(helper: client),
-        fallback: fallback,
-        helperInstalled: { false },
-        allowAdminPromptFallback: false
-    )
-
-    #expect(!routed.createFlag())
-    #expect(routed.startHelper(appPID: 1) == .failed("The helper isn't responding; reinstall it."))
-    #expect(routed.engageFailureMessage == "The helper isn't responding; reinstall it.")
-    #expect(!routed.isFlagPresent())
-    #expect(fallback.startCalls == 0)
-    #expect(!fallback.flagPresent)
     #expect(client.calls.isEmpty)
 }
 

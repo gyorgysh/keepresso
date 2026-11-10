@@ -116,11 +116,11 @@ final class AppModel {
         self.gate = TriggerGateController(factory: factory)
         let notifier = UserNotificationReminder()
         self.notifier = notifier
-        // Explicit manual privileged actions keep their announced osascript
-        // fallback. Automatic watchdogs are helper-only: a background session
-        // change must never open a password dialog when the helper is missing
-        // or its code signature no longer matches. The availability box is the
-        // thread-safe bridge: the manager writes it, detached tasks read it.
+        // The privileged seams route through the helper daemon whenever it's
+        // installed (silent XPC, no prompt) and fall back to the original
+        // osascript admin prompts otherwise. The availability box is the
+        // thread-safe bridge: the manager writes it, the detached-task
+        // closures read it at each engage.
         let helperClient = XPCHelperClient()
         self.helperClient = helperClient
         let helperManager = HelperManager(
@@ -143,16 +143,14 @@ final class AppModel {
             launcher: RoutedSleepWatchdog(
                 daemon: HelperDaemonSleepWatchdog(helper: helperClient),
                 fallback: OsascriptSleepWatchdog(),
-                helperInstalled: helperInstalled,
-                allowAdminPromptFallback: false
+                helperInstalled: helperInstalled
             )
         )
         self.awdl = AWDLWatchdogController(
             launcher: RoutedAWDLWatchdog(
                 daemon: HelperDaemonAWDLWatchdog(helper: helperClient),
                 fallback: OsascriptAWDLWatchdog(),
-                helperInstalled: helperInstalled,
-                allowAdminPromptFallback: false
+                helperInstalled: helperInstalled
             )
         )
         self.keyboardLock = KeyboardLockController(
