@@ -1,7 +1,7 @@
 import Foundation
 
 /// Optional exact lifecycle events for Oh My Pi. Native process discovery
-/// remains the zero-setup fallback; this extension adds precise working and
+/// remains the zero-setup fallback. This extension adds precise working and
 /// waiting edges using OMP's own session lifecycle.
 public enum OMPHooks {
     public static let marker = "KEEPRESSO OMP ACTIVITY EXTENSION"
@@ -85,7 +85,9 @@ public enum OMPHooks {
             return .set(.working, detail: nil)
         case .agentEnd where willContinue || awaitingAsyncWork:
             // OMP has yielded from a turn but still has an automatic or
-            // background continuation; Keepresso must continue holding awake.
+            // background continuation, so Keepresso keeps holding awake. OMP
+            // has no job-finished event, but a background result wakes the
+            // session, which starts a new agent loop.
             return .set(.working, detail: nil)
         case .agentEnd:
             return .set(.waiting, detail: "waiting")
@@ -95,8 +97,8 @@ public enum OMPHooks {
     }
 
     /// Resolves the OMP process above the short-lived helper CLI and records
-    /// the event. A missing ancestor is a silent no-op; native detection still
-    /// sees any process it can identify.
+    /// the event. A missing ancestor is a silent no-op, and native detection
+    /// still sees any process it can identify.
     public static func handle(
         event rawEvent: String,
         sessionId: String,
@@ -108,20 +110,23 @@ public enum OMPHooks {
         in directory: URL = AgentHooks.directoryURL(),
         parentOf: (Int32) -> Int32? = AgentHooks.defaultParentOf,
         commandOf: (Int32) -> String? = AgentHooks.defaultCommandOf,
-        pathOf: (Int32) -> String? = AgentHooks.defaultPathOf
+        pathOf: (Int32) -> String? = AgentHooks.defaultPathOf,
+        argumentsOf: (Int32) -> String? = AgentHooks.defaultArgumentsOf
     ) {
         guard let event = Event(rawValue: rawEvent) else { return }
+        // The extension sends "" when OMP has no working directory.
+        let cwd: String? = cwd.isEmpty ? nil : cwd
         if event == .sessionEnd {
             let id = Self.sessionId(fromSessionFile: sessionId) ?? sessionId
             record(event: event, sessionId: id, cwd: cwd, agentPid: nil, at: now, in: directory)
             return
         }
-        guard let match = AgentHooks.findAgentAncestor(
+        guard let match = findAgent(
             startingAt: parentPid,
-            agents: ["omp"],
             parentOf: parentOf,
             commandOf: commandOf,
-            pathOf: pathOf
+            pathOf: pathOf,
+            argumentsOf: argumentsOf
         ) else { return }
         record(
             event: event,
@@ -132,6 +137,29 @@ public enum OMPHooks {
             awaitingAsyncWork: awaitingAsyncWork,
             at: now,
             in: directory
+        )
+    }
+
+    /// The OMP process above the hook. The prebuilt binary (install script,
+    /// Homebrew, Nix, mise) runs as `omp`, but a Bun or npm install runs as
+    /// `bun …/omp` or `node …/omp`, where only argv names it. That is
+    /// recognized the way the `ps` scan does it.
+    static func findAgent(
+        startingAt pid: Int32,
+        parentOf: (Int32) -> Int32?,
+        commandOf: (Int32) -> String?,
+        pathOf: (Int32) -> String?,
+        argumentsOf: (Int32) -> String?
+    ) -> AgentHooks.AncestorMatch? {
+        AgentHooks.findAgentAncestor(
+            startingAt: pid,
+            agents: ["omp"],
+            parentOf: parentOf,
+            commandOf: commandOf,
+            pathOf: pathOf,
+            alsoMatches: { pid in
+                argumentsOf(pid).flatMap { PSAgentActivityMonitor.agentName(for: $0, agents: ["omp"]) } != nil
+            }
         )
     }
 
@@ -171,8 +199,9 @@ public enum OMPHooks {
         try Data(extensionSource(cliPath: cliPath).utf8).write(to: url, options: .atomic)
     }
 
-    /// Removes Keepresso's extension only; unrelated or replaced files are
-    /// never deleted.
+    /// Removes Keepresso's extension only. Unrelated or replaced files are
+    /// never deleted, and the extensions folder goes only if that leaves it
+    /// empty.
     public static func remove(
         agentDirectory: URL = agentDirectory(),
         fileManager: FileManager = .default
@@ -183,6 +212,10 @@ public enum OMPHooks {
             throw InstallError.extensionAlreadyOwnedByAnotherFile
         }
         try fileManager.removeItem(at: url)
+        let folder = url.deletingLastPathComponent()
+        if (try? fileManager.contentsOfDirectory(atPath: folder.path))?.isEmpty == true {
+            try? fileManager.removeItem(at: folder)
+        }
     }
 
     /// The extension does no polling. It emits one small CLI event at each
@@ -199,29 +232,55 @@ public enum OMPHooks {
         export default function (pi: any) {
           const keepresso = \#(encodedPath);
 
-          async function report(event: string, ctx: any, sessionId: string, willContinue = false, awaitingAsyncWork = false) {
-            if (!sessionId) return;
-            try {
-              await pi.exec(keepresso, [
-                "omp-hook", event, sessionId, ctx.cwd ?? "", willContinue ? "1" : "0", awaitingAsyncWork ? "1" : "0"
-              ], { cwd: ctx.cwd, timeout: 1500 });
-            } catch {
-              // Keepresso is an optional observer; never interrupt OMP.
-            }
+          // Events go out one at a time, in order. OMP can fire agent_end and
+          // session_shutdown together on exit, and a late agent-end would
+          // otherwise rewrite the record session-end just removed. Only
+          // shutdown is awaited (so it lands before OMP exits). The rest never
+          // hold up OMP.
+          let queue: Promise<void> = Promise.resolve();
+          let reported: string | undefined;
+          function report(event: string, ctx: any, sessionId: string | undefined, willContinue = false, awaitingAsyncWork = false) {
+            if (!sessionId) return queue;
+            reported = event === "session-end" ? undefined : sessionId;
+            const args = [
+              "omp-hook", event, sessionId, ctx.cwd ?? "", willContinue ? "1" : "0", awaitingAsyncWork ? "1" : "0"
+            ];
+            queue = queue.then(async () => {
+              try {
+                await pi.exec(keepresso, args, { cwd: ctx.cwd, timeout: 5000 });
+              } catch {
+                // Keepresso is an optional observer: never interrupt OMP.
+              }
+            });
+            return queue;
           }
 
-          const currentSession = (ctx: any) => ctx.sessionManager.getSessionId();
-          pi.on("session_start", (_event: any, ctx: any) =>
-            report("session-start", ctx, currentSession(ctx)));
-          pi.on("agent_start", (_event: any, ctx: any) =>
-            report("agent-start", ctx, currentSession(ctx)));
-          pi.on("agent_end", (event: any, ctx: any) =>
-            report("agent-end", ctx, currentSession(ctx), !!event.willContinue, !!event.awaitingAsyncWork));
-          pi.on("session_shutdown", (_event: any, ctx: any) =>
-            report("session-end", ctx, currentSession(ctx)));
-          pi.on("session_switch", async (event: any, ctx: any) => {
-            if (event.previousSessionFile) await report("session-end", ctx, event.previousSessionFile);
-            await report("session-start", ctx, currentSession(ctx));
+          // Subagents (task tool, eval agent(), /tan clones) run in the same
+          // process under their own session. The main session already reads
+          // as working while they run, and their records would overwrite it.
+          const isMain = (ctx: any) => ctx.agent?.kind !== "sub";
+          const currentSession = (ctx: any): string | undefined => ctx.sessionManager?.getSessionId?.();
+          pi.on("session_start", (_event: any, ctx: any) => {
+            if (isMain(ctx)) report("session-start", ctx, currentSession(ctx));
+          });
+          pi.on("agent_start", (_event: any, ctx: any) => {
+            if (isMain(ctx)) report("agent-start", ctx, currentSession(ctx));
+          });
+          pi.on("agent_end", (event: any, ctx: any) => {
+            if (isMain(ctx)) {
+              report("agent-end", ctx, currentSession(ctx), !!event.willContinue, !!event.awaitingAsyncWork);
+            }
+          });
+          pi.on("session_shutdown", (_event: any, ctx: any) => {
+            if (isMain(ctx)) return report("session-end", ctx, reported ?? currentSession(ctx));
+          });
+          pi.on("session_switch", (_event: any, ctx: any) => {
+            if (!isMain(ctx)) return;
+            // End the session last reported, which also covers an in-memory
+            // session that has no previous file.
+            const next = currentSession(ctx);
+            if (reported && reported !== next) report("session-end", ctx, reported);
+            report("session-start", ctx, next);
           });
         }
         """#

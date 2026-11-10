@@ -158,3 +158,37 @@ APP["To keep browsers from showing focus rings, record F13 to F20 while holding 
     "uk": "Щоб браузери не показували рамки фокуса, записуйте клавішу від F13 до F20 із затиснутою клавішею Control, Option або Command.",
     "zh-Hant": "若要避免瀏覽器顯示焦點外框，請在按住 Control、Option 或 Command 的同時錄製 F13 到 F20。",
 }
+
+APP["Restart OMP to load the Keepresso extension."] = {
+    "hu": "Indítsa újra az OMP-t a Keepresso-bővítmény betöltéséhez.",
+    "es": "Reinicia OMP para cargar la extensión de Keepresso.",
+    "fr": "Redémarrez OMP pour charger l’extension Keepresso.",
+    "de": "Starte OMP neu, um die Keepresso-Erweiterung zu laden.",
+    "zh-Hans": "请重新启动 OMP 以加载 Keepresso 扩展。",
+    "it": "Riavvia OMP per caricare l’estensione di Keepresso.",
+    "ja": "OMP を再起動して、Keepresso 拡張機能を読み込んでください。",
+    "ko": "OMP를 다시 시작하여 Keepresso 확장 프로그램을 로드하세요.",
+    "ru": "Перезапустите OMP, чтобы загрузить расширение Keepresso.",
+    "pt-BR": "Reinicie o OMP para carregar a extensão do Keepresso.",
+    "tr": "Keepresso uzantısını yüklemek için OMP'yi yeniden başlatın.",
+    "pl": "Uruchom ponownie OMP, aby wczytać rozszerzenie Keepresso.",
+    "uk": "Перезапустіть OMP, щоб завантажити розширення Keepresso.",
+    "zh-Hant": "請重新啟動 OMP 以載入 Keepresso 擴充功能。",
+}
+
+APP["Couldn't update the OMP extension."] = {
+    "hu": "Az OMP-bővítményt nem sikerült frissíteni.",
+    "es": "No se pudo actualizar la extensión de OMP.",
+    "fr": "Impossible de mettre à jour l’extension OMP.",
+    "de": "Die OMP-Erweiterung konnte nicht aktualisiert werden.",
+    "zh-Hans": "无法更新 OMP 扩展。",
+    "it": "Impossibile aggiornare l’estensione di OMP.",
+    "ja": "OMP の拡張機能を更新できませんでした。",
+    "ko": "OMP 확장 프로그램을 업데이트할 수 없습니다.",
+    "ru": "Не удалось обновить расширение OMP.",
+    "pt-BR": "Não foi possível atualizar a extensão do OMP.",
+    "tr": "OMP uzantısı güncellenemedi.",
+    "pl": "Nie można zaktualizować rozszerzenia OMP.",
+    "uk": "Не вдалося оновити розширення OMP.",
+    "zh-Hant": "無法更新 OMP 擴充功能。",
+}

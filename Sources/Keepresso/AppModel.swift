@@ -2460,7 +2460,7 @@ final class AppModel {
             try OMPHooks.install(cliPath: Self.bundledCLIPath)
             ompHooksError = nil
         } catch {
-            ompHooksError = L("Couldn't update OMP's Keepresso extension.")
+            ompHooksError = L("Couldn't update the OMP extension.")
         }
     }
 
@@ -2471,7 +2471,7 @@ final class AppModel {
             AgentHooks.purgeRecords(where: OMPHooks.ownsRecord)
             ompHooksError = nil
         } catch {
-            ompHooksError = L("Couldn't remove OMP's Keepresso extension.")
+            ompHooksError = L("Couldn't update the OMP extension.")
         }
     }
 

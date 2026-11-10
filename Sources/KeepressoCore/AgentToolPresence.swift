@@ -80,6 +80,7 @@ public enum AgentTool: CaseIterable, Sendable {
         case .omp:
             return [
                 "\(home)/.omp/agent",
+                "\(home)/.bun/bin/omp",
                 "\(home)/.local/bin/omp",
                 "/opt/homebrew/bin/omp",
                 "/usr/local/bin/omp",

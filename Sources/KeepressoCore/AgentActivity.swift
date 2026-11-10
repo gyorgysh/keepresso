@@ -114,7 +114,7 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring, @unchecked S
     /// (cursor-agent, agy).
     public static let agentCommands = [
         "claude", "codex", "gemini", "grok", "agy", "aider", "goose", "omp",
-        "cline", "zcode",
+        "cline",
         "cursor-agent", "opencode", "opencode2", "amp", "copilot", "droid",
         "auggie", "qwen", "kimi", "pi", "hermes", "kilo", "dsh", "muse", "devin",
     ]

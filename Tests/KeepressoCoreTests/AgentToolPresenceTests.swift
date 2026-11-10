@@ -55,6 +55,7 @@ private func mac(_ paths: String...) -> (String) -> Bool {
     }
     let omp: [String] = [
         "/Users/x/.omp/agent",
+        "/Users/x/.bun/bin/omp",
         "/Users/x/.local/bin/omp",
         "/opt/homebrew/bin/omp",
         "/usr/local/bin/omp",

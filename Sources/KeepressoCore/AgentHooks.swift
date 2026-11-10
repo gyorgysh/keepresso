@@ -803,9 +803,12 @@ public enum AgentHooks {
             agents: PSAgentActivityMonitor.agentCommands) != nil {
             return true
         }
-        // Qwen Code runs as a generic `node`; only its argv names it, which
-        // is as specific a test as the `ps` scan's own.
-        return defaultArgumentsOf(pid).map(PSAgentActivityMonitor.isQwenCodeCommand) ?? false
+        // Agents run under a runtime (`node`, `bun`) or Qwen Code's bundled
+        // Node are named only by argv. Reading it the way the `ps` scan does
+        // is as specific a test as the scan's own.
+        return defaultArgumentsOf(pid).flatMap {
+            PSAgentActivityMonitor.agentName(for: $0, agents: PSAgentActivityMonitor.agentCommands)
+        } != nil
     }
 
     // MARK: - settings.json install/remove
