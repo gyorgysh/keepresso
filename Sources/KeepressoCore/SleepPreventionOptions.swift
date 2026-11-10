@@ -56,6 +56,11 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
     /// and the poke then falls back to ``ActivityPokeKind/powerWarp``.
     public var activitySimulationKeyCode: Int?
 
+    /// Modifiers sent with ``activitySimulationKeyCode`` (stored as the
+    /// ``ActivityKeyModifiers`` raw value). Empty by default. Ignored for the
+    /// other methods and when the recorded key is itself a modifier.
+    public var activitySimulationKeyModifiers: ActivityKeyModifiers
+
     /// Idle-only keep-active mode. When set, the poke only fires once the
     /// user has been idle this many minutes, and never while a game is
     /// frontmost (a game already reports them as present to everything
@@ -79,6 +84,7 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
         simulateUserActivity: Bool = false,
         activitySimulationMethod: ActivitySimulationMethod = .powerWarp,
         activitySimulationKeyCode: Int? = nil,
+        activitySimulationKeyModifiers: ActivityKeyModifiers = [],
         activityPokeIdleMinutes: Int? = nil,
         activityOnlyWhileBrewing: Bool = true
     ) {
@@ -90,6 +96,7 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
         self.simulateUserActivity = simulateUserActivity
         self.activitySimulationMethod = activitySimulationMethod
         self.activitySimulationKeyCode = activitySimulationKeyCode
+        self.activitySimulationKeyModifiers = activitySimulationKeyModifiers
         self.activityPokeIdleMinutes = activityPokeIdleMinutes
         self.activityOnlyWhileBrewing = activityOnlyWhileBrewing
     }
@@ -109,10 +116,19 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
                   code >= 0, code <= Int(UInt16.max) else {
                 return .powerWarp
             }
-            return .key(UInt16(code))
+            return .key(UInt16(code), modifiers: activitySimulationEffectiveKeyModifiers)
         case .mouseMove:
             return .mouseMove
         }
+    }
+
+    /// The modifiers the specified key is actually sent with. A modifier key
+    /// already carries its own flag, and adding others to it would post a
+    /// chord nobody recorded, so it gets none.
+    public var activitySimulationEffectiveKeyModifiers: ActivityKeyModifiers {
+        guard let code = activitySimulationKeyCode,
+              !ActivityKeyModifiers.isModifierKey(code) else { return [] }
+        return activitySimulationKeyModifiers.intersection(.all)
     }
 
     /// The default "brew": keep the system awake, let the screen do its thing.
@@ -121,7 +137,7 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case preventSystemSleep, preventDisplaySleep, allowScreenSaverAfter
         case dimDisplayAfter, dimFloor, simulateUserActivity
-        case activitySimulationMethod, activitySimulationKeyCode
+        case activitySimulationMethod, activitySimulationKeyCode, activitySimulationKeyModifiers
         case activityPokeIdleMinutes, activityOnlyWhileBrewing
     }
 
@@ -144,6 +160,8 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
         activitySimulationMethod = (try? c.decodeIfPresent(String.self, forKey: .activitySimulationMethod))
             .flatMap(ActivitySimulationMethod.init(rawValue:)) ?? .powerWarp
         activitySimulationKeyCode = try? c.decodeIfPresent(Int.self, forKey: .activitySimulationKeyCode)
+        activitySimulationKeyModifiers = ((try? c.decodeIfPresent(Int.self, forKey: .activitySimulationKeyModifiers))
+            .map(ActivityKeyModifiers.init(rawValue:)) ?? []).intersection(.all)
         activityPokeIdleMinutes = (try? c.decodeIfPresent(Int.self, forKey: .activityPokeIdleMinutes))
             .map { min(max($0, 0), 24 * 60) }
         activityOnlyWhileBrewing = (try? c.decodeIfPresent(Bool.self, forKey: .activityOnlyWhileBrewing)) ?? true

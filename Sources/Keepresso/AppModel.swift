@@ -491,10 +491,20 @@ final class AppModel {
         }
     }
 
-    /// Virtual key for the specified-key keep-active method.
-    var activitySimulationKeyCode: Int? {
-        get { session.options.activitySimulationKeyCode }
-        set { updateOptions { $0.activitySimulationKeyCode = newValue } }
+    /// The specified-key keep-active method's key and its modifiers, set
+    /// together so a new recording never keeps the previous modifiers.
+    var activitySimulationKey: PresenceKey? {
+        get {
+            session.options.activitySimulationKeyCode.map {
+                PresenceKey(keyCode: $0, modifiers: session.options.activitySimulationEffectiveKeyModifiers)
+            }
+        }
+        set {
+            updateOptions {
+                $0.activitySimulationKeyCode = newValue?.keyCode
+                $0.activitySimulationKeyModifiers = newValue?.modifiers ?? []
+            }
+        }
     }
 
     /// Idle-only keep-active mode: poke only after this many idle minutes,

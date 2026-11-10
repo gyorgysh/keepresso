@@ -778,6 +778,7 @@
 "Help" = "Súgó";
 "Update available…" = "Frissítés érhető el…";
 "Updates" = "Frissítések";
+"Hold Control, Option, or Command while recording to send it with the key, so browsers don't show focus rings." = "Rögzítés közben tartsa lenyomva a Control, az Option vagy a Command billentyűt, hogy a billentyűvel együtt legyen elküldve, így a böngészők nem jelenítenek meg fókuszkeretet.";
 "Keepresso could not switch it off, so it stayed running instead of quitting." = "A Keepresso nem tudta kikapcsolni, ezért kilépés helyett tovább futott.";
 "Enter your administrator password to switch the sleep override off before Keepresso quits." = "Adja meg a rendszergazdai jelszavát az alvásfelülbírálás kikapcsolásához, mielőtt a Keepresso kilép.";
 "Enter your administrator password to switch closed-display mode off before Keepresso quits." = "Adja meg a rendszergazdai jelszavát a csukott fedél mód kikapcsolásához, mielőtt a Keepresso kilép.";

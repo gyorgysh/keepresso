@@ -141,3 +141,20 @@ APP["Updates"] = {
     "pt-BR": "Atualizações", "tr": "Güncellemeler", "pl": "Aktualizacje",
     "uk": "Оновлення", "zh-Hant": "更新",
 }
+
+APP["Hold Control, Option, or Command while recording to send it with the key, so browsers don't show focus rings."] = {
+    "hu": "Rögzítés közben tartsa lenyomva a Control, az Option vagy a Command billentyűt, hogy a billentyűvel együtt legyen elküldve, így a böngészők nem jelenítenek meg fókuszkeretet.",
+    "es": "Mantén pulsada Control, Opción o Comando mientras grabas para enviarla junto con la tecla, así los navegadores no muestran anillos de enfoque.",
+    "fr": "Maintenez Contrôle, Option ou Commande pendant l’enregistrement pour l’envoyer avec la touche, afin que les navigateurs n’affichent pas d’anneaux de mise au point.",
+    "de": "Halte beim Aufzeichnen Control, Wahltaste oder Befehlstaste gedrückt, um sie mit der Taste zu senden. So zeigen Browser keine Fokusringe an.",
+    "zh-Hans": "录制时按住 Control、Option 或 Command，即可将其与按键一同发送，这样浏览器就不会显示焦点环。",
+    "it": "Tieni premuto Controllo, Opzione o Comando durante la registrazione per inviarlo insieme al tasto, così i browser non mostrano gli anelli di focus.",
+    "ja": "記録中に Control、Option、Command のいずれかを押したままにすると、キーと一緒に送信され、ブラウザにフォーカスリングが表示されません。",
+    "ko": "기록하는 동안 Control, Option 또는 Command를 누르고 있으면 키와 함께 전송되어 브라우저에 포커스 링이 표시되지 않습니다.",
+    "ru": "Во время записи удерживайте Control, Option или Command, чтобы отправлять их вместе с клавишей. Тогда браузеры не будут показывать рамку фокуса.",
+    "pt-BR": "Segure Control, Option ou Command durante a gravação para enviá-la junto com a tecla, assim os navegadores não mostram anéis de foco.",
+    "tr": "Kayıt sırasında Control, Option veya Command tuşunu basılı tutarsanız tuşla birlikte gönderilir, böylece tarayıcılar odak halkası göstermez.",
+    "pl": "Podczas nagrywania przytrzymaj Control, Option lub Command, aby wysyłać go razem z klawiszem. Dzięki temu przeglądarki nie pokazują obramowania fokusu.",
+    "uk": "Під час запису утримуйте Control, Option або Command, щоб надсилати їх разом із клавішею. Тоді браузери не показуватимуть рамку фокуса.",
+    "zh-Hant": "錄製時按住 Control、Option 或 Command，即可將其與按鍵一併送出，瀏覽器就不會顯示焦點外框。",
+}

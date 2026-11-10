@@ -778,6 +778,7 @@
 "Help" = "도움말";
 "Update available…" = "업데이트 사용 가능…";
 "Updates" = "업데이트";
+"Hold Control, Option, or Command while recording to send it with the key, so browsers don't show focus rings." = "기록하는 동안 Control, Option 또는 Command를 누르고 있으면 키와 함께 전송되어 브라우저에 포커스 링이 표시되지 않습니다.";
 "Keepresso could not switch it off, so it stayed running instead of quitting." = "Keepresso가 이를 끄지 못해 종료되지 않고 계속 실행되었습니다.";
 "Enter your administrator password to switch the sleep override off before Keepresso quits." = "Keepresso가 종료되기 전에 잠자기 비활성화를 끄려면 관리자 암호를 입력하십시오.";
 "Enter your administrator password to switch closed-display mode off before Keepresso quits." = "Keepresso가 종료되기 전에 디스플레이 닫힘 모드를 끄려면 관리자 암호를 입력하십시오.";

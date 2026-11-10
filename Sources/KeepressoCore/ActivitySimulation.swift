@@ -33,12 +33,53 @@ public enum ActivitySimulationMethod: String, Codable, CaseIterable, Sendable {
     public var pokeInterval: TimeInterval { needsAccessibility ? 60 : 30 }
 }
 
+/// Modifiers sent with a specified-key poke, set only on that one key event
+/// (nothing is held down for other input). Chromium skips its focus-ring
+/// heuristic for a key pressed with Control, Option, or Command, so a combo
+/// like Control+F18 keeps browsers and Electron apps from drawing focus rings.
+/// Raw values are this app's own, stable for persistence.
+public struct ActivityKeyModifiers: OptionSet, Hashable, Codable, Sendable {
+    public let rawValue: Int
+    public init(rawValue: Int) { self.rawValue = rawValue }
+
+    public static let shift = ActivityKeyModifiers(rawValue: 1 << 0)
+    public static let control = ActivityKeyModifiers(rawValue: 1 << 1)
+    public static let option = ActivityKeyModifiers(rawValue: 1 << 2)
+    public static let command = ActivityKeyModifiers(rawValue: 1 << 3)
+
+    /// Every bit this build knows. A stored value is masked to it.
+    public static let all: ActivityKeyModifiers = [.shift, .control, .option, .command]
+
+    /// The modifier a Carbon virtual key code is, for either side's Shift,
+    /// Control, Option, or Command. `nil` for every other key.
+    public static func modifier(forKeyCode code: Int) -> ActivityKeyModifiers? {
+        switch code {
+        case 0x38, 0x3C: return .shift
+        case 0x3B, 0x3E: return .control
+        case 0x3A, 0x3D: return .option
+        case 0x37, 0x36: return .command
+        default: return nil
+        }
+    }
+
+    /// Carbon virtual key codes for Caps Lock and Fn.
+    public static let capsLockKeyCode = 0x39
+    public static let functionKeyCode = 0x3F
+
+    /// Whether a key code is itself a modifier key (including Caps Lock and
+    /// Fn). Such a key carries its own flag, so it is never sent with others.
+    public static func isModifierKey(_ code: Int) -> Bool {
+        modifier(forKeyCode: code) != nil || code == capsLockKeyCode || code == functionKeyCode
+    }
+}
+
 /// The concrete poke the simulator performs for one tick.
 public enum ActivityPokeKind: Equatable, Sendable {
     /// Prompt-free: declare user activity and warp the cursor 1px.
     case powerWarp
-    /// Key down/up of this Carbon virtual key code. Needs Accessibility.
-    case key(UInt16)
+    /// Key down/up of this Carbon virtual key code, with these modifiers set
+    /// on the key-down event. Needs Accessibility.
+    case key(UInt16, modifiers: ActivityKeyModifiers = [])
     /// Posted HID mouse-moved 1px and back. Needs Accessibility.
     case mouseMove
 }
@@ -98,8 +139,8 @@ public final class IOKitActivitySimulator: ActivitySimulating {
         switch kind {
         case .powerWarp:
             warpCursor()
-        case .key(let code):
-            tapKey(code)
+        case .key(let code, let modifiers):
+            tapKey(code, modifiers: modifiers)
             if !AccessibilityTrust.isTrusted { warpCursor() }
         case .mouseMove:
             postMouseMove()
@@ -124,13 +165,15 @@ public final class IOKitActivitySimulator: ActivitySimulating {
         CGWarpMouseCursorPosition(location)
     }
 
-    private func tapKey(_ code: CGKeyCode) {
+    /// The modifiers ride on the key-down only. No modifier key events are
+    /// posted and the key-up carries no flags, so nothing stays held for
+    /// real or automated input.
+    private func tapKey(_ code: CGKeyCode, modifiers: ActivityKeyModifiers) {
         let source = CGEventSource(stateID: .hidSystemState)
             ?? CGEventSource(stateID: .combinedSessionState)
         let down = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: true)
         let up = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: false)
-        let flags = Self.flags(for: code)
-        down?.flags = flags
+        down?.flags = Self.flags(for: code).union(Self.flags(for: modifiers))
         up?.flags = []
         down?.post(tap: .cghidEventTap)
         up?.post(tap: .cghidEventTap)
@@ -164,13 +207,16 @@ public final class IOKitActivitySimulator: ActivitySimulating {
     /// Modifier virtual keys need their flag bit set on key-down so the event
     /// looks like a real tap rather than a bare code.
     private static func flags(for code: CGKeyCode) -> CGEventFlags {
-        switch code {
-        case 0x38, 0x3C: return .maskShift
-        case 0x3B, 0x3E: return .maskControl
-        case 0x3A, 0x3D: return .maskAlternate
-        case 0x37, 0x36: return .maskCommand
-        case 0x39: return .maskAlphaShift
-        default: return []
-        }
+        if Int(code) == ActivityKeyModifiers.capsLockKeyCode { return .maskAlphaShift }
+        return ActivityKeyModifiers.modifier(forKeyCode: Int(code)).map(flags(for:)) ?? []
+    }
+
+    private static func flags(for modifiers: ActivityKeyModifiers) -> CGEventFlags {
+        var flags: CGEventFlags = []
+        if modifiers.contains(.shift) { flags.insert(.maskShift) }
+        if modifiers.contains(.control) { flags.insert(.maskControl) }
+        if modifiers.contains(.option) { flags.insert(.maskAlternate) }
+        if modifiers.contains(.command) { flags.insert(.maskCommand) }
+        return flags
     }
 }

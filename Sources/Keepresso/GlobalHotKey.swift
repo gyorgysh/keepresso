@@ -137,12 +137,21 @@ extension HotKeyShortcut {
     var displayString: String {
         guard modifierFlags >= 0 else { return "?" }
         let flags = NSEvent.ModifierFlags(rawValue: UInt(modifierFlags))
+        return Self.label(
+            keyName: Self.keyName(for: keyCode) ?? "?",
+            control: flags.contains(.control), option: flags.contains(.option),
+            shift: flags.contains(.shift), command: flags.contains(.command)
+        )
+    }
+
+    /// A key name prefixed with modifier glyphs in the menu order (⌃⌥⇧⌘).
+    static func label(keyName: String, control: Bool, option: Bool, shift: Bool, command: Bool) -> String {
         var parts = ""
-        if flags.contains(.control) { parts += "⌃" }
-        if flags.contains(.option)  { parts += "⌥" }
-        if flags.contains(.shift)   { parts += "⇧" }
-        if flags.contains(.command) { parts += "⌘" }
-        return parts + (Self.keyName(for: keyCode) ?? "?")
+        if control { parts += "⌃" }
+        if option { parts += "⌥" }
+        if shift { parts += "⇧" }
+        if command { parts += "⌘" }
+        return parts + keyName
     }
 
     /// A readable name for the common virtual key codes. Letters and digits use

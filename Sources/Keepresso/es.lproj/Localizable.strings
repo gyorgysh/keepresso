@@ -778,6 +778,7 @@
 "Help" = "Ayuda";
 "Update available…" = "Actualización disponible…";
 "Updates" = "Actualizaciones";
+"Hold Control, Option, or Command while recording to send it with the key, so browsers don't show focus rings." = "Mantén pulsada Control, Opción o Comando mientras grabas para enviarla junto con la tecla, así los navegadores no muestran anillos de enfoque.";
 "Keepresso could not switch it off, so it stayed running instead of quitting." = "Keepresso no pudo desactivarlo, así que siguió en ejecución en lugar de cerrarse.";
 "Enter your administrator password to switch the sleep override off before Keepresso quits." = "Introduce tu contraseña de administrador para desactivar la anulación de la suspensión antes de que Keepresso se cierre.";
 "Enter your administrator password to switch closed-display mode off before Keepresso quits." = "Introduce tu contraseña de administrador para desactivar el modo con pantalla cerrada antes de que Keepresso se cierre.";

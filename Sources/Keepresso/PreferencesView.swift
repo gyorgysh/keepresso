@@ -481,9 +481,9 @@ private struct GeneralTab: View {
                     }
                     if model.activitySimulationMethod == .specifiedKey {
                         LabeledContent("Key") {
-                            PresenceKeyRecorder(keyCode: Binding(
-                                get: { model.activitySimulationKeyCode },
-                                set: { model.activitySimulationKeyCode = $0 }
+                            PresenceKeyRecorder(key: Binding(
+                                get: { model.activitySimulationKey },
+                                set: { model.activitySimulationKey = $0 }
                             ))
                         }
                     }
@@ -688,6 +688,7 @@ private struct GeneralTab: View {
             L("Taps Shift every 60 s. Invisible, and nothing is typed.")
         case .specifiedKey:
             L("Taps the recorded key every 60 s. Prefer a function key or modifier.")
+                + " " + L("Hold Control, Option, or Command while recording to send it with the key, so browsers don't show focus rings.")
         case .mouseMove:
             L("Posts a 1-pixel mouse move every 60 s. For software that watches the pointer.")
         }

@@ -778,6 +778,7 @@
 "Help" = "說明";
 "Update available…" = "有可用更新…";
 "Updates" = "更新";
+"Hold Control, Option, or Command while recording to send it with the key, so browsers don't show focus rings." = "錄製時按住 Control、Option 或 Command，即可將其與按鍵一併送出，瀏覽器就不會顯示焦點外框。";
 "Keepresso could not switch it off, so it stayed running instead of quitting." = "Keepresso 無法將其關閉，因此並未結束，而是繼續執行。";
 "Enter your administrator password to switch the sleep override off before Keepresso quits." = "請輸入系統管理員密碼，以便在 Keepresso 結束前關閉睡眠停用開關。";
 "Enter your administrator password to switch closed-display mode off before Keepresso quits." = "請輸入系統管理員密碼，以便在 Keepresso 結束前關閉闔蓋模式。";
