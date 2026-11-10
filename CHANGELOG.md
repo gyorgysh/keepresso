@@ -7,33 +7,40 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 ### Added
 
+- **Oh My Pi (OMP).** Keepresso detects OMP sessions with no setup, whether
+  OMP came from the install script, Homebrew, Bun, or npm. For exact working
+  and waiting states, connect it from the "AI agent is working" trigger and
+  restart OMP. Contributed by @1tuz (#32).
+- Keepresso also detects the Cline CLI. Contributed by @1tuz (#32).
 - Check for Updates in Preferences > General. Available updates also appear
   in the menu, with an indicator beside the menu-bar cup.
 - Presence can send F13 to F20 with Control, Option, or Command, for example
-  Control+F18. Hold the modifier while recording the key. Chromium browsers
-  and Electron apps then stop drawing focus rings on each tap.
-  Suggested by @tsukinoko-kun (#34).
-- **Oh My Pi (OMP).** Keepresso detects OMP sessions with no setup, however
-  OMP was installed. Connect it from the "AI agent is working" trigger for
-  exact working and waiting states, then restart OMP. The Cline CLI is
-  detected too. Contributed by @1tuz (#32).
+  Control+F18, so Chromium browsers and Electron apps stop drawing focus
+  rings on each tap. Hold the modifier while recording the key. Suggested by
+  @tsukinoko-kun (#34).
+
+### Changed
+
+- Agent connection rows in Preferences are more compact.
 
 ### Fixed
 
 - Presence key and mouse methods tap every 60 seconds again instead of about
   every 11 seconds. Their own tap no longer counts as you being back at the
   Mac. Reported by @tsukinoko-kun (#35).
-- Stop showing Claude Code as working after an API error ends its turn, when
-  the installed Claude Code versions support the error hook.
-- Keep development copies from automatically rewriting agent connections
-  when opening Preferences, Rules, or Welcome.
-- Leave unchanged agent settings files alone during connection updates.
-- Keep the background steam moving continuously when switching between
-  Automatic and Manual or expanding and collapsing the menu.
-- Run the helper's signing check off the main thread and only when a repair
-  is needed, instead of during startup.
-- End the menu-bar panel's tracking session when dismissing it on macOS 27.
-  Skip focus attempts on windows that cannot receive keyboard input.
+- Claude Code no longer shows as working after an API error ends its turn,
+  when the installed Claude Code versions support the error hook.
+- On macOS 27, opening Preferences or another window from the menu closes the
+  menu. Before, the menu could stay open in front and leave the new window
+  inactive.
+- Closed-lid Low Power Mode no longer puts back an old power setting when an
+  unrelated connection to the helper closes.
+- Keepresso no longer rewrites an agent's settings file when a connection
+  check finds nothing to change.
+- Keepresso no longer checks the helper's signature at startup. It runs the
+  check in the background, and only when the helper needs repair.
+- The background steam keeps moving when you switch between Automatic and
+  Manual or expand and collapse the menu.
 
 ## [1.29.0] - 2026-11-03
 
