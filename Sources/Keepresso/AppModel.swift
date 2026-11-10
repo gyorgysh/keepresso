@@ -2460,7 +2460,7 @@ final class AppModel {
             try OMPHooks.install(cliPath: Self.bundledCLIPath)
             ompHooksError = nil
         } catch {
-            ompHooksError = L("Couldn't update the OMP extension.")
+            ompHooksError = Self.ompExtensionError(error)
         }
     }
 
@@ -2471,8 +2471,17 @@ final class AppModel {
             AgentHooks.purgeRecords(where: OMPHooks.ownsRecord)
             ompHooksError = nil
         } catch {
-            ompHooksError = L("Couldn't update the OMP extension.")
+            ompHooksError = Self.ompExtensionError(error)
         }
+    }
+
+    /// A file of the user's own at our extension's path blocks both connect
+    /// and remove. Say so, since only they can move it.
+    private static func ompExtensionError(_ error: Error) -> String {
+        if case OMPHooks.InstallError.extensionAlreadyOwnedByAnotherFile = error {
+            return L("Another keepresso-agent-activity.ts is in OMP's extensions folder. Move it, then try again.")
+        }
+        return L("Couldn't update the OMP extension.")
     }
 
     // MARK: - Agent tools, addressed uniformly

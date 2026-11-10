@@ -94,22 +94,20 @@ import Testing
     let source = OMPHooks.extensionSource(cliPath: "/Applications/Keepresso.app/Contents/Helpers/keepresso")
     #expect(source.contains("queue = queue.then("))
     #expect(source.contains(#"ctx.agent?.kind !== "sub""#))
+    // A bash background job (a dev server) never holds the session working.
+    #expect(source.contains(#"job?.type !== "bash""#))
+    #expect(source.contains("!!event.willContinue && !onlyBash"))
     #expect(source.contains(#"const keepresso = "/Applications/Keepresso.app/Contents/Helpers/keepresso";"#))
 }
 
-@Test func ompSessionSwitchPathResolvesThePreviousSessionId() {
-    let sessionFile = "/Users/x/.omp/agent/sessions/project/2026-11-04T10-30-45-123Z_abc-123.jsonl"
-    #expect(OMPHooks.sessionId(fromSessionFile: sessionFile) == "abc-123")
-    #expect(OMPHooks.sessionId(fromSessionFile: "/tmp/session-id.jsonl") == "session-id")
-    #expect(OMPHooks.sessionId(fromSessionFile: "/tmp/custom_session_id.jsonl") == "custom_session_id")
-    #expect(OMPHooks.sessionId(fromSessionFile: "/tmp/not-a-session.txt") == nil)
-
+@Test func ompSessionEndRemovesTheRecordWithoutAnAncestor() {
+    // Session end runs at OMP's exit, when the ancestor may already be gone.
     let directory = FileManager.default.temporaryDirectory
-        .appendingPathComponent("omp-switch-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("omp-end-\(UUID().uuidString)", isDirectory: true)
     defer { try? FileManager.default.removeItem(at: directory) }
     OMPHooks.record(event: .agentStart, sessionId: "abc-123", cwd: "/repo", agentPid: 101, in: directory)
     OMPHooks.handle(
-        event: "session-end", sessionId: sessionFile, cwd: "/repo",
+        event: "session-end", sessionId: "abc-123", cwd: "/repo",
         willContinue: false, awaitingAsyncWork: false, parentPid: 1, in: directory)
     #expect(AgentHooks.readRecord(sessionId: "abc-123", in: directory) == nil)
 }

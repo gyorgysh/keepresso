@@ -25,22 +25,6 @@ public enum OMPHooks {
         agentDirectory.appendingPathComponent("extensions/keepresso-agent-activity.ts")
     }
 
-    /// OMP persists session IDs after a timestamp prefix in its session file
-    /// names (`<timestamp>_<session-id>.jsonl`).
-    public static func sessionId(fromSessionFile file: String) -> String? {
-        let name = URL(fileURLWithPath: file).lastPathComponent
-        guard name.hasSuffix(".jsonl") else { return nil }
-        let stem = String(name.dropLast(".jsonl".count))
-        let timestampPrefix = #"^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_"#
-        let id: String
-        if let range = stem.range(of: timestampPrefix, options: .regularExpression) {
-            id = String(stem[range.upperBound...])
-        } else {
-            id = stem
-        }
-        return id.isEmpty ? nil : id
-    }
-
     /// Maps OMP's session and agent-loop events onto the shared per-session
     /// hook record used by all other agents.
     public static func record(
@@ -84,10 +68,12 @@ public enum OMPHooks {
         case .agentStart:
             return .set(.working, detail: nil)
         case .agentEnd where willContinue || awaitingAsyncWork:
-            // OMP has yielded from a turn but still has an automatic or
-            // background continuation, so Keepresso keeps holding awake. OMP
-            // has no job-finished event, but a background result wakes the
-            // session, which starts a new agent loop.
+            // OMP has yielded from a turn but still has an automatic
+            // continuation or a background task, so Keepresso keeps holding
+            // awake. The extension never sets either flag for a bash job
+            // alone, which may run forever. OMP has no
+            // job-finished event, but a background result wakes the session,
+            // which starts a new agent loop.
             return .set(.working, detail: nil)
         case .agentEnd:
             return .set(.waiting, detail: "waiting")
@@ -117,8 +103,7 @@ public enum OMPHooks {
         // The extension sends "" when OMP has no working directory.
         let cwd: String? = cwd.isEmpty ? nil : cwd
         if event == .sessionEnd {
-            let id = Self.sessionId(fromSessionFile: sessionId) ?? sessionId
-            record(event: event, sessionId: id, cwd: cwd, agentPid: nil, at: now, in: directory)
+            record(event: event, sessionId: sessionId, cwd: cwd, agentPid: nil, at: now, in: directory)
             return
         }
         guard let match = findAgent(
@@ -235,8 +220,8 @@ public enum OMPHooks {
           // Events go out one at a time, in order. OMP can fire agent_end and
           // session_shutdown together on exit, and a late agent-end would
           // otherwise rewrite the record session-end just removed. Only
-          // shutdown is awaited (so it lands before OMP exits). The rest never
-          // hold up OMP.
+          // shutdown is awaited, for at most two seconds, so it lands before
+          // OMP exits. The rest never hold up OMP.
           let queue: Promise<void> = Promise.resolve();
           let reported: string | undefined;
           function report(event: string, ctx: any, sessionId: string | undefined, willContinue = false, awaitingAsyncWork = false) {
@@ -260,27 +245,44 @@ public enum OMPHooks {
           // as working while they run, and their records would overwrite it.
           const isMain = (ctx: any) => ctx.agent?.kind !== "sub";
           const currentSession = (ctx: any): string | undefined => ctx.sessionManager?.getSessionId?.();
+          // A new session ends the one last reported, whichever event brought
+          // it in. That also covers an in-memory session with no file.
+          function begin(ctx: any) {
+            const next = currentSession(ctx);
+            if (reported && reported !== next) report("session-end", ctx, reported);
+            report("session-start", ctx, next);
+          }
+          // Background `task` and `eval` jobs are agent work and keep the
+          // session working. A `bash` job (a dev server, a watcher) may never
+          // end, so it does not, whichever flag OMP reports it under. Without
+          // a job snapshot, OMP's own flags stand.
+          function holds(event: any, ctx: any): [boolean, boolean] {
+            let running: any;
+            try { running = ctx.getAsyncJobSnapshot?.()?.running; } catch {}
+            if (!Array.isArray(running)) return [!!event.willContinue, !!event.awaitingAsyncWork];
+            const agentJobs = running.some((job: any) => job?.type !== "bash");
+            const onlyBash = running.length > 0 && !agentJobs;
+            return [!!event.willContinue && !onlyBash, !!event.awaitingAsyncWork && agentJobs];
+          }
           pi.on("session_start", (_event: any, ctx: any) => {
-            if (isMain(ctx)) report("session-start", ctx, currentSession(ctx));
+            if (isMain(ctx)) begin(ctx);
           });
           pi.on("agent_start", (_event: any, ctx: any) => {
             if (isMain(ctx)) report("agent-start", ctx, currentSession(ctx));
           });
           pi.on("agent_end", (event: any, ctx: any) => {
             if (isMain(ctx)) {
-              report("agent-end", ctx, currentSession(ctx), !!event.willContinue, !!event.awaitingAsyncWork);
+              const [willContinue, awaitingAgentWork] = holds(event, ctx);
+              report("agent-end", ctx, currentSession(ctx), willContinue, awaitingAgentWork);
             }
           });
           pi.on("session_shutdown", (_event: any, ctx: any) => {
-            if (isMain(ctx)) return report("session-end", ctx, reported ?? currentSession(ctx));
+            if (!isMain(ctx)) return;
+            const sent = report("session-end", ctx, reported ?? currentSession(ctx));
+            return Promise.race([sent, new Promise<void>((done) => setTimeout(done, 2000))]);
           });
           pi.on("session_switch", (_event: any, ctx: any) => {
-            if (!isMain(ctx)) return;
-            // End the session last reported, which also covers an in-memory
-            // session that has no previous file.
-            const next = currentSession(ctx);
-            if (reported && reported !== next) report("session-end", ctx, reported);
-            report("session-start", ctx, next);
+            if (isMain(ctx)) begin(ctx);
           });
         }
         """#

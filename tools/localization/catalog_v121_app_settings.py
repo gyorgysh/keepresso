@@ -192,3 +192,20 @@ APP["Couldn't update the OMP extension."] = {
     "uk": "Не вдалося оновити розширення OMP.",
     "zh-Hant": "無法更新 OMP 擴充功能。",
 }
+
+APP["Another keepresso-agent-activity.ts is in OMP's extensions folder. Move it, then try again."] = {
+    "hu": "Az OMP bővítménymappájában már van egy keepresso-agent-activity.ts. Helyezze át, majd próbálja újra.",
+    "es": "Hay otro keepresso-agent-activity.ts en la carpeta de extensiones de OMP. Muévelo y vuelve a intentarlo.",
+    "fr": "Un autre fichier keepresso-agent-activity.ts se trouve dans le dossier des extensions d’OMP. Déplacez-le, puis réessayez.",
+    "de": "Im Erweiterungsordner von OMP liegt bereits eine andere keepresso-agent-activity.ts. Verschiebe sie und versuche es dann erneut.",
+    "zh-Hans": "OMP 的扩展文件夹中已有另一个 keepresso-agent-activity.ts。请将其移走，然后重试。",
+    "it": "Un altro keepresso-agent-activity.ts si trova nella cartella delle estensioni di OMP. Spostalo e riprova.",
+    "ja": "OMP の拡張機能フォルダに別の keepresso-agent-activity.ts があります。移動してから、もう一度お試しください。",
+    "ko": "OMP의 확장 프로그램 폴더에 다른 keepresso-agent-activity.ts가 있습니다. 파일을 옮긴 후 다시 시도하세요.",
+    "ru": "В папке расширений OMP уже есть другой файл keepresso-agent-activity.ts. Переместите его и повторите попытку.",
+    "pt-BR": "Há outro keepresso-agent-activity.ts na pasta de extensões do OMP. Mova-o e tente novamente.",
+    "tr": "OMP'nin uzantılar klasöründe başka bir keepresso-agent-activity.ts var. Onu taşıyın, sonra tekrar deneyin.",
+    "pl": "W folderze rozszerzeń OMP jest już inny plik keepresso-agent-activity.ts. Przenieś go i spróbuj ponownie.",
+    "uk": "У папці розширень OMP уже є інший файл keepresso-agent-activity.ts. Перемістіть його та спробуйте ще раз.",
+    "zh-Hant": "OMP 的擴充功能資料夾中已有另一個 keepresso-agent-activity.ts。請先移走它，然後再試一次。",
+}
