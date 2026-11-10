@@ -12,6 +12,9 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- Presence key and mouse methods tap every 60 seconds again instead of about
+  every 11 seconds. Their own tap no longer counts as you being back at the
+  Mac. Reported by @tsukinoko-kun (#35).
 - Stop showing Claude Code as working after an API error ends its turn, when
   the installed Claude Code versions support the error hook.
 - Keep development copies from automatically rewriting agent connections
