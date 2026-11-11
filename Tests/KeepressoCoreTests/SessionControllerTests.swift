@@ -740,6 +740,117 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
 }
 
 @MainActor
+@Test func zeroBrightnessKeepsClosedLidDisplayAwakePastIdleTimeout() {
+    let clock = Clock()
+    let fake = FakeAssertions()
+    let brightness = FakeBrightness(level: 0.7, keyboardLevel: 0.4)
+    let controller = SessionController(assertions: fake, brightness: brightness, now: { clock.now })
+    controller.closedLidDisplayPolicy = .zeroBrightness
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    controller.reconcile(display: .usable)
+
+    controller.reconcile(display: .lidShutNoExternal)
+    #expect(fake.held == [.system, .display])
+    #expect(brightness.level == 0)
+    #expect(brightness.keyboardLevel == 0)
+
+    // A closed-lid remote session still needs a live display after the
+    // system's idle timeout, including ticks without a fresh lid reading.
+    clock.advance(601)
+    controller.reconcile(systemIdleSeconds: 601, display: .unknown)
+    #expect(fake.held == [.system, .display])
+    #expect(brightness.level == 0)
+
+    controller.reconcile(display: .usable)
+    #expect(brightness.level == 0.7)
+    #expect(brightness.keyboardLevel == 0.4)
+    #expect(fake.held == [.system, .display])
+}
+
+@MainActor
+@Test(arguments: [ClosedLidDisplayPolicy.displayOff, .leaveAlone])
+func otherLidPoliciesStillDropTheClosedLidDisplayAssertion(policy: ClosedLidDisplayPolicy) {
+    let (controller, fake, _) = makeController()
+    controller.closedLidDisplayPolicy = policy
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+
+    controller.reconcile(display: .lidShutNoExternal)
+    #expect(fake.held == [.system])
+}
+
+@MainActor
+@Test func zeroBrightnessPolicyChangesApplyWhileTheLidStaysClosed() {
+    let (controller, fake, _) = makeController()
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    controller.reconcile(display: .lidShutNoExternal)
+    #expect(fake.held == [.system])
+
+    controller.closedLidDisplayPolicy = .zeroBrightness
+    controller.reconcile()
+    #expect(fake.held == [.system, .display])
+
+    controller.closedLidDisplayPolicy = .displayOff
+    controller.reconcile()
+    #expect(fake.held == [.system])
+}
+
+@MainActor
+@Test func zeroBrightnessStillHonorsTheDisplaySleepOptionAndScreenSaverYield() {
+    let (controller, fake, _) = makeController()
+    controller.closedLidDisplayPolicy = .zeroBrightness
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: false))
+    controller.reconcile(display: .lidShutNoExternal)
+    #expect(fake.held == [.system])
+
+    controller.options = SleepPreventionOptions(
+        preventSystemSleep: true, preventDisplaySleep: true, allowScreenSaverAfter: 300)
+    controller.reconcile(systemIdleSeconds: 299, display: .lidShutNoExternal)
+    #expect(fake.held == [.system, .display])
+    controller.reconcile(systemIdleSeconds: 300, display: .lidShutNoExternal)
+    #expect(fake.held == [.system])
+}
+
+@MainActor
+@Test(arguments: [false, true])
+func zeroBrightnessReleasesDisplayProtectionOnStopOrExpiry(timed: Bool) {
+    let (controller, fake, clock) = makeController()
+    controller.closedLidDisplayPolicy = .zeroBrightness
+    controller.start(
+        mode: timed ? .timed(duration: 60) : .indefinite,
+        options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    controller.reconcile(display: .lidShutNoExternal)
+    #expect(fake.held == [.system, .display])
+
+    if timed {
+        clock.advance(60)
+        controller.reconcile(display: .lidShutNoExternal)
+    } else {
+        controller.stop()
+    }
+    #expect(!controller.isActive)
+    #expect(fake.held.isEmpty)
+}
+
+@MainActor
+@Test(arguments: [false, true])
+func zeroBrightnessReleasesDisplayProtectionDuringSafetyPause(thermal: Bool) {
+    let (controller, fake, _) = makeController()
+    controller.closedLidDisplayPolicy = .zeroBrightness
+    controller.pauseBelowBatteryPercent = 20
+    controller.pauseWhenHot = true
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
+    controller.reconcile(display: .lidShutNoExternal)
+    #expect(fake.held == [.system, .display])
+
+    controller.reconcile(
+        battery: thermal ? .onAC : .discharging(10),
+        thermal: thermal ? .hot : .clear,
+        display: .lidShutNoExternal)
+    #expect(!controller.isActive)
+    #expect(fake.held.isEmpty)
+}
+
+@MainActor
 @Test func clamshellForcesBuiltInPanelAndKeyboardDarkAndRestoresOnOpen() {
     let clock = Clock()
     let brightness = FakeBrightness(level: 0.7, keyboardLevel: 0.4)
@@ -1694,12 +1805,13 @@ private func leaseSummary(
 @MainActor
 @Test func leaseSessionNeverHoldsTheDisplayAssertion() {
     let (controller, fake, _) = makeController()
+    controller.closedLidDisplayPolicy = .zeroBrightness
     controller.options = SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true)
     let provider = FakeLeaseProvider()
     controller.leases = provider
 
     provider.summaries = [leaseSummary()]
-    controller.reconcile()
+    controller.reconcile(display: .lidShutNoExternal)
     #expect(fake.held == [.system])
 
     // A manual session with the same options still gets the display.
