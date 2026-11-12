@@ -216,6 +216,7 @@ final class AppModel {
         self.gamingWatcher.grace = loaded.awdlGraceSeconds
         self.closedDisplayAuto.onlyWhileBrewing = loaded.closedDisplayOnlyWhileBrewing
         self.closedDisplay.policy = loaded.closedLidDisplayPolicy
+        self.session.closedLidDisplayPolicy = loaded.closedLidDisplayPolicy
         self.controllerPoker.enabled = loaded.controllerPokeWhileGaming
         self.gamePriority.autoWithGaming = loaded.gamePriorityBoost
         // Decision log → outbound hooks + disk. After every stored property
@@ -1900,6 +1901,7 @@ final class AppModel {
         gamingWatcher.grace = newSettings.awdlGraceSeconds
         closedDisplayAuto.onlyWhileBrewing = newSettings.closedDisplayOnlyWhileBrewing
         closedDisplay.policy = newSettings.closedLidDisplayPolicy
+        session.closedLidDisplayPolicy = newSettings.closedLidDisplayPolicy
         controllerPoker.enabled = newSettings.controllerPokeWhileGaming
         gamePriority.autoWithGaming = newSettings.gamePriorityBoost
         if !newSettings.closedDisplayOnlyWhileBrewing {
@@ -3451,6 +3453,7 @@ final class AppModel {
         set {
             settings.closedLidDisplayPolicy = newValue
             closedDisplay.policy = newValue
+            session.closedLidDisplayPolicy = newValue
             persist()
         }
     }
