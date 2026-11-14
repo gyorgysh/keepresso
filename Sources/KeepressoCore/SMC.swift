@@ -80,6 +80,12 @@ public enum SMCCodec {
     }
 }
 
+protocol SMCFanAccess {
+    func keyInfo(_ name: String) -> (size: Int, type: String)?
+    func read(_ name: String) -> Double?
+    func write(_ name: String, value: Double) -> UInt8?
+}
+
 /// A connection to the `AppleSMC` IOKit user client. Reads (temperatures, fan
 /// speeds, key discovery) work unprivileged; writes are enforced root by the
 /// SMC itself, so only the privileged helper ever calls ``write(key:value:)``.
@@ -88,7 +94,7 @@ public enum SMCCodec {
 /// `SMCParamStruct` every monitoring tool ships), expressed in plain Swift so
 /// this file builds anywhere Core does; a machine or OS where the service or
 /// layout stops cooperating degrades to `nil` reads, never a crash.
-public final class SMCConnection {
+public final class SMCConnection: SMCFanAccess {
     // Command bytes for `data8` and the user-client method selector.
     private enum Command: UInt8 {
         case readKey = 5
@@ -277,7 +283,7 @@ public final class SMCFanInfo: FanInfoReading {
 /// below its reported minimum), so a "boost to 50%" during an emergency can
 /// only add cooling, never remove what the system's own control had chosen.
 public final class SMCFanController: FanControlling, @unchecked Sendable {
-    private let smc: SMCConnection?
+    private let smc: (any SMCFanAccess)?
     private let lock = NSLock()
     /// Per-fan RPM at the moment the current boost engaged (the clamp floor);
     /// cleared when auto control is restored.
@@ -285,6 +291,10 @@ public final class SMCFanController: FanControlling, @unchecked Sendable {
 
     public init(smc: SMCConnection? = SMCConnection()) {
         self.smc = smc
+    }
+
+    init(access: any SMCFanAccess) {
+        self.smc = access
     }
 
     public func fanCount() -> Int? {
@@ -310,7 +320,11 @@ public final class SMCFanController: FanControlling, @unchecked Sendable {
             let requested = minRPM + Double(percent) / 100 * (maxRPM - minRPM)
             let target = min(max(requested, engageFloor[fan] ?? 0, minRPM), maxRPM)
 
-            switch smc.write("F\(fan)Md", value: 1) {
+            guard let modeKey = modeKey(ofFan: fan) else {
+                allOK = false
+                continue
+            }
+            switch smc.write(modeKey, value: 1) {
             case SMCConnection.ResultCode.success:
                 break
             case SMCConnection.ResultCode.notWritable:
@@ -339,13 +353,27 @@ public final class SMCFanController: FanControlling, @unchecked Sendable {
         smc?.write("Ftst", value: 1) == SMCConnection.ResultCode.success
     }
 
+    /// M5 firmware uses lowercase `md`; older machines use `Md`.
+    /// Probe the hardware for each fan, including when restoring auto.
+    private func modeKey(ofFan fan: Int) -> String? {
+        for suffix in ["Md", "md"] {
+            let key = "F\(fan)\(suffix)"
+            if smc?.keyInfo(key) != nil { return key }
+        }
+        return nil
+    }
+
     public func restoreAuto() -> Bool {
         guard let smc, let count = fanCount(), count > 0 else { return false }
         lock.lock()
         defer { lock.unlock() }
         var ok = true
-        for fan in 0..<count where smc.write("F\(fan)Md", value: 0) != SMCConnection.ResultCode.success {
-            ok = false
+        for fan in 0..<count {
+            guard let modeKey = modeKey(ofFan: fan),
+                  smc.write(modeKey, value: 0) == SMCConnection.ResultCode.success else {
+                ok = false
+                continue
+            }
         }
         // Clear the test-mode unlock if it was ever set; harmless when not.
         _ = smc.write("Ftst", value: 0)
