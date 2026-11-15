@@ -266,6 +266,7 @@
 "your %@" = "senin %@";
 "on battery" = "pilde";
 "on battery at %d%%" = "pilde, %d%% seviyesinde";
+"Not started while the Mac is waking" = "Mac uyanırken başlatılmadı";
 "Resumed, battery recovered" = "Devam edildi, pil toparlandı";
 "Resumed, temperature recovered" = "Devam edildi, sıcaklık normale döndü";
 "Save the hotspot password first." = "Önce erişim noktası parolasını kaydedin.";

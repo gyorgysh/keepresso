@@ -266,6 +266,7 @@
 "your %@" = "az Ön %@";
 "on battery" = "akkumulátorról";
 "on battery at %d%%" = "akkumulátorról %d%%-nál";
+"Not started while the Mac is waking" = "A Mac ébredése közben nem indult el";
 "Resumed, battery recovered" = "Folytatva, az akkumulátor helyrejött";
 "Resumed, temperature recovered" = "Folytatva, a hőmérséklet helyrejött";
 "Save the hotspot password first." = "Először mentsd el a hotspot jelszavát.";

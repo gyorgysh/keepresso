@@ -266,6 +266,7 @@
 "your %@" = "your %@";
 "on battery" = "on battery";
 "on battery at %d%%" = "on battery at %d%%";
+"Not started while the Mac is waking" = "Not started while the Mac is waking";
 "Resumed, battery recovered" = "Resumed, battery recovered";
 "Resumed, temperature recovered" = "Resumed, temperature recovered";
 "Save the hotspot password first." = "Save the hotspot password first.";

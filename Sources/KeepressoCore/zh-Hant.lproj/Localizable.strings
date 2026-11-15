@@ -266,6 +266,7 @@
 "your %@" = "你的 %@";
 "on battery" = "使用電池時";
 "on battery at %d%%" = "使用電池，電量為 %d%%";
+"Not started while the Mac is waking" = "Mac 正在喚醒，未啟動";
 "Resumed, battery recovered" = "已恢復，電量已恢復";
 "Resumed, temperature recovered" = "已恢復，溫度已恢復";
 "Save the hotspot password first." = "請先儲存熱點密碼。";

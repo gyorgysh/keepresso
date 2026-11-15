@@ -15,6 +15,23 @@ public final class SessionController {
     /// Whether a session is currently keeping the Mac awake.
     public private(set) var isActive: Bool = false
 
+    public enum WakeState: Equatable {
+        case full, dark, unknown
+
+        public init(systemCapabilities: UInt64?) {
+            guard let systemCapabilities, systemCapabilities & 0x1 != 0 else {
+                self = .unknown
+                return
+            }
+            // powerd defines DarkWake as CPU present with neither graphics
+            // nor audio capability. It does not check the lid or LCD panel.
+            self = systemCapabilities & 0x6 == 0 ? .dark : .full
+        }
+    }
+    /// The host supplies the current execution state for both timed ticks and
+    /// starts delivered outside the timer (scripts, presets and schedules).
+    @ObservationIgnored public var wakeState: () -> WakeState = { .full }
+
     /// Duration policy for the active (or most recently configured) session.
     public private(set) var mode: SessionMode = .indefinite
 
@@ -360,6 +377,11 @@ public final class SessionController {
         options: SleepPreventionOptions? = nil,
         cause: SessionCause = .manual
     ) {
+        guard wakeState() == .full else {
+            log.record(began: false, reason: L("Not started while the Mac is waking"),
+                       kind: .startRefused, batteryPercent: lastBatteryPercent, at: now())
+            return
+        }
         // Honor the battery pause: activating here would only live until the
         // next tick's reading re-paused it, firing the natural-end effects at
         // the user seconds after they asked to start. The menu explains the
@@ -437,6 +459,9 @@ public final class SessionController {
     private enum StopEffects {
         /// Manual or command stop: silent.
         case none
+        /// Release expired assertions during background wake, recording the
+        /// cause without running the normal end effects.
+        case releaseOnly(kind: SessionEventKind)
         /// Natural end: notification (if configured) and a debounced end action.
         case natural(kind: SessionEventKind)
         /// Safety pause (battery / thermal): notification only, never the end
@@ -461,7 +486,7 @@ public final class SessionController {
         let kind: SessionEventKind? = {
             switch effects {
             case .none: return wasActive ? .sessionEnded : nil
-            case .natural(let kind), .safetyPause(let kind): return kind
+            case .natural(let kind), .safetyPause(let kind), .releaseOnly(let kind): return kind
             }
         }()
         if isActive {
@@ -492,7 +517,7 @@ public final class SessionController {
         reminder?.cancelPending()
         guard wasActive else { return }
         switch effects {
-        case .none:
+        case .none, .releaseOnly:
             break
         case .natural:
             performEndEffects(notice: notice, scheduleAction: true)
@@ -721,6 +746,20 @@ public final class SessionController {
         let summaries = leases?.tick(now: instant) ?? []
         if summaries != liveLeases { liveLeases = summaries }
         let leaseDemand = !summaries.isEmpty
+        let wake = wakeState()
+        guard wake == .full else {
+            cancelPendingEndAction()
+            if isActive, leaseHeld, !leaseDemand {
+                stop(reason: L("Automation lease ended"), effects: .releaseOnly(kind: .leaseReleased))
+            } else if isActive, !leaseHeld, triggerGate == nil,
+                      let total = mode.duration, let startedAt,
+                      instant.timeIntervalSince(startedAt) >= total {
+                stop(reason: L("Timed session ended"), effects: .releaseOnly(kind: .sessionEnded))
+            } else if wake == .dark, isActive, !leaseHeld, triggerGate != nil {
+                stop(reason: L("Trigger conditions ended"), effects: .releaseOnly(kind: .triggerReleased))
+            }
+            return
+        }
         if leaseDemand { lastLeaseDemandAt = instant }
 
         switch battery {

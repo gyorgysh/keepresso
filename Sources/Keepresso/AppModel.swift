@@ -245,6 +245,7 @@ final class AppModel {
         }
         // Launch idle: a manual session waits for the user's toggle, a gated
         // one waits for its conditions (the ticker's reconcile activates it).
+        session.wakeState = MacWakeState.read
         applyTriggerGate()
         // Give the decision log the satisfied rule labels when the gate flips
         // the session on ("Triggers: Camera in use").
@@ -435,6 +436,7 @@ final class AppModel {
     /// reachable in those states) behaves exactly as before.
     func toggleManual() {
         let wasActive = session.isActive
+        guard wasActive || session.wakeState() == .full else { return }
         pauseTriggers()
         if wasActive {
             revokeLeases()
@@ -448,6 +450,7 @@ final class AppModel {
     /// explicit duration. This is the customized menu path for requests such
     /// as "keep awake for three hours regardless of the current triggers."
     func startManualOverride(mode: SessionMode) {
+        guard session.wakeState() == .full else { return }
         pauseTriggers()
         settings.defaultMode = mode
         persist()
@@ -459,7 +462,8 @@ final class AppModel {
     /// lands on the chosen time; the choice is deliberately not persisted as
     /// the default mode (a saved "until 18:00" would go stale by tomorrow).
     func startUntil(hour: Int, minute: Int) {
-        guard let mode = SessionMode.until(hour: hour, minute: minute) else { return }
+        guard session.wakeState() == .full,
+              let mode = SessionMode.until(hour: hour, minute: minute) else { return }
         // Take manual ownership first, exactly like `toggleManual` and the URL
         // command path. Without this, starting while trigger gating is active
         // but unsatisfied makes `start()`'s synchronous reconcile immediately
@@ -1223,6 +1227,7 @@ final class AppModel {
     /// Keepresso schedule with wake-and-brew on, start a session (or apply a
     /// preset).
     func handleSystemWake() {
+        guard session.wakeState() == .full else { return }
         // A synced automation run takes precedence: hold for it and skip the
         // manual wake-and-brew below.
         if handleAutomationWake() { return }
@@ -2210,6 +2215,13 @@ final class AppModel {
         // .command so pausing a trigger-held session logs the stop as the
         // command that caused it, not "Stopped manually".
         let wasActive = session.isActive
+        if session.wakeState() != .full {
+            switch command {
+            case .start: return
+            case .toggle where !wasActive: return
+            default: break
+            }
+        }
         pauseTriggers(cause: .command)
         switch command {
         case .start(let mode):

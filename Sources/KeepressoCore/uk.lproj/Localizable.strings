@@ -266,6 +266,7 @@
 "your %@" = "твій %@";
 "on battery" = "від акумулятора";
 "on battery at %d%%" = "від акумулятора на %d%%";
+"Not started while the Mac is waking" = "Не запущено під час пробудження Mac";
 "Resumed, battery recovered" = "Поновлено, заряд відновлено";
 "Resumed, temperature recovered" = "Поновлено, температура в нормі";
 "Save the hotspot password first." = "Спочатку збережіть пароль точки доступу.";

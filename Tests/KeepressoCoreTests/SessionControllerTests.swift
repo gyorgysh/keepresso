@@ -1673,6 +1673,106 @@ private func leaseSummary(
 }
 
 @MainActor
+@Test func darkWakeRejectsDirectStartsAndDefersLiveLeaseUntilFullWake() {
+    let (controller, assertions, _) = makeController()
+    var wake = SessionController.WakeState.dark
+    controller.wakeState = { wake }
+    controller.start(cause: .command)
+    #expect(!controller.isActive)
+
+    let provider = FakeLeaseProvider()
+    provider.summaries = [leaseSummary()]
+    controller.leases = provider
+    controller.reconcile()
+    #expect(!controller.isActive)
+    #expect(assertions.held.isEmpty)
+    #expect(!controller.log.events.contains { $0.began })
+
+    wake = .full
+    controller.reconcile()
+    #expect(controller.isActive)
+    #expect(controller.log.events.last?.kind == .leaseAcquired)
+}
+
+@MainActor
+@Test func darkWakeDoesNotTickEvenAnAlreadyPositiveTrigger() {
+    let (controller, assertions, _) = makeController()
+    let gate = StubGate(true)
+    controller.wakeState = { .dark }
+    controller.triggerGate = gate
+    controller.reconcile()
+    #expect(gate.ticks == 0)
+    #expect(!controller.isActive)
+    #expect(assertions.held.isEmpty)
+}
+
+@Test func wakeStateUsesKernelCapabilitiesInsteadOfLidOrPanelState() {
+    #expect(SessionController.WakeState(systemCapabilities: 15) == .full)
+    #expect(SessionController.WakeState(systemCapabilities: 9) == .dark)
+    #expect(SessionController.WakeState(systemCapabilities: 5) == .full)
+    #expect(SessionController.WakeState(systemCapabilities: 0) == .unknown)
+    #expect(SessionController.WakeState(systemCapabilities: nil) == .unknown)
+}
+
+@MainActor
+@Test func timedExpiryReleasesAssertionsWithoutStartingLeaseDuringDarkWake() throws {
+    let clock = Clock()
+    let assertions = FakeAssertions()
+    let endActor = RecordingEndActor()
+    let controller = SessionController(assertions: assertions, endActor: endActor, now: { clock.now })
+    controller.endAction = .sleepMac
+    controller.start(mode: .timed(duration: 60))
+    try #require(controller.isActive)
+    let provider = FakeLeaseProvider()
+    provider.summaries = [leaseSummary()]
+    controller.leases = provider
+    controller.wakeState = { .dark }
+    clock.advance(61)
+    controller.reconcile()
+    #expect(!controller.isActive)
+    #expect(assertions.held.isEmpty)
+    #expect(!controller.log.events.contains { $0.kind == .leaseAcquired })
+    controller.leases = nil
+    controller.wakeState = { .full }
+    clock.advance(SessionController.endActionDebounce + 1)
+    controller.reconcile()
+    #expect(endActor.performed.isEmpty)
+}
+
+@MainActor
+@Test func darkWakeReleasesPreviousTriggerHoldWithoutRecheckingTheRule() {
+    let (controller, assertions, _) = makeController()
+    let gate = StubGate(true)
+    controller.triggerGate = gate
+    controller.reconcile()
+    #expect(controller.isActive)
+    let ticks = gate.ticks
+
+    controller.wakeState = { .dark }
+    controller.reconcile()
+    controller.reconcile()
+    #expect(gate.ticks == ticks)
+    #expect(!controller.isActive)
+    #expect(assertions.held.isEmpty)
+    #expect(controller.log.events.filter { $0.kind == .triggerReleased }.count == 1)
+}
+
+@MainActor
+@Test func safetyPauseDoesNotResumeUntilFullWake() {
+    let (controller, _, _) = makeController()
+    controller.pauseBelowBatteryPercent = 20
+    controller.start()
+    controller.reconcile(battery: .discharging(15))
+    #expect(controller.pausedByBattery)
+    controller.wakeState = { .dark }
+    controller.reconcile(battery: .onAC)
+    #expect(!controller.isActive)
+    controller.wakeState = { .full }
+    controller.reconcile(battery: .onAC)
+    #expect(controller.isActive)
+}
+
+@MainActor
 @Test func leaseDemandActivatesAnIdleController() {
     let (controller, fake, _) = makeController()
     let provider = FakeLeaseProvider()

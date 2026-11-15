@@ -266,6 +266,7 @@
 "your %@" = "votre %@";
 "on battery" = "sur batterie";
 "on battery at %d%%" = "sur batterie à %d%%";
+"Not started while the Mac is waking" = "Démarrage ignoré pendant la sortie de veille du Mac";
 "Resumed, battery recovered" = "Reprise, batterie rétablie";
 "Resumed, temperature recovered" = "Reprise, température rétablie";
 "Save the hotspot password first." = "Enregistrez d’abord le mot de passe du partage de connexion.";

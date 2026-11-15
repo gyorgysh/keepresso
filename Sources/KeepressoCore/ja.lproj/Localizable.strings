@@ -266,6 +266,7 @@
 "your %@" = "あなたの %@";
 "on battery" = "バッテリー使用時";
 "on battery at %d%%" = "バッテリー使用時（残量 %d%%）";
+"Not started while the Mac is waking" = "Mac の復帰中は開始しませんでした";
 "Resumed, battery recovered" = "再開、バッテリー回復";
 "Resumed, temperature recovered" = "再開、温度が回復";
 "Save the hotspot password first." = "先にホットスポットのパスワードを保存してください。";
