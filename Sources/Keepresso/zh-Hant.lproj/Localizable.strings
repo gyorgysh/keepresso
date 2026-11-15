@@ -877,6 +877,7 @@
 "Status only" = "僅狀態";
 "The familiar menu, with settings and tools tucked away." = "熟悉的選單，設定和工具預設收合。";
 "Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows." = "以您自己的版面配置取代標準下拉面板。開啟「自訂選單…」即可顯示、隱藏或重新排序控制項，變更其樣式和間距，並選擇選單列項目顯示的內容。";
+"Use CPU as a fallback" = "無其他訊號時使用 CPU";
 "Automatic hotspot fallback" = "自動切換至熱點";
 "Hotspot fallback" = "備用熱點";
 "Hotspot name" = "熱點名稱";

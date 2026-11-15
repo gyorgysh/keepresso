@@ -877,6 +877,7 @@
 "Status only" = "Solo estado";
 "The familiar menu, with settings and tools tucked away." = "El menú habitual, con ajustes y herramientas recogidos.";
 "Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows." = "Sustituye el desplegable estándar por tu propio diseño. Abre Personalizar menú… para mostrar, ocultar o reordenar controles, cambiar su estilo y espaciado, y elegir qué muestra el elemento de la barra de menús.";
+"Use CPU as a fallback" = "Usar la CPU como señal de respaldo";
 "Automatic hotspot fallback" = "Conexión automática al punto de acceso";
 "Hotspot fallback" = "Punto de acceso de respaldo";
 "Hotspot name" = "Nombre del punto de acceso";

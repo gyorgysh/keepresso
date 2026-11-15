@@ -877,6 +877,7 @@
 "Status only" = "Yalnızca durum";
 "The familiar menu, with settings and tools tucked away." = "Ayarları ve araçları daraltılmış tanıdık menü.";
 "Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows." = "Standart açılır menüyü kendi düzeninizle değiştirir. Kontrolleri göstermek, gizlemek veya yeniden sıralamak, stillerini ve aralıklarını değiştirmek ve menü çubuğu öğesinde nelerin görüneceğini seçmek için Menüyü özelleştir… seçeneğini açın.";
+"Use CPU as a fallback" = "Yedek sinyal olarak CPU kullanımını kullan";
 "Automatic hotspot fallback" = "Otomatik erişim noktası geçişi";
 "Hotspot fallback" = "Yedek erişim noktası";
 "Hotspot name" = "Erişim noktası adı";

@@ -194,13 +194,18 @@ public struct AgentRule: Codable, Equatable, Hashable, Sendable {
     /// working regardless of this flag (mid-task, flipping on every prompt
     /// would flap the trigger).
     public var countWaitingAsWorking: Bool
+    /// Whether CPU alone may mark a session working when hooks and recent
+    /// transcript writes provide no signal.
+    public var allowCPUFallback: Bool
 
     public init(
         grace: TimeInterval = AgentActivityTrigger.defaultGrace,
-        countWaitingAsWorking: Bool = false
+        countWaitingAsWorking: Bool = false,
+        allowCPUFallback: Bool = true
     ) {
         self.grace = grace
         self.countWaitingAsWorking = countWaitingAsWorking
+        self.allowCPUFallback = allowCPUFallback
     }
 
     /// Forgiving decoder: older saves without the waiting flag keep the
@@ -212,6 +217,7 @@ public struct AgentRule: Codable, Equatable, Hashable, Sendable {
             try c.decodeIfPresent(TimeInterval.self, forKey: .grace)
                 ?? AgentActivityTrigger.defaultGrace)
         countWaitingAsWorking = try c.decodeIfPresent(Bool.self, forKey: .countWaitingAsWorking) ?? false
+        allowCPUFallback = try c.decodeIfPresent(Bool.self, forKey: .allowCPUFallback) ?? true
     }
 
     public var label: String {
@@ -477,7 +483,8 @@ public struct TriggerFactory {
         case .agentActivity(let rule):
             let trigger = AgentActivityTrigger(
                 monitor: agents,
-                countWaitingAsWorking: rule.countWaitingAsWorking
+                countWaitingAsWorking: rule.countWaitingAsWorking,
+                allowCPUFallback: rule.allowCPUFallback
             )
             return rule.grace > 0
                 ? GracePeriodTrigger(wrapping: trigger, grace: rule.grace, now: now)

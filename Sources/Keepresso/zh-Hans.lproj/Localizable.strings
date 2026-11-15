@@ -877,6 +877,7 @@
 "Status only" = "仅状态";
 "The familiar menu, with settings and tools tucked away." = "熟悉的菜单，设置和工具默认收起。";
 "Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows." = "用你自己的布局替换标准下拉面板。打开“自定义菜单…”即可显示、隐藏或重新排序控件，更改其样式和间距，并选择菜单栏项目显示的内容。";
+"Use CPU as a fallback" = "无其他信号时使用 CPU";
 "Automatic hotspot fallback" = "自动切换到热点";
 "Hotspot fallback" = "备用热点";
 "Hotspot name" = "热点名称";

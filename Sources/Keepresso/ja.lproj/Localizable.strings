@@ -877,6 +877,7 @@
 "Status only" = "状態のみ";
 "The familiar menu, with settings and tools tucked away." = "おなじみのメニュー。設定とツールは折りたたまれます。";
 "Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows." = "標準のドロップダウンを、あなた独自のレイアウトに置き換えます。「メニューをカスタマイズ…」を開くと、操作の表示・非表示や並べ替え、スタイルと間隔の変更、メニューバー項目に表示する内容の選択ができます。";
+"Use CPU as a fallback" = "代替手段として CPU 使用率を使う";
 "Automatic hotspot fallback" = "ホットスポットへ自動切り替え";
 "Hotspot fallback" = "予備のホットスポット";
 "Hotspot name" = "ホットスポット名";

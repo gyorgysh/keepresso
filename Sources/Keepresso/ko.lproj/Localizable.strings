@@ -877,6 +877,7 @@
 "Status only" = "상태만";
 "The familiar menu, with settings and tools tucked away." = "설정과 도구가 접혀 있는 익숙한 메뉴.";
 "Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows." = "기본 드롭다운을 직접 구성한 레이아웃으로 바꿉니다. 메뉴 사용자화…를 열어 컨트롤을 표시, 숨기기 또는 순서 변경하고, 스타일과 간격을 바꾸고, 메뉴 막대 항목에 표시할 내용을 선택할 수 있습니다.";
+"Use CPU as a fallback" = "다른 신호가 없으면 CPU 사용량 확인";
 "Automatic hotspot fallback" = "자동 핫스팟 전환";
 "Hotspot fallback" = "예비 핫스팟";
 "Hotspot name" = "핫스팟 이름";

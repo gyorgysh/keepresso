@@ -877,6 +877,7 @@
 "Status only" = "Csak állapot";
 "The familiar menu, with settings and tools tucked away." = "A megszokott menü, összecsukott beállításokkal és eszközökkel.";
 "Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows." = "A szokásos lenyíló panel helyett a saját elrendezésedet használja. A Menü testreszabása… megnyitásával megjeleníthetsz, elrejthetsz vagy átrendezhetsz vezérlőket, módosíthatod a stílusukat és a térközt, és kiválaszthatod, mit mutasson a menüsori elem.";
+"Use CPU as a fallback" = "CPU-használat tartalék jelként";
 "Automatic hotspot fallback" = "Automatikus hotspot-tartalék";
 "Hotspot fallback" = "Hotspot-tartalék";
 "Hotspot name" = "Hotspot neve";

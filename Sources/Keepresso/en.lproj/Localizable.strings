@@ -877,6 +877,7 @@
 "Status only" = "Status only";
 "The familiar menu, with settings and tools tucked away." = "The familiar menu, with settings and tools tucked away.";
 "Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows." = "Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows.";
+"Use CPU as a fallback" = "Use CPU as a fallback";
 "Automatic hotspot fallback" = "Automatic hotspot fallback";
 "Hotspot fallback" = "Hotspot fallback";
 "Hotspot name" = "Hotspot name";

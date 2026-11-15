@@ -289,19 +289,15 @@ struct RulesView: View {
         return false
     }
 
-    /// In-place editor for an agent rule's idle grace and waiting policy.
+    /// In-place editor for an agent rule's idle grace and activity signals.
     private func agentOptionsMenu(index: Int, agentRule: AgentRule) -> some View {
         Menu {
             Picker("Grace period", selection: Binding(
                 get: { agentRule.grace },
                 set: {
-                    model.updateRule(
-                        at: index,
-                        to: .agentActivity(AgentRule(
-                            grace: $0,
-                            countWaitingAsWorking: agentRule.countWaitingAsWorking
-                        ))
-                    )
+                    var rule = agentRule
+                    rule.grace = $0
+                    model.updateRule(at: index, to: .agentActivity(rule))
                 }
             )) {
                 ForEach(Self.agentGracePresets, id: \.seconds) { preset in
@@ -313,16 +309,20 @@ struct RulesView: View {
                 isOn: Binding(
                     get: { agentRule.countWaitingAsWorking },
                     set: {
-                        model.updateRule(
-                            at: index,
-                            to: .agentActivity(AgentRule(
-                                grace: agentRule.grace,
-                                countWaitingAsWorking: $0
-                            ))
-                        )
+                        var rule = agentRule
+                        rule.countWaitingAsWorking = $0
+                        model.updateRule(at: index, to: .agentActivity(rule))
                     }
                 )
             )
+            Toggle("Use CPU as a fallback", isOn: Binding(
+                get: { agentRule.allowCPUFallback },
+                set: {
+                    var rule = agentRule
+                    rule.allowCPUFallback = $0
+                    model.updateRule(at: index, to: .agentActivity(rule))
+                }
+            ))
         } label: {
             Image(systemName: "slider.horizontal.3")
         }

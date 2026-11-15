@@ -877,6 +877,7 @@
 "Status only" = "Лише стан";
 "The familiar menu, with settings and tools tucked away." = "Звичне меню зі згорнутими налаштуваннями й інструментами.";
 "Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows." = "Замінює стандартне меню вашим власним компонуванням. Відкрийте «Налаштувати меню…», щоб показати, приховати або переставити елементи керування, змінити їхній стиль і відступи та вибрати, що показує елемент у рядку меню.";
+"Use CPU as a fallback" = "Використовувати навантаження ЦП як запасний сигнал";
 "Automatic hotspot fallback" = "Автоматичне підключення до точки доступу";
 "Hotspot fallback" = "Резервна точка доступу";
 "Hotspot name" = "Назва точки доступу";

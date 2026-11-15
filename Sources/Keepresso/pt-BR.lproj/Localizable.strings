@@ -877,6 +877,7 @@
 "Status only" = "Somente estado";
 "The familiar menu, with settings and tools tucked away." = "O menu habitual, com ajustes e ferramentas recolhidos.";
 "Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows." = "Substitui o menu padrão pelo seu próprio layout. Abra Personalizar menu… para mostrar, ocultar ou reordenar os controles, mudar o estilo e o espaçamento deles e escolher o que o item da barra de menus exibe.";
+"Use CPU as a fallback" = "Usar a CPU como sinal alternativo";
 "Automatic hotspot fallback" = "Alternância automática para hotspot";
 "Hotspot fallback" = "Hotspot de reserva";
 "Hotspot name" = "Nome do hotspot";

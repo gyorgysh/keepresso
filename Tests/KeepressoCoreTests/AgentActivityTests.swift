@@ -12,6 +12,64 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     AgentSession(pid: pid, agent: agent, tty: tty, cpuPercent: cpu)
 }
 
+private final class AgentTestAssertions: PowerAsserting {
+    private(set) var held: Set<PowerAssertionKind> = []
+
+    func apply(_ kinds: Set<PowerAssertionKind>, reason: String) {
+        held = kinds
+    }
+}
+
+@MainActor
+@Test func agentTaskEndsAndBackgroundCPUDoesNotRestartBrewing() throws {
+    let rule = try JSONDecoder().decode(AgentRule.self, from:
+        Data(#"{"grace":180,"allowCPUFallback":false}"#.utf8))
+    let monitor = FakeAgentActivity()
+    let assertions = AgentTestAssertions()
+    var clock = Date(timeIntervalSince1970: 1_000_000)
+    let factory = TriggerFactory(agents: monitor, now: { clock })
+    let controller = SessionController(assertions: assertions, now: { clock })
+    controller.triggerGate = TriggerEngine(combine: .any, triggers: [factory.makeTrigger(for: .agentActivity(rule))])
+
+    var agent = session(pid: 43, cpu: 0.1)
+    func tick(after seconds: TimeInterval) {
+        clock.addTimeInterval(seconds)
+        monitor.current = AgentSnapshot(sessions: [agent])
+        controller.reconcile(now: clock, systemIdleSeconds: 480)
+    }
+
+    agent.hookState = .working
+    tick(after: 0)
+    tick(after: 240)
+    try #require(controller.isActive)
+    try #require(assertions.held.contains(.system))
+    agent.hookState = .idle
+    tick(after: 1)
+    #expect(controller.isActive)
+    tick(after: 179)
+    try #require(!controller.isActive)
+    try #require(assertions.held.isEmpty)
+
+    agent.hookState = nil
+    agent.cpuPercent = 7.5
+    tick(after: 9)
+    tick(after: 1)
+    tick(after: 1)
+    #expect(!controller.isActive, "A cached CPU spike must not restart a released session")
+    #expect(assertions.held.isEmpty)
+    agent.cpuPercent = 70
+    tick(after: 1)
+    tick(after: 1)
+    #expect(!controller.isActive, "Sustained background CPU is also insufficient")
+    #expect(controller.log.events.filter { $0.kind == .triggerFired }.count == 1)
+
+    agent.cpuPercent = 0
+    agent.hasFreshEvidence = true
+    tick(after: 1)
+    #expect(controller.isActive, "Fresh transcript activity must still start brewing")
+    #expect(assertions.held.contains(.system))
+}
+
 // MARK: - ps output parsing
 
 @Test func parseReadsWellFormedRowsAndSkipsMalformedOnes() {

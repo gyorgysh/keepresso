@@ -1536,6 +1536,7 @@ public final class AgentActivityTrigger: Trigger {
     private let monitor: AgentActivityMonitoring
     /// See ``AgentRule/countWaitingAsWorking``.
     public let countWaitingAsWorking: Bool
+    private let allowCPUFallback: Bool
     private var smoothing: [Int32: State] = [:]
     /// Last tick's overall working verdict, so the host can detect the
     /// working → idle edge for outbound hooks.
@@ -1561,10 +1562,12 @@ public final class AgentActivityTrigger: Trigger {
 
     public init(
         monitor: AgentActivityMonitoring = PSAgentActivityMonitor(),
-        countWaitingAsWorking: Bool = false
+        countWaitingAsWorking: Bool = false,
+        allowCPUFallback: Bool = true
     ) {
         self.monitor = monitor
         self.countWaitingAsWorking = countWaitingAsWorking
+        self.allowCPUFallback = allowCPUFallback
     }
 
     public var label: String { L("AI agent working") }
@@ -1585,7 +1588,7 @@ public final class AgentActivityTrigger: Trigger {
                 hookState: session.hookState,
                 hookDetail: session.hookDetail,
                 countWaitingAsWorking: countWaitingAsWorking,
-                evidenceOnly: session.evidenceOnly
+                evidenceOnly: session.evidenceOnly || !allowCPUFallback
             )
             next[session.pid] = stepped
             return SessionState(session: session, isWorking: stepped.isWorking)

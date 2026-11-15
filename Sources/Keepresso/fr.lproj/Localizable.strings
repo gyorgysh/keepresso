@@ -877,6 +877,7 @@
 "Status only" = "État seul";
 "The familiar menu, with settings and tools tucked away." = "Le menu habituel, avec réglages et outils repliés.";
 "Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows." = "Remplace le menu déroulant standard par votre propre disposition. Ouvrez Personnaliser le menu… pour afficher, masquer ou réorganiser les commandes, modifier leur style et leur espacement, et choisir ce qu’affiche l’élément de la barre des menus.";
+"Use CPU as a fallback" = "Utiliser le processeur en dernier recours";
 "Automatic hotspot fallback" = "Repli automatique vers un partage de connexion";
 "Hotspot fallback" = "Partage de connexion de secours";
 "Hotspot name" = "Nom du partage de connexion";
