@@ -250,6 +250,8 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring, @unchecked S
     private var cached: AgentSnapshot = .empty
     private var lastFetch: Date?
     private var isRefreshing = false
+    private var generation: UInt64 = 0
+    private var waitingForFreshSnapshot = false
     /// When false, a refresh only parses `ps` into sessions and skips
     /// transcript walks, hook-record reads, cwd lookups, and origin
     /// classification. The trigger factory turns this off when no agent rule
@@ -294,15 +296,31 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring, @unchecked S
         self.classifyOrigin = classifyOrigin
     }
 
+    /// Drop agent observations from before a power-state transition. An
+    /// in-flight read may finish, but its results cannot become the new cache.
+    public func invalidate() {
+        withLock {
+            generation &+= 1
+            cached = .empty
+            lastFetch = nil
+            waitingForFreshSnapshot = true
+        }
+    }
+
+    func prepareFreshSnapshotIfNeeded() -> Bool {
+        if withLock({ waitingForFreshSnapshot }) { _ = current }
+        return withLock { !waitingForFreshSnapshot }
+    }
+
     public var current: AgentSnapshot {
-        let (snapshot, shouldRefresh) = withLock { () -> (AgentSnapshot, Bool) in
+        let (snapshot, requestedGeneration) = withLock { () -> (AgentSnapshot, UInt64?) in
             let isStale = lastFetch.map { now().timeIntervalSince($0) >= ttl } ?? true
             let shouldRefresh = isStale && !isRefreshing
             if shouldRefresh { isRefreshing = true }
-            return (cached, shouldRefresh)
+            return (cached, shouldRefresh ? generation : nil)
         }
 
-        if shouldRefresh {
+        if let requestedGeneration {
             Task.detached { [weak self] in
                 guard let self else { return }
                 // A transient `ps` failure keeps the previous snapshot: an
@@ -311,22 +329,26 @@ public final class PSAgentActivityMonitor: AgentActivityMonitoring, @unchecked S
                 // a baseline learned at its working level.
                 guard let raw = self.fetch() else {
                     self.withLock {
-                        self.lastFetch = self.now()
                         self.isRefreshing = false
+                        if self.generation == requestedGeneration { self.lastFetch = self.now() }
                     }
                     return
                 }
                 var sessions = Self.sessions(from: Self.parse(raw))
                 // Read the storage directly: `evidenceEnabled` re-acquires
                 // `lock`, and `NSLock` is not recursive.
-                let collectEvidence = self.withLock { self.evidenceEnabledStorage }
+                let collectEvidence = self.withLock {
+                    self.generation == requestedGeneration && self.evidenceEnabledStorage
+                }
                 if collectEvidence {
                     sessions = self.decorateWithEvidence(sessions)
                 }
                 self.withLock {
+                    self.isRefreshing = false
+                    guard self.generation == requestedGeneration else { return }
                     self.cached = AgentSnapshot(sessions: sessions)
                     self.lastFetch = self.now()
-                    self.isRefreshing = false
+                    self.waitingForFreshSnapshot = false
                 }
             }
         }
@@ -1557,6 +1579,13 @@ public final class AgentActivityTrigger: Trigger {
     public func consumeJustWentIdle() -> Bool {
         defer { justWentIdle = false }
         return justWentIdle
+    }
+
+    func discardObservations() {
+        smoothing.removeAll()
+        sessionStates.removeAll()
+        wasWorking = false
+        justWentIdle = false
     }
 
     public init(

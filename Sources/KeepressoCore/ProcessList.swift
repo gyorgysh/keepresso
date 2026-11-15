@@ -40,6 +40,8 @@ public final class PSProcessLister: ProcessListing {
     private var cached: [String] = []
     private var lastFetch: Date?
     private var isRefreshing = false
+    private var generation: UInt64 = 0
+    private var waitingForFreshSnapshot = false
 
     public init(
         ttl: TimeInterval = 3,
@@ -51,15 +53,29 @@ public final class PSProcessLister: ProcessListing {
         self.fetch = fetch
     }
 
+    func invalidate() {
+        withLock {
+            generation &+= 1
+            cached.removeAll()
+            lastFetch = nil
+            waitingForFreshSnapshot = true
+        }
+    }
+
+    func prepareFreshSnapshotIfNeeded() -> Bool {
+        if withLock({ waitingForFreshSnapshot }) { _ = current }
+        return withLock { !waitingForFreshSnapshot }
+    }
+
     public var current: [String] {
-        let (snapshot, shouldRefresh) = withLock { () -> ([String], Bool) in
+        let (snapshot, requestedGeneration) = withLock { () -> ([String], UInt64?) in
             let isStale = lastFetch.map { now().timeIntervalSince($0) >= ttl } ?? true
             let shouldRefresh = isStale && !isRefreshing
             if shouldRefresh { isRefreshing = true }
-            return (cached, shouldRefresh)
+            return (cached, shouldRefresh ? generation : nil)
         }
 
-        if shouldRefresh {
+        if let requestedGeneration {
             Task.detached { [weak self] in
                 guard let self else { return }
                 // A transient `ps` failure keeps the previous snapshot: an
@@ -68,16 +84,18 @@ public final class PSProcessLister: ProcessListing {
                 // same; match it here.
                 guard let raw = self.fetch() else {
                     self.withLock {
-                        self.lastFetch = self.now()
                         self.isRefreshing = false
+                        if self.generation == requestedGeneration { self.lastFetch = self.now() }
                     }
                     return
                 }
                 let fetched = raw.split(whereSeparator: \.isNewline).map(String.init)
                 self.withLock {
+                    self.isRefreshing = false
+                    guard self.generation == requestedGeneration else { return }
                     self.cached = fetched
                     self.lastFetch = self.now()
-                    self.isRefreshing = false
+                    self.waitingForFreshSnapshot = false
                 }
             }
         }

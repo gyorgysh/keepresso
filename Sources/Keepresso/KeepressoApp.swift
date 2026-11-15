@@ -275,6 +275,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if AppModel.runsFromApplicationsFolder {
             model.refreshAgentHookStatuses()
         }
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.willSleepNotification,
+            object: nil,
+            queue: .main
+        ) { [weak model] _ in
+            MainActor.assumeIsolated { model?.invalidateSleepingObservations() }
+        }
         ticker.start()
         // Register the global keep-awake toggle shortcut, if the user set one.
         model.registerHotKey()

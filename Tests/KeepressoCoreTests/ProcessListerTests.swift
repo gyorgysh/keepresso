@@ -60,6 +60,51 @@ private func eventually(_ condition: @escaping () -> Bool) async -> Bool {
     #expect(await eventually { lister.current == ["node server.js", "ffmpeg -i in.mov"] })
 }
 
+@MainActor
+@Test func processRuleCannotReuseAProcessFromBeforeSleep() async throws {
+    let stub = FetchStub(output: "/opt/homebrew/bin/example-build")
+    let clock = TestClock()
+    let lister = PSProcessLister(now: { clock.now }, fetch: stub.fetch)
+    let gate = TriggerGateController(factory: TriggerFactory(processes: lister, now: { clock.now }))
+    gate.rebuild(rules: [.process("example-build")], combine: .any, enabled: true)
+    try #require(await eventually { lister.current == ["/opt/homebrew/bin/example-build"] })
+    let engine = try #require(gate.engine)
+    try #require(engine.isSatisfied())
+
+    clock.advance(600)
+    stub.output = "/usr/bin/other-process"
+    gate.invalidateProcessObservations()
+    #expect(!engine.isSatisfied())
+    #expect(await eventually { gate.triggerObservationsReady() && lister.current == ["/usr/bin/other-process"] })
+    #expect(!engine.isSatisfied())
+}
+
+@Test func processListerDiscardsReadAlreadyInFlightDuringInvalidation() async throws {
+    let stub = FetchStub(output: "before-sleep")
+    let started = DispatchSemaphore(value: 0)
+    let finish = DispatchSemaphore(value: 0)
+    let lister = PSProcessLister(fetch: {
+        let output = stub.fetch()
+        if output == "before-sleep" {
+            started.signal()
+            _ = finish.wait(timeout: .now() + .seconds(2))
+        }
+        return output
+    })
+    _ = lister.current
+    defer { finish.signal() }
+    let didStart = await Task.detached { started.wait(timeout: .now() + .seconds(2)) == .success }.value
+    try #require(didStart)
+    lister.invalidate()
+    #expect(!lister.prepareFreshSnapshotIfNeeded())
+    stub.output = "after-sleep"
+    finish.signal()
+    let ready = await eventually { lister.prepareFreshSnapshotIfNeeded() }
+    try #require(ready)
+    #expect(lister.current == ["after-sleep"])
+    #expect(stub.callCount == 2)
+}
+
 @Test func freshCacheDoesNotRefetch() async {
     let stub = FetchStub(output: "node server.js")
     let clock = TestClock()

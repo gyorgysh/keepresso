@@ -1673,6 +1673,24 @@ private func leaseSummary(
 }
 
 @MainActor
+@Test func fullWakeWaitsForNewTriggerEvidence() {
+    let (controller, assertions, _) = makeController()
+    let gate = StubGate(true)
+    var ready = false
+    controller.triggerObservationsReady = { ready }
+    controller.triggerGate = gate
+    controller.reconcile()
+    #expect(gate.ticks == 0)
+    #expect(!controller.isActive)
+    #expect(assertions.held.isEmpty)
+
+    ready = true
+    controller.reconcile()
+    #expect(gate.ticks == 1)
+    #expect(controller.isActive)
+}
+
+@MainActor
 @Test func leaseDemandActivatesAnIdleController() {
     let (controller, fake, _) = makeController()
     let provider = FakeLeaseProvider()
