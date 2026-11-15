@@ -125,6 +125,13 @@ struct MenuCustomizationView: View {
     @State private var previewBridge = StatusItemBridge(updater: MenuPreviewUpdater())
     @State private var windowVisible = false
     private var layout: MenuLayout { model.editableMenuLayout }
+    private var profiles: [MenuLayoutProfile] {
+        MenuLayoutProfile.allCases.filter { !model.machineHasBattery || $0 != .brewingControls }
+    }
+
+    private func editableItems(in section: MenuLayoutSection) -> [MenuItem] {
+        layout.items(in: section).filter { !model.machineHasBattery || $0 != .closedDisplay }
+    }
 
     private func binding<T>(_ keyPath: WritableKeyPath<MenuLayout, T>) -> Binding<T> {
         Binding(get: { layout[keyPath: keyPath] }, set: { value in
@@ -170,7 +177,7 @@ struct MenuCustomizationView: View {
                     Form {
                         Section {
                             Menu {
-                                ForEach(MenuLayoutProfile.allCases) { profile in
+                                ForEach(profiles) { profile in
                                     Button(profile.label) { model.updateMenuLayout { $0 = .profile(profile) } }
                                 }
                             } label: {
@@ -210,7 +217,7 @@ struct MenuCustomizationView: View {
     }
 
     private var currentProfile: MenuLayoutProfile? {
-        MenuLayoutProfile.allCases.first { MenuLayout.profile($0) == layout }
+        profiles.first { model.menuLayoutForMachine(.profile($0)) == layout }
     }
 
     private var settingsEditor: some View {
@@ -338,7 +345,7 @@ struct MenuCustomizationView: View {
     }
     private func sectionMatchesSearch(_ section: MenuLayoutSection) -> Bool {
         search.isEmpty || section.label.localizedCaseInsensitiveContains(search)
-            || layout.items(in: section).contains(where: matches)
+            || editableItems(in: section).contains(where: matches)
     }
 
     @ViewBuilder private func sectionEditor(_ section: MenuLayoutSection) -> some View {
@@ -358,7 +365,7 @@ struct MenuCustomizationView: View {
                 set: { if $0 { expandedEditors.insert(section) } else { expandedEditors.remove(section) } }
             )) {
                 Toggle("Start collapsed", isOn: membership(section, in: \.collapsedSections))
-                ForEach(layout.items(in: section).filter {
+                ForEach(editableItems(in: section).filter {
                     search.isEmpty || section.label.localizedCaseInsensitiveContains(search) || matches($0)
                 }) { item in itemEditor(item) }
             } label: { Text("Controls") }
@@ -366,7 +373,7 @@ struct MenuCustomizationView: View {
     }
 
     @ViewBuilder private func itemEditor(_ item: MenuItem) -> some View {
-        let siblings = layout.items(in: layout.placement(of: item))
+        let siblings = editableItems(in: layout.placement(of: item))
         let title = itemTitle(item)
         HStack(spacing: 8) {
             Toggle(title, isOn: membership(item, in: \.hiddenItems, inverted: true))

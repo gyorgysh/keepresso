@@ -190,11 +190,11 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 - 💻 **Closed-display mode.** Keep running with the **lid shut** and no external
   display, on power or battery, for an always-on Mac or one you carry mid-task.
   What the screen itself does is your choice: turn it off, keep it powered at
-  zero brightness so a remote session stays live, or leave it alone. An optional
-  **"Keep brewing with closed lid"** mode ties it to the session instead of leaving it on
-  globally: on when a keep-awake session starts, off when it ends (or the app
-  quits, even after a crash), with the password asked once per app run, or
-  never with the administrator helper.
+  zero brightness so a remote session stays live, or leave it alone. Turn on
+  **Keep awake with lid closed** to keep an automatic or manual session
+  running with the lid shut. The override turns off when the session ends
+  or Keepresso quits. An indefinite manual session stays active until you
+  stop it. The setting requires administrator authorization.
 - 📱 **Hotspot fallback.** In Preferences > General, opt into a selected Wi-Fi
   hotspot when the Mac loses its network connection. Scope it to active
   keep-awake sessions (the default), closed-display mode, or whenever Keepresso
@@ -408,13 +408,9 @@ Updates, and Quit.
   toggles and app entries away, leaving just the status and the keep-awake
   controls. Keepresso remembers the choice, and everything hidden stays
   reachable from the right-click menu.
-- **Keep awake with lid closed.** Toggle it right from the menu before you shut
-  the lid or unplug. It flips a system setting (`pmset disablesleep`), so it
-  needs administrator rights: silent with the helper installed, one password
-  ask without it. Works on power or battery; turn it off when you're done, on
-  battery in a bag it can drain and heat up. Or set it to **"Only while
-  brewing"** in Preferences > General and it follows the session on its own:
-  on at session start, off at session end or app quit.
+- **Keep awake with lid closed.** Let active sessions keep a MacBook awake
+  with the lid shut. A previous persistent override can be cleared with
+  **Allow system sleep**. Mac desktops retain **Disable system sleep**.
 - **Preferences** (⌘,) holds the set-and-forget configuration, in tabs:
   - **General**: what to keep awake, the administrator helper, menu-bar
     countdown, battery auto-pause, closed-display mode, launch at login,

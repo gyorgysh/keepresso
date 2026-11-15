@@ -212,3 +212,22 @@ import Testing
         #expect(layout.hiddenItems == [.duration])
     }
 }
+
+@Test func notebookLayoutConsolidatesBothLidControls() {
+    let layout = MenuLayout.profile(.detailed).usingSessionLidControl()
+    let items = layout.groups(expanded: true).flatMap(\.items)
+    #expect(items.filter { $0 == .brewingOnly }.count == 1)
+    #expect(!items.contains(.closedDisplay))
+    #expect(layout.usingSessionLidControl() == layout)
+}
+
+@Test func notebookLayoutPreservesTheVisibleLegacyLidControl() {
+    let layout = MenuLayout.profile(.lidControls).usingSessionLidControl()
+    let items = layout.groups(expanded: false).flatMap(\.items)
+    #expect(layout.placement(of: .brewingOnly) == .manualSession)
+    #expect(items.contains(.brewingOnly))
+    #expect(!items.contains(.closedDisplay))
+
+    let hidden = MenuLayout.profile(.statusOnly).usingSessionLidControl()
+    #expect(!hidden.groups(expanded: true).flatMap(\.items).contains(.brewingOnly))
+}

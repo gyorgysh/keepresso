@@ -303,7 +303,7 @@ struct MenuBarContent: View {
 
     @ViewBuilder
     private func advancedSections(_ groups: [MenuLayoutGroup], layout: MenuLayout, visible: Set<MenuItem>) -> some View {
-        let closedDisplayHidden = !visible.contains(.closedDisplay)
+        let closedDisplayHidden = !model.machineHasBattery && !visible.contains(.closedDisplay)
         let brewingOnlyHidden = !visible.contains(.brewingOnly)
         let combinesCaption = combinesStatusCaption(layout, groups: groups)
         let needsSleepStatus = (closedDisplayHidden
@@ -323,6 +323,7 @@ struct MenuBarContent: View {
             // Collapsed groups retain their controls behind their disclosure.
             // Hidden overrides still report their state, including status-only
             // layouts where Preferences remains reachable by right-click.
+            ClosedDisplayRecoveryRow(model: model)
             if needsSleepStatus {
                 VStack(alignment: .leading, spacing: 6) {
                     if layout.showDividers { Divider().opacity(0.5) }
@@ -457,7 +458,7 @@ struct MenuBarContent: View {
                 }}
             ))
             if let interval = session.options.dimDisplayAfter { Text(Self.shortDuration(interval)).font(type.caption).foregroundStyle(.secondary) }
-        case .closedDisplay: advancedClosedDisplay
+        case .closedDisplay: desktopSleepOverride
         case .brewingOnly: advancedBrewingOnly
         case .lidPolicy:
             Picker("If the lid shuts", selection: Binding(get: { model.closedLidDisplayPolicy }, set: { model.closedLidDisplayPolicy = $0 })) {
@@ -529,27 +530,23 @@ struct MenuBarContent: View {
         Binding(get: { session.options[keyPath: keyPath] }, set: { value in model.updateOptions { $0[keyPath: keyPath] = value } })
     }
 
-    private var advancedClosedDisplay: some View {
+    private var desktopSleepOverride: some View {
         VStack(alignment: .leading, spacing: 6) {
-            switchRow(model.machineHasBattery ? "Keep awake with lid closed" : "Disable system sleep",
+            switchRow("Disable system sleep",
                       isOn: Binding(get: { model.closedDisplayEnabled }, set: { model.setClosedDisplay($0) }),
-                      info: model.machineHasBattery
-                        ? L("Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.")
-                        : L("Stops the Mac from sleeping at all, even with no session running. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password."),
+                      info: L("Stops the Mac from sleeping at all, even with no session running. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password."),
                       switchLocked: model.closedDisplayOnlyWhileBrewing, onLockedTap: { lidRowShakes += 1 })
                 .disabled(model.closedDisplayBusy)
             if model.closedDisplayBusy {
-                AdminAuthNote(purpose: model.machineHasBattery ? L("keep the Mac awake with the lid closed") : L("disable system sleep"))
+                AdminAuthNote(purpose: L("disable system sleep"))
             }
             if model.closedDisplayOnlyWhileBrewing {
-                Text(model.machineHasBattery ? "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." : "Follows the session while \u{201C}Only while brewing\u{201D} is on.")
+                Text("Follows the session while \u{201C}Only while brewing\u{201D} is on.")
                     .font(type.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     .shakes(on: lidRowShakes)
             }
             if model.closedDisplayEnabled {
-                Text(model.machineHasBattery
-                    ? L("Stays awake on battery too; the display turns off when the lid closes. Turn it off before putting it in a bag.")
-                    : L("The Mac won't sleep at all until you turn this off. The display still sleeps as usual."))
+                Text("The Mac won't sleep at all until you turn this off. The display still sleeps as usual.")
                     .font(type.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             if let error = model.closedDisplayError { HelperFeatureNotice(model: model, message: error).font(type.caption) }
@@ -712,6 +709,7 @@ struct MenuBarContent: View {
             optionToggles
         }
 
+        ClosedDisplayRecoveryRow(model: model)
         statusStack
 
         if menuExpanded {
@@ -722,7 +720,7 @@ struct MenuBarContent: View {
     }
 
 
-    /// The middle option toggles (closed-display, only-while-brewing, battery),
+    /// The middle option toggles (closed-display and battery),
     /// hidden while the panel is collapsed.
     @ViewBuilder
     private var optionToggles: some View {
@@ -750,44 +748,9 @@ struct MenuBarContent: View {
 
     @ViewBuilder
     private var closedDisplayControls: some View {
-        // The same pmset switch wears two names: on a laptop it exists to
-        // survive the lid closing, on a desktop (no lid, no battery) it
-        // reads as a hard "never sleep" override.
-        switchRow(model.machineHasBattery ? "Keep awake with lid closed" : "Disable system sleep",
-                  isOn: Binding(
-            get: { model.closedDisplayEnabled },
-            set: { model.setClosedDisplay($0) }
-        ), info: model.machineHasBattery
-            ? L("Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.")
-            : L("Stops the Mac from sleeping at all, even with no session running. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password."),
-                  // While "Only while brewing" is on, the automation owns this
-                  // setting: the switch reports what it did instead of offering
-                  // a manual override the next tick would undo anyway. Clicking
-                  // it shakes the line below, which names what is driving it.
-                  switchLocked: model.closedDisplayOnlyWhileBrewing,
-                  onLockedTap: { lidRowShakes += 1 })
-        .disabled(model.closedDisplayBusy)
-        if model.closedDisplayBusy {
-            AdminAuthNote(purpose: model.machineHasBattery
-                ? L("keep the Mac awake with the lid closed")
-                : L("disable system sleep"))
-        }
-        if model.closedDisplayOnlyWhileBrewing {
-            Text(model.machineHasBattery ? "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." : "Follows the session while \u{201C}Only while brewing\u{201D} is on.")
-                .font(type.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .shakes(on: lidRowShakes)
-        }
-        if model.closedDisplayEnabled {
-            Text(model.machineHasBattery
-                ? L("Stays awake on battery too; the display turns off when the lid closes. Turn it off before putting it in a bag.")
-                : L("The Mac won't sleep at all until you turn this off. The display still sleeps as usual."))
-                .font(type.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        if model.machineHasBattery && model.closedDisplayEnabled {
+        if !model.machineHasBattery { desktopSleepOverride }
+        advancedBrewingOnly
+        if model.machineHasBattery && model.closedDisplayOnlyWhileBrewing {
             Picker(L("If the lid shuts"), selection: Binding(
                 get: { model.closedLidDisplayPolicy },
                 set: { model.closedLidDisplayPolicy = $0 }
@@ -807,29 +770,6 @@ struct MenuBarContent: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-        }
-        if let error = model.closedDisplayError {
-            HelperFeatureNotice(model: model, message: error)
-                .font(type.caption)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-
-        switchRow(LocalizedStringKey(model.closedDisplayBrewingTitle), isOn: Binding(
-            get: { model.closedDisplayOnlyWhileBrewing },
-            set: { model.closedDisplayOnlyWhileBrewing = $0 }
-        ), info: model.machineHasBattery
-            ? L("Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.")
-            : L("Turns the sleep override on when a keep-awake session starts and off when it ends or Keepresso quits."))
-        .disabled(model.closedDisplayAutoBusy)
-        if model.closedDisplayAutoBusy && !model.helperInstalled {
-            AdminAuthNote(purpose: model.machineHasBattery
-                ? L("switch closed-display mode with the session")
-                : L("switch the sleep override with the session"))
-        }
-        if let error = model.closedDisplayAutoError {
-            HelperFeatureNotice(model: model, message: error)
-                .font(type.caption)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

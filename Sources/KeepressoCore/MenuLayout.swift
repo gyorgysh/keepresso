@@ -204,6 +204,31 @@ public struct MenuLayout: Codable, Equatable, Sendable {
         itemOrder.append(item)
     }
 
+    /// MacBooks expose a single session-based lid control. Give the old
+    /// override's slot to it when that was the user's visible or pinned row.
+    public func usingSessionLidControl() -> Self {
+        var copy = normalized()
+        let legacy: MenuItem = .closedDisplay
+        let session: MenuItem = .brewingOnly
+        let legacyVisible = !hiddenItems.contains(legacy) && !hiddenSections.contains(placement(of: legacy))
+        let sessionVisible = !hiddenItems.contains(session) && !hiddenSections.contains(placement(of: session))
+        let legacyPinned = legacyVisible && compactItems.contains(legacy)
+        if legacyVisible && (!sessionVisible || (legacyPinned && !compactItems.contains(session))) {
+            copy.hiddenItems.remove(session)
+            copy.placements[session] = placement(of: legacy)
+            if let oldIndex = copy.itemOrder.firstIndex(of: legacy),
+               let newIndex = copy.itemOrder.firstIndex(of: session) {
+                copy.itemOrder.swapAt(oldIndex, newIndex)
+            }
+        }
+        if legacyPinned { copy.compactItems.insert(session) }
+        copy.compactItems.remove(legacy)
+        copy.hiddenItems.insert(legacy)
+        copy.itemOrder.removeAll { $0 == legacy }
+        copy.itemOrder.append(legacy)
+        return copy
+    }
+
     public func normalized() -> Self {
         var copy = self
         copy.sectionOrder = normalizedOrder(sectionOrder, defaults: MenuLayoutSection.allCases)

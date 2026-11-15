@@ -852,47 +852,15 @@ private struct GeneralTab: View {
         }
     }
 
-    /// The pmset disablesleep switch. On a laptop it's "closed-display mode"
-    /// (keep running with the lid shut); a desktop has no lid, so the same
-    /// switch is presented as a hard "disable sleep" override. Shown on both,
-    /// so a desktop that latched the setting always has a way to unlatch it.
+    /// On MacBooks the lid override is tied to a session.
     private var closedDisplaySection: some View {
         Section {
-            Toggle(model.machineHasBattery ? "Keep awake with the lid closed" : "Disable system sleep",
-                   isOn: Binding(
-                get: { model.closedDisplayEnabled },
-                set: { model.setClosedDisplay($0) }
-            ))
-            // "Only while brewing" is authoritative: while it's on this row
-            // reports the automation's state instead of offering a manual
-            // override the next tick would undo. Clicking it shakes the line
-            // below, which names what is driving it. The section header's info
-            // button stays live, so the explanation is still one click away.
-            .disabled(model.closedDisplayBusy || model.closedDisplayOnlyWhileBrewing)
-            .overlay {
-                if model.closedDisplayOnlyWhileBrewing {
-                    Rectangle()
-                        .fill(.clear)
-                        .contentShape(Rectangle())
-                        .onTapGesture { lidRowShakes += 1 }
-                }
+            if model.machineHasBattery {
+                ClosedDisplayRecoveryRow(model: model)
+            } else {
+                desktopSleepOverride
             }
-            if model.closedDisplayBusy && !model.helperInstalled {
-                AdminAuthNote(purpose: model.machineHasBattery
-                    ? L("keep the Mac awake with the lid closed")
-                    : L("disable system sleep"))
-            }
-            if model.closedDisplayOnlyWhileBrewing {
-                Text(model.machineHasBattery ? "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." : "Follows the session while \u{201C}Only while brewing\u{201D} is on.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .shakes(on: lidRowShakes)
-            }
-            if let error = model.closedDisplayError {
-                HelperFeatureNotice(model: model, message: error)
-                    .font(.caption)
-            }
-            if model.machineHasBattery && model.closedDisplayEnabled {
+            if model.machineHasBattery && model.closedDisplayOnlyWhileBrewing {
                 Picker(L("If the lid shuts"), selection: Binding(
                     get: { model.closedLidDisplayPolicy },
                     set: { model.closedLidDisplayPolicy = $0 }
@@ -946,19 +914,57 @@ private struct GeneralTab: View {
                 Text("Mutes the built-in speakers with the lid closed and closed-display mode active. Headphones and other outputs keep playing. Unmutes when the lid opens or the mode ends, unless you had muted them yourself.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Text("Turn this on and then quit, and Keepresso asks whether to turn it off first.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         } header: {
             model.machineHasBattery
-                ? sectionHeader("Closed-display mode", info: L("Normally a MacBook sleeps the moment you shut the lid unless a display is attached. This keeps it running with the lid shut and nothing plugged in, on power or battery. What the screen itself does when the lid closes is your choice below (\u{201C}If the lid shuts\u{201D}): turn it off, keep it powered at zero brightness so a remote session stays live, or leave it alone. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off: closed and on battery, the Mac can still drain over time, so don't leave it on in a bag. \u{201C}Keep brewing with closed lid\u{201D} ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for \u{201C}Keep brewing with closed lid\u{201D}."))
+                ? sectionHeader("Closed-display mode", info: L("Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits."))
                 : sectionHeader("Disable sleep", info: L("Stops the Mac from sleeping at all, even with no session running. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off, even if Keepresso quits. The display still sleeps as usual. \u{201C}Only while brewing\u{201D} ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for \u{201C}Only while brewing\u{201D}."))
         } footer: {
             model.machineHasBattery
-                ? sectionFooter("Keeps running with the lid shut and no external display.")
+                ? sectionFooter("Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.")
                 : sectionFooter("Stops the Mac from sleeping at all until you turn it off.")
         }
     }
+
+    @ViewBuilder
+    private var desktopSleepOverride: some View {
+        Toggle("Disable system sleep",
+               isOn: Binding(
+            get: { model.closedDisplayEnabled },
+            set: { model.setClosedDisplay($0) }
+        ))
+        // "Only while brewing" is authoritative: while it's on this row
+        // reports the automation's state instead of offering a manual
+        // override the next tick would undo. Clicking it shakes the line
+        // below, which names what is driving it. The section header's info
+        // button stays live, so the explanation is still one click away.
+        .disabled(model.closedDisplayBusy || model.closedDisplayOnlyWhileBrewing)
+        .overlay {
+            if model.closedDisplayOnlyWhileBrewing {
+                Rectangle()
+                    .fill(.clear)
+                    .contentShape(Rectangle())
+                    .onTapGesture { lidRowShakes += 1 }
+            }
+        }
+        if model.closedDisplayBusy && !model.helperInstalled {
+            AdminAuthNote(purpose: L("disable system sleep"))
+        }
+        if model.closedDisplayOnlyWhileBrewing {
+            Text("Follows the session while \u{201C}Only while brewing\u{201D} is on.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .shakes(on: lidRowShakes)
+        }
+        if let error = model.closedDisplayError {
+            HelperFeatureNotice(model: model, message: error)
+                .font(.caption)
+        }
+
+        Text("Turn this on and then quit, and Keepresso asks whether to turn it off first.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+    }
+
 
     @ViewBuilder private var lowPowerStatus: some View {
         switch model.closedLidLowPowerController.status {

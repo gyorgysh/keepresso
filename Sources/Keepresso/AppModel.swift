@@ -1761,11 +1761,15 @@ final class AppModel {
 
     /// A saved granular layout is used only behind the existing opt-in flag.
     var advancedMenuLayout: MenuLayout? {
-        settings.customizedMenuLayout
+        settings.customizedMenuLayout.map(menuLayoutForMachine)
     }
 
     var editableMenuLayout: MenuLayout {
-        settings.menuLayout ?? MenuLayout()
+        menuLayoutForMachine(settings.menuLayout ?? MenuLayout())
+    }
+
+    func menuLayoutForMachine(_ layout: MenuLayout) -> MenuLayout {
+        machineHasBattery ? layout.usingSessionLidControl() : layout
     }
 
     func updateMenuLayout(_ update: (inout MenuLayout) -> Void) {
@@ -3229,6 +3233,7 @@ final class AppModel {
     /// again (Welcome, Preferences, …); SecurityAgent otherwise leaves it
     /// buried under every other app.
     func setClosedDisplay(_ on: Bool, userInitiated: Bool = true) {
+        guard !on || !userInitiated || !machineHasBattery else { return }
         // A user toggling closed-display during a thermal or battery pause has
         // taken over the intent: cancel any pending "restore when safe" so
         // recovery doesn't silently turn it back on against their choice. The
@@ -3396,7 +3401,14 @@ final class AppModel {
     }
 
     var closedDisplayBrewingTitle: String {
-        machineHasBattery ? "Keep brewing with closed lid" : "Only while brewing"
+        machineHasBattery ? "Keep awake with lid closed" : "Only while brewing"
+    }
+
+    /// The live flag is shared with older Keepresso versions and with macOS
+    /// commands. Offer a way to clear it without assuming we own it.
+    var hasUnscopedSleepOverrideOnNotebook: Bool {
+        machineHasBattery && closedDisplayEnabled
+            && !closedDisplayAuto.isHolding && !closedDisplayAuto.isBusy
     }
 
     /// Whether closed-display mode follows the session instead of staying on
