@@ -191,7 +191,7 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   display, on power or battery, for an always-on Mac or one you carry mid-task.
   What the screen itself does is your choice: turn it off, keep it powered at
   zero brightness so a remote session stays live, or leave it alone. An optional
-  **"Only while brewing"** mode ties it to the session instead of leaving it on
+  **"Keep brewing with closed lid"** mode ties it to the session instead of leaving it on
   globally: on when a keep-awake session starts, off when it ends (or the app
   quits, even after a crash), with the password asked once per app run, or
   never with the administrator helper.
@@ -391,8 +391,8 @@ Updates, and Quit.
   actions neutral too, with the same button shape and centered label. All presets
   keep the standard 280-point width. Settings and tools start collapsed; the
   session controls adapt to manual and trigger
-  sessions. The two small switch variants add just closed-display mode or
-  Only while brewing to Compact.
+  sessions. The two small switch variants add manual or session-linked
+  closed-display controls to Compact.
   Status only shows information without session buttons. Preview controls cannot
   change a session or feature setting.
   “Show less” can retain pinned controls, the first few groups, or everything.

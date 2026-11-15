@@ -3,6 +3,7 @@
 
 _LANGS = ['hu', 'es', 'fr', 'de', 'zh-Hans', 'it', 'ja', 'ko', 'ru', 'pt-BR', 'tr', 'pl', 'uk', 'zh-Hant']
 _ROWS = '''
+Keep brewing with closed lid|Ébren tartás lecsukott fedélnél|Mantener la sesión con la tapa cerrada|Poursuivre la session capot fermé|Sitzung bei geschlossenem Deckel fortsetzen|合盖后继续保持唤醒|Continua la sessione a coperchio chiuso|蓋を閉じてもセッションを続ける|덮개를 닫아도 세션 계속|Продолжать сеанс с закрытой крышкой|Continuar a sessão com a tampa fechada|Kapak kapalıyken oturumu sürdür|Kontynuuj sesję przy zamkniętej pokrywie|Продовжувати сеанс із закритою кришкою|關上上蓋後繼續保持喚醒
 Accent color|Kiemelőszín|Color de acento|Couleur d’accentuation|Akzentfarbe|强调色|Colore di accento|アクセントカラー|강조 색상|Акцентный цвет|Cor de destaque|Vurgu rengi|Kolor akcentu|Акцентний колір|強調色
 Clear style|Letisztult stílus|Estilo discreto|Style épuré|Schlichter Stil|简洁样式|Stile essenziale|シンプルなスタイル|간결한 스타일|Сдержанный стиль|Estilo discreto|Sade stil|Stonowany styl|Стриманий стиль|簡潔樣式
 Control style|Vezérlők stílusa|Estilo de los controles|Style des commandes|Stil der Bedienelemente|控件样式|Stile dei controlli|操作のスタイル|컨트롤 스타일|Стиль элементов управления|Estilo dos controles|Kontrol stili|Styl elementów sterujących|Стиль елементів керування|控制項樣式

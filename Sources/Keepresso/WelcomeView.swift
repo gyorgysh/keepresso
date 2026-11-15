@@ -395,7 +395,7 @@ struct WelcomeView: View {
     /// the note explains while the dialog is up).
     ///
     /// The switch itself is sticky (stays on until turned off). A callout
-    /// bubble under it offers **Only while brewing** as an optional tip, so
+    /// bubble under it offers **Keep brewing with closed lid** as an optional tip, so
     /// people who want session-tied automation can opt in without being
     /// forced into it.
     private var closedDisplaySetupRow: some View {
@@ -426,7 +426,7 @@ struct WelcomeView: View {
                 }
             }
             if model.closedDisplayOnlyWhileBrewing {
-                Text("Follows the session while \u{201C}Only while brewing\u{201D} is on.")
+                Text("Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.")
                     .font(type.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -465,7 +465,7 @@ struct WelcomeView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Handle it automatically")
                     .font(type.callout.weight(.medium))
-                Text("Enable \u{201C}Only while brewing\u{201D} so closed-display follows each keep-awake session (your triggers or a manual brew) and turns off when nothing is holding the Mac awake.")
+                Text("Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.")
                     .font(type.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

@@ -329,8 +329,12 @@ struct MenuCustomizationView: View {
         .onAppear { previewExpanded = model.menuPanelExpanded }
     }
 
+    private func itemTitle(_ item: MenuItem) -> String {
+        item == .brewingOnly ? L(model.closedDisplayBrewingTitle) : item.label
+    }
+
     private func matches(_ item: MenuItem) -> Bool {
-        search.isEmpty || item.label.localizedCaseInsensitiveContains(search)
+        search.isEmpty || itemTitle(item).localizedCaseInsensitiveContains(search)
     }
     private func sectionMatchesSearch(_ section: MenuLayoutSection) -> Bool {
         search.isEmpty || section.label.localizedCaseInsensitiveContains(search)
@@ -363,8 +367,9 @@ struct MenuCustomizationView: View {
 
     @ViewBuilder private func itemEditor(_ item: MenuItem) -> some View {
         let siblings = layout.items(in: layout.placement(of: item))
+        let title = itemTitle(item)
         HStack(spacing: 8) {
-            Toggle(item.label, isOn: membership(item, in: \.hiddenItems, inverted: true))
+            Toggle(title, isOn: membership(item, in: \.hiddenItems, inverted: true))
                 .frame(maxWidth: .infinity, alignment: .leading)
             Button {
                 model.updateMenuLayout {
@@ -373,12 +378,12 @@ struct MenuCustomizationView: View {
             } label: {
                 Image(systemName: layout.compactItems.contains(item) ? "pin.fill" : "pin")
             }
-            .accessibilityLabel("\(L("Keep in Show less")): \(item.label)")
+            .accessibilityLabel("\(L("Keep in Show less")): \(title)")
             .help(L("Keep in Show less"))
-            moveButton(up: true, label: item.label, disabled: siblings.first == item) {
+            moveButton(up: true, label: title, disabled: siblings.first == item) {
                 model.updateMenuLayout { $0.moveItem(item, by: -1) }
             }
-            moveButton(up: false, label: item.label, disabled: siblings.last == item) {
+            moveButton(up: false, label: title, disabled: siblings.last == item) {
                 model.updateMenuLayout { $0.moveItem(item, by: 1) }
             }
             Menu {
@@ -387,7 +392,7 @@ struct MenuCustomizationView: View {
                         .disabled(section == layout.placement(of: item))
                 }
             } label: { Image(systemName: "arrowshape.turn.up.right") }
-            .accessibilityLabel("\(L("Move to section")): \(item.label)")
+            .accessibilityLabel("\(L("Move to section")): \(title)")
             .help(L("Move to section"))
         }
         .buttonStyle(.borderless)
@@ -409,7 +414,7 @@ extension MenuLayoutProfile {
         case .compact: L("A small session menu with status and quick timers.")
         case .balanced: L("The familiar menu, with settings and tools tucked away.")
         case .lidControls: L("A compact session menu with the closed-display switch.")
-        case .brewingControls: L("A compact session menu with Only while brewing.")
+        case .brewingControls: L("Turns the sleep override on when a keep-awake session starts and off when it ends or Keepresso quits.")
         case .statusOnly: L("Status and activity only, without session buttons.")
         case .detailed: L("All controls available. Settings, conditions, and shortcuts start collapsed.")
         }

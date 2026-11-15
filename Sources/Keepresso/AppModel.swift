@@ -3395,6 +3395,10 @@ final class AppModel {
         }
     }
 
+    var closedDisplayBrewingTitle: String {
+        machineHasBattery ? "Keep brewing with closed lid" : "Only while brewing"
+    }
+
     /// Whether closed-display mode follows the session instead of staying on
     /// until manually turned off (see
     /// ``ClosedDisplayAutoController/onlyWhileBrewing``). Persisted. Turning it

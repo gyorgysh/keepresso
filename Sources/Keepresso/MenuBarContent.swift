@@ -542,7 +542,7 @@ struct MenuBarContent: View {
                 AdminAuthNote(purpose: model.machineHasBattery ? L("keep the Mac awake with the lid closed") : L("disable system sleep"))
             }
             if model.closedDisplayOnlyWhileBrewing {
-                Text("Follows the session while \u{201C}Only while brewing\u{201D} is on.")
+                Text(model.machineHasBattery ? "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." : "Follows the session while \u{201C}Only while brewing\u{201D} is on.")
                     .font(type.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     .shakes(on: lidRowShakes)
             }
@@ -558,7 +558,7 @@ struct MenuBarContent: View {
 
     private var advancedBrewingOnly: some View {
         VStack(alignment: .leading, spacing: 6) {
-            switchRow("Only while brewing", isOn: Binding(get: { model.closedDisplayOnlyWhileBrewing }, set: { model.closedDisplayOnlyWhileBrewing = $0 }),
+            switchRow(LocalizedStringKey(model.closedDisplayBrewingTitle), isOn: Binding(get: { model.closedDisplayOnlyWhileBrewing }, set: { model.closedDisplayOnlyWhileBrewing = $0 }),
                       info: model.machineHasBattery
                         ? L("Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits.")
                         : L("Turns the sleep override on when a keep-awake session starts and off when it ends or Keepresso quits."))
@@ -773,7 +773,7 @@ struct MenuBarContent: View {
                 : L("disable system sleep"))
         }
         if model.closedDisplayOnlyWhileBrewing {
-            Text("Follows the session while \u{201C}Only while brewing\u{201D} is on.")
+            Text(model.machineHasBattery ? "Turns closed-display mode on when a keep-awake session starts and off when it ends or Keepresso quits." : "Follows the session while \u{201C}Only while brewing\u{201D} is on.")
                 .font(type.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -814,7 +814,7 @@ struct MenuBarContent: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
 
-        switchRow("Only while brewing", isOn: Binding(
+        switchRow(LocalizedStringKey(model.closedDisplayBrewingTitle), isOn: Binding(
             get: { model.closedDisplayOnlyWhileBrewing },
             set: { model.closedDisplayOnlyWhileBrewing = $0 }
         ), info: model.machineHasBattery
