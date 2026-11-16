@@ -262,6 +262,8 @@ public final class ClosedDisplayAutoController {
         case user
     }
     private var holdOff: HoldOff = .none
+    private var wantsBrewingHold = false
+    private var isReleasing = false
 
     /// Whether the root helper was already spawned this app run. Once it's up,
     /// engaging and releasing is flag-file-only: no more prompts.
@@ -298,7 +300,9 @@ public final class ClosedDisplayAutoController {
     /// (and no prompt) once already authorized.
     @discardableResult
     public func prime() async -> SleepSettingResult {
-        guard !helperStarted, !isBusy else { return .applied }
+        guard !helperStarted, !isBusy, !isReleasing else { return .applied }
+        isBusy = true
+        defer { isBusy = false }
         let result = await engage()
         if case .applied = result { await release() }
         return result
@@ -307,7 +311,8 @@ public final class ClosedDisplayAutoController {
     /// Stop holding if we are, restoring normal sleep. For when the feature is
     /// switched off mid-session.
     public func stopIfHolding() async {
-        if isHolding { await release() }
+        wantsBrewingHold = false
+        await releaseIfNeeded()
     }
 
     /// Let the next tick try engaging again. For after an external fix (the
@@ -322,39 +327,60 @@ public final class ClosedDisplayAutoController {
     /// on the first engage of an app run; a cancel holds off until the session
     /// ends) and releases when it stops.
     public func autoTick(brewing: Bool) async {
+        await autoTick(brewing: { brewing })
+    }
+
+    /// The app supplies a live reading so an outstanding helper call can
+    /// observe a session ending before the next tick runs.
+    public func autoTick(brewing: @MainActor () -> Bool) async {
         guard onlyWhileBrewing else { return }
-        if brewing {
-            guard !isHolding, !isBusy, holdOff == .none else { return }
-            switch await engage() {
-            case .applied:
-                break
-            case .cancelled:
-                holdOff = .user
-            case .failed:
-                holdOff = .failure
-            }
-        } else {
+        wantsBrewingHold = brewing()
+        guard wantsBrewingHold else {
             holdOff = .none
-            if isHolding {
-                await release()
-            }
+            await releaseIfNeeded()
+            return
         }
+        guard !isHolding, !isBusy, !isReleasing, holdOff == .none else { return }
+
+        isBusy = true
+        defer { isBusy = false }
+        func stillWanted() -> Bool { onlyWhileBrewing && wantsBrewingHold && brewing() }
+        let result = await engage(whileWanted: stillWanted)
+        guard stillWanted() else {
+            // The helper may have applied the hold while brewing was stopping.
+            if case .applied = result { await release() }
+            return
+        }
+        switch result {
+        case .applied:
+            break
+        case .cancelled:
+            holdOff = .user
+        case .failed:
+            holdOff = .failure
+        }
+    }
+
+    private func releaseIfNeeded() async {
+        guard isHolding, !isBusy, !isReleasing else { return }
+        await release()
     }
 
     /// Disable sleep via the helper. The first call of this app run spawns the
     /// root helper (one administrator prompt); later ones just recreate the
     /// flag, instantly and prompt-free.
     @discardableResult
-    private func engage() async -> SleepSettingResult {
-        guard !isBusy else { return .cancelled }
-        isBusy = true
-        defer { isBusy = false }
+    private func engage(whileWanted stillWanted: @MainActor () -> Bool = { true }) async -> SleepSettingResult {
         let launcher = self.launcher
         let flagCreated = await Task.detached { launcher.createFlag() }.value
         guard flagCreated else {
             let message = launcher.engageFailureMessage
             lastError = message
             return .failed(message)
+        }
+        guard stillWanted() else {
+            await release()
+            return .cancelled
         }
         if helperStarted {
             lastError = nil
@@ -386,6 +412,8 @@ public final class ClosedDisplayAutoController {
     /// Re-enable normal sleep: just delete the flag (no prompt); the helper
     /// notices within a cycle and flips `disablesleep` back off.
     private func release() async {
+        isReleasing = true
+        defer { isReleasing = false }
         let launcher = self.launcher
         await Task.detached { launcher.removeFlag() }.value
         // Only drop the local latch when the backend agrees the hold is gone.
