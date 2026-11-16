@@ -244,8 +244,9 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   forgotten session can't quietly drain the battery. When a session ends on its
   own (a timer expiring, triggers dropping), optionally notify, then sleep the
   display, lock the screen, start the screen saver, or sleep the Mac. With
-  **Do nothing** selected, you can opt to switch back to Automatic mode when
-  a manual timer expires and let the enabled triggers take over. And when
+  **Do nothing** selected, use **Return to Automatic when timer ends** beside
+  the timer in the menu bar's Manual mode to let enabled triggers take over
+  when the timer expires. And when
   something happens (session start/end, trigger fire/release, agent went idle,
   thermal stage, battery pause), run a Shortcut, POST a webhook, or a shell
   command, handy for a push to your phone when an overnight agent finishes.

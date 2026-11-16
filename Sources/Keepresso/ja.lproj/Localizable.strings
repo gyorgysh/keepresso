@@ -938,6 +938,5 @@
 "Low Power Mode is active." = "低電力モードが有効です。";
 "Initializing the helper…" = "ヘルパーを初期化中…";
 "Updating the helper…" = "ヘルパーを更新中…";
-"Go into automatic mode when manual session ends" = "手動セッションの終了時に自動モードに切り替える";
-"Returns control to enabled triggers when a manual timer runs out." = "手動タイマーが切れると、有効なトリガーに制御を戻します。";
-"Choose Do nothing above to allow Automatic mode after a manual timer." = "手動タイマー終了後の自動モードを有効にするには、上で「何もしない」を選択してください。";
+"Return to Automatic when timer ends" = "タイマーが切れたら自動モードに戻る";
+"Choose %@ under Automation in Preferences to use this switch." = "このスイッチを使うには、環境設定の「自動化」で「%@」を選択してください。";

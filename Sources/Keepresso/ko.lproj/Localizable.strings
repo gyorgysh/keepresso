@@ -938,6 +938,5 @@
 "Low Power Mode is active." = "저전력 모드가 켜져 있습니다.";
 "Initializing the helper…" = "도우미 초기화 중…";
 "Updating the helper…" = "도우미 업데이트 중…";
-"Go into automatic mode when manual session ends" = "수동 세션이 끝나면 자동 모드로 전환";
-"Returns control to enabled triggers when a manual timer runs out." = "수동 타이머가 만료되면 활성화된 트리거에 제어를 돌려줍니다.";
-"Choose Do nothing above to allow Automatic mode after a manual timer." = "수동 타이머가 끝난 뒤 자동 모드를 사용하려면 위에서 ‘아무 작업 안 함’을 선택하세요.";
+"Return to Automatic when timer ends" = "타이머가 만료되면 자동 모드로 돌아가기";
+"Choose %@ under Automation in Preferences to use this switch." = "이 스위치를 사용하려면 환경설정의 자동화에서 ‘%@’을 선택하세요.";

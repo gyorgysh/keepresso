@@ -938,6 +938,5 @@
 "Low Power Mode is active." = "Режим низького енергоспоживання активний.";
 "Initializing the helper…" = "Запуск помічника…";
 "Updating the helper…" = "Оновлення помічника…";
-"Go into automatic mode when manual session ends" = "Переходити в автоматичний режим після завершення ручного сеансу";
-"Returns control to enabled triggers when a manual timer runs out." = "Після спливу ручного таймера керування повертається до ввімкнених тригерів.";
-"Choose Do nothing above to allow Automatic mode after a manual timer." = "Виберіть вище «Нічого не робити», щоб дозволити автоматичний режим після ручного таймера.";
+"Return to Automatic when timer ends" = "Повертатися в автоматичний режим після спливу таймера";
+"Choose %@ under Automation in Preferences to use this switch." = "Щоб скористатися цим перемикачем, виберіть «%@» у розділі «Автоматизація» налаштувань.";

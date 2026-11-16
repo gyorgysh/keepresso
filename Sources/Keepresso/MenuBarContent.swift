@@ -306,6 +306,7 @@ struct MenuBarContent: View {
         let closedDisplayHidden = !visible.contains(.closedDisplay)
         let brewingOnlyHidden = !visible.contains(.brewingOnly)
         let combinesCaption = combinesStatusCaption(layout, groups: groups)
+        let manualTimerAnchor = MenuLayout.manualTimerControlAnchor(in: visible)
         let needsSleepStatus = (closedDisplayHidden
             && (model.closedDisplayEnabled || model.closedDisplayBusy || model.closedDisplayError != nil))
             || (brewingOnlyHidden && (model.closedDisplayAutoBusy || model.closedDisplayAutoError != nil))
@@ -318,7 +319,8 @@ struct MenuBarContent: View {
             }
             ForEach(groups) { group in
                 if layout.showDividers && group.id != groups.first?.id { Divider() }
-                advancedGroup(group, layout: layout, combinesCaption: combinesCaption)
+                advancedGroup(group, layout: layout, combinesCaption: combinesCaption,
+                              manualTimerAnchor: manualTimerAnchor)
             }
             // Collapsed groups retain their controls behind their disclosure.
             // Hidden overrides still report their state, including status-only
@@ -347,7 +349,12 @@ struct MenuBarContent: View {
     }
 
     @ViewBuilder
-    private func advancedGroup(_ group: MenuLayoutGroup, layout: MenuLayout, combinesCaption: Bool) -> some View {
+    private func advancedGroup(
+        _ group: MenuLayoutGroup,
+        layout: MenuLayout,
+        combinesCaption: Bool,
+        manualTimerAnchor: MenuItem?
+    ) -> some View {
         let collapsed = (preview != nil ? (previewCollapsedSections ?? layout.collapsedSections) : layout.collapsedSections)
             .contains(group.section)
         VStack(alignment: .leading, spacing: group.section == .manualSession ? layout.density.spacing - 2 : layout.density.spacing) {
@@ -383,9 +390,12 @@ struct MenuBarContent: View {
                 ForEach(group.items.contains(.triggerAction)
                     ? [.triggerAction] + group.items.filter { $0 != .triggerAction }
                     : group.items) { item in
-                    advancedItem(item, layout: layout, combinesCaption: combinesCaption)
-                        .modifier(CustomMenuControlStyle(item: item, style: layout.controlStyle))
-                        .disabled(preview != nil).allowsHitTesting(preview == nil)
+                    Group {
+                        advancedItem(item, layout: layout, combinesCaption: combinesCaption)
+                            .modifier(CustomMenuControlStyle(item: item, style: layout.controlStyle))
+                        if item == manualTimerAnchor { manualTimerReturnControl }
+                    }
+                    .disabled(preview != nil).allowsHitTesting(preview == nil)
                 }
             }
         }
@@ -642,6 +652,26 @@ struct MenuBarContent: View {
         }
     }
 
+    @ViewBuilder
+    private var manualTimerReturnControl: some View {
+        if model.triggersEnabled && model.triggersPaused {
+            let canReturn = model.endAction == .none
+            VStack(alignment: .leading, spacing: 4) {
+                switchRow("Return to Automatic when timer ends", isOn: Binding(
+                    get: { model.endAction == .none && model.automaticAfterManualTimer },
+                    set: { model.automaticAfterManualTimer = $0 }
+                ))
+                .disabled(!canReturn)
+                if !canReturn {
+                    Text(L("Choose %@ under Automation in Preferences to use this switch.", SessionEndAction.none.label))
+                        .font(type.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     /// The existing adaptive layout. Custom section choices never affect it.
     @ViewBuilder
     private var standardMenuSections: some View {
@@ -687,6 +717,8 @@ struct MenuBarContent: View {
                     model.startUntil(hour: hour, minute: minute)
                 }
             }
+
+            manualTimerReturnControl
 
             if session.isActive && !model.quickStopDurations.isEmpty {
                 // The three short defaults share a line with the label;

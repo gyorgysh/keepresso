@@ -938,6 +938,5 @@
 "Low Power Mode is active." = "Tryb niskiego zużycia energii jest aktywny.";
 "Initializing the helper…" = "Uruchamianie pomocnika…";
 "Updating the helper…" = "Aktualizowanie pomocnika…";
-"Go into automatic mode when manual session ends" = "Przełącz na tryb automatyczny po zakończeniu sesji ręcznej";
-"Returns control to enabled triggers when a manual timer runs out." = "Po upływie czasu ustawionego ręcznie sterowanie wraca do włączonych wyzwalaczy.";
-"Choose Do nothing above to allow Automatic mode after a manual timer." = "Wybierz powyżej „Nie rób nic”, aby umożliwić tryb automatyczny po upływie czasu ustawionego ręcznie.";
+"Return to Automatic when timer ends" = "Wróć do trybu automatycznego po upływie czasu";
+"Choose %@ under Automation in Preferences to use this switch." = "Aby użyć tego przełącznika, wybierz „%@” w sekcji Automatyzacja w preferencjach.";

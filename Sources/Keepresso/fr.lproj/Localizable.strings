@@ -938,6 +938,5 @@
 "Low Power Mode is active." = "Le mode économie d’énergie est actif.";
 "Initializing the helper…" = "Initialisation de l’assistant…";
 "Updating the helper…" = "Mise à jour de l’assistant…";
-"Go into automatic mode when manual session ends" = "Passer en mode automatique à la fin de la session manuelle";
-"Returns control to enabled triggers when a manual timer runs out." = "Rend le contrôle aux déclencheurs activés à l’expiration d’un minuteur manuel.";
-"Choose Do nothing above to allow Automatic mode after a manual timer." = "Choisissez « Ne rien faire » ci-dessus pour autoriser le mode automatique après un minuteur manuel.";
+"Return to Automatic when timer ends" = "Revenir au mode automatique à la fin du minuteur";
+"Choose %@ under Automation in Preferences to use this switch." = "Pour utiliser ce bouton, choisissez « %@ » dans Automatisation dans les préférences.";

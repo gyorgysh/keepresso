@@ -102,6 +102,13 @@ import Testing
     #expect(Set(layout.groups(expanded: false, available: available).flatMap(\.items)) == available)
 }
 
+@Test func returnToAutomaticFollowsOneVisibleManualTimerControl() {
+    #expect(MenuLayout.manualTimerControlAnchor(in: [.duration, .manualOverride]) == .duration)
+    #expect(MenuLayout.manualTimerControlAnchor(in: [.duration, .quickStop]) == .duration)
+    #expect(MenuLayout.manualTimerControlAnchor(in: [.manualOverride, .quickStop]) == .manualOverride)
+    #expect(MenuLayout.manualTimerControlAnchor(in: [.manualToggle, .quickStop]) == nil)
+}
+
 @Test func applyingEveryMenuProfileChangesOnlyPresentation() throws {
     var settings = KeepressoSettings.default
     settings.triggersEnabled = true

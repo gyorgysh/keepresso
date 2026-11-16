@@ -938,6 +938,5 @@
 "Low Power Mode is active." = "Low Power Mode is active.";
 "Initializing the helper…" = "Initializing the helper…";
 "Updating the helper…" = "Updating the helper…";
-"Go into automatic mode when manual session ends" = "Go into automatic mode when manual session ends";
-"Returns control to enabled triggers when a manual timer runs out." = "Returns control to enabled triggers when a manual timer runs out.";
-"Choose Do nothing above to allow Automatic mode after a manual timer." = "Choose Do nothing above to allow Automatic mode after a manual timer.";
+"Return to Automatic when timer ends" = "Return to Automatic when timer ends";
+"Choose %@ under Automation in Preferences to use this switch." = "Choose %@ under Automation in Preferences to use this switch.";

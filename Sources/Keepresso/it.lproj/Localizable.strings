@@ -938,6 +938,5 @@
 "Low Power Mode is active." = "Risparmio energetico attivo.";
 "Initializing the helper…" = "Avvio dell’assistente…";
 "Updating the helper…" = "Aggiornamento dell’assistente…";
-"Go into automatic mode when manual session ends" = "Passa alla modalità automatica al termine della sessione manuale";
-"Returns control to enabled triggers when a manual timer runs out." = "Restituisce il controllo agli attivatori abilitati allo scadere di un timer manuale.";
-"Choose Do nothing above to allow Automatic mode after a manual timer." = "Scegli «Non fare nulla» qui sopra per consentire la modalità automatica dopo un timer manuale.";
+"Return to Automatic when timer ends" = "Torna alla modalità automatica allo scadere del timer";
+"Choose %@ under Automation in Preferences to use this switch." = "Per usare questo interruttore, scegli «%@» in Automazione nelle Preferenze.";

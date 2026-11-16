@@ -938,6 +938,5 @@
 "Low Power Mode is active." = "Düşük Güç Modu etkin.";
 "Initializing the helper…" = "Yardımcı başlatılıyor…";
 "Updating the helper…" = "Yardımcı güncelleniyor…";
-"Go into automatic mode when manual session ends" = "Elle başlatılan oturum bittiğinde otomatik moda geç";
-"Returns control to enabled triggers when a manual timer runs out." = "Elle ayarlanan sayaç dolduğunda kontrolü etkin tetikleyicilere geri verir.";
-"Choose Do nothing above to allow Automatic mode after a manual timer." = "Elle ayarlanan sayaçtan sonra otomatik moda izin vermek için yukarıda «Hiçbir şey yapma» seçeneğini seçin.";
+"Return to Automatic when timer ends" = "Sayaç dolduğunda otomatik moda dön";
+"Choose %@ under Automation in Preferences to use this switch." = "Bu anahtarı kullanmak için Tercihler’de Otomasyon altında «%@» seçeneğini seçin.";

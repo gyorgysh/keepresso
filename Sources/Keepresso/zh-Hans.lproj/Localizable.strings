@@ -938,6 +938,5 @@
 "Low Power Mode is active." = "低电量模式已启用。";
 "Initializing the helper…" = "正在初始化辅助程序…";
 "Updating the helper…" = "正在更新辅助程序…";
-"Go into automatic mode when manual session ends" = "手动会话结束时切换到自动模式";
-"Returns control to enabled triggers when a manual timer runs out." = "手动计时器到期时，将控制权交还给已启用的触发条件。";
-"Choose Do nothing above to allow Automatic mode after a manual timer." = "在上方选择“不执行任何操作”，即可在手动计时器到期后使用自动模式。";
+"Return to Automatic when timer ends" = "计时器到期时返回自动模式";
+"Choose %@ under Automation in Preferences to use this switch." = "要使用此开关，请在偏好设置的“自动化”中选择“%@”。";

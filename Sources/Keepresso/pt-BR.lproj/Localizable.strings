@@ -938,6 +938,5 @@
 "Low Power Mode is active." = "Modo Pouca Energia ativo.";
 "Initializing the helper…" = "Iniciando o assistente…";
 "Updating the helper…" = "Atualizando o assistente…";
-"Go into automatic mode when manual session ends" = "Mudar para o modo automático ao fim da sessão manual";
-"Returns control to enabled triggers when a manual timer runs out." = "Devolve o controle aos gatilhos ativados quando o temporizador manual termina.";
-"Choose Do nothing above to allow Automatic mode after a manual timer." = "Escolha «Não fazer nada» acima para permitir o modo automático após um temporizador manual.";
+"Return to Automatic when timer ends" = "Voltar ao modo automático quando o temporizador terminar";
+"Choose %@ under Automation in Preferences to use this switch." = "Para usar este controle, selecione «%@» em Automação nas Preferências.";
