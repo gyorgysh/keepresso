@@ -9,8 +9,12 @@ private final class FakeFanHelper: PrivilegedHelperCalling, @unchecked Sendable 
     private let lock = NSLock()
     private(set) var calls: [String] = []
     var accepts = true
+    /// Holds to refuse before accepting, for firmware whose unlock takes a
+    /// moment to land.
+    var refusalsBeforeAccepting = 0
+    var answersPing = true
 
-    func ping() -> Bool { true }
+    func ping() -> Bool { answersPing }
     func pingVersion() -> Int? { HelperService.protocolVersion }
     func setSleepDisabled(_ disabled: Bool) -> Bool { true }
     func setSleepHold(_ holding: Bool) -> Bool { true }
@@ -20,7 +24,11 @@ private final class FakeFanHelper: PrivilegedHelperCalling, @unchecked Sendable 
     func setFanHold(_ holding: Bool, percent: Int) -> Bool {
         lock.lock()
         calls.append(holding ? "hold(\(percent))" : "release")
-        let ok = accepts || !holding // releases always land
+        var ok = accepts || !holding // releases always land
+        if holding, ok, refusalsBeforeAccepting > 0 {
+            refusalsBeforeAccepting -= 1
+            ok = false
+        }
         lock.unlock()
         return ok
     }
@@ -147,7 +155,45 @@ private func makeController(
 }
 
 @MainActor
-@Test func helperRefusalAbortsEarlyWithoutFurtherLevels() async {
+@Test func unreachableHelperAbortsEarlyWithoutFurtherLevels() async {
+    let fans = FakeFans()
+    let (controller, helper) = makeController(fans: fans)
+    helper.inner.accepts = false
+    helper.inner.answersPing = false
+    controller.start()
+    await controller.activeRun?.value
+
+    guard case .finished(let report) = controller.phase else {
+        Issue.record("expected a finished phase, got \(controller.phase)")
+        return
+    }
+    #expect(report.verdict == .helperUnavailable)
+    #expect(report.steps.isEmpty)
+    // One refused hold, then the release. Never the next level.
+    #expect(helper.inner.recorded == ["hold(50)", "release"])
+}
+
+@MainActor
+@Test func aSlowFirmwareUnlockStillPassesOnceTheBoostLands() async {
+    let fans = FakeFans()
+    let (controller, helper) = makeController(fans: fans)
+    // The first forced write is refused while the unlock settles. The hold
+    // must be kept, not released, so the later levels can land.
+    helper.inner.refusalsBeforeAccepting = 1
+    controller.start()
+    await controller.activeRun?.value
+
+    guard case .finished(let report) = controller.phase else {
+        Issue.record("expected a finished phase, got \(controller.phase)")
+        return
+    }
+    #expect(report.verdict == .allGood)
+    #expect(report.steps.map(\.percent) == FanDryRunController.levels)
+    #expect(helper.inner.recorded == ["hold(50)", "hold(70)", "hold(90)", "release"])
+}
+
+@MainActor
+@Test func aHelperThatKeepsRefusingRunsEveryLevelThenReportsIt() async {
     let fans = FakeFans()
     let (controller, helper) = makeController(fans: fans)
     helper.inner.accepts = false
@@ -158,10 +204,9 @@ private func makeController(
         Issue.record("expected a finished phase, got \(controller.phase)")
         return
     }
+    // The helper answers but never takes the fans, and they never moved.
     #expect(report.verdict == .helperUnavailable)
-    #expect(report.steps.isEmpty)
-    // One refused hold, then the release; never the next level.
-    #expect(helper.inner.recorded == ["hold(50)", "release"])
+    #expect(helper.inner.recorded == ["hold(50)", "hold(70)", "hold(90)", "release"])
 }
 
 @MainActor

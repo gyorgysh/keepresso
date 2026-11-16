@@ -24,7 +24,8 @@ public struct FanDryRunReport: Equatable, Sendable {
         /// The helper accepted the writes but one or more fans never sped up
         /// (typically firmware refusing manual control on this machine).
         case fansDidNotRespond
-        /// The helper refused or never answered; nothing was written.
+        /// The helper never answered, or it refused a forced level and the
+        /// fans never sped up either.
         case helperUnavailable
         /// No fans to test (fanless machine, or the SMC was unreadable).
         case noFans
@@ -166,13 +167,24 @@ public final class FanDryRunController {
             verdict: .allGood
         )
 
+        // A refused level is not the end of the test. Some firmware only
+        // accepts manual mode a few seconds after the unlock write, so the
+        // helper's first attempt fails and its own re-assert tick lands the
+        // boost shortly after. Giving up here would also release the hold,
+        // which undoes the unlock. So keep the hold through the settle window
+        // and let the fans' actual behavior decide. Only a helper that is not
+        // answering at all ends the run early.
+        var holdRefused = false
         for percent in Self.levels {
             phase = .running(percent: percent)
-            guard await callHelper(holding: true, percent: percent) else {
-                await release()
-                report.verdict = .helperUnavailable
-                phase = .finished(report)
-                return
+            if !(await callHelper(holding: true, percent: percent)) {
+                guard await helperAnswers() else {
+                    await release()
+                    report.verdict = .helperUnavailable
+                    phase = .finished(report)
+                    return
+                }
+                holdRefused = true
             }
             await sleeper(Self.settleSeconds)
             if Task.isCancelled {
@@ -198,8 +210,19 @@ public final class FanDryRunController {
                 range: ranges[fan]
             )
         }
-        report.verdict = allResponded ? .allGood : .fansDidNotRespond
+        if allResponded {
+            report.verdict = .allGood
+        } else {
+            report.verdict = holdRefused ? .helperUnavailable : .fansDidNotRespond
+        }
         phase = .finished(report)
+    }
+
+    /// Whether the helper is reachable at all, to tell a refused write from a
+    /// helper that is gone. Off the main actor like every helper call.
+    private func helperAnswers() async -> Bool {
+        let helper = self.helper
+        return await Task.detached { helper.ping() }.value
     }
 
     /// One helper call off the main actor (the XPC client blocks on a
