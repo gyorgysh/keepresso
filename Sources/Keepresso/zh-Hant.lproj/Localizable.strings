@@ -938,3 +938,6 @@
 "Low Power Mode is active." = "低耗電模式已啟用。";
 "Initializing the helper…" = "正在初始化輔助程式…";
 "Updating the helper…" = "正在更新輔助程式…";
+"Go into automatic mode when manual session ends" = "手動工作階段結束時切換至自動模式";
+"Returns control to enabled triggers when a manual timer runs out." = "手動計時器到期時，將控制權交還給已啟用的觸發條件。";
+"Choose Do nothing above to allow Automatic mode after a manual timer." = "在上方選擇「不執行任何動作」，即可在手動計時器到期後使用自動模式。";

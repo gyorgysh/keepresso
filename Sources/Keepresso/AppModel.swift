@@ -246,6 +246,11 @@ final class AppModel {
         // Launch idle: a manual session waits for the user's toggle, a gated
         // one waits for its conditions (the ticker's reconcile activates it).
         applyTriggerGate()
+        session.onManualTimerExpired = { [weak self] in
+            guard let self, self.settings.automaticAfterManualTimer,
+                  self.settings.triggersEnabled else { return }
+            self.resumeTriggers()
+        }
         // Give the decision log the satisfied rule labels when the gate flips
         // the session on ("Triggers: Camera in use").
         session.triggerDescriber = { [weak self] in
@@ -816,6 +821,14 @@ final class AppModel {
             settings.notifyOnEnd = newValue
             session.notifyOnEnd = newValue
             if newValue { notifier.requestAuthorization() }
+            persist()
+        }
+    }
+
+    var automaticAfterManualTimer: Bool {
+        get { settings.automaticAfterManualTimer }
+        set {
+            settings.automaticAfterManualTimer = newValue
             persist()
         }
     }

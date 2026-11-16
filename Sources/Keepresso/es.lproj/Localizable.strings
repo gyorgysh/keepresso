@@ -938,3 +938,6 @@
 "Low Power Mode is active." = "El modo de bajo consumo está activo.";
 "Initializing the helper…" = "Iniciando el asistente…";
 "Updating the helper…" = "Actualizando el asistente…";
+"Go into automatic mode when manual session ends" = "Cambiar a modo automático al terminar la sesión manual";
+"Returns control to enabled triggers when a manual timer runs out." = "Devuelve el control a las condiciones activadas cuando se agota el temporizador manual.";
+"Choose Do nothing above to allow Automatic mode after a manual timer." = "Elige «No hacer nada» arriba para permitir el modo automático al vencer un temporizador manual.";

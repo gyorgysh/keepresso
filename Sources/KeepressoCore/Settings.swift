@@ -27,6 +27,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     public var quickStopDurations: [TimeInterval]
     /// What to do to the Mac when a session ends on its own. None by default.
     public var endAction: SessionEndAction
+    /// Return control to enabled triggers after a manual timer expires. Off by default.
+    public var automaticAfterManualTimer: Bool
     /// Outbound "on event, do action" hooks. Empty by default.
     public var eventHooks: [EventHook]
     /// Scheduled wake + optional wake-and-brew, or `nil` (the default) for off.
@@ -137,6 +139,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         endingSoonNoticeSeconds: TimeInterval? = nil,
         quickStopDurations: [TimeInterval] = KeepressoSettings.defaultQuickStopDurations,
         endAction: SessionEndAction = .none,
+        automaticAfterManualTimer: Bool = false,
         eventHooks: [EventHook] = [],
         wakeSchedule: WakeScheduleConfig? = nil,
         automationSync: AutomationSyncConfig = AutomationSyncConfig(),
@@ -180,6 +183,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.endingSoonNoticeSeconds = Self.normalizedEndingSoonNotice(endingSoonNoticeSeconds)
         self.quickStopDurations = Self.normalizedQuickStopDurations(quickStopDurations)
         self.endAction = endAction
+        self.automaticAfterManualTimer = automaticAfterManualTimer
         self.eventHooks = eventHooks
         self.wakeSchedule = wakeSchedule
         self.automationSync = automationSync
@@ -287,6 +291,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
                 ?? Self.defaultQuickStopDurations
         )
         endAction = try c.decodeIfPresent(SessionEndAction.self, forKey: .endAction) ?? .none
+        automaticAfterManualTimer = try c.decodeIfPresent(Bool.self, forKey: .automaticAfterManualTimer) ?? false
         eventHooks = try c.decodeIfPresent([EventHook].self, forKey: .eventHooks) ?? []
         wakeSchedule = try c.decodeIfPresent(WakeScheduleConfig.self, forKey: .wakeSchedule)
         hotspotFallback = ((try? c.decodeIfPresent(HotspotFallbackConfig.self, forKey: .hotspotFallback)) ?? HotspotFallbackConfig()).normalized()

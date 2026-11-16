@@ -938,3 +938,6 @@
 "Low Power Mode is active." = "Stromsparmodus ist aktiv.";
 "Initializing the helper…" = "Helfer wird gestartet…";
 "Updating the helper…" = "Helfer wird aktualisiert…";
+"Go into automatic mode when manual session ends" = "Am Ende einer manuellen Sitzung in den Automatikmodus wechseln";
+"Returns control to enabled triggers when a manual timer runs out." = "Übergibt die Steuerung nach Ablauf eines manuellen Timers an die aktivierten Auslöser.";
+"Choose Do nothing above to allow Automatic mode after a manual timer." = "Wähle oben „Nichts tun“, um nach einem manuellen Timer in den Automatikmodus wechseln zu können.";

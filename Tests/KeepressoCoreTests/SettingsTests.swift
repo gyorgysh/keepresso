@@ -22,6 +22,16 @@ import Foundation
     #expect(decoded.showCountdownInMenuBar == true)
 }
 
+@Test func automaticAfterManualTimerDefaultsOffAndRoundTrips() throws {
+    #expect(!KeepressoSettings.default.automaticAfterManualTimer)
+    let legacy = try JSONDecoder().decode(KeepressoSettings.self, from: Data("{}".utf8))
+    #expect(!legacy.automaticAfterManualTimer)
+
+    let settings = KeepressoSettings(automaticAfterManualTimer: true)
+    let data = try JSONEncoder().encode(settings)
+    #expect(try JSONDecoder().decode(KeepressoSettings.self, from: data).automaticAfterManualTimer)
+}
+
 @Test func onboardingDefaultsOffForFreshInstallButOnForExistingSettings() throws {
     // A fresh install sees the welcome window once...
     #expect(KeepressoSettings.default.hasOnboarded == false)

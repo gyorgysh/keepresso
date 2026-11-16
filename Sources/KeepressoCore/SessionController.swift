@@ -92,6 +92,10 @@ public final class SessionController {
     /// pauses (those manage sleep themselves).
     public var endAction: SessionEndAction = .none
 
+    /// The host may restore its trigger gate here, before this tick evaluates demand.
+    /// Called only after a manual timer expires naturally with no end action configured.
+    @ObservationIgnored public var onManualTimerExpired: (() -> Void)?
+
     /// Seconds to wait after a natural session end before performing
     /// ``endAction``. A restart (manual, trigger, or command) within this
     /// window cancels the pending action. Three seconds absorbs a brief
@@ -816,8 +820,35 @@ public final class SessionController {
         // assertions for a tick past it. No gate (it reactivates on its own)
         // and no leases (they take precedence): with either present, the
         // remembered session stays out of the way.
+        var resumedManualAfterSafetyPause = false
         if triggerGate == nil, !isActive, !leaseDemand, let paused = safetyPausedManual {
+            resumedManualAfterSafetyPause = true
             resumeSafetyPausedSession(paused, at: instant)
+        }
+
+        if triggerGate == nil, isActive, !leaseHeld, let total = mode.duration, let startedAt,
+           instant.timeIntervalSince(startedAt) >= total {
+            // A deadline noticed long after it passed (Mac slept across it)
+            // still ends the session and may notify, but must not fire the
+            // end action: waking the lid would immediately re-sleep the
+            // display or lock the screen.
+            let overdue = instant.timeIntervalSince(startedAt) - total
+            let fireAction = overdue <= Self.endActionStaleGrace
+            stop(
+                reason: L("Timed session ended"),
+                effects: fireAction
+                    ? .natural(kind: .sessionEnded)
+                    : .safetyPause(kind: .sessionEnded)
+            )
+            // Expiry while safety owned the session cannot resume triggers.
+            if fireAction, !resumedManualAfterSafetyPause, endAction == .none {
+                onManualTimerExpired?()
+            }
+            // A restored gate or an existing lease can take over this tick.
+            if triggerGate == nil, !leaseDemand {
+                flushPendingEndAction(at: instant)
+                return
+            }
         }
 
         if let triggerGate {
@@ -845,30 +876,6 @@ public final class SessionController {
                 } else {
                     setActive(false, at: instant)
                 }
-            }
-        } else if isActive, !leaseHeld, let total = mode.duration, let startedAt,
-                  instant.timeIntervalSince(startedAt) >= total {
-            // A deadline noticed long after it passed (Mac slept across it)
-            // still ends the session and may notify, but must not fire the
-            // end action: waking the lid would immediately re-sleep the
-            // display or lock the screen.
-            let overdue = instant.timeIntervalSince(startedAt) - total
-            let fireAction = overdue <= Self.endActionStaleGrace
-            stop(
-                reason: L("Timed session ended"),
-                effects: fireAction
-                    ? .natural(kind: .sessionEnded)
-                    : .safetyPause(kind: .sessionEnded)
-            )
-            // Live leases carry the awake state straight through the expiry:
-            // the timed session ends normally (log, optional notice), then a
-            // lease session begins in the same tick, cancelling the pending
-            // end action before it can fire mid-lease.
-            if leaseDemand {
-                beginLeaseSession(at: instant)
-            } else {
-                flushPendingEndAction(at: instant)
-                return
             }
         } else if !isActive, leaseDemand {
             // A safety pause never reaches this point (the latches above

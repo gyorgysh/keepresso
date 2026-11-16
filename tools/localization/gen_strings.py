@@ -75,6 +75,7 @@ from catalog_v122_quit_sleep import APP as V122_QUIT_SLEEP_APP, CORE as V122_QUI
 from catalog_v125_battery_resume import CORE as V125_BATTERY_RESUME_CORE
 from catalog_menu_customization import APP as MENU_CUSTOMIZATION_APP
 from catalog_connectivity import APP as CONNECTIVITY_APP, CORE as CONNECTIVITY_CORE
+from catalog_manual_timer import APP as MANUAL_TIMER_APP
 
 
 def merge_overlay(catalog: dict, lang: str, table: dict, name: str):
@@ -113,6 +114,7 @@ def merge_extra_langs():
     APP.update(MENU_CUSTOMIZATION_APP)
     APP.update(CONNECTIVITY_APP)
     CORE.update(CONNECTIVITY_CORE)
+    APP.update(MANUAL_TIMER_APP)
 
 
 if __name__ == "__main__":

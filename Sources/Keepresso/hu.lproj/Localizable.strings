@@ -938,3 +938,6 @@
 "Low Power Mode is active." = "Az alacsony töltöttségű mód aktív.";
 "Initializing the helper…" = "A segéd indítása…";
 "Updating the helper…" = "A segéd frissítése…";
+"Go into automatic mode when manual session ends" = "Váltás automatikus módra a kézi munkamenet végén";
+"Returns control to enabled triggers when a manual timer runs out." = "A kézi időzítő lejártakor visszaadja a vezérlést a bekapcsolt feltételeknek.";
+"Choose Do nothing above to allow Automatic mode after a manual timer." = "A kézi időzítő után csak akkor válthat automatikus módra, ha fent a Ne tegyen semmit beállítást választja.";

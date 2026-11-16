@@ -1084,6 +1084,89 @@ private final class StubGate: TriggerEvaluating {
 }
 
 @MainActor
+@Test(arguments: [true, false])
+func manualTimerHandsOffToExistingTriggersAtExpiry(isSatisfied: Bool) {
+    let (controller, assertions, clock) = makeController()
+    let gate = StubGate(isSatisfied)
+    controller.onManualTimerExpired = { [weak controller] in controller?.triggerGate = gate }
+    controller.start(mode: .timed(duration: 60))
+
+    clock.advance(59)
+    controller.reconcile()
+    #expect(controller.triggerGate == nil)
+    #expect(controller.isActive)
+
+    clock.advance(1)
+    controller.reconcile()
+    #expect(controller.triggerGate === gate)
+    #expect(controller.isActive == isSatisfied)
+    #expect(controller.remaining == nil)
+    #expect(assertions.held == (isSatisfied ? [.system] : []))
+    #expect(gate.ticks == 1)
+}
+
+@MainActor
+@Test(arguments: [SessionEndAction.sleepDisplay, .lockScreen, .startScreensaver, .sleepMac])
+func manualTimerKeepsTheConfiguredEndActionInsteadOfHandingOff(action: SessionEndAction) {
+    let clock = Clock()
+    let actor = RecordingEndActor()
+    let controller = SessionController(assertions: FakeAssertions(), endActor: actor, now: { clock.now })
+    let gate = StubGate(true)
+    controller.onManualTimerExpired = { [weak controller] in controller?.triggerGate = gate }
+    controller.endAction = action
+    controller.start(mode: .timed(duration: 60))
+
+    clock.advance(60)
+    controller.reconcile()
+    #expect(controller.triggerGate == nil)
+    #expect(!controller.isActive)
+
+    clock.advance(SessionController.endActionDebounce)
+    controller.reconcile()
+    #expect(actor.performed == [action])
+}
+
+@MainActor
+@Test(arguments: [SessionCause.manual, .command])
+func manuallyStoppingTheTimerDoesNotHandOff(cause: SessionCause) {
+    let (controller, _, clock) = makeController()
+    let gate = StubGate(true)
+    controller.onManualTimerExpired = { [weak controller] in controller?.triggerGate = gate }
+    controller.start(mode: .timed(duration: 60))
+
+    controller.stop(cause: cause)
+    clock.advance(60)
+    controller.reconcile()
+    #expect(controller.triggerGate == nil)
+    #expect(!controller.isActive)
+}
+
+@MainActor
+@Test(arguments: [true, false])
+func timerThatExpiresDuringASafetyPauseDoesNotHandOff(onBattery: Bool) {
+    let (controller, _, clock) = makeController()
+    let gate = StubGate(true)
+    controller.onManualTimerExpired = { [weak controller] in controller?.triggerGate = gate }
+    controller.pauseBelowBatteryPercent = 20
+    controller.pauseWhenHot = true
+    controller.start(mode: .timed(duration: 60))
+
+    clock.advance(59)
+    if onBattery {
+        controller.reconcile(battery: .discharging(10))
+    } else {
+        controller.reconcile(thermal: .hot)
+    }
+    #expect(!controller.isActive)
+    #expect(controller.triggerGate == nil)
+
+    clock.advance(2)
+    controller.reconcile(battery: .onAC, thermal: .clear)
+    #expect(controller.triggerGate == nil)
+    #expect(!controller.isActive)
+}
+
+@MainActor
 @Test func triggerGateDrivesActivationOnReconcile() {
     let (controller, fake, _) = makeController()
     let gate = StubGate(false)

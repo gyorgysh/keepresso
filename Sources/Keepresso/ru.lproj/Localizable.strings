@@ -938,3 +938,6 @@
 "Low Power Mode is active." = "Режим энергосбережения включён.";
 "Initializing the helper…" = "Запуск помощника…";
 "Updating the helper…" = "Обновление помощника…";
+"Go into automatic mode when manual session ends" = "Переходить в автоматический режим по завершении ручного сеанса";
+"Returns control to enabled triggers when a manual timer runs out." = "По истечении ручного таймера управление возвращается включённым триггерам.";
+"Choose Do nothing above to allow Automatic mode after a manual timer." = "Выберите выше «Ничего не делать», чтобы разрешить автоматический режим после ручного таймера.";

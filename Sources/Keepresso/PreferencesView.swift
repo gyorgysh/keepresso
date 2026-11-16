@@ -1659,6 +1659,17 @@ private struct AutomationTab: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            Toggle("Go into automatic mode when manual session ends", isOn: Binding(
+                get: { model.endAction == .none && model.automaticAfterManualTimer },
+                set: { model.automaticAfterManualTimer = $0 }
+            ))
+            .disabled(model.endAction != .none)
+            Text(model.endAction == .none
+                 ? L("Returns control to enabled triggers when a manual timer runs out.")
+                 : L("Choose Do nothing above to allow Automatic mode after a manual timer."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         } header: {
             sectionHeader("After the session ends", info: L("When the last thing keeping the Mac awake ends on its own (a timer expiring, trigger conditions dropping, or the final automation lease releasing), Keepresso can put the display to sleep, lock the screen, start the screen saver, or sleep the Mac. Leases count: while any lease is live the session continues and nothing fires. Off by default so a timed session never surprises you. Manual stops, and the battery and thermal safety pauses, never run this action. A brief debounce cancels it if the session restarts right away."))
         } footer: {
