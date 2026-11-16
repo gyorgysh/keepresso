@@ -190,6 +190,7 @@ final class AppModel {
         self.session.endAction = loaded.endAction
         self.session.pauseBelowBatteryPercent = loaded.pauseBelowBatteryPercent
         self.session.pauseWhenHot = loaded.thermalSafety?.stopBrewing ?? false
+        self.session.systemThermalPressure = SystemThermalPressure.publicPressure
         // Leases surviving a relaunch are picked up by the first tick's
         // directory scan; no launch-time special case.
         self.session.leases = loaded.automationLeasesEnabled ? leaseEngine : nil
@@ -1409,6 +1410,7 @@ final class AppModel {
            helperInstalled, helper.daemonOutdated {
             helper.watchDaemonUpdate()
         }
+        restoreThermalClosedDisplayIfReady()
         fanHoldWatchTick()
         fanFloorTick()
     }
@@ -1536,23 +1538,26 @@ final class AppModel {
                 thermalLiftedClosedDisplay = true
                 setClosedDisplay(false, userInitiated: false)
             case .resumeBrewing:
-                notifier.notify(
-                    title: L("Temperatures recovered"),
-                    body: L("The Mac has cooled down. Keepresso is back to normal control."),
-                    sound: false
-                )
-                if thermalLiftedClosedDisplay {
-                    thermalLiftedClosedDisplay = false
-                    // Battery pause still needs closed-display off. Hand the
-                    // restore latch over rather than turning the setting back
-                    // on underneath a low-battery pause.
-                    if session.pausedByBattery {
-                        batteryLiftedClosedDisplay = true
-                    } else if helperInstalled {
-                        setClosedDisplay(true, userInitiated: false)
-                    }
+                if !session.pausedByCriticalThermal {
+                    notifier.notify(
+                        title: L("Temperatures recovered"),
+                        body: L("The Mac has cooled down. Keepresso is back to normal control."),
+                        sound: false
+                    )
                 }
             }
+        }
+    }
+
+    private func restoreThermalClosedDisplayIfReady() {
+        guard thermalLiftedClosedDisplay, thermalGuard.state.stage != .stopped,
+              !session.pausedByThermal else { return }
+        thermalLiftedClosedDisplay = false
+        // An ongoing battery pause keeps the sleep override off.
+        if session.pausedByBattery {
+            batteryLiftedClosedDisplay = true
+        } else if helperInstalled {
+            setClosedDisplay(true, userInitiated: false)
         }
     }
 

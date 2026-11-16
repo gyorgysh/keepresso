@@ -1894,6 +1894,117 @@ private func leaseSummary(
 }
 
 @MainActor
+@Test func criticalPressureReleasesAssertionsEvenWithTheOptionalGuardOff() {
+    let (controller, assertions, clock) = makeController()
+    var pressure: ThermalPressureLevel? = .nominal
+    controller.systemThermalPressure = { pressure }
+    controller.start(mode: .timed(duration: 60))
+    clock.advance(10)
+
+    pressure = .critical
+    controller.updateCriticalThermalPause()
+    #expect(controller.pausedByCriticalThermal)
+    #expect(!controller.isActive)
+    #expect(assertions.held.isEmpty)
+
+    for reading: ThermalPressureLevel? in [.serious, nil] {
+        pressure = reading
+        controller.start()
+        controller.reconcile()
+        #expect(controller.pausedByCriticalThermal)
+        #expect(!controller.isActive)
+        #expect(assertions.held.isEmpty)
+    }
+
+    pressure = .fair
+    controller.reconcile()
+    #expect(!controller.pausedByCriticalThermal)
+    #expect(controller.isActive)
+    #expect(controller.remaining == 50)
+}
+
+@MainActor
+@Test(arguments: [true, false])
+func criticalPressureDoesNotResumeACancelledOrExpiredTimer(cancelled: Bool) {
+    let clock = Clock()
+    let endActor = RecordingEndActor()
+    let controller = SessionController(assertions: FakeAssertions(), endActor: endActor, now: { clock.now })
+    var pressure: ThermalPressureLevel? = .nominal
+    controller.systemThermalPressure = { pressure }
+    controller.endAction = .sleepMac
+    controller.start(mode: .timed(duration: 60))
+    clock.advance(59)
+
+    pressure = .critical
+    controller.updateCriticalThermalPause()
+    if cancelled { controller.stop() } else { clock.advance(2) }
+
+    pressure = .nominal
+    controller.reconcile()
+    #expect(!controller.isActive)
+    clock.advance(SessionController.endActionDebounce)
+    controller.reconcile()
+    #expect(endActor.performed.isEmpty)
+}
+
+@MainActor
+@Test(arguments: [true, false])
+func criticalPressureBlocksTriggerAndLeaseDemand(lease: Bool) {
+    let (controller, assertions, _) = makeController()
+    var pressure: ThermalPressureLevel? = .critical
+    controller.systemThermalPressure = { pressure }
+    if lease {
+        let provider = FakeLeaseProvider()
+        provider.summaries = [leaseSummary()]
+        controller.leases = provider
+    } else {
+        controller.triggerGate = StubGate(true)
+    }
+
+    controller.start()
+    controller.reconcile()
+    #expect(!controller.isActive)
+    #expect(assertions.held.isEmpty)
+
+    pressure = .nominal
+    controller.reconcile()
+    #expect(controller.isActive)
+    #expect(assertions.held.contains(.system))
+}
+
+@MainActor
+@Test func criticalPressureAndTheConfiguredThermalGuardRecoverIndependently() {
+    let (controller, assertions, _) = makeController()
+    var pressure: ThermalPressureLevel? = .nominal
+    controller.systemThermalPressure = { pressure }
+    controller.pauseWhenHot = true
+    controller.start()
+    controller.reconcile(thermal: .hot)
+    #expect(controller.pausedByThermal)
+    #expect(!controller.isActive)
+
+    pressure = .critical
+    controller.reconcile(thermal: .hot)
+    pressure = .fair
+    controller.reconcile(thermal: .hot)
+    #expect(!controller.pausedByCriticalThermal)
+    #expect(controller.pausedByThermal)
+    #expect(!controller.isActive)
+
+    pressure = .critical
+    controller.reconcile(thermal: .clear)
+    controller.pauseWhenHot = false
+    #expect(controller.pausedByThermal)
+    #expect(!controller.isActive)
+    #expect(assertions.held.isEmpty)
+
+    pressure = .fair
+    controller.reconcile()
+    #expect(!controller.pausedByThermal)
+    #expect(controller.isActive)
+}
+
+@MainActor
 @Test func thermalPauseOutranksLeaseDemand() {
     let (controller, fake, clock) = makeController()
     controller.pauseWhenHot = true

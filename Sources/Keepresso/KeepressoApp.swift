@@ -199,6 +199,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
     /// Listens for the Control Center toggle's Darwin doorbell.
     private var widgetObserver: WidgetCommandObserver?
+    private var thermalObserver: NSObjectProtocol?
     /// Set when this launch is a duplicate handing over to an already running
     /// copy (see ``yieldIfDuplicateInstance()``). The terminate that follows
     /// must not run the usual quit chores, they belong to the copy staying up.
@@ -267,6 +268,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // record goes stale after an app update plus a reboot); check it now,
         // and repair the registration, before the first engage fails on it.
         model.verifyHelper()
+        thermalObserver = NotificationCenter.default.addObserver(
+            forName: ProcessInfo.thermalStateDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let model = self?.model else { return }
+                model.session.updateCriticalThermalPause()
+                if model.session.pausedByCriticalThermal {
+                    model.closedDisplayAutoTick()
+                    model.syncWidgetState()
+                }
+            }
+        }
         // Check the agent hook installs now rather than only when Preferences
         // opens, so an update's new or changed hook events reach tools the
         // user already connected. Repairs only; never connects a new tool.
@@ -378,6 +393,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        if let thermalObserver { NotificationCenter.default.removeObserver(thermalObserver) }
         // "Dim, don't sleep" lowers the built-in panel's brightness, a persistent
         // display setting the OS won't restore on exit the way it releases power
         // assertions. Put it back before we go, or quitting mid-dim leaves the

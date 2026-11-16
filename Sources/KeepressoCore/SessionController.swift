@@ -273,15 +273,40 @@ public final class SessionController {
         didSet {
             // Same as the battery latch: disabling clears immediately so a
             // start() in the same tick isn't refused by a stale thermal latch.
-            if !pauseWhenHot { pausedByThermal = false }
+            if !pauseWhenHot { pausedByConfiguredThermal = false }
         }
     }
 
-    /// True once the thermal guard force-stopped the session, so reactivation
-    /// waits for the guard's all-clear (dwell and hysteresis live there, not
-    /// here). Public for the same reason as ``pausedByBattery``: the UI must
-    /// be able to say the Mac is deliberately being allowed to cool.
-    public private(set) var pausedByThermal = false
+    /// The optional guard and the system's Critical cutoff have independent
+    /// recovery conditions. The session waits for both to release.
+    public var pausedByThermal: Bool { pausedByConfiguredThermal || pausedByCriticalThermal }
+    public private(set) var pausedByCriticalThermal = false
+    private var pausedByConfiguredThermal = false
+
+    /// The host supplies the public macOS thermal-pressure reading. This is
+    /// independent of any sensors or thresholds selected for the optional guard.
+    @ObservationIgnored public var systemThermalPressure: (() -> ThermalPressureLevel?)?
+
+    /// Apply a pressure transition outside the one-second reconcile tick.
+    public func updateCriticalThermalPause(at instant: Date? = nil) {
+        switch systemThermalPressure?() {
+        case .critical:
+            guard !pausedByCriticalThermal else { return }
+            pausedByCriticalThermal = true
+            stopForThermalPause()
+        case .nominal, .fair:
+            guard pausedByCriticalThermal else { return }
+            pausedByCriticalThermal = false
+            // A timer that expired during the cutoff must not resume or fire
+            // an end action when macOS reports recovery.
+            if let paused = safetyPausedManual, let startedAt = paused.startedAt,
+               let duration = paused.mode.duration, (instant ?? now()).timeIntervalSince(startedAt) >= duration {
+                safetyPausedManual = nil
+            }
+        case .serious, nil:
+            break
+        }
+    }
 
     /// The thermal twin of ``batteryRefusedStarts``.
     public private(set) var thermalRefusedStarts = 0
@@ -377,6 +402,7 @@ public final class SessionController {
         }
         // Same contract for the thermal pause: the guard decides when the Mac
         // has cooled; a start now would just be re-stopped on the next tick.
+        updateCriticalThermalPause()
         if pausedByThermal {
             thermalRefusedStarts += 1
             log.record(
@@ -499,6 +525,20 @@ public final class SessionController {
         case .safetyPause:
             performEndEffects(notice: notice, scheduleAction: false)
         }
+    }
+
+    private func stopForThermalPause() {
+        cancelPendingEndAction()
+        guard isActive else { return }
+        safetyStop(
+            reason: L("Paused, the Mac is running hot"),
+            effects: .safetyPause(kind: .thermalPaused),
+            notice: (
+                title: L("Paused on high temperature"),
+                body: L("Keepresso stopped the keep-awake session so the Mac can cool down. It resumes when temperatures recover.")
+            ),
+            resumeReason: L("Resumed, temperature recovered")
+        )
     }
 
     /// Force-stop for a safety pause (battery or thermal), remembering a
@@ -701,6 +741,7 @@ public final class SessionController {
         gameFrontmost: Bool = false
     ) {
         let instant = now ?? self.now()
+        updateCriticalThermalPause(at: instant)
 
         // Latch real display verdicts; fold `.unknown` onto the last known so
         // a nil `AppleClamshellState` or a start()/command reconcile without a
@@ -778,36 +819,23 @@ public final class SessionController {
         // stops and holds, `.clear` releases, `.unknown` changes nothing.
         if !pauseWhenHot {
             // Feature off: never leave a stale pause latched.
-            pausedByThermal = false
+            pausedByConfiguredThermal = false
         } else {
             switch thermal {
             case .hot:
-                if !pausedByThermal {
-                    pausedByThermal = true
-                    // Same rule as the battery latch above.
-                    cancelPendingEndAction()
-                    if isActive {
-                        safetyStop(
-                            reason: L("Paused, the Mac is running hot"),
-                            effects: .safetyPause(kind: .thermalPaused),
-                            notice: (
-                                title: L("Paused on high temperature"),
-                                body: L("Keepresso stopped the keep-awake session so the Mac can cool down. It resumes when temperatures recover.")
-                            ),
-                            resumeReason: L("Resumed, temperature recovered")
-                        )
-                    }
+                if !pausedByConfiguredThermal {
+                    pausedByConfiguredThermal = true
+                    stopForThermalPause()
                 }
-                triggerGate?.tick()
-                return
             case .clear:
-                pausedByThermal = false
+                pausedByConfiguredThermal = false
             case .unknown:
-                if pausedByThermal {
-                    triggerGate?.tick()
-                    return
-                }
+                break
             }
+        }
+        if pausedByThermal {
+            triggerGate?.tick()
+            return
         }
 
         // A lifted safety pause restarts the manual session it stopped ahead

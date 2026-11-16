@@ -161,10 +161,11 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   with an optional grace period before it lets go.
 - 🔋 **Battery-aware auto-pause.** Let the Mac sleep once charge drops below a
   threshold you choose, even mid-session, so it never runs the battery flat.
-- 🌡️ **Thermal safety net.** Holding a Mac awake through heavy load can also
-  hold in the heat, so Keepresso can watch it: macOS's own thermal pressure
-  (works on every Mac) or specific temperature sensors picked from a live
-  list. If the reading stays over your threshold for a sustained time it
+- 🌡️ **Thermal safety net.** When macOS reports Critical thermal pressure,
+  Keepresso pauses brewing immediately and waits for Fair or Nominal before
+  letting an eligible session resume. The optional thermal safety net can
+  act earlier using macOS thermal pressure or specific temperature sensors
+  picked from a live list. If the reading stays over your threshold for a sustained time it
   escalates, first (optionally) boosting the fans to a chosen strength, never
   below what the system already chose, then pausing the session so the Mac
   can cool, with a notification saying why. Everything restores itself once
