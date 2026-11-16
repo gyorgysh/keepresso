@@ -482,6 +482,12 @@ keepresso -d -i              # also keep the display awake, until Ctrl-C
 keepresso -u                 # wake the display now
 ```
 
+For a running app, the JSON `status` object can include `brewingStartedAt`
+(an ISO 8601 timestamp) and `brewingMode` (`manual`, `automatic` for a trigger,
+or `lease` for an automation lease). Both fields are optional. They are omitted
+when idle and by older Keepresso versions. Check `appRunning` before acting
+on the snapshot.
+
 The standalone holds work even when the app is not running; `keepresso help`
 lists everything. Installed from a DMG instead of Homebrew? Symlink it
 yourself: `ln -s /Applications/Keepresso.app/Contents/Helpers/keepresso /usr/local/bin/`.

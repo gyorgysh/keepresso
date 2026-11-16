@@ -1984,3 +1984,34 @@ private func leaseSummary(
     #expect(controller.isActive == false)
     #expect(controller.log.events.last?.kind == .leaseReleased)
 }
+
+@MainActor
+@Test func brewOwnershipTracksTheSourceKeepingTheSessionAlive() {
+    let (controller, _, clock) = makeController()
+    let leases = FakeLeaseProvider()
+    controller.leases = leases
+
+    #expect(controller.brewingMode == nil)
+    controller.start(mode: .timed(duration: 60))
+    #expect(controller.brewingMode == .manual)
+    #expect(controller.startedAt == clock.now)
+    controller.stop()
+
+    let gate = StubGate(true)
+    controller.triggerGate = gate
+    controller.reconcile()
+    #expect(controller.brewingMode == .automatic)
+    let triggerStart = controller.startedAt
+
+    leases.summaries = [leaseSummary()]
+    gate.satisfied = false
+    clock.advance(1)
+    controller.reconcile()
+    #expect(controller.brewingMode == .lease)
+    #expect(controller.startedAt == triggerStart)
+
+    leases.summaries = []
+    controller.reconcile()
+    #expect(controller.brewingMode == nil)
+    #expect(controller.startedAt == nil)
+}

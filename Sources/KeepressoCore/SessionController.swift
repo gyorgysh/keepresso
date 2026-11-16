@@ -58,6 +58,19 @@ public final class SessionController {
     /// app's trigger pause, the menu's explicit lease stop).
     public var isLeaseHeld: Bool { leaseHeld }
 
+    /// The demand currently sustaining an active brew.
+    public enum BrewingMode: String, Sendable {
+        case manual
+        case automatic
+        case lease
+    }
+
+    public var brewingMode: BrewingMode? {
+        guard isActive else { return nil }
+        if leaseHeld { return .lease }
+        return triggerGate == nil ? .manual : .automatic
+    }
+
     /// The last reconcile instant that saw live lease demand, so a lease end
     /// noticed long after it happened (the Mac slept across the expiry) can
     /// skip the end action, mirroring the timed path's staleness rule.
