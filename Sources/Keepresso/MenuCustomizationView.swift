@@ -24,6 +24,7 @@ extension MenuItem {
         case .statusCaption: L("Status explanation")
         case .endTime: L("End time")
         case .otherApps: L("Other apps")
+        case .returnToAutomatic: L("Return to Automatic when timer ends")
         case .manualToggle: L("Keep awake")
         case .duration: L("For")
         case .quickStop: L("Stop in")

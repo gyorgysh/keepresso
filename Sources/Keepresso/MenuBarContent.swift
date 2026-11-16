@@ -220,6 +220,7 @@ struct MenuBarContent: View {
         let triggerControlled = model.triggersEnabled && !model.triggersPaused
         return Set(MenuItem.allCases.filter { item in
             switch item {
+            case .returnToAutomatic: return model.triggersEnabled && model.triggersPaused
             case .manualToggle, .duration:
                 return !layout.adaptiveSessionControls || !triggerControlled
             case .manualOverride:
@@ -256,19 +257,17 @@ struct MenuBarContent: View {
         })
     }
 
-    private func visibleItems(_ groups: [MenuLayoutGroup], layout: MenuLayout) -> [MenuItem] {
+    private func visibleItems(_ groups: [MenuLayoutGroup], layout: MenuLayout) -> Set<MenuItem> {
         let collapsed = preview != nil ? (previewCollapsedSections ?? layout.collapsedSections) : layout.collapsedSections
-        return groups.filter { !collapsed.contains($0.section) }.flatMap(\.items)
+        return Set(groups.filter { !collapsed.contains($0.section) }.flatMap(\.items))
     }
 
     private func advancedPanel(_ layout: MenuLayout) -> some View {
         let groups = layout.groups(expanded: menuExpanded, available: availableMenuItems(layout))
-        let visibleRows = visibleItems(groups, layout: layout)
-        let visible = Set(visibleRows)
-        let manualTimerAnchor = MenuLayout.manualTimerControlAnchor(in: visibleRows)
+        let visible = visibleItems(groups, layout: layout)
         let maxHeight = preview?.maxHeight ?? (max(250, (bridge.panelWindow?.screen ?? NSScreen.main)?.visibleFrame.height ?? 800) - 100)
         return ScrollView {
-            advancedSections(groups, layout: layout, visible: visible, manualTimerAnchor: manualTimerAnchor)
+            advancedSections(groups, layout: layout, visible: visible)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(GeometryReader { geometry in
@@ -304,9 +303,7 @@ struct MenuBarContent: View {
     }
 
     @ViewBuilder
-    private func advancedSections(
-        _ groups: [MenuLayoutGroup], layout: MenuLayout, visible: Set<MenuItem>, manualTimerAnchor: MenuItem?
-    ) -> some View {
+    private func advancedSections(_ groups: [MenuLayoutGroup], layout: MenuLayout, visible: Set<MenuItem>) -> some View {
         let closedDisplayHidden = !visible.contains(.closedDisplay)
         let brewingOnlyHidden = !visible.contains(.brewingOnly)
         let combinesCaption = combinesStatusCaption(layout, groups: groups)
@@ -322,8 +319,7 @@ struct MenuBarContent: View {
             }
             ForEach(groups) { group in
                 if layout.showDividers && group.id != groups.first?.id { Divider() }
-                advancedGroup(group, layout: layout, combinesCaption: combinesCaption,
-                              manualTimerAnchor: manualTimerAnchor)
+                advancedGroup(group, layout: layout, combinesCaption: combinesCaption)
             }
             // Collapsed groups retain their controls behind their disclosure.
             // Hidden overrides still report their state, including status-only
@@ -355,8 +351,7 @@ struct MenuBarContent: View {
     private func advancedGroup(
         _ group: MenuLayoutGroup,
         layout: MenuLayout,
-        combinesCaption: Bool,
-        manualTimerAnchor: MenuItem?
+        combinesCaption: Bool
     ) -> some View {
         let collapsed = (preview != nil ? (previewCollapsedSections ?? layout.collapsedSections) : layout.collapsedSections)
             .contains(group.section)
@@ -394,7 +389,6 @@ struct MenuBarContent: View {
                     ? [.triggerAction] + group.items.filter { $0 != .triggerAction }
                     : group.items) { item in
                     Group {
-                        if item == manualTimerAnchor { manualTimerReturnControl }
                         advancedItem(item, layout: layout, combinesCaption: combinesCaption)
                             .modifier(CustomMenuControlStyle(item: item, style: layout.controlStyle))
                     }
@@ -427,6 +421,7 @@ struct MenuBarContent: View {
         case .manualToggle:
             switchRow("Keep awake", isOn: Binding(get: { session.isActive }, set: { _ in model.toggleManual() }))
         case .duration: advancedDurationControl(item, alwaysStart: false)
+        case .returnToAutomatic: manualTimerReturnControl
         case .manualOverride: advancedDurationControl(item, alwaysStart: true)
         case .quickStop:
             VStack(alignment: .leading, spacing: 6) {

@@ -102,12 +102,36 @@ import Testing
     #expect(Set(layout.groups(expanded: false, available: available).flatMap(\.items)) == available)
 }
 
-@Test func returnToAutomaticPrecedesFirstVisibleManualControl() {
-    #expect(MenuLayout.manualTimerControlAnchor(in: [.manualToggle, .duration]) == .manualToggle)
-    #expect(MenuLayout.manualTimerControlAnchor(in: [.manualOverride, .duration]) == .manualOverride)
-    #expect(MenuLayout.manualTimerControlAnchor(in: [.duration, .quickStop]) == .duration)
-    #expect(MenuLayout.manualTimerControlAnchor(in: [.triggerAction, .quickStop]) == .quickStop)
-    #expect(MenuLayout.manualTimerControlAnchor(in: [.triggerAction]) == nil)
+@Test func returnToAutomaticIsAnIndependentCustomizableMenuRow() throws {
+    let item = MenuItem.returnToAutomatic
+    var layout = MenuLayout()
+    #expect(layout.items(in: .manualSession).first == item)
+    #expect(layout.groups(expanded: false).flatMap(\.items).contains(item))
+
+    layout.moveItem(item, to: .quickSettings)
+    layout.moveItem(item, by: -1)
+    layout.compactItems.remove(item)
+    #expect(layout.placement(of: item) == .quickSettings)
+    #expect(layout.items(in: .quickSettings).suffix(2) == [item, .endAction])
+    #expect(!layout.groups(expanded: false).flatMap(\.items).contains(item))
+
+    layout.hiddenItems.insert(item)
+    let restored = try JSONDecoder().decode(MenuLayout.self, from: JSONEncoder().encode(layout))
+    #expect(restored == layout.normalized())
+    #expect(!restored.groups(expanded: true).flatMap(\.items).contains(item))
+}
+
+@Test func olderLayoutsGainTheTimerRowOnlyWithVisibleManualControls() throws {
+    let item = MenuItem.returnToAutomatic
+    let manualJSON = #"{"itemOrder":["duration","manualToggle","quit"],"compactItems":["duration"]}"#
+    let manual = try JSONDecoder().decode(MenuLayout.self, from: Data(manualJSON.utf8))
+    #expect(manual.items(in: .manualSession).prefix(2) == [item, .duration])
+    #expect(manual.groups(expanded: false).flatMap(\.items).contains(item))
+
+    let statusJSON = #"{"itemOrder":["statusHeader","manualToggle","duration","manualOverride","quickStop"],"hiddenSections":["manualSession"],"compactItems":["statusHeader"]}"#
+    let status = try JSONDecoder().decode(MenuLayout.self, from: Data(statusJSON.utf8))
+    #expect(status.hiddenItems.contains(item))
+    #expect(!status.compactItems.contains(item))
 }
 
 @Test func applyingEveryMenuProfileChangesOnlyPresentation() throws {
@@ -140,7 +164,7 @@ import Testing
 }
 
 @Test func menuProfilesOfferMinimalThroughDetailedWithoutChangingDefaults() {
-    #expect(MenuLayout.profile(.minimal).groups(expanded: true).flatMap(\.items).count == 5)
+    #expect(MenuLayout.profile(.minimal).groups(expanded: true).flatMap(\.items).count == 6)
     #expect(MenuLayout.profile(.detailed).groups(expanded: true).flatMap(\.items).count == MenuItem.allCases.count)
     #expect(MenuLayout.profile(.balanced) == MenuLayout())
     var layout = MenuLayout()

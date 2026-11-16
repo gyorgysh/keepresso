@@ -12,7 +12,7 @@ public enum MenuLayoutSection: String, CaseIterable, Codable, Identifiable, Send
 /// feature, session, trigger, or safety setting that row controls.
 public enum MenuItem: String, CaseIterable, Codable, Identifiable, Sendable {
     case statusHeader, statusCaption, endTime, otherApps
-    case manualToggle, duration, quickStop, manualOverride
+    case returnToAutomatic, manualToggle, duration, quickStop, manualOverride
     case triggersToggle, triggerAction, triggerSummary, triggerRules
     case systemSleep, displaySleep, keepActive, screenSaverYield, dimDisplay
     case closedDisplay, brewingOnly, lidPolicy, batteryPause, batteryThreshold
@@ -26,7 +26,7 @@ public enum MenuItem: String, CaseIterable, Codable, Identifiable, Sendable {
         switch self {
         case .statusHeader, .statusCaption, .endTime: .status
         case .otherApps: .otherApps
-        case .manualToggle, .duration, .quickStop, .manualOverride: .manualSession
+        case .returnToAutomatic, .manualToggle, .duration, .quickStop, .manualOverride: .manualSession
         case .triggersToggle, .triggerAction, .triggerSummary, .triggerRules: .triggers
         case .systemSleep, .displaySleep, .keepActive, .screenSaverYield, .dimDisplay,
              .closedDisplay, .brewingOnly, .lidPolicy, .batteryPause, .batteryThreshold,
@@ -84,7 +84,7 @@ public struct MenuLayout: Codable, Equatable, Sendable {
     public var hiddenItems: Set<MenuItem> = Self.balancedHiddenItems
     public var compactItems: Set<MenuItem> = [
         .statusHeader, .statusCaption, .otherApps, .manualToggle, .duration, .quickStop,
-        .manualOverride, .triggerAction, .triggerRules, .leaseStatus, .fanStatus, .awdlStatus,
+        .returnToAutomatic, .manualOverride, .triggerAction, .triggerRules, .leaseStatus, .fanStatus, .awdlStatus,
     ]
     public var collapsedSections: Set<MenuLayoutSection> = [.quickSettings, .presets, .toolsAndShortcuts, .help]
     public var compactMode: CompactMenuMode = .pinnedItems
@@ -118,7 +118,7 @@ public struct MenuLayout: Codable, Equatable, Sendable {
         switch profile {
         case .balanced: break
         case .minimal, .compact:
-            var visible: Set<MenuItem> = [.statusHeader, .manualToggle, .duration, .manualOverride, .triggerAction]
+            var visible: Set<MenuItem> = [.statusHeader, .returnToAutomatic, .manualToggle, .duration, .manualOverride, .triggerAction]
             if profile == .compact { visible.formUnion([.statusCaption, .quickStop]) }
             layout.hiddenItems = Set(MenuItem.allCases).subtracting(visible)
             layout.compactItems = visible
@@ -156,12 +156,6 @@ public struct MenuLayout: Codable, Equatable, Sendable {
                                       .triggerSummary, .triggerRules, .leaseStatus, .fanStatus, .awdlStatus]
         let items = Set(groups(expanded: true).flatMap(\.items))
         return !items.isEmpty && items.isSubset(of: statuses)
-    }
-
-    /// Show the return-to-Automatic switch before the first visible manual control.
-    public static func manualTimerControlAnchor(in visibleItems: [MenuItem]) -> MenuItem? {
-        let manualControls: Set<MenuItem> = [.manualToggle, .duration, .manualOverride, .quickStop]
-        return visibleItems.first(where: manualControls.contains)
     }
 
     public func placement(of item: MenuItem) -> MenuLayoutSection {
@@ -237,7 +231,8 @@ public struct MenuLayout: Codable, Equatable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         func strings(_ key: CodingKeys) -> [String]? { try? c.decode([String].self, forKey: key) }
         if let values = strings(.sectionOrder) { sectionOrder = values.compactMap(MenuLayoutSection.init(rawValue:)) }
-        if let values = strings(.itemOrder) { itemOrder = values.compactMap(MenuItem.init(rawValue:)) }
+        let savedItemOrder = strings(.itemOrder)
+        if let savedItemOrder { itemOrder = savedItemOrder.compactMap(MenuItem.init(rawValue:)) }
         if let values = try? c.decode([String: String].self, forKey: .placements) {
             placements = Dictionary(uniqueKeysWithValues: values.compactMap { item, section in
                 guard let item = MenuItem(rawValue: item), let section = MenuLayoutSection(rawValue: section) else { return nil }
@@ -248,6 +243,18 @@ public struct MenuLayout: Codable, Equatable, Sendable {
         if let values = strings(.hiddenItems) { hiddenItems = Set(values.compactMap(MenuItem.init(rawValue:))) }
         if let values = strings(.compactItems) { compactItems = Set(values.compactMap(MenuItem.init(rawValue:))) }
         if let values = strings(.collapsedSections) { collapsedSections = Set(values.compactMap(MenuLayoutSection.init(rawValue:))) }
+        if let savedItemOrder, !savedItemOrder.contains(MenuItem.returnToAutomatic.rawValue) {
+            let manualControls: Set<MenuItem> = [.manualToggle, .duration, .manualOverride, .quickStop]
+            let visibleManualControls = manualControls.filter {
+                !hiddenItems.contains($0) && !hiddenSections.contains(placement(of: $0))
+            }
+            if let first = itemOrder.firstIndex(where: visibleManualControls.contains) {
+                itemOrder.insert(.returnToAutomatic, at: first)
+            }
+            if visibleManualControls.isEmpty { hiddenItems.insert(.returnToAutomatic) }
+            compactItems.remove(.returnToAutomatic)
+            if !compactItems.isDisjoint(with: visibleManualControls) { compactItems.insert(.returnToAutomatic) }
+        }
         func raw<T: RawRepresentable>(_ key: CodingKeys, default value: T) -> T where T.RawValue == String {
             (try? c.decode(String.self, forKey: key)).flatMap(T.init(rawValue:)) ?? value
         }
