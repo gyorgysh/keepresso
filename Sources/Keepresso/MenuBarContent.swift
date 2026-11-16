@@ -256,17 +256,19 @@ struct MenuBarContent: View {
         })
     }
 
-    private func visibleItems(_ groups: [MenuLayoutGroup], layout: MenuLayout) -> Set<MenuItem> {
+    private func visibleItems(_ groups: [MenuLayoutGroup], layout: MenuLayout) -> [MenuItem] {
         let collapsed = preview != nil ? (previewCollapsedSections ?? layout.collapsedSections) : layout.collapsedSections
-        return Set(groups.filter { !collapsed.contains($0.section) }.flatMap(\.items))
+        return groups.filter { !collapsed.contains($0.section) }.flatMap(\.items)
     }
 
     private func advancedPanel(_ layout: MenuLayout) -> some View {
         let groups = layout.groups(expanded: menuExpanded, available: availableMenuItems(layout))
-        let visible = visibleItems(groups, layout: layout)
+        let visibleRows = visibleItems(groups, layout: layout)
+        let visible = Set(visibleRows)
+        let manualTimerAnchor = MenuLayout.manualTimerControlAnchor(in: visibleRows)
         let maxHeight = preview?.maxHeight ?? (max(250, (bridge.panelWindow?.screen ?? NSScreen.main)?.visibleFrame.height ?? 800) - 100)
         return ScrollView {
-            advancedSections(groups, layout: layout, visible: visible)
+            advancedSections(groups, layout: layout, visible: visible, manualTimerAnchor: manualTimerAnchor)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(GeometryReader { geometry in
@@ -302,11 +304,12 @@ struct MenuBarContent: View {
     }
 
     @ViewBuilder
-    private func advancedSections(_ groups: [MenuLayoutGroup], layout: MenuLayout, visible: Set<MenuItem>) -> some View {
+    private func advancedSections(
+        _ groups: [MenuLayoutGroup], layout: MenuLayout, visible: Set<MenuItem>, manualTimerAnchor: MenuItem?
+    ) -> some View {
         let closedDisplayHidden = !visible.contains(.closedDisplay)
         let brewingOnlyHidden = !visible.contains(.brewingOnly)
         let combinesCaption = combinesStatusCaption(layout, groups: groups)
-        let manualTimerAnchor = MenuLayout.manualTimerControlAnchor(in: visible)
         let needsSleepStatus = (closedDisplayHidden
             && (model.closedDisplayEnabled || model.closedDisplayBusy || model.closedDisplayError != nil))
             || (brewingOnlyHidden && (model.closedDisplayAutoBusy || model.closedDisplayAutoError != nil))
@@ -391,9 +394,9 @@ struct MenuBarContent: View {
                     ? [.triggerAction] + group.items.filter { $0 != .triggerAction }
                     : group.items) { item in
                     Group {
+                        if item == manualTimerAnchor { manualTimerReturnControl }
                         advancedItem(item, layout: layout, combinesCaption: combinesCaption)
                             .modifier(CustomMenuControlStyle(item: item, style: layout.controlStyle))
-                        if item == manualTimerAnchor { manualTimerReturnControl }
                     }
                     .disabled(preview != nil).allowsHitTesting(preview == nil)
                 }
@@ -691,6 +694,8 @@ struct MenuBarContent: View {
             triggerSummary
                 .transition(.opacity)
         } else {
+            manualTimerReturnControl
+
             switchRow("Keep awake", isOn: Binding(
                 get: { session.isActive },
                 set: { _ in model.toggleManual() }
@@ -717,8 +722,6 @@ struct MenuBarContent: View {
                     model.startUntil(hour: hour, minute: minute)
                 }
             }
-
-            manualTimerReturnControl
 
             if session.isActive && !model.quickStopDurations.isEmpty {
                 // The three short defaults share a line with the label;

@@ -158,10 +158,10 @@ public struct MenuLayout: Codable, Equatable, Sendable {
         return !items.isEmpty && items.isSubset(of: statuses)
     }
 
-    /// Attach the return-to-Automatic switch to one visible timer row.
-    public static func manualTimerControlAnchor(in visibleItems: Set<MenuItem>) -> MenuItem? {
-        if visibleItems.contains(.duration) { return .duration }
-        return visibleItems.contains(.manualOverride) ? .manualOverride : nil
+    /// Show the return-to-Automatic switch before the first visible manual control.
+    public static func manualTimerControlAnchor(in visibleItems: [MenuItem]) -> MenuItem? {
+        let manualControls: Set<MenuItem> = [.manualToggle, .duration, .manualOverride, .quickStop]
+        return visibleItems.first(where: manualControls.contains)
     }
 
     public func placement(of item: MenuItem) -> MenuLayoutSection {

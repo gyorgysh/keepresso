@@ -102,11 +102,12 @@ import Testing
     #expect(Set(layout.groups(expanded: false, available: available).flatMap(\.items)) == available)
 }
 
-@Test func returnToAutomaticFollowsOneVisibleManualTimerControl() {
-    #expect(MenuLayout.manualTimerControlAnchor(in: [.duration, .manualOverride]) == .duration)
+@Test func returnToAutomaticPrecedesFirstVisibleManualControl() {
+    #expect(MenuLayout.manualTimerControlAnchor(in: [.manualToggle, .duration]) == .manualToggle)
+    #expect(MenuLayout.manualTimerControlAnchor(in: [.manualOverride, .duration]) == .manualOverride)
     #expect(MenuLayout.manualTimerControlAnchor(in: [.duration, .quickStop]) == .duration)
-    #expect(MenuLayout.manualTimerControlAnchor(in: [.manualOverride, .quickStop]) == .manualOverride)
-    #expect(MenuLayout.manualTimerControlAnchor(in: [.manualToggle, .quickStop]) == nil)
+    #expect(MenuLayout.manualTimerControlAnchor(in: [.triggerAction, .quickStop]) == .quickStop)
+    #expect(MenuLayout.manualTimerControlAnchor(in: [.triggerAction]) == nil)
 }
 
 @Test func applyingEveryMenuProfileChangesOnlyPresentation() throws {
