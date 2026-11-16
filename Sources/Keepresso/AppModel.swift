@@ -1965,6 +1965,10 @@ final class AppModel {
             ),
             leaseIDs: session.liveLeases.map(\.id).sorted(),
             leasesEnabled: settings.automationLeasesEnabled,
+            returnsToAutomatic: endsAt.map { _ in
+                settings.triggersEnabled && triggersPaused && settings.automaticAfterManualTimer
+                    && session.endAction == .none
+            },
             lastWakeRequestId: lastWakeRequestId,
             lastWakeRequestOutcome: lastWakeRequestOutcome
         )

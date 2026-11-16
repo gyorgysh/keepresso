@@ -20,6 +20,7 @@ final class WidgetStateSync {
         var state: SharedSessionState
         var leaseIDs: [String]
         var leasesEnabled: Bool
+        var returnsToAutomatic: Bool?
         var lastWakeRequestId: String?
         var lastWakeRequestOutcome: String?
     }
@@ -33,11 +34,13 @@ final class WidgetStateSync {
         _ state: SharedSessionState,
         leaseIDs: [String] = [],
         leasesEnabled: Bool = true,
+        returnsToAutomatic: Bool? = nil,
         lastWakeRequestId: String? = nil,
         lastWakeRequestOutcome: String? = nil
     ) {
         let written = Written(
             state: state, leaseIDs: leaseIDs, leasesEnabled: leasesEnabled,
+            returnsToAutomatic: returnsToAutomatic,
             lastWakeRequestId: lastWakeRequestId, lastWakeRequestOutcome: lastWakeRequestOutcome
         )
         guard written != last else { return }
@@ -48,6 +51,7 @@ final class WidgetStateSync {
             endsAt: state.endsAt,
             triggersEnabled: state.triggersEnabled,
             triggersPaused: state.triggersPaused,
+            returnsToAutomatic: returnsToAutomatic,
             appVersion: appVersion,
             pid: ProcessInfo.processInfo.processIdentifier,
             writtenAt: Date(),

@@ -184,6 +184,23 @@ import Foundation
     #expect((object?["writtenAt"] as? String)?.hasSuffix("Z") == true)
 }
 
+@Test func statusFileReportsReturnsToAutomaticWithoutRequiringItInOldSnapshots() throws {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keepresso-tests-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    let old = StatusSnapshot(isActive: true, pid: 42, writtenAt: Date(timeIntervalSince1970: 1_800_000_000))
+    StatusFile.write(old, to: url)
+    #expect(try #require(StatusFile.read(from: url)).returnsToAutomatic == nil)
+
+    var snapshot = old
+    snapshot.returnsToAutomatic = true
+    StatusFile.write(snapshot, to: url)
+    let json = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+    #expect(json["returnsToAutomatic"] as? Bool == true)
+    #expect(StatusFile.read(from: url) == snapshot)
+}
+
 // MARK: - Lease commands
 
 private let leaseId = "aaaaaaaa-1111-2222-3333-444444444444"

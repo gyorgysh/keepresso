@@ -14,6 +14,8 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
     public var endsAt: Date?
     public var triggersEnabled: Bool
     public var triggersPaused: Bool
+    /// Whether the active manual timer is configured to resume automatic triggers on expiry.
+    public var returnsToAutomatic: Bool?
     /// The writing app's marketing version, for support and mismatch checks.
     public var appVersion: String?
     /// The writing app's process id.
@@ -36,6 +38,7 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
         endsAt: Date? = nil,
         triggersEnabled: Bool = false,
         triggersPaused: Bool = false,
+        returnsToAutomatic: Bool? = nil,
         appVersion: String? = nil,
         pid: Int32,
         writtenAt: Date,
@@ -48,6 +51,7 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
         self.endsAt = endsAt
         self.triggersEnabled = triggersEnabled
         self.triggersPaused = triggersPaused
+        self.returnsToAutomatic = returnsToAutomatic
         self.appVersion = appVersion
         self.pid = pid
         self.writtenAt = writtenAt

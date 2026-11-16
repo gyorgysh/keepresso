@@ -250,6 +250,8 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   something happens (session start/end, trigger fire/release, agent went idle,
   thermal stage, battery pause), run a Shortcut, POST a webhook, or a shell
   command, handy for a push to your phone when an overnight agent finishes.
+  While a manual timer runs, the optional `returnsToAutomatic` field in JSON
+  status reports the configured behavior on natural expiry.
   Schedule a system wake through the administrator helper and optionally start
   keep-awake when the Mac comes back (wake, work, sleep).
 - 💽 **Disk keep-alive.** Periodic no-op disk I/O to stop an external drive or NAS
