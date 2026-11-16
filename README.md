@@ -462,6 +462,16 @@ open "keepresso://toggle"
 Either way, if triggers are on they pause first (same as the menu's Pause
 Triggers), so the command actually takes effect.
 
+Local companion applications can request the same Manual or Automatic mode
+as the menu when triggers are enabled. Write an atomic ISO 8601 JSON request
+with `id` (UUID), `pid` (the running Keepresso PID), `paused` (boolean) and
+`validUntil` (at most five seconds ahead) to `.trigger-mode-<uuid>.json`
+beside `status.json`. Open `keepresso://apply-trigger-mode?id=<uuid>` using
+the same UUID. Keepresso accepts regular request files owned by its login
+user and consumes each accepted file once. Use `supportsTriggerModeControl`
+and `lastTriggerModeRequestID` in the status snapshot for discovery and
+acknowledgment. This is local same-account automation.
+
 ### The `keepresso` command-line tool
 
 The app bundle ships a caffeinate-style CLI. The Homebrew cask links it onto

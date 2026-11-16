@@ -1950,6 +1950,7 @@ final class AppModel {
                 triggersEnabled: settings.triggersEnabled,
                 triggersPaused: triggersPaused
             ),
+            lastTriggerModeRequestID: lastTriggerModeRequestID,
             leaseIDs: session.liveLeases.map(\.id).sorted(),
             leasesEnabled: settings.automationLeasesEnabled,
             lastWakeRequestId: lastWakeRequestId,
@@ -2182,6 +2183,8 @@ final class AppModel {
 
     // MARK: - URL scheme commands
 
+    @ObservationIgnored private var lastTriggerModeRequestID: UUID?
+
     /// Handle a `keepresso://` command from ``URLCommand/parse(_:)``. Acts like
     /// the manual toggle/duration picker. When trigger gating is on it pauses
     /// triggers first (the same in-memory pause as the menu's Manual mode,
@@ -2189,6 +2192,16 @@ final class AppModel {
     /// command on the next once-a-second reconcile, turning it into a no-op
     /// with no feedback to the script that fired it.
     func handle(_ command: URLCommand) {
+        if case .applyTriggerMode(let id) = command {
+            guard settings.triggersEnabled, let request = TriggerModeRequest.take(
+                id, expectedPID: ProcessInfo.processInfo.processIdentifier, now: Date()
+            ) else { return }
+            if request.paused { pauseTriggers(cause: .command) }
+            else { resumeTriggers() }
+            lastTriggerModeRequestID = id
+            syncWidgetState()
+            return
+        }
         // The automation doorbell is not a session command: it must not
         // pause triggers or touch the session, only process pending
         // automation inputs and bring the next reconcile (and the
@@ -2226,7 +2239,7 @@ final class AppModel {
             } else {
                 session.start(mode: settings.defaultMode, cause: .command)
             }
-        case .syncLeases:
+        case .syncLeases, .applyTriggerMode:
             break // handled above
         }
     }

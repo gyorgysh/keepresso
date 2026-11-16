@@ -10,6 +10,11 @@ import Foundation
 /// behind by a crash.
 public struct StatusSnapshot: Codable, Equatable, Sendable {
     public var isActive: Bool
+    /// Indicates support for local one-use trigger mode requests. Optional for
+    /// snapshots written by older Keepresso versions.
+    public var supportsTriggerModeControl: Bool?
+    /// The last accepted trigger mode request acknowledged by this process.
+    public var lastTriggerModeRequestID: UUID?
     /// When a timed session ends, or `nil` for indefinite/trigger-held ones.
     public var endsAt: Date?
     public var triggersEnabled: Bool
@@ -33,6 +38,8 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
 
     public init(
         isActive: Bool,
+        supportsTriggerModeControl: Bool? = nil,
+        lastTriggerModeRequestID: UUID? = nil,
         endsAt: Date? = nil,
         triggersEnabled: Bool = false,
         triggersPaused: Bool = false,
@@ -45,6 +52,8 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
         lastWakeRequestOutcome: String? = nil
     ) {
         self.isActive = isActive
+        self.supportsTriggerModeControl = supportsTriggerModeControl
+        self.lastTriggerModeRequestID = lastTriggerModeRequestID
         self.endsAt = endsAt
         self.triggersEnabled = triggersEnabled
         self.triggersPaused = triggersPaused

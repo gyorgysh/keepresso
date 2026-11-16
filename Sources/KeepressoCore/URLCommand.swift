@@ -16,11 +16,14 @@ import Foundation
 /// - `keepresso://sync-leases`: rescan automation inputs now (and launch the
 ///   app if needed). Carries no parameters on purpose: lease data travels in
 ///   validated files, the URL is only the doorbell.
+/// - `keepresso://apply-trigger-mode?id=<uuid>`: apply a one-use local
+///   trigger-mode request. The mode itself is never accepted from the URL.
 public enum URLCommand: Equatable, Sendable {
     case start(mode: SessionMode)
     case stop
     case toggle
     case syncLeases
+    case applyTriggerMode(UUID)
 
     /// Parses a `keepresso://` URL into a command, or `nil` if it's not one
     /// Keepresso recognises (wrong scheme, unknown host, or a malformed
@@ -51,6 +54,13 @@ public enum URLCommand: Equatable, Sendable {
             return .toggle
         case "sync-leases":
             return .syncLeases
+        case "apply-trigger-mode":
+            guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                  components.user == nil, components.password == nil, components.port == nil,
+                  components.path.isEmpty, components.fragment == nil,
+                  let query = components.queryItems, query.count == 1, query[0].name == "id",
+                  let value = query[0].value, let id = UUID(uuidString: value) else { return nil }
+            return .applyTriggerMode(id)
         default:
             return nil
         }
