@@ -236,6 +236,16 @@ public final class ThermalGuardController {
     public var config: ThermalSafetyConfig? {
         didSet {
             guard config != oldValue else { return }
+            // Losing or regaining fan control doesn't change the cooling rule.
+            // The guard may already have let go of the system sleep override.
+            if state.stage == .stopped, let config, let oldValue,
+               config.mode == oldValue.mode, config.sustainSeconds == oldValue.sustainSeconds,
+               config.stopBrewing, oldValue.stopBrewing {
+                if config.fanBoostPercent == nil && oldValue.fanBoostPercent != nil {
+                    pendingReleases.append(.restoreFans)
+                }
+                return
+            }
             // Appended, not assigned: back-to-back config changes must not
             // drop a release queued by the previous one.
             pendingReleases += releaseEffects(for: state.stage)
