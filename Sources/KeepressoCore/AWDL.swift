@@ -100,9 +100,14 @@ extension AWDLWatchdogLaunching {
 /// as soon as the loop is running.
 public final class OsascriptAWDLWatchdog: AWDLWatchdogLaunching {
     private let flagURL: URL
+    private let ownerPID: Int32
 
-    public init(flagURL: URL = OsascriptAWDLWatchdog.defaultFlagURL) {
+    public init(
+        flagURL: URL = OsascriptAWDLWatchdog.defaultFlagURL,
+        ownerPID: Int32 = ProcessInfo.processInfo.processIdentifier
+    ) {
         self.flagURL = flagURL
+        self.ownerPID = ownerPID
     }
 
     public static var defaultFlagURL: URL {
@@ -117,16 +122,7 @@ public final class OsascriptAWDLWatchdog: AWDLWatchdogLaunching {
     }
 
     public func createFlag() -> Bool {
-        do {
-            try FileManager.default.createDirectory(
-                at: flagURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            try Data().write(to: flagURL)
-            return true
-        } catch {
-            return false
-        }
+        AppSupportFlagFile(url: flagURL).create(owner: ownerPID)
     }
 
     public func removeFlag() {
@@ -154,16 +150,27 @@ public final class OsascriptAWDLWatchdog: AWDLWatchdogLaunching {
     /// interface after sleep/wake, Wi-Fi toggles, or any app requesting AWDL),
     /// and on the flag disappearing it restores `awdl0 up` once and idles, so
     /// re-enabling needs no new prompt. On app death it restores the interface
-    /// (only if it was the one holding it down) and removes any leftover flag,
-    /// so a crash fails safe.
+    /// (only if it was the one holding it down) and removes its own leftover
+    /// flag, so a crash fails safe. A flag stamped by a newer app run is left
+    /// alone (see ``removeOwnedFlagClause(flag:appPID:)``).
     static func watchdogCommand(flagPath: String, appPID: Int32) -> String {
         let flag = shellSingleQuoted(flagPath)
         return "( DOWNED=; while kill -0 \(appPID) 2>/dev/null; do "
             + "if [ -f \(flag) ]; then /sbin/ifconfig awdl0 down; DOWNED=1; "
             + "elif [ -n \"$DOWNED\" ]; then /sbin/ifconfig awdl0 up; DOWNED=; fi; "
             + "sleep 3; done; "
-            + "rm -f \(flag); "
+            + removeOwnedFlagClause(flag: flag, appPID: appPID)
             + "if [ -n \"$DOWNED\" ]; then /sbin/ifconfig awdl0 up; fi ) </dev/null >/dev/null 2>&1 &"
+    }
+
+    /// The loop's exit cleanup: remove the flag only when this app run
+    /// stamped it. The loop notices its app died up to a cycle late, and by
+    /// then a relaunched app may have created a flag of its own at the same
+    /// path. Deleting that one would leave the new run believing it holds
+    /// while its own loop sees no flag and does nothing. An unstamped or
+    /// foreign leftover is cleared by the next launch's cleanup instead.
+    static func removeOwnedFlagClause(flag: String, appPID: Int32) -> String {
+        "if [ \"$(cat \(flag) 2>/dev/null)\" = \"\(appPID)\" ]; then rm -f \(flag); fi; "
     }
 
     /// POSIX single-quote a value so `/bin/sh` treats it as one literal word.

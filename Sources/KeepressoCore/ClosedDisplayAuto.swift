@@ -41,9 +41,14 @@ extension SleepWatchdogLaunching {
 /// backgrounded so the prompt returns as soon as the loop is running.
 public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
     private let flagURL: URL
+    private let ownerPID: Int32
 
-    public init(flagURL: URL = OsascriptSleepWatchdog.defaultFlagURL) {
+    public init(
+        flagURL: URL = OsascriptSleepWatchdog.defaultFlagURL,
+        ownerPID: Int32 = ProcessInfo.processInfo.processIdentifier
+    ) {
         self.flagURL = flagURL
+        self.ownerPID = ownerPID
     }
 
     public static var defaultFlagURL: URL {
@@ -54,7 +59,7 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
 
     public func isFlagPresent() -> Bool { flag.isPresent }
 
-    public func createFlag() -> Bool { flag.create() }
+    public func createFlag() -> Bool { flag.create(owner: ownerPID) }
 
     public func removeFlag() { flag.remove() }
 
@@ -81,7 +86,9 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
     /// setting directly). So it writes only on a flag transition, and on app
     /// death restores normal sleep only if it was the one that disabled it, so
     /// a crash or quit mid-session fails safe while a manually enabled global
-    /// setting survives untouched.
+    /// setting survives untouched. Its exit cleanup removes only a flag this
+    /// app run stamped, never one a relaunched app has since created (see
+    /// ``OsascriptAWDLWatchdog/removeOwnedFlagClause(flag:appPID:)``).
     static func watchdogCommand(flagPath: String, appPID: Int32) -> String {
         // Single-quote the path so it stays one literal word to /bin/sh (the
         // command runs as root via `do shell script`). See
@@ -92,7 +99,7 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
             + "if [ -z \"$SET\" ]; then /usr/bin/pmset -a disablesleep 1; SET=1; fi; "
             + "elif [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0; SET=; fi; "
             + "sleep 2; done; "
-            + "rm -f \(flag); "
+            + OsascriptAWDLWatchdog.removeOwnedFlagClause(flag: flag, appPID: appPID)
             + "if [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0; fi ) </dev/null >/dev/null 2>&1 &"
     }
 
@@ -324,6 +331,11 @@ public final class ClosedDisplayAutoController {
     public func autoTick(brewing: Bool) async {
         guard onlyWhileBrewing else { return }
         if brewing {
+            // The hold is only as good as the flag behind it. If the flag went
+            // missing underneath a live hold (deleted by hand, or by anything
+            // else touching the folder), the helper has already let sleep back
+            // on: drop the latch so this tick takes the hold again.
+            if isHolding, !isBusy, !launcher.isFlagPresent() { isHolding = false }
             guard !isHolding, !isBusy, holdOff == .none else { return }
             switch await engage() {
             case .applied:
