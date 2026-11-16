@@ -1955,6 +1955,7 @@ final class AppModel {
                 triggersEnabled: settings.triggersEnabled,
                 triggersPaused: triggersPaused
             ),
+            wakeState: MacWakeState.read().rawValue,
             leaseIDs: session.liveLeases.map(\.id).sorted(),
             leasesEnabled: settings.automationLeasesEnabled,
             lastWakeRequestId: lastWakeRequestId,
@@ -1972,6 +1973,7 @@ final class AppModel {
                 triggersEnabled: settings.triggersEnabled,
                 triggersPaused: triggersPaused
             ),
+            wakeState: MacWakeState.read().rawValue,
             leasesEnabled: settings.automationLeasesEnabled
         )
     }

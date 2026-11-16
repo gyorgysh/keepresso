@@ -486,6 +486,11 @@ The standalone holds work even when the app is not running; `keepresso help`
 lists everything. Installed from a DMG instead of Homebrew? Symlink it
 yourself: `ln -s /Applications/Keepresso.app/Contents/Helpers/keepresso /usr/local/bin/`.
 
+The JSON snapshot includes the last wake capability observed by the app in
+`wakeState`. The value is `full`, `dark` (macOS background wake), or
+`unknown`. This is a snapshot rather than a live sleep
+detector. Older apps leave the field out.
+
 ## Why not the Mac App Store?
 
 The App Sandbox blocks the `IOPMAssertion` power APIs Keepresso depends on, so

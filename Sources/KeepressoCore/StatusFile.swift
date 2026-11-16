@@ -19,6 +19,8 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
     /// The writing app's process id.
     public var pid: Int32
     public var writtenAt: Date
+    /// Last execution capability observed by the app. One of full, dark, or unknown.
+    public var wakeState: String?
     /// Ids of the automation leases counting as demand, the acquire
     /// acknowledgment channel. Optional: files written by older apps lack it,
     /// which acquire treats as "app too old to grant leases".
@@ -39,6 +41,7 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
         appVersion: String? = nil,
         pid: Int32,
         writtenAt: Date,
+        wakeState: String? = nil,
         leaseIDs: [String]? = nil,
         leasesEnabled: Bool? = nil,
         lastWakeRequestId: String? = nil,
@@ -51,6 +54,7 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
         self.appVersion = appVersion
         self.pid = pid
         self.writtenAt = writtenAt
+        self.wakeState = wakeState
         self.leaseIDs = leaseIDs
         self.leasesEnabled = leasesEnabled
         self.lastWakeRequestId = lastWakeRequestId

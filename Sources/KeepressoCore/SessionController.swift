@@ -15,7 +15,7 @@ public final class SessionController {
     /// Whether a session is currently keeping the Mac awake.
     public private(set) var isActive: Bool = false
 
-    public enum WakeState: Equatable {
+    public enum WakeState: String, Sendable {
         case full, dark, unknown
 
         public init(systemCapabilities: UInt64?) {

@@ -18,6 +18,7 @@ final class WidgetStateSync {
     /// second lease arriving during an active session changes nothing else.
     private struct Written: Equatable {
         var state: SharedSessionState
+        var wakeState: String?
         var leaseIDs: [String]
         var leasesEnabled: Bool
         var lastWakeRequestId: String?
@@ -31,13 +32,14 @@ final class WidgetStateSync {
     /// the ticker calls this every second and the no-op path is the common one.
     func write(
         _ state: SharedSessionState,
+        wakeState: String? = nil,
         leaseIDs: [String] = [],
         leasesEnabled: Bool = true,
         lastWakeRequestId: String? = nil,
         lastWakeRequestOutcome: String? = nil
     ) {
         let written = Written(
-            state: state, leaseIDs: leaseIDs, leasesEnabled: leasesEnabled,
+            state: state, wakeState: wakeState, leaseIDs: leaseIDs, leasesEnabled: leasesEnabled,
             lastWakeRequestId: lastWakeRequestId, lastWakeRequestOutcome: lastWakeRequestOutcome
         )
         guard written != last else { return }
@@ -51,6 +53,7 @@ final class WidgetStateSync {
             appVersion: appVersion,
             pid: ProcessInfo.processInfo.processIdentifier,
             writtenAt: Date(),
+            wakeState: wakeState,
             leaseIDs: leaseIDs,
             leasesEnabled: leasesEnabled,
             lastWakeRequestId: lastWakeRequestId,
