@@ -118,7 +118,10 @@ public final class ClosedDisplayCoordinator {
     /// action, or defers it past another tick, would leave enforcement free to
     /// act on the reading that refresh is about to replace.
     public func tick(_ conditions: Conditions) -> [Action] {
-        guard conditions.onlyWhileBrewing else { return [] }
+        guard conditions.onlyWhileBrewing else {
+            // A late acquisition may still own a hold if rollback failed.
+            return conditions.automationHolding ? [.runAutoTick(brewing: false)] : []
+        }
         var actions: [Action] = []
         let brewing = conditions.brewing
         if brewing, !sawBrewing, !conditions.automationAuthorized, !conditions.helperInstalled {

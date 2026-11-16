@@ -489,3 +489,29 @@ func lateClosedDisplayEngageReleasesWhenDemandEnds(disableFeature: Bool) async {
     #expect(!controller.isHolding)
     #expect(!launcher.flagPresent)
 }
+
+@MainActor
+@Test func closedDisplayRetriesALateFailedReleaseAfterTheFeatureIsDisabled() async {
+    let launcher = FakeSleepWatchdogLauncher()
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+    controller.onlyWhileBrewing = true
+    let pending = PendingWatchdogCall()
+    launcher.beforeStart = pending.suspend
+    launcher.removeClearsFlag = false
+
+    let engaging = Task { await controller.autoTick(brewing: true) }
+    for await _ in pending.started { break }
+    controller.onlyWhileBrewing = false
+    await controller.stopIfHolding()
+    pending.readyToReturn.signal()
+    await engaging.value
+    pending.notification.finish()
+
+    #expect(controller.isHolding)
+    #expect(launcher.flagPresent)
+    launcher.removeClearsFlag = true
+    await controller.autoTick(brewing: true)
+    #expect(!controller.isHolding)
+    #expect(!launcher.flagPresent)
+    #expect(launcher.startCalls == 1)
+}

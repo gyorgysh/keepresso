@@ -333,8 +333,7 @@ public final class ClosedDisplayAutoController {
     /// The app supplies a live reading so an outstanding helper call can
     /// observe a session ending before the next tick runs.
     public func autoTick(brewing: @MainActor () -> Bool) async {
-        guard onlyWhileBrewing else { return }
-        wantsBrewingHold = brewing()
+        wantsBrewingHold = onlyWhileBrewing && brewing()
         guard wantsBrewingHold else {
             holdOff = .none
             await releaseIfNeeded()
