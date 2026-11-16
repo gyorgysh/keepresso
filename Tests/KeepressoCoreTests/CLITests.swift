@@ -163,6 +163,23 @@ import Foundation
     #expect(StatusFile.read(from: url) == snapshot)
 }
 
+@Test func statusFileReportsLastUserInputAtWithoutRequiringItInOldSnapshots() throws {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keepresso-tests-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    let old = StatusSnapshot(isActive: true, pid: 42, writtenAt: Date(timeIntervalSince1970: 1_800_000_000))
+    StatusFile.write(old, to: url)
+    #expect(try #require(StatusFile.read(from: url)).lastUserInputAt == nil)
+
+    var snapshot = old
+    snapshot.lastUserInputAt = Date(timeIntervalSince1970: 1_799_999_000)
+    StatusFile.write(snapshot, to: url)
+    let json = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+    #expect(json["lastUserInputAt"] as? String == ISO8601DateFormatter().string(from: try #require(snapshot.lastUserInputAt)))
+    #expect(StatusFile.read(from: url) == snapshot)
+}
+
 @Test func statusFileReadsMissingFileAsNil() {
     let url = FileManager.default.temporaryDirectory
         .appendingPathComponent("keepresso-tests-\(UUID().uuidString).json")

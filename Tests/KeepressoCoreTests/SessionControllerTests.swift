@@ -52,6 +52,53 @@ private final class FakeBrightness: BrightnessControlling {
 }
 
 @MainActor
+@Test func userInputStatusIgnoresKeepressoPokesAndOmitsInvalidReadings() {
+    let clock = Clock()
+    let activity = FakeActivity()
+    let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
+    controller.start(options: SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true))
+    let sessionStart = clock.now
+    #expect(activity.pokeCount == 1)
+    clock.advance(20)
+    controller.reconcile(systemIdleSeconds: 20, statusIdleReader: { nil })
+    #expect(controller.lastUserInputAt == sessionStart)
+
+    clock.advance(2)
+    controller.reconcile(systemIdleSeconds: 22, statusIdleReader: { nil })
+    #expect(controller.lastUserInputAt == sessionStart)
+
+    clock.advance(5)
+    controller.reconcile(systemIdleSeconds: 0, statusIdleReader: { nil })
+    #expect(controller.lastUserInputAt == clock.now)
+
+    controller.reconcile(statusIdleReader: { .infinity })
+    #expect(controller.lastUserInputAt == nil)
+}
+
+@MainActor
+@Test func userInputStatusDoesNotChangeActivitySimulationPolicy() {
+    let clock = Clock()
+    let activity = FakeActivity()
+    let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
+    controller.reconcile(statusIdleReader: {
+        Issue.record("Status idle reader ran while no session was active")
+        return 0
+    })
+    controller.start(options: SleepPreventionOptions(
+        preventSystemSleep: true, simulateUserActivity: true, activityPokeIdleMinutes: 1
+    ))
+    clock.advance(120)
+    controller.reconcile(statusIdleReader: { 120 })
+    let estimate = controller.lastUserInputAt
+    #expect(estimate != nil)
+    controller.reconcile(statusIdleReader: { 119.8 })
+    #expect(controller.lastUserInputAt == estimate)
+    #expect(activity.pokeCount == 0)
+    controller.stop()
+    #expect(controller.lastUserInputAt == nil)
+}
+
+@MainActor
 @Test func keepActivePokesOnceOnActivationThenOnTheInterval() {
     let clock = Clock()
     let activity = FakeActivity()

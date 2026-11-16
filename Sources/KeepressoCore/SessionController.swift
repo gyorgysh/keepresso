@@ -25,6 +25,9 @@ public final class SessionController {
     /// When the active session began, or `nil` while idle.
     public private(set) var startedAt: Date?
 
+    /// Best-effort input time for the current active session.
+    @ObservationIgnored public private(set) var lastUserInputAt: Date?
+
     /// When set, live triggers own activation: every ``reconcile(now:systemIdleSeconds:)``
     /// turns the session on or off to match the gate, and manual ``toggle()`` /
     /// ``start(mode:options:)`` only hold until the next tick. While gated the
@@ -400,6 +403,7 @@ public final class SessionController {
         if let options { self.options = options }
         self.mode = mode
         self.startedAt = now()
+        lastUserInputAt = nil
         self.isActive = true
         remindersFired = 0
         lastActivityPokeAt = nil
@@ -475,6 +479,7 @@ public final class SessionController {
         }
         isActive = false
         startedAt = nil
+        lastUserInputAt = nil
         leaseHeld = false
         remindersFired = 0
         endingSoonFired = false
@@ -698,7 +703,8 @@ public final class SessionController {
         battery: BatteryReading = .unknown,
         thermal: ThermalReading = .unknown,
         display: DisplayReading = .unknown,
-        gameFrontmost: Bool = false
+        gameFrontmost: Bool = false,
+        statusIdleReader: (() -> TimeInterval?)? = nil
     ) {
         let instant = now ?? self.now()
 
@@ -886,6 +892,11 @@ public final class SessionController {
         // Taken before this tick's poke: every idle consumer reads the user's
         // idle, not the reset our own posted key or mouse event caused.
         let userIdle = pokeAdjustedIdle(systemIdleSeconds, at: instant)
+        // Keep the optional status sample out of the inputs to power policy.
+        if isActive, let statusIdleReader {
+            let idle = userIdle ?? pokeAdjustedIdle(statusIdleReader(), at: instant)
+            updateLastUserInput(at: instant, idle: idle)
+        }
         let ownPokeReset = systemIdleSeconds.map { idleResetIsOwnPoke($0, at: instant) } ?? false
         let desired = desiredAssertions(systemIdleSeconds: userIdle, display: effectiveDisplay)
         assertions.apply(
@@ -1178,6 +1189,20 @@ public final class SessionController {
         // clicked) that is zero.
         idleAtLastPoke = userIdle ?? 0
         activity.poke(options.activityPokeKind)
+    }
+
+    private func updateLastUserInput(at instant: Date, idle: TimeInterval?) {
+        guard let idle, idle.isFinite, idle >= 0 else {
+            lastUserInputAt = nil
+            return
+        }
+        let estimate = instant.addingTimeInterval(-idle)
+        if let previous = lastUserInputAt {
+            // Avoid rewriting the snapshot every tick while typing.
+            if abs(estimate.timeIntervalSince(previous)) < 1 { return }
+            if idle < 2, (0..<10).contains(instant.timeIntervalSince(previous)) { return }
+        }
+        lastUserInputAt = estimate
     }
 
     /// The idle reading with our own poke taken out. A posted key or mouse

@@ -57,6 +57,10 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   mouse. Those methods request Accessibility only when you pick them. It only
   steps in once you've been idle a few seconds, so it never types or nudges
   while you're using the Mac. Off by default.
+  During a brew, JSON status can include `lastUserInputAt`, an estimate
+  from the system idle counter that subtracts Keepresso's simulated
+  activity where identifiable. The local snapshot stores the most recent
+  estimate only. It omits input content and history.
 - ⚡ **Trigger engine.** Stay awake only while charging or on battery, an external
   display is connected, you're on a chosen Wi-Fi network, **a VPN is
   connected**, the **camera or microphone is in use**, **audio is playing**, a

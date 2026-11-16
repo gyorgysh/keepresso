@@ -122,7 +122,8 @@ final class SessionTicker {
                         battery: battery,
                         thermal: thermal,
                         display: display,
-                        gameFrontmost: self?.gameFrontmost?() ?? false
+                        gameFrontmost: self?.gameFrontmost?() ?? false,
+                        statusIdleReader: Self.systemIdleSeconds
                     )
                 }
                 disk?.tick(now: Date())

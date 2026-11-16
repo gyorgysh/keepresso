@@ -12,6 +12,8 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
     public var isActive: Bool
     /// When a timed session ends, or `nil` for indefinite/trigger-held ones.
     public var endsAt: Date?
+    /// Best-effort input time during a brew, with our own simulated activity omitted.
+    public var lastUserInputAt: Date?
     public var triggersEnabled: Bool
     public var triggersPaused: Bool
     /// The writing app's marketing version, for support and mismatch checks.
@@ -34,6 +36,7 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
     public init(
         isActive: Bool,
         endsAt: Date? = nil,
+        lastUserInputAt: Date? = nil,
         triggersEnabled: Bool = false,
         triggersPaused: Bool = false,
         appVersion: String? = nil,
@@ -46,6 +49,7 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
     ) {
         self.isActive = isActive
         self.endsAt = endsAt
+        self.lastUserInputAt = lastUserInputAt
         self.triggersEnabled = triggersEnabled
         self.triggersPaused = triggersPaused
         self.appVersion = appVersion

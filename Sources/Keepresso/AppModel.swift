@@ -1951,6 +1951,7 @@ final class AppModel {
                 triggersPaused: triggersPaused
             ),
             leaseIDs: session.liveLeases.map(\.id).sorted(),
+            lastUserInputAt: session.isActive ? session.lastUserInputAt : nil,
             leasesEnabled: settings.automationLeasesEnabled,
             lastWakeRequestId: lastWakeRequestId,
             lastWakeRequestOutcome: lastWakeRequestOutcome

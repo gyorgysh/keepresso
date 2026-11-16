@@ -19,6 +19,7 @@ final class WidgetStateSync {
     private struct Written: Equatable {
         var state: SharedSessionState
         var leaseIDs: [String]
+        var lastUserInputAt: Date?
         var leasesEnabled: Bool
         var lastWakeRequestId: String?
         var lastWakeRequestOutcome: String?
@@ -32,12 +33,13 @@ final class WidgetStateSync {
     func write(
         _ state: SharedSessionState,
         leaseIDs: [String] = [],
+        lastUserInputAt: Date? = nil,
         leasesEnabled: Bool = true,
         lastWakeRequestId: String? = nil,
         lastWakeRequestOutcome: String? = nil
     ) {
         let written = Written(
-            state: state, leaseIDs: leaseIDs, leasesEnabled: leasesEnabled,
+            state: state, leaseIDs: leaseIDs, lastUserInputAt: lastUserInputAt, leasesEnabled: leasesEnabled,
             lastWakeRequestId: lastWakeRequestId, lastWakeRequestOutcome: lastWakeRequestOutcome
         )
         guard written != last else { return }
@@ -46,6 +48,7 @@ final class WidgetStateSync {
         StatusFile.write(StatusSnapshot(
             isActive: state.isActive,
             endsAt: state.endsAt,
+            lastUserInputAt: lastUserInputAt,
             triggersEnabled: state.triggersEnabled,
             triggersPaused: state.triggersPaused,
             appVersion: appVersion,
