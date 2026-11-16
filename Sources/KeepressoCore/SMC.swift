@@ -80,6 +80,10 @@ public enum SMCCodec {
     }
 }
 
+/// The slice of ``SMCConnection`` the fan controller needs, as a seam so tests
+/// can drive the real ``SMCFanController`` against a fake SMC. Same contract as
+/// the connection: `keyInfo` and `read` return nil for a key the SMC does not
+/// have, `write` returns the SMC result code (nil when the call never got there).
 protocol SMCFanAccess {
     func keyInfo(_ name: String) -> (size: Int, type: String)?
     func read(_ name: String) -> Double?
@@ -288,6 +292,9 @@ public final class SMCFanController: FanControlling, @unchecked Sendable {
     /// Per-fan RPM at the moment the current boost engaged (the clamp floor);
     /// cleared when auto control is restored.
     private var engageFloor: [Int: Double] = [:]
+    /// Per-fan mode key, once found (see ``modeKey(ofFan:)``). A key name is
+    /// fixed by the firmware, so a hit is kept for the life of the process.
+    private var modeKeys: [Int: String] = [:]
 
     public init(smc: SMCConnection? = SMCConnection()) {
         self.smc = smc
@@ -353,12 +360,20 @@ public final class SMCFanController: FanControlling, @unchecked Sendable {
         smc?.write("Ftst", value: 1) == SMCConnection.ResultCode.success
     }
 
-    /// M5 firmware uses lowercase `md`; older machines use `Md`.
-    /// Probe the hardware for each fan, including when restoring auto.
+    /// The fan's mode key. M5 firmware spells it with a lowercase `md`, older
+    /// machines with `Md`, so probe both, legacy spelling first: a machine
+    /// that has `Md` behaves exactly as it always did. The probe is a
+    /// read-only key lookup. Only a hit is remembered, so a fan whose key was
+    /// not found is probed again on the next call rather than written off.
+    /// Call with ``lock`` held.
     private func modeKey(ofFan fan: Int) -> String? {
+        if let known = modeKeys[fan] { return known }
         for suffix in ["Md", "md"] {
             let key = "F\(fan)\(suffix)"
-            if smc?.keyInfo(key) != nil { return key }
+            if smc?.keyInfo(key) != nil {
+                modeKeys[fan] = key
+                return key
+            }
         }
         return nil
     }
@@ -370,7 +385,8 @@ public final class SMCFanController: FanControlling, @unchecked Sendable {
         var ok = true
         for fan in 0..<count {
             guard let modeKey = modeKey(ofFan: fan),
-                  smc.write(modeKey, value: 0) == SMCConnection.ResultCode.success else {
+                  smc.write(modeKey, value: 0) == SMCConnection.ResultCode.success
+            else {
                 ok = false
                 continue
             }

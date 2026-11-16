@@ -4,6 +4,8 @@ import Testing
 private final class FanSMC: SMCFanAccess {
     var values: [String: Double]
     var writes: [(key: String, value: Double)] = []
+    /// Key lookups, in order: the mode-key probes show up here.
+    var lookups: [String] = []
 
     init(modeKeys: [String]) {
         values = ["FNum": Double(modeKeys.count)]
@@ -17,6 +19,7 @@ private final class FanSMC: SMCFanAccess {
     }
 
     func keyInfo(_ name: String) -> (size: Int, type: String)? {
+        lookups.append(name)
         guard values[name] != nil else { return nil }
         return name.hasSuffix("Md") || name.hasSuffix("md") || name == "FNum"
             ? (1, "ui8 ") : (4, "flt ")
@@ -77,4 +80,28 @@ private final class FanSMC: SMCFanAccess {
     #expect(controller.setForced(percent: 90) == .failed)
     #expect(smc.values["F0Tg"] == 4000)
     #expect(!controller.restoreAuto())
+}
+
+@Test func fanModeKeyIsProbedOncePerFanThenRemembered() {
+    let smc = FanSMC(modeKeys: ["F0md", "F1md"])
+    let controller = SMCFanController(access: smc)
+
+    #expect(controller.setForced(percent: 90) == .ok)
+    #expect(controller.setForced(percent: 90) == .ok)
+    #expect(controller.restoreAuto())
+    // One miss on the legacy spelling and one hit per fan, not one per call.
+    #expect(smc.lookups.filter { $0.hasSuffix("Md") } == ["F0Md", "F1Md"])
+    #expect(smc.lookups.filter { $0.hasSuffix("md") } == ["F0md", "F1md"])
+}
+
+@Test func aMissingFanModeKeyIsProbedAgainOnTheNextCall() {
+    let smc = FanSMC(modeKeys: ["F0md"])
+    smc.values.removeValue(forKey: "F0md")
+    let controller = SMCFanController(access: smc)
+    #expect(controller.setForced(percent: 90) == .failed)
+
+    // A miss is never remembered: once the key answers, the boost goes through.
+    smc.values["F0md"] = 0
+    #expect(controller.setForced(percent: 90) == .ok)
+    #expect(smc.values["F0md"] == 1)
 }
