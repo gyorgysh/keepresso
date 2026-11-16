@@ -95,7 +95,7 @@ final class SessionTicker {
                             lidClosed: lidClosed,
                             sleepOverrideActive: closedDisplay?.isEnabled
                         )
-                        let effects = guard_.tick(armed: armed)
+                        let effects = guard_.tick(armed: armed, stillLidClosed: self.thermalArming.lidClosed)
                         if !effects.isEmpty { self.onThermalEffects?(effects) }
                         if session.consumesThermalReading {
                             thermal = guard_.readingForSession

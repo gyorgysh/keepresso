@@ -211,7 +211,7 @@ public enum ThermalGuard {
 /// release a latched safety measure, mirroring how a `nil` thermal sample
 /// freezes the guard.
 public struct ThermalArming: Sendable, Equatable {
-    private var lidClosed = false
+    public private(set) var lidClosed = false
     private var overrideActive = false
 
     public init() {}
@@ -281,15 +281,14 @@ public final class ThermalGuardController {
     ///
     /// `armed` is the host's ``ThermalArming`` verdict. While disarmed the
     /// signal is still sampled (the live UI keeps its readings) but the state
-    /// machine never escalates, and any latched stage releases immediately:
-    /// opening the lid ends the emergency, so fans and the session come back
-    /// on that very tick rather than waiting out the cool-down dwell.
-    public func tick(armed: Bool) -> [ThermalEffect] {
+    /// machine never escalates. A stopped guard keeps monitoring until it
+    /// has cooled or the lid opens, even after it lifts its own override.
+    public func tick(armed: Bool, stillLidClosed: Bool = false) -> [ThermalEffect] {
         var effects = pendingReleases
         pendingReleases = []
         guard let config else { return effects }
         let sample = sample(for: config.mode)
-        guard armed else {
+        guard armed || (stillLidClosed && state.stage == .stopped) else {
             if state != ThermalGuardState() {
                 effects.append(contentsOf: releaseEffects(for: state.stage))
                 state = ThermalGuardState()
