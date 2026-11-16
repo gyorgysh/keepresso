@@ -144,6 +144,25 @@ import Foundation
 
 // MARK: - Status file
 
+@Test func statusSnapshotThermalFieldsAreOptionalAndRoundTrip() throws {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keepresso-thermal-status-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: url) }
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    StatusFile.write(StatusSnapshot(isActive: false, pid: 1, writtenAt: now), to: url)
+    let legacy = try #require(StatusFile.read(from: url))
+    #expect(legacy.thermalState == nil)
+    #expect(legacy.thermalGuardActive == nil)
+    #expect(legacy.thermalBrewingPaused == nil)
+
+    let paused = StatusSnapshot(
+        isActive: false, thermalState: "serious", thermalGuardActive: true,
+        thermalBrewingPaused: true, pid: 1, writtenAt: now
+    )
+    StatusFile.write(paused, to: url)
+    #expect(StatusFile.read(from: url) == paused)
+}
+
 @Test func statusSnapshotRoundTripsThroughDisk() {
     let url = FileManager.default.temporaryDirectory
         .appendingPathComponent("keepresso-tests-\(UUID().uuidString)", isDirectory: true)

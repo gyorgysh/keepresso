@@ -23,7 +23,14 @@ final class WidgetStateSync {
         var lastWakeRequestId: String?
         var lastWakeRequestOutcome: String?
     }
+    private struct ThermalStatus: Equatable {
+        var state: String?
+        var guardActive: Bool?
+        var brewingPaused: Bool?
+    }
     private var last: Written?
+    private var lastThermal: ThermalStatus?
+    private var lastStatusWrite: ContinuousClock.Instant?
     private let appVersion =
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
 
@@ -33,6 +40,9 @@ final class WidgetStateSync {
         _ state: SharedSessionState,
         leaseIDs: [String] = [],
         leasesEnabled: Bool = true,
+        thermalState: String? = nil,
+        thermalGuardActive: Bool? = nil,
+        thermalBrewingPaused: Bool? = nil,
         lastWakeRequestId: String? = nil,
         lastWakeRequestOutcome: String? = nil
     ) {
@@ -40,14 +50,26 @@ final class WidgetStateSync {
             state: state, leaseIDs: leaseIDs, leasesEnabled: leasesEnabled,
             lastWakeRequestId: lastWakeRequestId, lastWakeRequestOutcome: lastWakeRequestOutcome
         )
-        guard written != last else { return }
+        let thermal = ThermalStatus(
+            state: thermalState, guardActive: thermalGuardActive, brewingPaused: thermalBrewingPaused
+        )
+        let now = ContinuousClock.now
+        let refreshingThermalStatus = thermalGuardActive == true || thermalBrewingPaused == true
+        let heartbeatDue = refreshingThermalStatus
+            && lastStatusWrite.map { $0.duration(to: now) >= .seconds(4) } == true
+        guard written != last || thermal != lastThermal || heartbeatDue else { return }
         let stateChanged = state != last?.state
         last = written
+        lastThermal = thermal
+        lastStatusWrite = now
         StatusFile.write(StatusSnapshot(
             isActive: state.isActive,
             endsAt: state.endsAt,
             triggersEnabled: state.triggersEnabled,
             triggersPaused: state.triggersPaused,
+            thermalState: thermalState,
+            thermalGuardActive: thermalGuardActive,
+            thermalBrewingPaused: thermalBrewingPaused,
             appVersion: appVersion,
             pid: ProcessInfo.processInfo.processIdentifier,
             writtenAt: Date(),

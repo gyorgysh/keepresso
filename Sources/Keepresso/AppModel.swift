@@ -1940,6 +1940,7 @@ final class AppModel {
     /// per-tick recomputation lands on the same instant and doesn't defeat the
     /// change check.
     func syncWidgetState() {
+        let thermalState = systemThermalState
         let endsAt = session.remaining.map {
             Date(timeIntervalSinceReferenceDate: (Date().timeIntervalSinceReferenceDate + $0).rounded())
         }
@@ -1952,9 +1953,23 @@ final class AppModel {
             ),
             leaseIDs: session.liveLeases.map(\.id).sorted(),
             leasesEnabled: settings.automationLeasesEnabled,
+            thermalState: thermalState,
+            thermalGuardActive: (thermalState == "critical" && session.pausedByThermal)
+                || thermalGuard.state.stage == .stopped || fanBoostActivePercent != nil,
+            thermalBrewingPaused: session.pausedByThermal,
             lastWakeRequestId: lastWakeRequestId,
             lastWakeRequestOutcome: lastWakeRequestOutcome
         )
+    }
+
+    private var systemThermalState: String {
+        switch ProcessInfo.processInfo.thermalState {
+        case .nominal: return "nominal"
+        case .fair: return "fair"
+        case .serious: return "serious"
+        case .critical: return "critical"
+        @unknown default: return "unknown"
+        }
     }
 
     /// On quit, leave the widgets showing "off": the session's assertions die
