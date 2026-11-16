@@ -828,20 +828,17 @@ public final class SessionController {
 
         if triggerGate == nil, isActive, !leaseHeld, let total = mode.duration, let startedAt,
            instant.timeIntervalSince(startedAt) >= total {
-            // A deadline noticed long after it passed (Mac slept across it)
-            // still ends the session and may notify, but must not fire the
-            // end action: waking the lid would immediately re-sleep the
-            // display or lock the screen.
+            // End actions and trigger handoff require a fresh expiry outside
+            // a safety pause. Recovery can still report that the timer ended.
             let overdue = instant.timeIntervalSince(startedAt) - total
-            let fireAction = overdue <= Self.endActionStaleGrace
+            let fireAction = !resumedManualAfterSafetyPause && overdue <= Self.endActionStaleGrace
             stop(
                 reason: L("Timed session ended"),
                 effects: fireAction
                     ? .natural(kind: .sessionEnded)
                     : .safetyPause(kind: .sessionEnded)
             )
-            // Expiry while safety owned the session cannot resume triggers.
-            if fireAction, !resumedManualAfterSafetyPause, endAction == .none {
+            if fireAction, endAction == .none {
                 onManualTimerExpired?()
             }
             // A restored gate or an existing lease can take over this tick.

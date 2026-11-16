@@ -1167,6 +1167,33 @@ func timerThatExpiresDuringASafetyPauseDoesNotHandOff(onBattery: Bool) {
 }
 
 @MainActor
+@Test(arguments: [true, false])
+func timerThatExpiresDuringASafetyPauseSkipsTheEndAction(onBattery: Bool) {
+    let clock = Clock()
+    let endActor = RecordingEndActor()
+    let controller = SessionController(assertions: FakeAssertions(), endActor: endActor, now: { clock.now })
+    controller.endAction = .sleepMac
+    controller.pauseBelowBatteryPercent = 20
+    controller.pauseWhenHot = true
+    controller.start(mode: .timed(duration: 60))
+
+    clock.advance(59)
+    if onBattery {
+        controller.reconcile(battery: .discharging(10))
+    } else {
+        controller.reconcile(thermal: .hot)
+    }
+    #expect(!controller.isActive)
+
+    clock.advance(2)
+    controller.reconcile(battery: .onAC, thermal: .clear)
+    #expect(!controller.isActive)
+    clock.advance(SessionController.endActionDebounce + 1)
+    controller.reconcile(battery: .onAC, thermal: .clear)
+    #expect(endActor.performed.isEmpty)
+}
+
+@MainActor
 @Test func triggerGateDrivesActivationOnReconcile() {
     let (controller, fake, _) = makeController()
     let gate = StubGate(false)
