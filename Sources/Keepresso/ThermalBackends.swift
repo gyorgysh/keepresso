@@ -56,17 +56,14 @@ final class SystemThermalPressure: ThermalPressureReading {
                 return
             }
         }
-        lock.lock(); level = Self.publicPressure() ?? .critical; lock.unlock()
-    }
-
-    static func publicPressure() -> ThermalPressureLevel? {
         switch ProcessInfo.processInfo.thermalState {
-        case .nominal: return .nominal
-        case .fair: return .fair
-        case .serious: return .serious
-        case .critical: return .critical
-        @unknown default: return nil // an unknown reading must not release the cutoff
+        case .nominal: mapped = .nominal
+        case .fair: mapped = .fair
+        case .serious: mapped = .serious
+        case .critical: mapped = .critical
+        @unknown default: mapped = .critical // fail hot, never cool
         }
+        lock.lock(); level = mapped; lock.unlock()
     }
 }
 

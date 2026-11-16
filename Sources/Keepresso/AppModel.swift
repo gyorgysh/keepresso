@@ -190,7 +190,7 @@ final class AppModel {
         self.session.endAction = loaded.endAction
         self.session.pauseBelowBatteryPercent = loaded.pauseBelowBatteryPercent
         self.session.pauseWhenHot = loaded.thermalSafety?.stopBrewing ?? false
-        self.session.systemThermalPressure = SystemThermalPressure.publicPressure
+        self.session.systemThermalPressure = Self.readCriticalThermalPressure
         // Leases surviving a relaunch are picked up by the first tick's
         // directory scan; no launch-time special case.
         self.session.leases = loaded.automationLeasesEnabled ? leaseEngine : nil
@@ -1546,6 +1546,16 @@ final class AppModel {
                     )
                 }
             }
+        }
+    }
+
+    private static func readCriticalThermalPressure() -> ThermalPressureLevel? {
+        switch ProcessInfo.processInfo.thermalState {
+        case .nominal: return .nominal
+        case .fair: return .fair
+        case .serious: return .serious
+        case .critical: return .critical
+        @unknown default: return nil
         }
     }
 
