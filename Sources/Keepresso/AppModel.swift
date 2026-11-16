@@ -61,10 +61,7 @@ final class AppModel {
     /// The thermal safety net: watches the configured heat signal, applies the
     /// dwell/hysteresis, and hands escalation effects to
     /// ``handleThermalEffects(_:)`` via the ticker. Off while its config is nil.
-    let thermalGuard = ThermalGuardController(
-        pressure: SystemThermalPressure(),
-        sensors: MachineThermalSensors()
-    )
+    let thermalGuard = ThermalGuardController(pressure: SystemThermalPressure())
     /// Registration and status of the privileged helper daemon, the one-time
     /// password alternative to the per-run osascript prompts.
     let helper: HelperManager
@@ -207,7 +204,7 @@ final class AppModel {
         // Raw config here (self isn't fully initialized yet for the
         // availability derivation); the first thermalAvailabilityTick one
         // second later nils an unavailable boost stage out.
-        self.thermalGuard.config = loaded.thermalSafety
+        self.thermalGuard.config = loaded.thermalSafety?.usingSystemPressure
         GlassClarity.shared.value = Double(loaded.glassClarity) / 100
         self.disk = DiskKeepAliveController()
         self.disk.config = loaded.diskKeepAlive
@@ -1371,10 +1368,10 @@ final class AppModel {
 
     /// Setting this re-derives the existing guard and session pause gate.
     var thermalSafety: ThermalSafetyConfig? {
-        get { settings.thermalSafety }
+        get { settings.thermalSafety?.usingSystemPressure }
         set {
-            settings.thermalSafety = newValue
-            thermalGuard.config = effectiveThermalConfig(newValue)
+            settings.thermalSafety = newValue?.usingSystemPressure
+            thermalGuard.config = effectiveThermalConfig(settings.thermalSafety)
             session.pauseWhenHot = newValue?.stopBrewing ?? false
             if newValue != nil { notifier.requestAuthorization() }
             persist()
@@ -1387,7 +1384,7 @@ final class AppModel {
     /// unavailable stage 1 never eats a sustain window before the pause.
     /// Settings keep the user's chosen strength untouched.
     private func effectiveThermalConfig(_ config: ThermalSafetyConfig?) -> ThermalSafetyConfig? {
-        guard var config else { return nil }
+        guard var config = config?.usingSystemPressure else { return nil }
         if config.fanBoostPercent != nil,
            !(machineHasFans && helperInstalled && !helper.daemonOutdated) {
             config.fanBoostPercent = nil
@@ -1582,16 +1579,18 @@ final class AppModel {
     /// The "Test Fans" system check in Preferences ▸ General ▸ Thermal: a
     /// short supervised run through three boost levels with readings at each,
     /// so the fan path can be trusted before the safety net ever needs it.
-    /// Its own controller is `@Observable`; the temperature comes from the
-    /// same reader the guard uses (hottest sensor the machine offers).
-    @ObservationIgnored private(set) lazy var fanDryRun = FanDryRunController(
-        helper: helperClient,
-        fans: SMCFanInfo(),
-        readCelsius: { [thermalGuard] in
-            let ids = thermalGuard.discoverSensors().map(\.id)
-            return thermalGuard.liveReadings(ids: ids).values.max()
-        }
-    )
+    /// The supervised test's temperature readings are diagnostic only.
+    @ObservationIgnored private(set) lazy var fanDryRun: FanDryRunController = {
+        let sensors = MachineThermalSensors()
+        return FanDryRunController(
+            helper: helperClient,
+            fans: SMCFanInfo(),
+            readCelsius: {
+                let ids = sensors.discoverSensors().map(\.id)
+                return sensors.readCelsius(ids: ids)?.values.max()
+            }
+        )
+    }()
 
     /// Why the fan test can't start right now, so the UI can say it next to
     /// the disabled button instead of greying out silently. `machineHasFans`

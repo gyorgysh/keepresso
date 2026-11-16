@@ -58,6 +58,15 @@ public struct ThermalSafetyConfig: Codable, Equatable, Sendable {
         )
     }
 
+    /// Preserve the dwell and actions when interpreting an old degree-based
+    /// preference on the public system pressure scale.
+    public var usingSystemPressure: Self {
+        guard case .sensors = mode else { return self }
+        var config = self
+        config.mode = .pressure(atOrAbove: .serious)
+        return config
+    }
+
     public static let defaultSustainSeconds: TimeInterval = 30
     public static let sustainRange: ClosedRange<TimeInterval> = 5...600
     public static let celsiusRange: ClosedRange<Double> = 60...110
@@ -274,8 +283,8 @@ public final class ThermalGuardController {
         sensors.readCelsius(ids: ids) ?? [:]
     }
 
-    /// One 1 Hz step. Cheap when off (a nil check); pressure mode reads a
-    /// push-updated value, sensor mode reads through the backend's TTL cache.
+    /// One 1 Hz step. Read public pressure for live UI even when the guard
+    /// is off. Sensor-mode consumers can still read through the TTL cache.
     /// Pending releases flush even while off, so disabling the feature
     /// mid-emergency restores fans and the session on the very next tick.
     ///
@@ -287,6 +296,8 @@ public final class ThermalGuardController {
     public func tick(armed: Bool) -> [ThermalEffect] {
         var effects = pendingReleases
         pendingReleases = []
+        let level = pressure.current
+        if currentLevel != level { currentLevel = level }
         guard let config else { return effects }
         let sample = sample(for: config.mode)
         guard armed else {
@@ -318,7 +329,6 @@ public final class ThermalGuardController {
     private func sample(for mode: ThermalSafetyConfig.Mode) -> ThermalSample? {
         switch mode {
         case .pressure:
-            currentLevel = pressure.current
             lastSampleFailed = currentLevel == nil
             return currentLevel.map { .pressure($0) }
         case .sensors(let ids, _):

@@ -149,6 +149,26 @@ private let pressureConfig = ThermalSafetyConfig(
     #expect(state.stage == .clear)
 }
 
+@Test func sensorGuardSettingsCanRunOnPublicPressureWithoutChangingOtherChoices() throws {
+    let legacy = ThermalSafetyConfig(
+        mode: .sensors(ids: ["Tp09"], celsius: 98),
+        sustainSeconds: 60,
+        fanBoostPercent: 80,
+        stopBrewing: false
+    )
+    let data = try JSONEncoder().encode(legacy)
+    let saved = try JSONDecoder().decode(ThermalSafetyConfig.self, from: data)
+    #expect(saved == legacy)
+    #expect(saved.usingSystemPressure == ThermalSafetyConfig(
+        mode: .pressure(atOrAbove: .serious),
+        sustainSeconds: 60,
+        fanBoostPercent: 80,
+        stopBrewing: false
+    ))
+    let pressure = ThermalSafetyConfig(mode: .pressure(atOrAbove: .fair))
+    #expect(pressure.usingSystemPressure == pressure)
+}
+
 @MainActor
 @Test func controllerConfigChangeReleasesLatchedEffects() {
     final class ScriptedSensors: ThermalSensorReading {

@@ -162,10 +162,10 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 - 🔋 **Battery-aware auto-pause.** Let the Mac sleep once charge drops below a
   threshold you choose, even mid-session, so it never runs the battery flat.
 - 🌡️ **Thermal safety net.** Holding a Mac awake through heavy load can also
-  hold in the heat, so Keepresso can watch it: macOS's own thermal pressure
-  (works on every Mac) or specific temperature sensors picked from a live
-  list. If the reading stays over your threshold for a sustained time it
-  escalates, first (optionally) boosting the fans to a chosen strength, never
+  hold in the heat, so Keepresso watches macOS's public thermal pressure.
+  Old temperature-based guard settings use Serious and keep their dwell and
+  actions. If the reading stays at or above your threshold for the configured
+  time, the guard escalates, first (optionally) boosting the fans to a chosen strength, never
   below what the system already chose, then pausing the session so the Mac
   can cool, with a notification saying why. Everything restores itself once
   temperatures recover. A built-in **"Test Fans"** check proves the fan path

@@ -1,9 +1,7 @@
 import Foundation
 
 /// macOS thermal pressure, ordered so "at or above serious" reads as a plain
-/// comparison. Mirrors `ProcessInfo.ThermalState`; the app-side backend also
-/// folds the finer five-level Darwin notification into these four (its extra
-/// "heavy" level maps to ``serious``).
+/// comparison. Mirrors public `ProcessInfo.ThermalState`.
 public enum ThermalPressureLevel: Int, Codable, Comparable, Sendable, CaseIterable {
     case nominal = 0
     case fair
@@ -49,9 +47,7 @@ public enum ThermalReading: Equatable, Sendable {
     case unknown
 }
 
-/// Coarse system thermal pressure. The real backend (app-side) is push-updated
-/// from `ProcessInfo` and the thermal-pressure Darwin notification, so reads
-/// are free; `nil` means no reading has arrived yet.
+/// Coarse system thermal pressure. A nil reading leaves a guard unchanged.
 public protocol ThermalPressureReading: AnyObject {
     var current: ThermalPressureLevel? { get }
 }

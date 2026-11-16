@@ -1170,9 +1170,6 @@ struct MenuBarContent: View {
             return L("Battery below %d%%, Keepresso sessions paused until plugged in", model.pauseBelowBatteryPercent)
         }
         if session.pausedByThermal {
-            if let celsius = model.thermalGuard.currentCelsius {
-                return L("Running hot (%d °C), letting the Mac cool down", Int(celsius))
-            }
             return L("Running hot, letting the Mac cool down")
         }
         if model.triggersEnabled && !model.triggersPaused {

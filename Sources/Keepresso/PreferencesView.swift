@@ -600,12 +600,7 @@ private struct GeneralTab: View {
                     sectionFooter("Lets the Mac sleep once charge drops below this level, and switches off closed-display mode so a lid-closed Mac can sleep too.")
                 }
             }
-            // The thermal net is a lid-closed safety: a desktop has no lid to
-            // trap heat behind, so it gets no section (battery is the same
-            // laptop proxy the closed-display wording uses below).
-            if model.machineHasBattery {
-                thermalSection
-            }
+            thermalSection
             closedDisplaySection
             HotspotPreferencesSection(model: model)
             Section {
@@ -713,57 +708,25 @@ private struct GeneralTab: View {
     /// a lid.
     private var thermalSection: some View {
         Section {
-            Toggle("Pause when running hot", isOn: Binding(
-                get: { model.thermalSafety != nil },
-                set: { model.thermalSafety = $0 ? ThermalSafetyConfig() : nil }
-            ))
-            if let config = model.thermalSafety {
-                Picker("Watch", selection: Binding(
-                    get: { if case .sensors = config.mode { return 1 } else { return 0 } },
-                    set: { kind in
+            LabeledContent("System thermal pressure", value: model.thermalGuard.currentLevel?.label ?? L("Unknown"))
+            if model.machineHasBattery {
+                Toggle("Pause when running hot", isOn: Binding(
+                    get: { model.thermalSafety != nil },
+                    set: { model.thermalSafety = $0 ? ThermalSafetyConfig() : nil }
+                ))
+            }
+            if model.machineHasBattery, let config = model.thermalSafety,
+               case .pressure(let level) = config.mode {
+                Picker("At or above", selection: Binding(
+                    get: { level },
+                    set: { newLevel in
                         var updated = config
-                        updated.mode = kind == 1
-                            ? .sensors(ids: [], celsius: ThermalSafetyConfig.celsiusRange.upperBound - 15)
-                            : .pressure(atOrAbove: .serious)
+                        updated.mode = .pressure(atOrAbove: newLevel)
                         model.thermalSafety = updated
                     }
                 )) {
-                    Text("System thermal pressure").tag(0)
-                    Text("Temperature sensors").tag(1)
-                }
-                switch config.mode {
-                case .pressure(let level):
-                    Picker("At or above", selection: Binding(
-                        get: { level },
-                        set: { newLevel in
-                            var updated = config
-                            updated.mode = .pressure(atOrAbove: newLevel)
-                            model.thermalSafety = updated
-                        }
-                    )) {
-                        // Labels come from Core so the level names localize once.
-                        ForEach([ThermalPressureLevel.fair, .serious, .critical], id: \.self) { level in
-                            Text(verbatim: level.label).tag(level)
-                        }
-                    }
-                case .sensors(let ids, let celsius):
-                    ThermalSensorPicker(model: model, selectedIDs: Binding(
-                        get: { ids },
-                        set: { newIDs in
-                            var updated = config
-                            updated.mode = .sensors(ids: newIDs, celsius: celsius)
-                            model.thermalSafety = updated
-                        }
-                    ))
-                    LabeledContent("Above") {
-                        TemperatureThresholdSlider(celsius: Binding(
-                            get: { celsius },
-                            set: { newCelsius in
-                                var updated = config
-                                updated.mode = .sensors(ids: ids, celsius: newCelsius)
-                                model.thermalSafety = updated
-                            }
-                        ))
+                    ForEach([ThermalPressureLevel.fair, .serious, .critical], id: \.self) { level in
+                        Text(verbatim: level.label).tag(level)
                     }
                 }
                 Picker("Sustained for", selection: Binding(
@@ -816,7 +779,7 @@ private struct GeneralTab: View {
                     ThermalHelperLockedRow(model: model)
                 }
             }
-            if model.machineHasFans {
+            if model.machineHasBattery && model.machineHasFans {
                 Toggle("Minimum fan speed with the lid closed", isOn: Binding(
                     get: { model.closedLidMinimumFanPercent != nil },
                     set: { model.closedLidMinimumFanPercent = $0 ? ClosedLidFanFloor.defaultPercent : nil }
@@ -846,7 +809,7 @@ private struct GeneralTab: View {
                 }
             }
         } header: {
-            sectionHeader("Thermal", info: L("A safety net for a Mac left running with the lid closed, slid into a bag with a session still holding it awake. It acts only in that trapped state: lid shut, with \u{201C}Keep awake with the lid closed\u{201D} overriding sleep. Watch macOS's own thermal pressure (works everywhere, \u{201C}Serious\u{201D} is where throttling bites) or specific temperature sensors, and if the reading stays over the threshold for the chosen time, Keepresso escalates: first, optionally, it boosts the fans (never below what the system chose, needs the administrator helper), and if it stays hot for the same time again, it pauses the session and switches the sleep override off, so the Mac can finally sleep and cool, telling you why in a notification. Opening the lid, or readings recovering, undoes everything: fan control returns to the system, the override comes back, and the session resumes. Die sensors on modern Macs routinely run at 90-100 \u{00B0}C under load, so thresholds around 95-100 \u{00B0}C are sensible."))
+            Text("Thermal")
         } footer: {
             sectionFooter("If the Mac runs hot with the lid closed, the session pauses so it can sleep and cool down.")
         }
