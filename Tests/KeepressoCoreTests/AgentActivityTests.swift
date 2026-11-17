@@ -817,6 +817,80 @@ private let bionicHostCommand =
 
 // MARK: - Monitor cache
 
+@Test func agentMonitorDiscardsAScanStartedBeforeInvalidation() async throws {
+    let oldScanStarted = DispatchSemaphore(value: 0)
+    let finishOldScan = DispatchSemaphore(value: 0)
+    let fetches = LockCounter()
+    let now = Date()
+    let monitor = PSAgentActivityMonitor(now: { now }, fetch: {
+        fetches.increment()
+        guard fetches.value == 1 else { return "101 1 0.1 after-sleep claude" }
+        oldScanStarted.signal()
+        _ = finishOldScan.wait(timeout: .now() + .seconds(2))
+        return "100 1 40.0 before-sleep claude"
+    })
+    monitor.evidenceEnabled = false
+    _ = monitor.current
+    defer { finishOldScan.signal() }
+    let didStart = await Task.detached { oldScanStarted.wait(timeout: .now() + .seconds(2)) == .success }.value
+    try #require(didStart)
+    monitor.invalidate()
+    finishOldScan.signal()
+    let deadline = ContinuousClock.now + .seconds(2)
+    while ContinuousClock.now < deadline {
+        if let first = monitor.current.sessions.first {
+            #expect(first.tty == "after-sleep")
+            #expect(fetches.value == 2)
+            return
+        }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    Issue.record("No new scan was accepted after invalidation")
+}
+
+@MainActor
+@Test func invalidatedProcessScanCannotStartANewSession() async throws {
+    let oldScanStarted = DispatchSemaphore(value: 0)
+    let finishOldScan = DispatchSemaphore(value: 0)
+    let fetches = LockCounter()
+    let shared = SharedPSSnapshot(run: {
+        fetches.increment()
+        guard fetches.value == 1 else { return "101 1 0.1 after-sleep claude" }
+        oldScanStarted.signal()
+        _ = finishOldScan.wait(timeout: .now() + .seconds(2))
+        return "100 1 40.0 before-sleep claude"
+    })
+    let monitor = PSAgentActivityMonitor(fetch: shared.fetchRaw)
+    monitor.evidenceEnabled = false
+    let agent = AgentActivityTrigger(monitor: monitor)
+    let controller = SessionController(assertions: SnapshotTestAssertions())
+    controller.triggerGate = TriggerEngine(combine: .any, triggers: [agent])
+    controller.reconcile()
+    defer { finishOldScan.signal() }
+    let didStart = await Task.detached { oldScanStarted.wait(timeout: .now() + .seconds(2)) == .success }.value
+    try #require(didStart)
+    shared.invalidate()
+    monitor.invalidate()
+    finishOldScan.signal()
+
+    let deadline = ContinuousClock.now + .seconds(2)
+    while ContinuousClock.now < deadline {
+        controller.reconcile()
+        #expect(!controller.isActive)
+        if agent.sessionStates.first?.session.tty == "after-sleep" {
+            #expect(controller.log.events.allSatisfy { $0.kind != .triggerFired })
+            return
+        }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    Issue.record("The session controller never received a post-invalidation scan")
+}
+
+private final class SnapshotTestAssertions: PowerAsserting {
+    let held: Set<PowerAssertionKind> = []
+    func apply(_ kinds: Set<PowerAssertionKind>, reason: String) {}
+}
+
 @Test func monitorServesStaleSnapshotAndRefreshesInBackground() async throws {
     var now = Date(timeIntervalSince1970: 0)
     let monitor = PSAgentActivityMonitor(ttl: 3, now: { now }, fetch: {

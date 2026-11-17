@@ -246,6 +246,9 @@ final class AppModel {
         }
         // Launch idle: a manual session waits for the user's toggle, a gated
         // one waits for its conditions (the ticker's reconcile activates it).
+        session.triggerObservationsReady = { [weak self] in
+            self?.refreshTriggerObservations() ?? false
+        }
         applyTriggerGate()
         // Give the decision log the satisfied rule labels when the gate flips
         // the session on ("Triggers: Camera in use").
@@ -720,6 +723,19 @@ final class AppModel {
 
     /// Owns the live engine gating the session and the menu's rule-state cache.
     @ObservationIgnored private let gate: TriggerGateController
+    @ObservationIgnored private var lastProcessWakeTime: UInt64?
+
+    func invalidateSleepingObservations() {
+        gate.invalidateProcessObservations()
+    }
+
+    private func refreshTriggerObservations() -> Bool {
+        if let wakeTime = ProcessWakeTime.read(), wakeTime != lastProcessWakeTime {
+            lastProcessWakeTime = wakeTime
+            invalidateSleepingObservations()
+        }
+        return gate.triggerObservationsReady()
+    }
 
     /// Rebuild (or tear down) the controller's gate to match current settings,
     /// then wire it to the session (nil while paused, so the manual toggle owns

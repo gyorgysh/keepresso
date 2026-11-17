@@ -59,6 +59,28 @@ private final class SnapshotClock: @unchecked Sendable {
     #expect(stub.callCount == 2)
 }
 
+@Test func sharedPSSnapshotDiscardsAReadThatSpansInvalidation() async throws {
+    let clock = SnapshotClock()
+    let started = DispatchSemaphore(value: 0)
+    let finish = DispatchSemaphore(value: 0)
+    let previous = clock.now
+    let snapshot = SharedPSSnapshot(now: { clock.now }, run: {
+        guard clock.now == previous else { return "new" }
+        started.signal()
+        _ = finish.wait(timeout: .now() + .seconds(2))
+        return "old"
+    })
+    let pending = Task.detached { snapshot.fetchRaw() }
+    defer { finish.signal() }
+    let didStart = await Task.detached { started.wait(timeout: .now() + .seconds(2)) == .success }.value
+    try #require(didStart)
+    clock.advance(600)
+    snapshot.invalidate()
+    finish.signal()
+    #expect(await pending.value == nil)
+    #expect(snapshot.fetchRaw() == "new")
+}
+
 @Test func sharedPSSnapshotDerivesCommandListing() {
     let rich = """
         1 0 0.5 ?? /bin/zsh

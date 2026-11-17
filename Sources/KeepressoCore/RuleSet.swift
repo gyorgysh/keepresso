@@ -346,6 +346,7 @@ public struct TriggerFactory {
     /// Real agent backend when the factory owns one, so evidence work can be
     /// gated off when no agent rule is live. Nil when tests inject a fake.
     private let agentMonitor: PSAgentActivityMonitor?
+    private let sharedPS: SharedPSSnapshot
 
     public init(
         powerSource: PowerSourceMonitoring = IOKitPowerSourceMonitor(),
@@ -370,6 +371,7 @@ public struct TriggerFactory {
         // One shared `ps` snapshot for process matching and agent detection
         // unless the caller injects its own backends (tests).
         let sharedPS = SharedPSSnapshot(now: now)
+        self.sharedPS = sharedPS
         let resolvedProcesses = processes ?? PSProcessLister(
             now: now, fetch: sharedPS.fetchCommandListing)
         let resolvedAgents: AgentActivityMonitoring
@@ -407,6 +409,20 @@ public struct TriggerFactory {
     /// agent rule is in the live engine. No-op when a test injected a fake.
     public func setAgentEvidenceEnabled(_ enabled: Bool) {
         agentMonitor?.evidenceEnabled = enabled
+    }
+
+    func invalidateProcessObservations() {
+        sharedPS.invalidate()
+        agentMonitor?.invalidate()
+        (processes as? PSProcessLister)?.invalidate()
+    }
+
+    func prepareAgentObservations() -> Bool {
+        agentMonitor?.prepareFreshSnapshotIfNeeded() ?? true
+    }
+
+    func prepareProcessObservations() -> Bool {
+        (processes as? PSProcessLister)?.prepareFreshSnapshotIfNeeded() ?? true
     }
 
     /// Build the live trigger for one rule.

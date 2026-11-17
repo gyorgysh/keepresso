@@ -15,6 +15,9 @@ public final class SessionController {
     /// Whether a session is currently keeping the Mac awake.
     public private(set) var isActive: Bool = false
 
+    /// The app waits for a fresh reading from rules that use process data.
+    @ObservationIgnored public var triggerObservationsReady: () -> Bool = { true }
+
     /// Duration policy for the active (or most recently configured) session.
     public private(set) var mode: SessionMode = .indefinite
 
@@ -816,6 +819,8 @@ public final class SessionController {
                 }
             }
         }
+
+        guard triggerGate == nil || triggerObservationsReady() else { return }
 
         // A lifted safety pause restarts the manual session it stopped ahead
         // of the chain below, so an overdue timed deadline still ends on

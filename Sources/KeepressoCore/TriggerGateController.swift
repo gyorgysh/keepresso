@@ -116,6 +116,33 @@ public final class TriggerGateController {
         return states
     }
 
+    public func invalidateProcessObservations() {
+        factory.invalidateProcessObservations()
+        cachedStates = nil
+        cachedAt = nil
+        for trigger in engine?.triggers ?? [] {
+            let grace = trigger as? GracePeriodTrigger
+            grace?.resetGrace()
+            if let agent = (grace?.wrappedTrigger ?? trigger) as? AgentActivityTrigger {
+                agent.discardObservations()
+            }
+        }
+    }
+
+    public func triggerObservationsReady() -> Bool {
+        let needsAgents = engineRules.contains {
+            if case .agentActivity = $0 { return true }
+            return false
+        }
+        let needsProcesses = engineRules.contains {
+            if case .process = $0 { return true }
+            return false
+        }
+        let agentsReady = !needsAgents || factory.prepareAgentObservations()
+        let processesReady = !needsProcesses || factory.prepareProcessObservations()
+        return agentsReady && processesReady
+    }
+
     /// Whether any live agent-activity trigger flipped from working to idle
     /// on its most recent ``Trigger/tick()``. The host reads this after
     /// reconcile to fire the agent-idle outbound hook. False when gating is

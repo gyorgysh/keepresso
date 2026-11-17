@@ -13,6 +13,10 @@ public final class SharedPSSnapshot: @unchecked Sendable {
     private let now: () -> Date
     private let run: @Sendable () -> String?
     private let lock = NSLock()
+    // Invalidating from the host must never wait for a running `ps`.
+    private let generationLock = NSLock()
+    private var generation: UInt64 = 0
+    private var cachedGeneration: UInt64 = 0
     private var cached: String?
     private var lastFetch: Date?
 
@@ -26,17 +30,25 @@ public final class SharedPSSnapshot: @unchecked Sendable {
         self.run = run
     }
 
+    public func invalidate() {
+        generationLock.withLock { generation &+= 1 }
+    }
+
     /// Blocking fetch wrappers marked `@Sendable` so they can be handed to
     /// ``PSProcessLister`` / ``PSAgentActivityMonitor`` without a concurrency
     /// warning (the class itself is already `@unchecked Sendable`).
     @Sendable public func fetchRaw() -> String? {
         lock.lock()
         defer { lock.unlock() }
-        if let cached, let lastFetch, now().timeIntervalSince(lastFetch) < ttl {
+        let requestedGeneration = generationLock.withLock { generation }
+        if cachedGeneration == requestedGeneration,
+           let cached, let lastFetch, now().timeIntervalSince(lastFetch) < ttl {
             return cached
         }
         let value = run()
+        guard generationLock.withLock({ generation == requestedGeneration }) else { return nil }
         cached = value
+        cachedGeneration = requestedGeneration
         lastFetch = now()
         return value
     }
