@@ -1362,23 +1362,21 @@ struct MenuBarContent: View {
 
     // MARK: - Live trigger summary
 
-    /// Which of the two modes controls keeping awake while triggers are on.
-    private enum ControlMode: Hashable { case automatic, manual }
-
     /// Automatic or Manual. Choosing Manual pauses the triggers (which also
     /// stops a trigger-held session: Manual starts from "the Mac can sleep",
     /// and Keep awake is one flip away). Choosing Automatic resumes them.
     /// The pause stays in memory only, so a relaunch is always Automatic.
     private var modeSwitch: some View {
-        Picker("Keep awake mode", selection: Binding(
-            get: { model.triggersPaused ? ControlMode.manual : .automatic },
-            set: { $0 == .manual ? model.pauseTriggers() : model.resumeTriggers() }
-        )) {
-            Text("Automatic").tag(ControlMode.automatic)
-            Text("Manual").tag(ControlMode.manual)
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
+        KeepAwakeModePicker(
+            manual: Binding(
+                get: { model.triggersPaused },
+                set: { $0 ? model.pauseTriggers() : model.resumeTriggers() }
+            ),
+            title: L("Keep awake mode"),
+            automaticTitle: L("Automatic"),
+            manualTitle: L("Manual"),
+            accent: advancedMenuLayout?.controlStyle == .clear ? .labelColor : NSColor(.keepressoBrew)
+        )
         .frame(maxWidth: .infinity)
     }
 
