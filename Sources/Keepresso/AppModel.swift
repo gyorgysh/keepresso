@@ -3507,8 +3507,8 @@ final class AppModel {
             )
         case .verifyHelper:
             verifyHelper()
-        case .runAutoTick(let brewing):
-            Task { await closedDisplayAuto.autoTick(brewing: brewing) }
+        case .runAutoTick:
+            Task { await closedDisplayAuto.autoTick(brewing: { self.session.isActive }) }
         case .refreshThenEnforce(let delay):
             refreshThenEnforceClosedDisplay(after: delay.map { .seconds($0) })
         case .clearForeignHold(let announce):

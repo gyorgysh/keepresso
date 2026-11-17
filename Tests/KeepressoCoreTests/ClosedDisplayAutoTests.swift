@@ -136,9 +136,12 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     var engageFailureMessage = "backend says no"
     /// Helper spawns, i.e. how often the user was asked for a password.
     var startCalls = 0
+    var beforeCreate: (() -> Void)?
+    var beforeStart: (() -> Void)?
 
     func isFlagPresent() -> Bool { flagPresent }
     func createFlag() -> Bool {
+        beforeCreate?()
         guard createFlagSucceeds else { return false }
         flagPresent = true
         return true
@@ -148,6 +151,7 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     }
     func startHelper(appPID: Int32) -> SleepSettingResult {
         startCalls += 1
+        beforeStart?()
         return result
     }
 }
@@ -535,4 +539,92 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     // all stays silent.
     #expect(Q.coverage(brewing: true, overrideLive: false) == .session)
     #expect(Q.coverage(brewing: false, overrideLive: false) == .none)
+}
+
+// Suspend the fake backend while another main-actor tick updates demand.
+private struct PendingWatchdogCall {
+    let started: AsyncStream<Void>
+    let notification: AsyncStream<Void>.Continuation
+    let readyToReturn = DispatchSemaphore(value: 0)
+
+    init() {
+        (started, notification) = AsyncStream<Void>.makeStream()
+    }
+
+    func suspend() {
+        notification.yield(())
+        _ = readyToReturn.wait(timeout: .now() + 10)
+    }
+}
+
+@MainActor
+@Test(arguments: [false, true])
+func lateClosedDisplayEngageReleasesWhenDemandEnds(disableFeature: Bool) async {
+    let launcher = FakeSleepWatchdogLauncher()
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+    controller.onlyWhileBrewing = true
+    let pending = PendingWatchdogCall()
+    launcher.beforeStart = pending.suspend
+
+    let engaging = Task { await controller.autoTick(brewing: true) }
+    for await _ in pending.started { break }
+    if disableFeature {
+        controller.onlyWhileBrewing = false
+        await controller.stopIfHolding()
+    } else {
+        await controller.autoTick(brewing: false)
+    }
+    pending.readyToReturn.signal()
+    await engaging.value
+    pending.notification.finish()
+
+    #expect(!controller.isHolding)
+    #expect(!launcher.flagPresent)
+}
+
+@MainActor
+@Test func closedDisplayDoesNotStartTheHelperWhenBrewingEndsDuringFlagCreation() async {
+    let launcher = FakeSleepWatchdogLauncher()
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+    controller.onlyWhileBrewing = true
+    let pending = PendingWatchdogCall()
+    launcher.beforeCreate = pending.suspend
+    var brewing = true
+
+    let engaging = Task { await controller.autoTick(brewing: { brewing }) }
+    for await _ in pending.started { break }
+    brewing = false
+    pending.readyToReturn.signal()
+    await engaging.value
+    pending.notification.finish()
+
+    #expect(launcher.startCalls == 0)
+    #expect(!controller.isHolding)
+    #expect(!launcher.flagPresent)
+}
+
+@MainActor
+@Test func closedDisplayRetriesALateFailedReleaseAfterTheFeatureIsDisabled() async {
+    let launcher = FakeSleepWatchdogLauncher()
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+    controller.onlyWhileBrewing = true
+    let pending = PendingWatchdogCall()
+    launcher.beforeStart = pending.suspend
+    launcher.removeClearsFlag = false
+
+    let engaging = Task { await controller.autoTick(brewing: true) }
+    for await _ in pending.started { break }
+    controller.onlyWhileBrewing = false
+    await controller.stopIfHolding()
+    pending.readyToReturn.signal()
+    await engaging.value
+    pending.notification.finish()
+
+    #expect(controller.isHolding)
+    #expect(launcher.flagPresent)
+    launcher.removeClearsFlag = true
+    await controller.autoTick(brewing: true)
+    #expect(!controller.isHolding)
+    #expect(!launcher.flagPresent)
+    #expect(launcher.startCalls == 1)
 }

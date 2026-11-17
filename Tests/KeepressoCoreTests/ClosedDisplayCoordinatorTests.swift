@@ -33,6 +33,14 @@ private func conditions(
 }
 
 @MainActor
+@Test func tickLetsADisabledAutomationReleaseAnOwnedHold() {
+    let coordinator = ClosedDisplayCoordinator()
+    let disabledWithHold = conditions(onlyWhileBrewing: false, brewing: true, automationHolding: true)
+    #expect(coordinator.tick(disabledWithHold) == [.runAutoTick(brewing: false)])
+    #expect(coordinator.tick(conditions(onlyWhileBrewing: false, brewing: true)).isEmpty)
+}
+
+@MainActor
 @Test func tickPulsesTheAutomationWithTheSessionState() {
     let coordinator = ClosedDisplayCoordinator()
     #expect(coordinator.tick(conditions(brewing: true)).contains(.runAutoTick(brewing: true)))
