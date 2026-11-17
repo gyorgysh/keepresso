@@ -17,6 +17,7 @@ final class WidgetStateSync {
     /// leases, but `status.json` is the acquire acknowledgment channel, and a
     /// second lease arriving during an active session changes nothing else.
     private struct Written: Equatable {
+        var lastTriggerModeRequestID: UUID?
         var state: SharedSessionState
         var leaseIDs: [String]
         var leasesEnabled: Bool
@@ -31,12 +32,14 @@ final class WidgetStateSync {
     /// the ticker calls this every second and the no-op path is the common one.
     func write(
         _ state: SharedSessionState,
+        lastTriggerModeRequestID: UUID? = nil,
         leaseIDs: [String] = [],
         leasesEnabled: Bool = true,
         lastWakeRequestId: String? = nil,
         lastWakeRequestOutcome: String? = nil
     ) {
         let written = Written(
+            lastTriggerModeRequestID: lastTriggerModeRequestID,
             state: state, leaseIDs: leaseIDs, leasesEnabled: leasesEnabled,
             lastWakeRequestId: lastWakeRequestId, lastWakeRequestOutcome: lastWakeRequestOutcome
         )
@@ -45,6 +48,8 @@ final class WidgetStateSync {
         last = written
         StatusFile.write(StatusSnapshot(
             isActive: state.isActive,
+            supportsTriggerModeControl: true,
+            lastTriggerModeRequestID: lastTriggerModeRequestID,
             endsAt: state.endsAt,
             triggersEnabled: state.triggersEnabled,
             triggersPaused: state.triggersPaused,
