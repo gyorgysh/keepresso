@@ -541,12 +541,12 @@ verified without touching real hardware.
 - `scripts/make-icon.swift`: regenerate the app icon asset catalog.
 
 See [docs/BUILDING.md](docs/BUILDING.md) for a full build walkthrough and
-[CLAUDE.md](CLAUDE.md) for the architecture and contributor workflow.
+[AGENTS.md](AGENTS.md) for the architecture and conventions.
 
 ## Contributing
 
-Issues and pull requests are welcome. New behavior goes in `KeepressoCore` behind
-a protocol seam with tests, then a thin SwiftUI layer in the app.
+Issues and pull requests are welcome, security fixes included. See
+[CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 
 ## License
 
@@ -556,5 +556,8 @@ Keepresso is free software: use it, study it, fork it, and contribute back. The
 copyleft terms mean any distributed version (including forks and modifications)
 must stay open-source under the same license, so nobody can take it closed and
 ship a proprietary product from it.
+
+The license covers the code, not the name. Forks and fan projects must use their
+own name and say they are unofficial, see [TRADEMARK.md](TRADEMARK.md).
 
 If Keepresso is useful to you, you can [support its development](https://gyorgy.sh/donate).
