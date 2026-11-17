@@ -14,6 +14,12 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
     public var endsAt: Date?
     public var triggersEnabled: Bool
     public var triggersPaused: Bool
+    /// macOS's public thermal pressure, or "unknown" when unavailable.
+    public var thermalState: String?
+    /// Whether a thermal guard is actively responding to the reading.
+    public var thermalGuardActive: Bool?
+    /// Whether brewing is paused for thermal safety.
+    public var thermalBrewingPaused: Bool?
     /// The writing app's marketing version, for support and mismatch checks.
     public var appVersion: String?
     /// The writing app's process id.
@@ -36,6 +42,9 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
         endsAt: Date? = nil,
         triggersEnabled: Bool = false,
         triggersPaused: Bool = false,
+        thermalState: String? = nil,
+        thermalGuardActive: Bool? = nil,
+        thermalBrewingPaused: Bool? = nil,
         appVersion: String? = nil,
         pid: Int32,
         writtenAt: Date,
@@ -48,6 +57,9 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
         self.endsAt = endsAt
         self.triggersEnabled = triggersEnabled
         self.triggersPaused = triggersPaused
+        self.thermalState = thermalState
+        self.thermalGuardActive = thermalGuardActive
+        self.thermalBrewingPaused = thermalBrewingPaused
         self.appVersion = appVersion
         self.pid = pid
         self.writtenAt = writtenAt

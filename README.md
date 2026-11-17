@@ -467,6 +467,10 @@ Triggers), so the command actually takes effect.
 
 ### The `keepresso` command-line tool
 
+The JSON status may include `thermalState` (macOS thermal pressure),
+`thermalGuardActive` and `thermalBrewingPaused`. Older writers omit these
+fields. Keepresso refreshes active thermal reports during a cooling pause.
+
 The app bundle ships a caffeinate-style CLI. The Homebrew cask links it onto
 your PATH; on a DMG install, the administrator helper creates the
 `/usr/local/bin/keepresso` link for you. It drives the app for session
