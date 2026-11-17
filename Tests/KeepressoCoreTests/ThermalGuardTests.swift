@@ -180,6 +180,33 @@ private let pressureConfig = ThermalSafetyConfig(
 }
 
 @MainActor
+@Test func losingFanBoostDoesNotEndThermalCooldown() {
+    final class Pressure: ThermalPressureReading {
+        var current: ThermalPressureLevel? = .serious
+    }
+    let pressure = Pressure()
+    let controller = ThermalGuardController(pressure: pressure)
+    var config = ThermalSafetyConfig(sustainSeconds: 5, fanBoostPercent: 80)
+    controller.config = config
+    let effects = (0..<10).flatMap { _ in controller.tick(armed: true) }
+    #expect(effects == [.boostFans(percent: 80), .pauseBrewing])
+
+    config.fanBoostPercent = nil
+    controller.config = config
+    #expect(controller.tick(armed: false, stillLidClosed: true) == [.restoreFans])
+    #expect(controller.readingForSession == .hot)
+
+    config.fanBoostPercent = 80
+    controller.config = config
+    #expect(controller.tick(armed: false, stillLidClosed: true).isEmpty)
+    #expect(controller.readingForSession == .hot)
+
+    pressure.current = .fair
+    for _ in 0..<4 { #expect(controller.tick(armed: false, stillLidClosed: true).isEmpty) }
+    #expect(controller.tick(armed: false, stillLidClosed: true) == [.restoreFans, .resumeBrewing])
+}
+
+@MainActor
 @Test func disarmedControllerNeverEscalates() {
     final class ScriptedSensors: ThermalSensorReading {
         func discoverSensors() -> [ThermalSensor] { [ThermalSensor(id: "Tp09", name: "Tp09")] }
@@ -280,4 +307,28 @@ private let pressureConfig = ThermalSafetyConfig(
         let data = try JSONEncoder().encode(config)
         #expect(try JSONDecoder().decode(ThermalSafetyConfig.self, from: data) == config)
     }
+}
+
+@MainActor
+@Test func stoppedGuardWaitsForCoolingAfterItDropsTheSleepOverride() {
+    final class Pressure: ThermalPressureReading {
+        var current: ThermalPressureLevel? = .serious
+    }
+    let pressure = Pressure()
+    let controller = ThermalGuardController(pressure: pressure)
+    controller.config = ThermalSafetyConfig(sustainSeconds: 5)
+    var arming = ThermalArming()
+    let armed = arming.update(lidClosed: true, sleepOverrideActive: true)
+    for _ in 0..<4 { #expect(controller.tick(armed: armed).isEmpty) }
+    #expect(controller.tick(armed: armed) == [.pauseBrewing])
+
+    let overrideReleased = arming.update(lidClosed: nil, sleepOverrideActive: false)
+    #expect(controller.tick(armed: overrideReleased, stillLidClosed: arming.lidClosed).isEmpty)
+    #expect(controller.readingForSession == .hot)
+    pressure.current = nil
+    #expect(controller.tick(armed: overrideReleased, stillLidClosed: arming.lidClosed).isEmpty)
+    #expect(controller.state.stage == .stopped)
+    pressure.current = .fair
+    for _ in 0..<4 { #expect(controller.tick(armed: overrideReleased, stillLidClosed: arming.lidClosed).isEmpty) }
+    #expect(controller.tick(armed: overrideReleased, stillLidClosed: arming.lidClosed) == [.restoreFans, .resumeBrewing])
 }

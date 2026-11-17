@@ -211,7 +211,7 @@ public enum ThermalGuard {
 /// release a latched safety measure, mirroring how a `nil` thermal sample
 /// freezes the guard.
 public struct ThermalArming: Sendable, Equatable {
-    private var lidClosed = false
+    public private(set) var lidClosed = false
     private var overrideActive = false
 
     public init() {}
@@ -236,6 +236,16 @@ public final class ThermalGuardController {
     public var config: ThermalSafetyConfig? {
         didSet {
             guard config != oldValue else { return }
+            // Losing or regaining fan control doesn't change the cooling rule.
+            // The guard may already have let go of the system sleep override.
+            if state.stage == .stopped, let config, let oldValue,
+               config.mode == oldValue.mode, config.sustainSeconds == oldValue.sustainSeconds,
+               config.stopBrewing, oldValue.stopBrewing {
+                if config.fanBoostPercent == nil && oldValue.fanBoostPercent != nil {
+                    pendingReleases.append(.restoreFans)
+                }
+                return
+            }
             // Appended, not assigned: back-to-back config changes must not
             // drop a release queued by the previous one.
             pendingReleases += releaseEffects(for: state.stage)
@@ -281,15 +291,14 @@ public final class ThermalGuardController {
     ///
     /// `armed` is the host's ``ThermalArming`` verdict. While disarmed the
     /// signal is still sampled (the live UI keeps its readings) but the state
-    /// machine never escalates, and any latched stage releases immediately:
-    /// opening the lid ends the emergency, so fans and the session come back
-    /// on that very tick rather than waiting out the cool-down dwell.
-    public func tick(armed: Bool) -> [ThermalEffect] {
+    /// machine never escalates. A stopped guard keeps monitoring until it
+    /// has cooled or the lid opens, even after it lifts its own override.
+    public func tick(armed: Bool, stillLidClosed: Bool = false) -> [ThermalEffect] {
         var effects = pendingReleases
         pendingReleases = []
         guard let config else { return effects }
         let sample = sample(for: config.mode)
-        guard armed else {
+        guard armed || (stillLidClosed && state.stage == .stopped) else {
             if state != ThermalGuardState() {
                 effects.append(contentsOf: releaseEffects(for: state.stage))
                 state = ThermalGuardState()
