@@ -30,6 +30,11 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
     /// the acknowledgment channel for `keepresso wake set` / `clear`.
     public var lastWakeRequestId: String?
     public var lastWakeRequestOutcome: String?
+    /// Start time of the active brew. Absent when idle or from older writers.
+    public var brewingStartedAt: Date?
+    /// Demand sustaining the active brew: "manual", "automatic", or "lease".
+    /// Absent when idle or from older writers.
+    public var brewingMode: String?
 
     public init(
         isActive: Bool,
@@ -42,7 +47,9 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
         leaseIDs: [String]? = nil,
         leasesEnabled: Bool? = nil,
         lastWakeRequestId: String? = nil,
-        lastWakeRequestOutcome: String? = nil
+        lastWakeRequestOutcome: String? = nil,
+        brewingStartedAt: Date? = nil,
+        brewingMode: String? = nil
     ) {
         self.isActive = isActive
         self.endsAt = endsAt
@@ -55,6 +62,8 @@ public struct StatusSnapshot: Codable, Equatable, Sendable {
         self.leasesEnabled = leasesEnabled
         self.lastWakeRequestId = lastWakeRequestId
         self.lastWakeRequestOutcome = lastWakeRequestOutcome
+        self.brewingStartedAt = brewingStartedAt
+        self.brewingMode = brewingMode
     }
 }
 

@@ -22,6 +22,8 @@ final class WidgetStateSync {
         var leasesEnabled: Bool
         var lastWakeRequestId: String?
         var lastWakeRequestOutcome: String?
+        var brewingStartedAt: Date?
+        var brewingMode: String?
     }
     private var last: Written?
     private let appVersion =
@@ -34,11 +36,14 @@ final class WidgetStateSync {
         leaseIDs: [String] = [],
         leasesEnabled: Bool = true,
         lastWakeRequestId: String? = nil,
-        lastWakeRequestOutcome: String? = nil
+        lastWakeRequestOutcome: String? = nil,
+        brewingStartedAt: Date? = nil,
+        brewingMode: String? = nil
     ) {
         let written = Written(
             state: state, leaseIDs: leaseIDs, leasesEnabled: leasesEnabled,
-            lastWakeRequestId: lastWakeRequestId, lastWakeRequestOutcome: lastWakeRequestOutcome
+            lastWakeRequestId: lastWakeRequestId, lastWakeRequestOutcome: lastWakeRequestOutcome,
+            brewingStartedAt: brewingStartedAt, brewingMode: brewingMode
         )
         guard written != last else { return }
         let stateChanged = state != last?.state
@@ -54,10 +59,11 @@ final class WidgetStateSync {
             leaseIDs: leaseIDs,
             leasesEnabled: leasesEnabled,
             lastWakeRequestId: lastWakeRequestId,
-            lastWakeRequestOutcome: lastWakeRequestOutcome
+            lastWakeRequestOutcome: lastWakeRequestOutcome,
+            brewingStartedAt: brewingStartedAt,
+            brewingMode: brewingMode
         ))
-        // Widgets don't render leases: skip the reload when only the lease
-        // side of the snapshot moved.
+        // Skip the reload when only fields written to status.json changed.
         guard stateChanged, let defaults else { return }
         WidgetBridge.writeState(state, to: defaults)
         WidgetCenter.shared.reloadTimelines(ofKind: WidgetBridge.statusWidgetKind)

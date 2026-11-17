@@ -1955,7 +1955,9 @@ final class AppModel {
             leaseIDs: session.liveLeases.map(\.id).sorted(),
             leasesEnabled: settings.automationLeasesEnabled,
             lastWakeRequestId: lastWakeRequestId,
-            lastWakeRequestOutcome: lastWakeRequestOutcome
+            lastWakeRequestOutcome: lastWakeRequestOutcome,
+            brewingStartedAt: session.startedAt,
+            brewingMode: session.brewingMode?.rawValue
         )
     }
 

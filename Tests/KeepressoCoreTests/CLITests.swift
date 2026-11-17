@@ -277,3 +277,25 @@ private let leaseId = "aaaaaaaa-1111-2222-3333-444444444444"
     #expect(old?.leaseIDs == nil)
     #expect(old?.leasesEnabled == nil)
 }
+
+@Test func statusSnapshotBrewFieldsAreOptionalAndUseStableJSONKeys() throws {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("keepresso-tests-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    let start = Date(timeIntervalSince1970: 1_800_000_000)
+    StatusFile.write(StatusSnapshot(isActive: false, pid: 1, writtenAt: start), to: url)
+    let previous = try #require(StatusFile.read(from: url))
+    #expect(previous.brewingStartedAt == nil)
+    #expect(previous.brewingMode == nil)
+
+    let active = StatusSnapshot(
+        isActive: true, pid: 1, writtenAt: start,
+        brewingStartedAt: start, brewingMode: "manual"
+    )
+    StatusFile.write(active, to: url)
+    let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+    #expect(json?["brewingMode"] as? String == "manual")
+    #expect((json?["brewingStartedAt"] as? String)?.hasSuffix("Z") == true)
+    #expect(StatusFile.read(from: url) == active)
+}
