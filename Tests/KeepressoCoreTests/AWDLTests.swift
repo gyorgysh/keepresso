@@ -39,7 +39,11 @@ import Foundation
     #expect(command.contains("elif [ -n \"$DOWNED\" ]; then /sbin/ifconfig awdl0 up"))
     #expect(command.contains("sleep 3"))
     #expect(command.hasSuffix("&"))
-    #expect(command.contains("rm -f '/Users/g/Library/Application Support/Keepresso/awdl-watchdog.flag'"))
+    // Exit cleanup removes the flag only when this app run stamped it, so a
+    // quickly relaunched app's flag survives the old loop winding down.
+    #expect(command.contains(
+        "if [ \"$(cat '/Users/g/Library/Application Support/Keepresso/awdl-watchdog.flag' 2>/dev/null)\" = \"4242\" ]; "
+            + "then rm -f '/Users/g/Library/Application Support/Keepresso/awdl-watchdog.flag'; fi; "))
 }
 
 @Test func appleScriptEscapingSurvivesQuotedPaths() {

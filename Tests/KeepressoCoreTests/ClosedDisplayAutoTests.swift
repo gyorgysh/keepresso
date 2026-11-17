@@ -20,8 +20,103 @@ import Foundation
     #expect(command.contains("if [ -z \"$SET\" ]; then /usr/bin/pmset -a disablesleep 1"))
     #expect(command.contains("elif [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0"))
     #expect(command.hasSuffix("&"))
-    #expect(command.contains("rm -f '/Users/g/Library/Application Support/Keepresso/sleep-watchdog.flag'"))
+    // Exit cleanup removes the flag only when this app run stamped it.
+    #expect(command.contains(
+        "if [ \"$(cat '/Users/g/Library/Application Support/Keepresso/sleep-watchdog.flag' 2>/dev/null)\" = \"4242\" ]; "
+            + "then rm -f '/Users/g/Library/Application Support/Keepresso/sleep-watchdog.flag'; fi; "))
     #expect(command.contains("if [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0; fi )"))
+}
+
+/// Runs the real watchdog loop under `/bin/sh` with `pmset` swapped for a
+/// logger and the cycle shortened, against a stand-in app process.
+private struct WatchdogHarness {
+    let dir: URL
+    let flagURL: URL
+    let logURL: URL
+    let app = Process()
+
+    init() throws {
+        dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("keepresso-watchdog-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        flagURL = dir.appendingPathComponent("sleep-watchdog.flag")
+        logURL = dir.appendingPathComponent("pmset.log")
+        app.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        app.arguments = ["60"]
+        try app.run()
+    }
+
+    var appPID: Int32 { app.processIdentifier }
+
+    func startLoop() throws {
+        let command = OsascriptSleepWatchdog.watchdogCommand(flagPath: flagURL.path, appPID: appPID)
+            .replacingOccurrences(
+                of: "/usr/bin/pmset -a disablesleep",
+                with: "/bin/echo >>\(OsascriptAWDLWatchdog.shellSingleQuoted(logURL.path))")
+            .replacingOccurrences(of: "sleep 2", with: "sleep 0.1")
+        let shell = Process()
+        shell.executableURL = URL(fileURLWithPath: "/bin/sh")
+        shell.arguments = ["-c", command]
+        try shell.run()
+        shell.waitUntilExit()
+    }
+
+    /// The values the loop "wrote" to `disablesleep`, in order.
+    var writes: [String] {
+        ((try? String(contentsOf: logURL, encoding: .utf8)) ?? "")
+            .split(separator: "\n").map(String.init)
+    }
+
+    func waitForWrites(_ expected: [String]) async -> Bool {
+        for _ in 0..<100 {
+            if writes == expected { return true }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        return false
+    }
+
+    func quitApp() {
+        app.terminate()
+        app.waitUntilExit()
+    }
+
+    func cleanUp() {
+        if app.isRunning { quitApp() }
+        try? FileManager.default.removeItem(at: dir)
+    }
+}
+
+@Test func sleepWatchdogLeavesARelaunchedAppsFlagAloneOnExit() async throws {
+    let harness = try WatchdogHarness()
+    defer { harness.cleanUp() }
+    let oldRun = OsascriptSleepWatchdog(flagURL: harness.flagURL, ownerPID: harness.appPID)
+    #expect(oldRun.createFlag())
+    try harness.startLoop()
+    #expect(await harness.waitForWrites(["1"]))
+
+    // The app quits mid-hold and is relaunched at once: the new run stamps a
+    // flag of its own before the old loop has noticed its app is gone.
+    harness.quitApp()
+    let newRun = OsascriptSleepWatchdog(flagURL: harness.flagURL, ownerPID: harness.appPID + 1)
+    #expect(newRun.createFlag())
+
+    // The old loop still gives back what it took, but the new run's flag
+    // survives for the new run's loop to act on.
+    #expect(await harness.waitForWrites(["1", "0"]))
+    #expect(newRun.isFlagPresent())
+}
+
+@Test func sleepWatchdogRemovesItsOwnFlagOnExit() async throws {
+    let harness = try WatchdogHarness()
+    defer { harness.cleanUp() }
+    let run = OsascriptSleepWatchdog(flagURL: harness.flagURL, ownerPID: harness.appPID)
+    #expect(run.createFlag())
+    try harness.startLoop()
+    #expect(await harness.waitForWrites(["1"]))
+
+    harness.quitApp()
+    #expect(await harness.waitForWrites(["1", "0"]))
+    #expect(!run.isFlagPresent())
 }
 
 @Test func sleepWatchdogSingleQuotesAHostileFlagPath() {
@@ -59,6 +154,24 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
         beforeStart?()
         return result
     }
+}
+
+@MainActor
+@Test func closedDisplayAutoRetakesAHoldWhoseFlagWentMissing() async {
+    let launcher = FakeSleepWatchdogLauncher()
+    let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
+    controller.onlyWhileBrewing = true
+    await controller.autoTick(brewing: true)
+    #expect(controller.isHolding)
+
+    // Something removed the flag behind the controller's back: the helper has
+    // let sleep back on, so the next tick must take the hold again, without
+    // another password prompt.
+    launcher.flagPresent = false
+    await controller.autoTick(brewing: true)
+    #expect(controller.isHolding)
+    #expect(launcher.flagPresent)
+    #expect(launcher.startCalls == 1)
 }
 
 @MainActor

@@ -22,6 +22,11 @@ public final class SessionController {
     /// the next ``reconcile(now:systemIdleSeconds:)``.
     public var options: SleepPreventionOptions = .default
 
+    /// The selected lid-shut panel policy. Zero-brightness mode keeps the
+    /// display assertion when ``options`` requests it, so a dark panel does
+    /// not idle-sleep underneath a remote session. Applied on the next reconcile.
+    public var closedLidDisplayPolicy: ClosedLidDisplayPolicy = .displayOff
+
     /// When the active session began, or `nil` while idle.
     public private(set) var startedAt: Date?
 
@@ -140,8 +145,8 @@ public final class SessionController {
     /// Whether any display worth holding awake is currently usable.
     public enum DisplayReading: Equatable, Sendable {
         /// The lid is shut with no external display attached: the only panel
-        /// there is sits inside a closed lid, so nothing on screen is worth
-        /// holding awake or dimming. The display assertion stands down.
+        /// there is sits inside a closed lid. The display assertion stands
+        /// down unless zero-brightness mode keeps it live for remote use.
         case lidShutNoExternal
         /// The lid is shut but an external monitor is attached (clamshell).
         /// The display assertion stays so the external can stay awake; the
@@ -151,8 +156,8 @@ public final class SessionController {
         case usable
         /// No reading this call. Leaves the last known reading in place so a
         /// fluttering `AppleClamshellState` or an out-of-band reconcile (start,
-        /// URL command) cannot re-hold the display assertion over a still-shut
-        /// lid. With no prior reading, treated as usable so a failed lid read
+        /// URL command) cannot treat a still-shut lid as open. With no prior
+        /// reading, treated as usable so a failed lid read
         /// never silently drops the assertion in front of someone using the Mac.
         case unknown
     }
@@ -656,7 +661,8 @@ public final class SessionController {
     }
 
     /// Whether a display reading has any effect here: something is asking to
-    /// hold the display awake, so a shut lid can stand it down. The host skips
+    /// hold the display awake, so a shut lid can adjust its assertion and
+    /// brightness policy. The host skips
     /// the per-second lid and display sweep when this is false.
     public var consumesDisplayReading: Bool {
         options.preventDisplaySleep
@@ -687,8 +693,9 @@ public final class SessionController {
     ///     applied there. `.unknown` (the internal-reconcile default) leaves
     ///     the thermal latch untouched, exactly like the battery reading.
     ///   - display: lid and external-monitor layout. ``.lidShutNoExternal``
-    ///     drops the display assertion; ``.lidShutWithExternal`` keeps it for
-    ///     the external and forces the built-in panel and keyboard dark when
+    ///     drops the display assertion unless zero-brightness mode needs it;
+    ///     ``.lidShutWithExternal`` keeps it for the external and forces the
+    ///     built-in panel and keyboard dark when
     ///     prevent-display-sleep is on. `.unknown` reuses the last known
     ///     reading so a lid-property flutter or an out-of-band reconcile cannot
     ///     thrash the assertion; with no prior reading it fails open as usable.
@@ -917,10 +924,10 @@ public final class SessionController {
     ///   built-in should emit nothing, and macOS offers no way to sleep one
     ///   display: `displaysleepnow` takes every display down, so with an
     ///   external attached brightness is the only lever there is. With no
-    ///   external, ``ClosedDisplayController`` sleeps the panel outright and
-    ///   this is the layer underneath it, so a panel woken inside the lid is
-    ///   already dark before the re-sleep lands. External displays and
-    ///   keyboards are untouched either way: this seam only addresses the
+    ///   external, ``ClosedDisplayController`` applies the selected panel
+    ///   policy. This layer keeps it dark when zero-brightness mode holds the
+    ///   display awake, or before the display-off policy re-sleeps it. External
+    ///   displays and keyboards are untouched either way: this seam only addresses the
     ///   built-in. Restore targets come from the last open-lid sample (not a
     ///   live read after macOS has already zeroed them).
     /// - **Lid open**: remember levels for a later clamshell stretch, then
@@ -1362,11 +1369,13 @@ public final class SessionController {
         if leaseHeld { return [.system] }
         var kinds: Set<PowerAssertionKind> = []
         if options.preventSystemSleep { kinds.insert(.system) }
-        // A panel inside a closed lid with nothing external is not worth
-        // holding awake, so the display assertion stands down. Clamshell
-        // (``.lidShutWithExternal``) keeps the assertion so the external can
-        // stay lit; the built-in panel is forced dark via brightness instead.
-        if options.preventDisplaySleep, display != .lidShutNoExternal {
+        // Zero-brightness mode needs a live display even without an external
+        // monitor: dropping the assertion lets idle display sleep lock a remote
+        // session. Other policies retain the closed-lid stand-down. Clamshell
+        // with an external monitor keeps the assertion for that screen; the
+        // built-in panel is forced dark via brightness instead.
+        let canHoldDisplay = display != .lidShutNoExternal || closedLidDisplayPolicy == .zeroBrightness
+        if options.preventDisplaySleep, canHoldDisplay {
             let yielded: Bool = {
                 guard let threshold = options.allowScreenSaverAfter,
                       let idle = systemIdleSeconds else { return false }
