@@ -1,561 +1,112 @@
 <p align="center">
-  <img src="docs/assets/icon.png" width="128" height="128" alt="Pervigil app icon">
+  <a href="https://github.com/bubb4rd/pervigil"><img src="docs/assets/icon.png" alt="Pervigil" width="120" height="120"></a>
 </p>
 
 <h1 align="center">Pervigil</h1>
 
 <p align="center">
-  Keep your Mac awake, on your terms, with smart triggers, presets, timed
-  sessions, and closed-display mode in a clean, native menu-bar app, built on a
-  modern foundation for the next decade of computing.
+  <a href="https://github.com/bubb4rd/pervigil/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/bubb4rd/pervigil/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-000?logo=apple">
+  <img alt="Swift + SwiftUI" src="https://img.shields.io/badge/Swift-SwiftUI-f05138?logo=swift&logoColor=white">
+  <img alt="15 languages" src="https://img.shields.io/badge/Languages-15-007aff">
+  <a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/badge/License-GPLv3-6eaff6"></a>
+</p>
+
+<p align="center">A native macOS menu bar utility that keeps your Mac awake while work is running and lets it sleep when idle.</p>
+
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#automation">Automation</a> ·
+  <a href="#permissions">Permissions</a> ·
+  <a href="#build-from-source">Build</a>
 </p>
 
 <p align="center">
-  <sub>An unofficial fork of <a href="https://github.com/gyorgysh/keepresso">Keepresso</a>.
-  Not affiliated with or endorsed by the Keepresso project or pueev OÜ.</sub>
+  <img src="docs/assets/hero_menu.svg" width="460" alt="Close-up tilted view of the Pervigil menu active with Claude, Cursor, Antigravity, and Codex running">
 </p>
 
-<p align="center">
-  <a href="https://github.com/bubb4rd/pervigil/actions/workflows/ci.yml"><img src="https://github.com/bubb4rd/pervigil/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/macOS-14%2B-blue" alt="macOS 14+">
-  <img src="https://img.shields.io/badge/Swift-SwiftUI-orange" alt="Swift + SwiftUI">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPLv3-green" alt="GPL-3.0 License"></a>
-</p>
+Pervigil manages macOS `IOPMAssertion` power assertions manually or automatically through configurable triggers, closed-display controls, and CLI/MCP leases. It is distributed outside the Mac App Store because the App Sandbox blocks `IOPMAssertion` APIs.
 
----
-
-Pervigil is a native **Swift + SwiftUI** menu-bar app. It uses macOS power
-assertions (`IOPMAssertion`) to prevent system and display sleep, and layers on
-condition-based **triggers** so your Mac only stays awake when it actually should.
-It lives quietly in the menu bar, no Dock icon, no clutter.
-
-<p align="center">
-  <img src="docs/assets/demo_manual.svg" width="270" alt="Animated Pervigil menu: switching keep-awake on, picking a one hour session that counts down, then switching it off">
-  &nbsp;
-  <img src="docs/assets/demo_triggers.svg" width="270" alt="Animated Pervigil menu: AI agents and a network condition hold the Mac awake, then it goes idle when the work stops">
-  &nbsp;
-  <img src="docs/assets/demo_lid.svg" width="270" alt="Animated Pervigil menu: turning on keep awake with lid closed, the display goes dark while an AI agent keeps working">
-</p>
-
-## Features
-
-- ⚡ **Keep awake, your way.** Prevent system sleep and/or display sleep as
-  independent toggles, indefinitely, for a timed session (presets or any custom
-  duration), or **until a wall-clock time** ("until 18:00", today or tomorrow).
-- 🌙 **Yield the screen saver.** Let the screen saver or display sleep kick in
-  after _N_ minutes idle while the system itself stays awake.
-- 🔅 **Dim, don't sleep.** On a long held session, let the built-in display drop
-  to its dimmest a few minutes after you step away, staying awake but dark, then
-  snap back to your brightness the moment you return or the session ends. Kinder
-  to the panel and the battery on overnight sessions than a screen left fully lit.
-- 🟢 **Keep me active.** Keeping the Mac awake does not by itself keep you
-  present. Meeting and chat apps, remote desktop, VDI, cloud gaming, and many
-  other tools still treat a quiet keyboard as idle: they mark you away,
-  disconnect, or time out. Optionally stay active too, and pick how: a
-  prompt-free power/cursor warp, or F15 every 60 seconds, Shift, a specified
-  key, or a posted mouse move when the software only notices a real key or
-  mouse. Those methods request Accessibility only when you pick them. It only
-  steps in once you've been idle a few seconds, so it never types or nudges
-  while you're using the Mac. Off by default.
-- ⚡ **Trigger engine.** Stay awake only while charging or on battery, an external
-  display is connected, you're on a chosen Wi-Fi network, **a VPN is
-  connected**, the **camera or microphone is in use**, **audio is playing**, a
-  chosen **Bluetooth device is connected** (headphones, a controller), a
-  **calendar event is in progress**, a specific app or process is running, a
-  chosen **volume is mounted**, **CPU usage** sits above a threshold (builds,
-  renders, training runs), **network throughput** stays above a threshold (a
-  large download, upload, or sync), a **download is in progress** in a folder you
-  choose (keep awake until it finishes), **a game is in front**, or during a
-  **scheduled time window** (weekdays 9:00-18:00, overnight hours). Combine
-  conditions with **any** (OR) or **all** (AND). An Automatic and Manual
-  switch in the menu bar shows which one is in control, and Manual sets the
-  triggers aside without touching your rules.
-- 🤖 **Agent-aware.** The "AI agent is working" condition keeps the Mac awake
-  while a coding agent (claude, cursor, codex, antigravity, gemini, grok, aider,
-  goose, pi, omp, cline, hermes, kilo, opencode, dsh, muse, devin, qwen,
-  kimi, and friends) is actually working, and lets it sleep once every
-  session goes quiet, after a grace you choose. Agents that stream a transcript
-  to disk prove their work directly, even through long zero-CPU network waits.
-  The rest are judged on the CPU of their processes and tool calls against each
-  session's own learned idle level. **Claude Code, Cursor, Codex, Grok,
-  Antigravity, Hermes Agent, Oh My Pi (OMP), Qwen Code, Devin, and Kimi Code**
-  can report their state exactly through an opt-in integration connected in one
-  click: a session is working when the tool says it is, a
-  pending permission prompt counts as working (so the Mac waits for your
-  answer), and background subagents count too. That covers the agents built into
-  the Cursor and Antigravity apps, which run inside the editor and have no
-  process of their own to watch, and each chat inside one editor is tracked on
-  its own. The menu lists every session with a live working / idle state and
-  where it runs. OMP loads Pervigil's extension the next time it starts.
-- ⏰ **Wake for scheduled AI runs.** Pervigil reads the recurring tasks your
-  local AI tools schedule (Claude Desktop routines, Codex automations,
-  tokenstat.ai), wakes the
-  Mac a few minutes before each run, and holds it awake long enough to finish,
-  even with the lid shut. It reads only the schedule and name, never the prompt,
-  ignores cloud routines (those run on the vendor's servers, no wake needed), and
-  you switch on the tools you want woken for. A run that needs longer can hold a
-  lease until it's done.
-- ⏹️ **Stop in 15, one click.** A row of quick "Stop in" buttons (15 min, 30 min,
-  1 h out of the box, editable) turns a running session into a timed one, so the
-  Mac goes back to sleeping on its own without you remembering to toggle off.
-  Optionally get a heads-up a few minutes before any timed session ends.
-- 🎥 **Never sleeps mid-meeting.** The camera/microphone conditions catch every
-  meeting app at once, including calls running in a browser tab, and read only
-  the device's in-use state (the green-dot signal), never the stream, so no
-  camera or microphone permission is ever requested. You can also scope the
-  microphone to one app, so only a real call in Slack, Discord, or Zoom holds the
-  Mac awake, not any app that happens to open the mic.
-- 🎮 **Game-aware.** The "Playing a game" condition spots apps that declare a
-  games category, anything running from a **Steam** library (many Steam games
-  skip the declaration), and the cloud and game-streaming clients: **GeForce
-  NOW, Boosteroid, Parsec, Moonlight, Shadow**. A five-minute grace means
-  alt-tabbing to Discord doesn't drop the session. A **controller condition**
-  counts any connected gamepad, DualSense, Xbox, and Steam Controller
-  included (detected permission-free even though macOS reports it as a
-  keyboard and mouse), and a **Steam download condition** holds the Mac
-  awake while a game actually downloads, releasing when it finishes or you
-  pause it. While you play, opt-in comforts keep the display awake during
-  controller-only sessions and give the game **high CPU priority** through
-  the administrator helper, restored when the bout ends.
-- ⌨️ **Keyboard Cleaner.** Lock the keys from the panel or the icon menu so you
-  can wipe the keyboard without typing into Slack. Top-row Mac keys (Mission
-  Control, Spotlight, Dictation) are included. The pointer stays live. No
-  Accessibility prompt.
-- 🌐 **Public Wi-Fi.** When a cafe or airport network associates but never
-  shows a login page, a Headless-style window diagnoses the captive portal and
-  offers Open login page, Flush DNS, and a Wi-Fi cycle. Opening it does not
-  ask for Location or an administrator password.
-- 📶 **Gaming & Streaming Setup.** macOS hops the Wi-Fi radio off-channel for
-  AWDL (AirDrop, Handoff, Sidecar) about once a second, which shows up as
-  50-100 ms ping spikes mid-game or mid-stream. A dedicated window diagnoses
-  it with a built-in **jitter test**, and fixes it with a session-scoped
-  **AWDL pause**: no password at all with the administrator helper installed
-  (once per launch without it), instant toggling, and everything restores
-  itself the moment you stop (even after a crash). An
-  **automatic mode** watches for a game (or a cloud-gaming app) on its own with
-  no trigger setup, authorizes once up front so it never pops a password dialog
-  over a running game, and shows a live status with a grace countdown when a
-  game closes. Optional notifications when it pauses and resumes. Plus
-  radio-hygiene checks: wired network, Wi-Fi channel alignment with AWDL's
-  social channels (44 in the EU, 149 in the US and Canada), Bluetooth, Game Mode.
-- 🎛️ **Presets.** Apply a named trigger bundle in one click, built-in (AI Agent,
-  Gaming, Cloud Gaming, Meetings, Remote Control, On AC Power, External
-  Display Connected, Remote Session (SSH), Backup Running, Media Render) or
-  your own saved rule sets. Deleted a built-in? "Restore default presets"
-  brings it back.
-- 👋 **First-run setup.** A welcome window on a new Mac points out that Pervigil
-  lives in the menu bar (no Dock icon) and sets you up in one click for how you
-  work: agentic coding, gaming and streaming, meetings and calls, or remote
-  access. Reopen it any time from Preferences.
-- 🧩 **Desktop widgets and a Control Center toggle.** A small widget that's a
-  one-tap toggle (the Pervigil mark lights up while awake, with a live
-  countdown), a medium widget with Start/Stop and Pause/Resume Triggers
-  buttons, and on macOS 26 a Keep Awake control for Control Center.
-- 🔍 **Awake explainer.** The Activity pane shows every app's live power
-  assertions, a readable `pmset -g assertions`, so you can see exactly what's
-  preventing sleep (whoever's doing it), a seven-day held-awake summary, and a
-  decision log of why each Pervigil session started or stopped that survives
-  relaunch. The menu bar even names another app that's holding the Mac awake
-  ("Held by Google Chrome") when Pervigil itself is idle.
-- 🪪 **Auto app detection.** Caffeinate while listed apps run or are frontmost,
-  with an optional grace period before it lets go.
-- 🔋 **Battery-aware auto-pause.** Let the Mac sleep once charge drops below a
-  threshold you choose, even mid-session, so it never runs the battery flat.
-- 🌡️ **Thermal safety net.** Holding a Mac awake through heavy load can also
-  hold in the heat, so Pervigil can watch it: macOS's own thermal pressure
-  (works on every Mac) or specific temperature sensors picked from a live
-  list. If the reading stays over your threshold for a sustained time it
-  escalates, first (optionally) boosting the fans to a chosen strength, never
-  below what the system already chose, then pausing the session so the Mac
-  can cool, with a notification saying why. Everything restores itself once
-  temperatures recover. A built-in **"Test Fans"** check proves the fan path
-  end to end in about 12 seconds ("All good. Fan 1: 0 → 4800 rpm"), so you
-  can trust the boost before a heavy render needs it. Watching and pausing
-  work everywhere. The fan boost runs through the administrator helper, so
-  it's silent and never prompts.
-- ⏱️ **Menu-bar countdown.** An optional live countdown next to the menu-bar icon for
-  timed sessions.
-- ⌨️ **Global hotkey.** A system-wide keyboard shortcut to toggle keep-awake from
-  any app, recorded in Preferences (Carbon-based, so no Input Monitoring or
-  Accessibility permission).
-- 🚀 **Start on launch.** Optionally begin a keep-awake session the moment
-  Pervigil launches, for an always-on Mac that shouldn't need a rule.
-- 💾 **Export and import.** Back up your settings, triggers, and presets to a JSON
-  file, or move them to another Mac, from Preferences > General. The file is
-  version-stamped and validated on import.
-- 🔗 **Shortcuts and URL scheme.** Native Shortcuts actions (Start, Stop,
-  Toggle) for Shortcuts, Spotlight, and Siri, plus a URL scheme for Raycast,
-  Alfred, or a shell script: `pervigil://start?duration=60`,
-  `pervigil://start?until=18:00`, `stop`, or `toggle`.
-- 💻 **Closed-display mode.** Keep running with the **lid shut** and no external
-  display, on power or battery, for an always-on Mac or one you carry mid-task.
-  What the screen itself does is your choice: turn it off, keep it powered at
-  zero brightness so a remote session stays live, or leave it alone. With
-  **Prevent display sleep** enabled, **Stay on at 0% brightness** also keeps
-  display-sleep prevention active under the closed lid. A configured screen-saver
-  delay still applies. An optional
-  **"Only while awake"** mode ties it to the session instead of leaving it on
-  globally: on when a keep-awake session starts, off when it ends (or the app
-  quits, even after a crash), with the password asked once per app run, or
-  never with the administrator helper.
-- 📱 **Hotspot fallback.** In Preferences > General, opt into a selected Wi-Fi
-  hotspot when the Mac loses its network connection. Scope it to active
-  keep-awake sessions (the default), closed-display mode, or whenever Pervigil
-  runs. Choose the delay, retry interval, battery minimum, and connection
-  notifications. Passwords stay in Keychain and are never included in settings
-  backups. Requires Location access and a broadcasting, secured hotspot. For
-  iPhone discovery, use macOS Wi-Fi settings > Ask to join hotspots > Automatic.
-  Pervigil does not enable the phone's hotspot remotely, interrupt an existing
-  route, or switch away from a connected hotspot with no internet access.
-  A network handoff can briefly interrupt requests; agents must handle their
-  own reconnects.
-- 🍃 **Closed-lid Low Power Mode.** An optional switch in General's
-  closed-display section temporarily selects Low Power Mode while the lid is
-  shut and the sleep override is active. Battery only by default; optionally
-  include plugged-in use. The administrator helper preserves battery and
-  adapter settings independently, confirms each write, and restores them when
-  the lid opens, the override ends, or the app disconnects. Its restore journal
-  also survives daemon restarts. The status explains what it is waiting for.
-- 🌀 **Closed-lid fan floor.** On supported Macs with fans, opt into a minimum
-  fan speed while closed-display mode is active and the lid is shut. Starts at
-  50% of the fan range, adjustable from 10% to 100%. This is independent of the
-  thermal heat boost and pause settings: a heat boost can raise the floor, then
-  return to it when the Mac cools. Fanless Macs keep the existing thermal pause
-  behavior. Disarming or quitting restores automatic fan control.
-- 🔇 **Closed-lid speaker mute.** An optional switch in the same section mutes
-  the built-in speakers while the lid is shut and closed-display mode is
-  active, so nothing plays out of a closed MacBook. Headphones and other
-  outputs keep playing. Opening the lid or ending the mode unmutes them at
-  their previous volume, speakers you had muted yourself stay muted, and a
-  crash or force quit is undone on the next launch. No helper or permission
-  needed.
-- 🔑 **One password, ever.** An optional **administrator helper**, a small
-  system service installed from Preferences > General (or the welcome screen),
-  handles the privileged switches for Pervigil: closed-display mode, the
-  thermal fan boost, and the AWDL pause become instant and silent, with no
-  password prompt on any launch. macOS asks for your password once, when you
-  approve the helper under Login Items, and the approval survives restarts
-  and updates, and app updates replace the service automatically, never a
-  reinstall. The helper can only flip those specific switches, restores
-  everything if the app quits or crashes, puts the `pervigil` CLI on PATH
-  for DMG installs, and can be removed at any time. Without it, everything
-  still works the old way, with a once-per-run prompt (now always announced
-  by a notification), except the fan boost, which stays off rather than ever
-  prompting from a background safety action.
-- 🔔 **Reminders, end actions, and event hooks.** A "still awake" notification
-  (with an optional sound) after _N_ minutes, one-time or recurring, so a
-  forgotten session can't quietly drain the battery. When a session ends on its
-  own (a timer expiring, triggers dropping), optionally notify, then sleep the
-  display, lock the screen, start the screen saver, or sleep the Mac. And when
-  something happens (session start/end, trigger fire/release, agent went idle,
-  thermal stage, battery pause), run a Shortcut, POST a webhook, or a shell
-  command, handy for a push to your phone when an overnight agent finishes.
-  Schedule a system wake through the administrator helper and optionally start
-  keep-awake when the Mac comes back (wake, work, sleep).
-- 💽 **Disk keep-alive.** Periodic no-op disk I/O to stop an external drive or NAS
-  from spinning down.
-- 🖥️ **Headless Setup checklist.** Probes the system settings an always-on,
-  headless Mac needs (sleep, auto-restart, auto-login, FileVault, remote access)
-  and guides you to fix each one.
-- 🖼️ **Headless virtual display (experimental).** On a Mac with no monitor,
-  create a higher-resolution HiDPI virtual display so Screen Sharing and VNC look
-  crisp instead of a fuzzy 1920×1080. Off by default; uses a private macOS API,
-  so it's a no-dummy-plug software alternative you should treat as experimental.
-- ✨ **Native and quiet.** A menu-bar agent with a filled icon while awake, a
-  live summary of what's holding the session on, a Liquid Glass app icon (Icon
-  Composer, with light, dark, and tinted appearances), and Liquid Glass window
-  styling on macOS 26+. The dropdown's glass is yours to tune, from frosty to
-  fully clear (Preferences > General > Appearance).
-- 🌍 **Fifteen languages.** English, German, Spanish, French, Hungarian, Italian,
-  Japanese, Korean, Russian, Brazilian Portuguese, Turkish, Polish, Ukrainian,
-  Simplified Chinese, and Traditional Chinese, across the menu, every window,
-  notifications, VoiceOver labels, and the widgets. Pick one in Preferences or on
-  the Welcome screen, or follow the system language (the default).
-- ⬆️ **Self-updating.** Built-in auto-updates via [Sparkle](https://sparkle-project.org),
-  with an EdDSA-signed appcast on GitHub Releases.
-
-## Screenshots
-
-<table>
-<tr>
-<td align="center" width="50%">
-  <img src="docs/assets/prefs_general.webp" width="320" alt="Preferences: General tab with keep-awake toggles, startup, a global shortcut, and the app language"><br>
-  <sub>General: keep-awake toggles, launch at login, a global shortcut, your language</sub>
-</td>
-<td align="center" width="50%">
-  <img src="docs/assets/prefs_triggers.webp" width="320" alt="Preferences: the Triggers tab with presets and a rule list of AI agent working, AC power, playing a game, and CPU conditions"><br>
-  <sub>Trigger engine: combine conditions with any or all, or apply a preset</sub>
-</td>
-</tr>
-<tr>
-<td align="center" width="50%">
-  <img src="docs/assets/prefs_activity.webp" width="320" alt="Preferences: Activity tab listing live power assertions and session decisions"><br>
-  <sub>Awake explainer: every app's live power assertions, plus why each session started or stopped</sub>
-</td>
-<td align="center" width="50%">
-  <img src="docs/assets/prefs_display.webp" width="320" alt="Preferences: experimental headless virtual display"><br>
-  <sub>Headless virtual display: crisp Screen Sharing on a Mac with no monitor</sub>
-</td>
-</tr>
-<tr>
-<td align="center" colspan="2">
-  <img src="docs/assets/prefs_conditions.webp" width="320" alt="Preferences: the Triggers tab with an Add row grouping power and display, network and devices, and apps and activity conditions, and Claude Code connected"><br>
-  <sub>Adding a condition: grouped menus for power and display, network and devices, apps and activity, with Claude Code connected</sub>
-</td>
-</tr>
-</table>
-
-## Built for the agentic era
-
-**The only app you'll ever need for a headless Mac setup**, whether it's running
-AI agents, a server, a render farm, or anything reachable over HTTP or SSH.
-Pervigil fits the way Macs are used now, and where they're headed:
-
-- 🤖 **AI agents.** Keep a Mac awake and reachable so agents can operate it around
-  the clock without it dozing off mid-task.
-- 💻 **MacBooks on the go.** Closed-display mode keeps work running on power or
-  battery while you pack up and move.
-- 🧑‍💻 **Builders and vibe coders.** Long builds, training runs, and overnight jobs
-  finish instead of getting cut short by sleep.
-- 🏢 **Business and enterprise, no charge.** Headless Mac minis and Mac Studios
-  powering local LLMs, agent fleets, CI, or a render farm stay up without a
-  license fee.
-- 🎬 **Studios.** Long renders and exports run to completion, untended.
-- 🎮 **Gamers and streamers.** Sessions stay awake while you play (native,
-  Steam, or cloud), and the AWDL pause smooths out the once-a-second ping
-  spikes that stutter cloud gaming and live streams.
-
-The use cases are effectively limitless. Modern UI, a solid and well-tested
-foundation, and a quiet must-have for the next decade of computing.
-
-### Automation leases, CLI, and MCP
-
-Any tool can hold the Mac awake for exactly the lifetime of a task through a
-bounded lease: acquire with a TTL, heartbeat while working, release when
-done. Leases union, a crashed tool's lease simply expires, and after the
-last one ends the Mac can sleep again (running your configured
-end-of-session action). Works for AI agents, render scripts, backup jobs,
-anything that can run a command:
-
-```sh
-ID=$(uuidgen)
-pervigil lease acquire --id "$ID" --tool render --task "overnight export" --ttl 600
-# ... long work with periodic: pervigil lease heartbeat --id "$ID"
-pervigil lease release --id "$ID"
-```
-
-MCP-capable agents get the same operations from the bundled server; point
-your MCP configuration at:
-
-```
-/Applications/Pervigil.app/Contents/Helpers/pervigil-mcp
-```
-
-A ready-to-copy agent skill ships in the app at
-`Contents/Resources/AgentSkill/keep-awake`. Agents can also read the system
-wake schedule with `pervigil wake status`, and, if you flip the default-off
-switch in Preferences ▸ Automation, schedule wake-ups with
-`pervigil wake set`.
+> [!NOTE]
+> Pervigil is an unofficial fork of [Keepresso](https://github.com/gyorgysh/keepresso) and is not affiliated with or endorsed by the Keepresso project or pueev OÜ. See [TRADEMARK.md](TRADEMARK.md).
 
 ## Install
 
-**Homebrew:**
+Requires macOS 14 (Sonoma) or later.
 
 ```sh
 brew install --cask bubb4rd/pervigil/pervigil
 ```
 
-**Manual:** download the latest signed, notarized DMG from
-[Releases](https://github.com/bubb4rd/pervigil/releases), drag **Pervigil** to
-Applications, and launch it.
+Or download the signed, notarized DMG from [Releases](https://github.com/bubb4rd/pervigil/releases) and move **Pervigil** to Applications.
 
-Either way, Pervigil keeps itself up to date from there.
+Updates are delivered via [Sparkle](https://sparkle-project.org) (see [CHANGELOG.md](CHANGELOG.md)). To uninstall, remove the optional administrator helper in **Preferences → General**, then quit the app and run `brew uninstall --cask pervigil` (add `--zap` to clear preferences and caches).
 
-## Using Pervigil
+## Features
 
-Click the Pervigil icon in the menu bar to open Pervigil. Right-click (or control-click)
-it for a compact context menu with the app entries: Preferences, Headless
-Setup, Gaming & Streaming, Keyboard Cleaner, Public Wi-Fi, About, Check for
-Updates, and Quit.
+- **Keep-awake sessions**: Independent system and display sleep assertions, preset or custom durations, "until HH:MM" end times, screen saver yield, automatic display dimming, optional idle activity simulation, and a global hotkey.
+- **Automatic triggers**: Combine conditions with AND/OR logic or apply built-in presets across power, external displays, schedules, Wi-Fi, VPN, network throughput, Bluetooth, game controllers, mounted volumes, running or frontmost apps, camera/mic in-use state, audio playback, Calendar events, CPU usage, downloads, and games.
+- **AI agent awareness**: Detects active coding agents (Claude Code, Cursor, Codex, Antigravity, Gemini, Aider, Devin, and others) via opt-in integrations, transcripts, or CPU baselines. Automatically wakes the Mac ahead of scheduled local AI runs.
+- **Closed-display mode**: Keeps the Mac running with the lid shut on AC or battery, with session-scoped restoration, optional Low Power Mode, minimum fan floor, built-in speaker mute, and Keychain-backed hotspot fallback.
+- **Safety and recovery**: Battery-threshold auto-pause, thermal protection with automatic fan boost, session reminders, scheduled wake, and end-of-session actions (sleep, lock, Shortcuts, webhooks, or shell commands).
+- **System utilities**: Live power assertion inspector (`pmset` view and session log), AWDL jitter pause for gaming and streaming, Keyboard Cleaner, captive-portal Wi-Fi recovery, Headless Setup checklist, experimental HiDPI virtual display, and external drive keep-alive.
+- **Native integration**: Swift/SwiftUI with no Dock icon, Widgets and Control Center support, customizable menu layouts, JSON settings import/export, and 15 languages.
 
-- **Quick toggle.** Flip **Keep awake** on or off and pick a duration:
-  indefinitely, a preset (15 minutes, 1 hour, 4 hours), any custom duration, or
-  until a time of day. The icon fills while a session is active.
-- **Customize the menu.** Open **Customize Menu…** in Preferences > General >
-  Menu bar for a live preview beside the editor. Enable **Customize menu
-  sections**, then start with
-  **Minimal**, **Compact**, **Balanced**, **Lid controls**, **Session controls**,
-  **Status only**, or **Detailed**, then hide, reorder, pin, or move any of the 39
-  controls between groups. Choose spacing, panel width, status style, group
-  headings and disclosures, trigger and agent detail, and menu-bar text. Session
-  action buttons use the accent color by default, while dropdowns and app links
-  stay neutral. **Appearance > Control style > Clear style** makes the session
-  actions neutral too, with the same button shape and centered label. All presets
-  keep the standard 280-point width. Settings and tools start collapsed; the
-  session controls adapt to manual and trigger
-  sessions. The two small switch variants add just closed-display mode or
-  Only while awake to Compact.
-  Status only shows information without session buttons. Preview controls cannot
-  change a session or feature setting.
-  “Show less” can retain pinned controls, the first few groups, or everything.
-  Optional quick controls include manual sessions while triggers are running,
-  display sleep, keep-active, reminders, presets, and end actions.
-  Customization is off by default. Enabling it keeps the standard menu until
-  you choose a profile or edit a layout option. Disabling it restores that menu
-  while retaining your custom layout. Layout changes preserve feature settings
-  and are included in configuration backups. Preferences and Quit remain
-  available by right-click and keyboard shortcut. Active sleep overrides and
-  safety warnings remain visible, with their settings reachable in Preferences.
-- **Show less.** The disclosure row at the bottom of the panel folds the option
-  toggles and app entries away, leaving just the status and the keep-awake
-  controls. Pervigil remembers the choice, and everything hidden stays
-  reachable from the right-click menu.
-- **Keep awake with lid closed.** Toggle it right from the menu before you shut
-  the lid or unplug. It flips a system setting (`pmset disablesleep`), so it
-  needs administrator rights: silent with the helper installed, one password
-  ask without it. Works on power or battery; turn it off when you're done, on
-  battery in a bag it can drain and heat up. Or set it to **"Only while
-  awake"** in Preferences > General and it follows the session on its own:
-  on at session start, off at session end or app quit.
-- **Preferences** (⌘,) holds the set-and-forget configuration, in tabs:
-  - **General**: what to keep awake, the administrator helper, menu-bar
-    countdown, battery auto-pause, closed-display mode, launch at login,
-    settings backup (export/import), and the welcome screen.
-  - **Triggers**: turn on rule-based activation, apply a preset, and build your
-    rule set.
-  - **Reminder**: a one-time or recurring "still awake" alert, with a sound,
-    plus end notifications and the ending-soon warning.
-  - **Automation**: end-of-session actions, outbound event hooks, and scheduled
-    wake (with optional auto-start on wake).
-  - **Disk**: choose a volume to keep spun up and how often to touch it.
-  - **Display**: create an experimental high-resolution headless virtual display.
-  - **Activity**: what's keeping the Mac awake right now, a weekly held-awake
-    summary, and why each session started or stopped (persisted across relaunch).
-- **Headless Setup** checks that an always-on Mac (say a Mac mini with no display)
-  is configured to stay reachable, and links you straight to the right settings.
-- **Gaming & Streaming** diagnoses the once-a-second Wi-Fi lag spikes AWDL
-  causes (jitter test), pauses AWDL for the session with one toggle, and
-  checks the radio hygiene around it: wired network, Wi-Fi channel, Bluetooth,
-  Game Mode.
-- **Keyboard Cleaner** locks the keys so you can wipe the Mac, including the
-  top-row special keys. Unlock is a click. A crash or quit puts the mapping back.
-- **Public Wi-Fi** diagnoses captive portals that never show a login page and
-  offers Open login page, Flush DNS, and a Wi-Fi cycle.
+## Automation
 
-Pervigil has no Dock icon by design. Everything lives in the menu bar.
+### CLI and leases
 
-### Driving it from Shortcuts or a script
-
-Pervigil ships native **Shortcuts actions**: Start Keeping Awake (optionally
-for _N_ minutes), Stop Keeping Awake, and Toggle Keep Awake, usable from the
-Shortcuts app, Spotlight, and Siri.
-
-It also registers a `pervigil://` URL scheme so Raycast, Alfred, or a shell
-script can start or stop a session without opening the menu:
-
-```
-open "pervigil://start"              # indefinite session
-open "pervigil://start?duration=60"  # timed session, in minutes
-open "pervigil://start?until=18:00"  # until a wall-clock time (24h HH:MM)
-open "pervigil://stop"
-open "pervigil://toggle"
-```
-
-Either way, if triggers are on they pause first (same as the menu's Pause
-Triggers), so the command actually takes effect.
-
-### The `pervigil` command-line tool
-
-The app bundle ships a caffeinate-style CLI. The Homebrew cask links it onto
-your PATH; on a DMG install, the administrator helper creates the
-`/usr/local/bin/pervigil` link for you. It drives the app for session
-commands and can also hold its own assertion when you need to block in a
-pipeline:
+The `pervigil` CLI is linked by Homebrew or available at `/Applications/Pervigil.app/Contents/Helpers/pervigil`.
 
 ```sh
-pervigil start --for 90     # tell the app to keep awake for 90 minutes
-pervigil stop               # end the session
-pervigil status             # exit 0 awake, 1 not, 2 app not running
-pervigil status --json      # machine-readable, jq-friendly
+# Control the running app
+pervigil start --for 90
+pervigil stop
+pervigil status --json          # exit 0 awake, 1 idle, 2 app not running
 
-pervigil -t 3600            # hold an assertion itself for an hour
-pervigil -w $!              # stay awake until a process exits
-pervigil -d -i              # also keep the display awake, until Ctrl-C
-pervigil -u                 # wake the display now
+# Standalone assertions (work without the app running)
+pervigil -t 3600                # hold for 1 hour
+pervigil -w $!                  # hold until a process exits
+
+# Bounded leases for scripts and background tools
+ID=$(uuidgen)
+pervigil lease acquire --id "$ID" --tool render --task "export" --ttl 600
+pervigil lease heartbeat --id "$ID"
+pervigil lease release --id "$ID"
 ```
 
-The standalone holds work even when the app is not running; `pervigil help`
-lists everything. Installed from a DMG instead of Homebrew? Symlink it
-yourself: `ln -s /Applications/Pervigil.app/Contents/Helpers/pervigil /usr/local/bin/`.
+### MCP, Shortcuts, and URL scheme
 
-## Why not the Mac App Store?
+- **MCP server**: Point MCP-compatible agents at `/Applications/Pervigil.app/Contents/Helpers/pervigil-mcp` (a ready-to-install skill is bundled at `Contents/Resources/AgentSkill/keep-awake`).
+- **Shortcuts**: Native Start, Stop, and Toggle Keep Awake actions for Shortcuts, Spotlight, and Siri.
+- **URL scheme**: `pervigil://start`, `pervigil://start?duration=60`, `pervigil://start?until=18:00`, `pervigil://stop`, and `pervigil://toggle`.
 
-The App Sandbox blocks the `IOPMAssertion` power APIs Pervigil depends on, so
-it's distributed **outside** the store, as a direct, notarized DMG download.
+## Permissions
 
-## Building from source
+Permissions are requested only when you enable a feature that requires them. Camera and microphone permissions are never requested; in-use triggers read only the system indicator state.
 
-Pervigil uses **[XcodeGen](https://github.com/yonaskolb/XcodeGen)** to generate
-the Xcode project from [`project.yml`](project.yml) (the `.xcodeproj` is **not**
-checked in), and **Swift Package Manager** for the testable core
-([`PervigilCore`](Sources/PervigilCore)).
+| Permission | Required for |
+|---|---|
+| **Administrator helper** | Closed-display mode, AWDL pause, fan control, wake schedules, Keyboard Cleaner, game priority, DNS flush (one-time Login Items approval, or per-launch prompt) |
+| **Location** | Wi-Fi SSID trigger and hotspot fallback (required by macOS to read network names) |
+| **Bluetooth** | Connected Bluetooth device trigger |
+| **Calendar** | Active calendar event trigger |
+| **Accessibility** | Optional keyboard/mouse methods for idle activity simulation |
 
-**Requirements:** macOS 14+, Xcode 16+, `xcodegen` (`brew install xcodegen`).
+## Build from source
+
+Requires macOS 14+, Xcode 26+, and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`). The Xcode project is generated from [`project.yml`](project.yml).
 
 ```sh
 git clone https://github.com/bubb4rd/pervigil.git
 cd pervigil
-
-./scripts/run.sh            # generate the project and open it in Xcode (⌘R to run)
+./scripts/run.sh                # generate Pervigil.xcodeproj and open in Xcode
+swift test                      # run PervigilCore tests (requires full Xcode)
 ```
 
-### Working on the core logic
-
-The sleep-control state machine lives in `PervigilCore` and is fully unit
-tested, independent of any UI:
-
-```sh
-swift build      # build the core library
-swift test       # run the test suite (requires the full Xcode toolchain)
-```
-
-### How it works
-
-Two layers, by design:
-
-- **`PervigilCore`** is a SwiftUI-free SwiftPM library: the `SessionController`
-  state machine plus protocol seams over every system touchpoint (power
-  assertions, power source, displays, network, workspace, disk, notifications).
-  This is where behavior lives and where the tests are.
-- **`Pervigil`** is the thin SwiftUI `MenuBarExtra` app: views and lifecycle
-  glue wired to the real system backends.
-
-The controller doesn't run its own timer; the app ticks it once a second. Tests
-advance a fake clock and inject fakes for the system seams, so the logic is
-verified without touching real hardware.
-
-### Scripts
-
-- `scripts/run.sh`: generate the project and open it in Xcode.
-- `scripts/make-icon.swift`: regenerate the app icon asset catalog.
-
-See [docs/BUILDING.md](docs/BUILDING.md) for a full build walkthrough and
-[AGENTS.md](AGENTS.md) for the architecture and conventions.
-
-## Contributing
-
-Issues and pull requests are welcome, security fixes included. See
-[CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
+Documentation: [`docs/BUILDING.md`](docs/BUILDING.md) · [`AGENTS.md`](AGENTS.md) · [`docs/AUTOMATION_SYNC.md`](docs/AUTOMATION_SYNC.md) · [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md)
 
 ## License
 
-[GNU GPL v3.0](LICENSE) © 2026 Pervigil and Keepresso contributors.
-
-Pervigil is free software: use it, study it, fork it, and contribute back. The
-copyleft terms mean any distributed version (including forks and modifications)
-must stay open-source under the same license, so nobody can take it closed and
-ship a proprietary product from it.
-
-Pervigil is derived from the [Keepresso](https://github.com/gyorgysh/keepresso)
-source code. The Keepresso name, logo, and app icon belong to pueev OÜ; Pervigil
-uses its own name and branding, see [TRADEMARK.md](TRADEMARK.md).
+[GNU GPL v3.0](LICENSE) © 2026 Pervigil and Keepresso contributors. Forked from [Keepresso](https://github.com/gyorgysh/keepresso); the Keepresso name, logo, and app icon belong to pueev OÜ. Built with [Sparkle](https://sparkle-project.org) and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
