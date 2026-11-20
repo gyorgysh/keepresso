@@ -6,7 +6,7 @@ For what shipped when, read `CHANGELOG.md`.
 
 ## What this is
 
-Keepresso is a macOS **menu-bar keep-awake app** (Swift + SwiftUI, macOS 14+):
+Pervigil is a macOS **menu-bar keep-awake app** (Swift + SwiftUI, macOS 14+):
 it holds the Mac awake, either manually or automatically while triggers hold
 (on a call, downloading, gaming, an AI agent working, and so on), and lets it
 sleep otherwise.
@@ -21,31 +21,31 @@ messages tidy and release-worthy.
 
 Two-layer split, deliberately keeping all testable logic out of the UI:
 
-- **`Sources/KeepressoCore`**: a SwiftPM library with **no SwiftUI**. This is
-  where behavior lives and where tests go (`Tests/KeepressoCoreTests`). System
+- **`Sources/PervigilCore`**: a SwiftPM library with **no SwiftUI**. This is
+  where behavior lives and where tests go (`Tests/PervigilCoreTests`). System
   access (power, network, workspace, disk, SMC, brightness) sits behind protocol
   seams so tests can inject fakes.
-- **`Sources/Keepresso`**: the SwiftUI `MenuBarExtra` app shell. Thin: views +
-  lifecycle glue, depends on `KeepressoCore`. `AppModel` wires the real backends.
-- **`Sources/KeepressoWidget`**: the widget + Control Center appex. Talks to the
+- **`Sources/Pervigil`**: the SwiftUI `MenuBarExtra` app shell. Thin: views +
+  lifecycle glue, depends on `PervigilCore`. `AppModel` wires the real backends.
+- **`Sources/PervigilWidget`**: the widget + Control Center appex. Talks to the
   app through an App Group (`WidgetBridge` in Core). The group id is resolved at
   runtime from the process's own signature, never hardcoded.
 
 `project.yml` (XcodeGen) defines the app target and references the local package.
-The generated `Keepresso.xcodeproj` is **git-ignored**: never commit it,
+The generated `Pervigil.xcodeproj` is **git-ignored**: never commit it,
 regenerate it with `xcodegen generate`.
 
 ### Where things live
 
 - **Privileged work** goes through a root helper (`SMAppService` daemon, source
-  in `Sources/keepresso-helper`, protocol in `KeepressoCore/HelperService.swift`,
+  in `Sources/pervigil-helper`, protocol in `PervigilCore/HelperService.swift`,
   app-side glue in `HelperManager`) over a versioned XPC protocol: closed-display
   `disablesleep`, `pmset` wake schedules, fan holds, AWDL pausing, priority boost,
   Keyboard Cleaner, DNS flush. Without the helper, these features fall back to a
   password prompt on purpose, and a notification always explains it first.
-- **Bundled tools** under `Contents/Helpers`: the `keepresso` CLI
-  (`Sources/keepresso-cli`) and the `keepresso-mcp` stdio MCP server
-  (`Sources/keepresso-mcp`), both of which drive automation leases. A
+- **Bundled tools** under `Contents/Helpers`: the `pervigil` CLI
+  (`Sources/pervigil-cli`) and the `pervigil-mcp` stdio MCP server
+  (`Sources/pervigil-mcp`), both of which drive automation leases. A
   ready-to-install agent skill ships under
   `Contents/Resources/AgentSkill/keep-awake`.
 - **Localization**: 15 UI languages, generated from Python catalogs in
@@ -54,23 +54,23 @@ regenerate it with `xcodegen generate`.
   Run `python3 tools/localization/check_all.py` after any string change.
 - **Distribution**: the tag-triggered `.github/workflows/release.yml` builds,
   signs, notarizes, and publishes the DMG + signed Sparkle appcast on every `v*`
-  tag. Each release also bumps `Casks/keepresso.rb` (`version` + `sha256`) in the
-  `gyorgysh/homebrew-keepresso` tap. The Sparkle updater seam is
-  `Sources/Keepresso/Updater.swift`.
+  tag. Each release also bumps `Casks/pervigil.rb` (`version` + `sha256`) in the
+  `bubb4rd/homebrew-pervigil` tap. The Sparkle updater seam is
+  `Sources/Pervigil/Updater.swift`.
 - **Docs**: `docs/BUILDING.md` (build it yourself), `docs/AUTOMATION_SYNC.md`
   (Scheduled AI runs design), `docs/AGENT_BRANDS.md` (agent brand assets).
 
 ## Commands
 
 ```sh
-# Core logic (KeepressoCore), runs anywhere with a Swift toolchain
+# Core logic (PervigilCore), runs anywhere with a Swift toolchain
 swift build                 # build the core library
 swift test                  # run the test suite (needs full Xcode, not just CLT)
 swift test --filter timedSessionExpiresOnReconcile   # a single test
 
 # The app, needs full Xcode + xcodegen (brew install xcodegen)
-xcodegen generate           # regenerate Keepresso.xcodeproj from project.yml
-open Keepresso.xcodeproj    # build/run the Keepresso scheme with Cmd-R
+xcodegen generate           # regenerate Pervigil.xcodeproj from project.yml
+open Pervigil.xcodeproj    # build/run the Pervigil scheme with Cmd-R
 
 # The checks CI runs besides the build and tests
 python3 tools/localization/check_all.py
@@ -109,7 +109,7 @@ threshold.
 
 ## Conventions
 
-- New testable behavior goes in `KeepressoCore` behind a protocol seam if it
+- New testable behavior goes in `PervigilCore` behind a protocol seam if it
   touches the system, mirroring `PowerAsserting`. The app wires the real
   implementation, tests use a fake.
 - The controller and anything it touches are `@MainActor`.

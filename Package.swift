@@ -2,49 +2,49 @@
 import PackageDescription
 
 let package = Package(
-    name: "KeepressoCore",
+    name: "PervigilCore",
     defaultLocalization: "en",
     platforms: [
         .macOS(.v14)
     ],
     products: [
-        .library(name: "KeepressoCore", targets: ["KeepressoCore"]),
+        .library(name: "PervigilCore", targets: ["PervigilCore"]),
         // The caffeinate-style CLI. Built here for the dev loop; the release
-        // app embeds the identically sourced `keepresso-cli` Xcode target.
-        .executable(name: "keepresso", targets: ["keepresso-cli"]),
+        // app embeds the identically sourced `pervigil-cli` Xcode target.
+        .executable(name: "pervigil", targets: ["pervigil-cli"]),
         // The privileged helper daemon (an SMAppService LaunchDaemon). Same
         // arrangement: built here for the dev loop, shipped via the
-        // identically sourced `keepresso-helper` Xcode target.
-        .executable(name: "keepresso-helper", targets: ["keepresso-helper"]),
+        // identically sourced `pervigil-helper` Xcode target.
+        .executable(name: "pervigil-helper", targets: ["pervigil-helper"]),
         // The MCP stdio server exposing automation leases to AI agents. Same
         // arrangement again: dev loop here, embedded Xcode target in releases.
-        .executable(name: "keepresso-mcp", targets: ["keepresso-mcp"])
+        .executable(name: "pervigil-mcp", targets: ["pervigil-mcp"])
     ],
     targets: [
         .target(
-            name: "KeepressoCore",
-            path: "Sources/KeepressoCore"
+            name: "PervigilCore",
+            path: "Sources/PervigilCore"
         ),
         .executableTarget(
-            name: "keepresso-cli",
-            dependencies: ["KeepressoCore"],
-            path: "Sources/keepresso-cli"
+            name: "pervigil-cli",
+            dependencies: ["PervigilCore"],
+            path: "Sources/pervigil-cli"
         ),
         .executableTarget(
-            name: "keepresso-helper",
-            dependencies: ["KeepressoCore"],
-            path: "Sources/keepresso-helper",
+            name: "pervigil-helper",
+            dependencies: ["PervigilCore"],
+            path: "Sources/pervigil-helper",
             exclude: ["Info.plist"]
         ),
         .executableTarget(
-            name: "keepresso-mcp",
-            dependencies: ["KeepressoCore"],
-            path: "Sources/keepresso-mcp"
+            name: "pervigil-mcp",
+            dependencies: ["PervigilCore"],
+            path: "Sources/pervigil-mcp"
         ),
         .testTarget(
-            name: "KeepressoCoreTests",
-            dependencies: ["KeepressoCore"],
-            path: "Tests/KeepressoCoreTests"
+            name: "PervigilCoreTests",
+            dependencies: ["PervigilCore"],
+            path: "Tests/PervigilCoreTests"
         )
     ]
 )

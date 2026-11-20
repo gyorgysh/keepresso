@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# package-dmg.sh: wrap Keepresso.app in the installer disk image.
+# package-dmg.sh: wrap Pervigil.app in the installer disk image.
 #
 #   ./scripts/package-dmg.sh <app-bundle> <output.dmg> [volume-name]
 #
@@ -18,7 +18,7 @@ set -euo pipefail
 
 APP="${1:?usage: package-dmg.sh <app-bundle> <output.dmg> [volume-name]}"
 DMG="${2:?usage: package-dmg.sh <app-bundle> <output.dmg> [volume-name]}"
-VOLUME="${3:-Keepresso}"
+VOLUME="${3:-Pervigil}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"

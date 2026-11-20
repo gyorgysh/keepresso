@@ -1,0 +1,516 @@
+import Foundation
+
+/// The parsed intent of a `pervigil` command-line invocation.
+///
+/// The CLI binary ships inside the app bundle (`Contents/Helpers/pervigil`,
+/// symlinked onto PATH by the Homebrew cask) and covers what the
+/// `pervigil://` URL scheme cannot: blocking holds in a pipeline, waiting on
+/// a process, and scriptable status. Parsing and URL building live here in
+/// Core so they are unit-tested; the executable target is thin glue around
+/// the system calls.
+public enum CLIRequest: Equatable, Sendable {
+    case help
+    case version
+    /// Print the app-written status snapshot; `json` selects machine output.
+    case status(json: Bool)
+    /// Forward a command to the app through its `pervigil://` scheme.
+    case remote(RemoteCommand)
+    /// Hold this process's own power assertion, caffeinate-style.
+    case hold(Hold)
+    /// Record an agent-hook event delivered on stdin (Claude Code hooks).
+    /// Hidden from the help text: installed hook commands are its only
+    /// intended caller.
+    case agentHook(event: String)
+    /// Record a Cursor hook event delivered on stdin. Hidden for the same
+    /// reason as ``agentHook(event:)``.
+    case cursorHook(event: String)
+    case antigravityHook(event: String)
+    /// Record a Codex hook event delivered on stdin. Hidden likewise.
+    case codexHook(event: String)
+    /// Record a Grok hook event delivered on stdin. Hidden likewise.
+    case grokHook(event: String)
+    /// Record a Hermes plugin event delivered on stdin. Hidden likewise.
+    case hermesHook(event: String)
+    /// Record an Oh My Pi extension event. Hidden likewise.
+    case ompHook(
+        event: String,
+        sessionId: String,
+        cwd: String,
+        willContinue: Bool,
+        awaitingAsyncWork: Bool
+    )
+    /// Record a Qwen Code, Devin, or Kimi Code hook event delivered on
+    /// stdin. Hidden likewise.
+    case compatHook(tool: CompatHooks.Tool, event: String)
+    /// Manage automation leases (bounded keep-awake grants for scripts and
+    /// agents), executed by ``LeaseClient``.
+    case lease(LeaseCommand)
+    /// Read or change the system wake schedule, executed by ``WakeClient``.
+    /// Changes are honored only while the default-off preference is on.
+    case wake(WakeCommand)
+
+    /// One `pervigil wake` operation.
+    public enum WakeCommand: Equatable, Sendable {
+        case status(json: Bool)
+        /// Install a one-shot and/or repeating wake. At least one part set.
+        case set(oneShot: Date?, repeatDays: String?, repeatTime: String?, json: Bool)
+        case clear(json: Bool)
+    }
+
+    /// One `pervigil lease` operation, fully validated by the parser.
+    public enum LeaseCommand: Equatable, Sendable {
+        case acquire(
+            id: String,
+            owner: String?,
+            tool: String,
+            task: String,
+            ttlSeconds: Int,
+            maxLifetimeSeconds: Int?,
+            json: Bool
+        )
+        case heartbeat(id: String, ttlSeconds: Int?, json: Bool)
+        case release(id: String, json: Bool)
+        case list(json: Bool)
+    }
+
+    /// A command delivered to the app (launching it if needed) via
+    /// `open <url>`. Mirrors what ``URLCommand/parse(_:)`` accepts on the
+    /// receiving side; ``urlString`` is round-trip-tested against it.
+    public enum RemoteCommand: Equatable, Sendable {
+        case start(durationMinutes: Double?, untilTime: String?)
+        case stop
+        case toggle
+        /// The lease doorbell: rescan automation inputs, launching the app
+        /// if needed. Parameterless by design.
+        case syncLeases
+
+        /// The `pervigil://` URL that carries this command.
+        public var urlString: String {
+            switch self {
+            case .start(nil, nil):
+                return "pervigil://start"
+            case .start(let minutes?, _):
+                return "pervigil://start?duration=\(Self.trimmed(minutes))"
+            case .start(nil, let time?):
+                return "pervigil://start?until=\(time)"
+            case .stop:
+                return "pervigil://stop"
+            case .toggle:
+                return "pervigil://toggle"
+            case .syncLeases:
+                return "pervigil://sync-leases"
+            }
+        }
+
+        /// "90.0" reads worse than "90" in a URL; drop a whole-number's tail.
+        private static func trimmed(_ minutes: Double) -> String {
+            minutes == minutes.rounded() && minutes.magnitude < 1e15
+                ? String(Int(minutes))
+                : String(minutes)
+        }
+    }
+
+    /// A caffeinate-style hold: the CLI process takes its own IOKit assertion
+    /// and blocks until a bound is reached (or forever, until a signal).
+    public struct Hold: Equatable, Sendable {
+        /// Keep the display awake too (`-d`), not just the system.
+        public var display = false
+        /// Declare user activity once at start (`-u`): wakes the display and
+        /// resets the idle timer, like `caffeinate -u`.
+        public var declareUserActivity = false
+        /// Release after this many seconds (`-t`).
+        public var timeoutSeconds: Double?
+        /// Release when this process exits (`-w`). Combined with `-t`,
+        /// whichever bound is reached first wins.
+        public var waitForPID: Int32?
+        /// True when `-u` appeared with no hold flags at all: declare the
+        /// activity once and exit instead of blocking.
+        public var oneShot = false
+
+        public init(
+            display: Bool = false,
+            declareUserActivity: Bool = false,
+            timeoutSeconds: Double? = nil,
+            waitForPID: Int32? = nil,
+            oneShot: Bool = false
+        ) {
+            self.display = display
+            self.declareUserActivity = declareUserActivity
+            self.timeoutSeconds = timeoutSeconds
+            self.waitForPID = waitForPID
+            self.oneShot = oneShot
+        }
+    }
+
+    /// Parses the arguments (without the executable name). Throws
+    /// ``CLIUsageError`` with a user-facing message on bad input.
+    public static func parse(_ arguments: [String]) throws -> CLIRequest {
+        guard let first = arguments.first else { return .help }
+        if let tool = CompatHooks.Tool.allCases.first(where: { $0.subcommand == first }) {
+            guard arguments.count == 2 else {
+                throw CLIUsageError("\(first) takes exactly one event name")
+            }
+            return .compatHook(tool: tool, event: arguments[1])
+        }
+        switch first {
+        case "help", "--help", "-h":
+            return .help
+        case "version", "--version":
+            return .version
+        case "status":
+            let rest = arguments.dropFirst()
+            guard rest.isEmpty || rest == ["--json"] else {
+                throw CLIUsageError("'status' takes only --json")
+            }
+            return .status(json: rest.first == "--json")
+        case "start":
+            return .remote(try parseStart(Array(arguments.dropFirst())))
+        case "stop", "toggle":
+            guard arguments.count == 1 else {
+                throw CLIUsageError("'\(first)' takes no options")
+            }
+            return .remote(first == "stop" ? .stop : .toggle)
+        case "agent-hook":
+            guard arguments.count == 2 else {
+                throw CLIUsageError("agent-hook takes exactly one event name")
+            }
+            return .agentHook(event: arguments[1])
+        case "cursor-hook":
+            guard arguments.count == 2 else {
+                throw CLIUsageError("cursor-hook takes exactly one event name")
+            }
+            return .cursorHook(event: arguments[1])
+        case "antigravity-hook":
+            guard arguments.count == 2 else {
+                throw CLIUsageError("antigravity-hook takes exactly one event name")
+            }
+            return .antigravityHook(event: arguments[1])
+        case "codex-hook":
+            guard arguments.count == 2 else {
+                throw CLIUsageError("codex-hook takes exactly one event name")
+            }
+            return .codexHook(event: arguments[1])
+        case "grok-hook":
+            guard arguments.count == 2 else {
+                throw CLIUsageError("grok-hook takes exactly one event name")
+            }
+            return .grokHook(event: arguments[1])
+        case "hermes-hook":
+            guard arguments.count == 2 else {
+                throw CLIUsageError("hermes-hook takes exactly one event name")
+            }
+            return .hermesHook(event: arguments[1])
+        case "omp-hook":
+            guard arguments.count == 6 else {
+                throw CLIUsageError("omp-hook takes an event, session id, working directory, and two continuation flags")
+            }
+            guard !arguments[2].isEmpty else {
+                throw CLIUsageError("omp-hook needs a session id")
+            }
+            func flag(_ value: String) throws -> Bool {
+                switch value {
+                case "0": return false
+                case "1": return true
+                default: throw CLIUsageError("omp-hook continuation flags must be 0 or 1")
+                }
+            }
+            return .ompHook(
+                event: arguments[1],
+                sessionId: arguments[2],
+                cwd: arguments[3],
+                willContinue: try flag(arguments[4]),
+                awaitingAsyncWork: try flag(arguments[5])
+            )
+        case "lease":
+            return .lease(try parseLease(Array(arguments.dropFirst())))
+        case "wake":
+            return .wake(try parseWake(Array(arguments.dropFirst())))
+        default:
+            guard first.hasPrefix("-") else {
+                throw CLIUsageError("unknown command '\(first)' (run 'pervigil help')")
+            }
+            return .hold(try parseHold(arguments))
+        }
+    }
+
+    // MARK: - start options
+
+    private static func parseStart(_ options: [String]) throws -> RemoteCommand {
+        var minutes: Double?
+        var until: String?
+        var index = 0
+        while index < options.count {
+            let option = options[index]
+            switch option {
+            case "--for", "--duration":
+                guard index + 1 < options.count else {
+                    throw CLIUsageError("\(option) needs a value in minutes")
+                }
+                guard let value = Double(options[index + 1]), value > 0,
+                      value <= SessionMode.maxTimedMinutes else {
+                    throw CLIUsageError("'\(options[index + 1])' is not a positive number of minutes")
+                }
+                minutes = value
+                index += 2
+            case "--until":
+                guard index + 1 < options.count else {
+                    throw CLIUsageError("--until needs a 24-hour time like 18:30")
+                }
+                let raw = options[index + 1]
+                guard Self.isValidClockTime(raw) else {
+                    throw CLIUsageError("'\(raw)' is not a 24-hour time like 18:30")
+                }
+                until = raw
+                index += 2
+            default:
+                throw CLIUsageError("unknown start option '\(option)'")
+            }
+        }
+        guard minutes == nil || until == nil else {
+            throw CLIUsageError("use either --for or --until, not both")
+        }
+        return .start(durationMinutes: minutes, untilTime: until)
+    }
+
+    // MARK: - lease options
+
+    private static func parseLease(_ arguments: [String]) throws -> LeaseCommand {
+        guard let verb = arguments.first else {
+            throw CLIUsageError("lease needs a verb: acquire, heartbeat, release, or list")
+        }
+        var flags = try leaseFlags(Array(arguments.dropFirst()))
+        let json = flags.removeValue(forKey: "--json") != nil
+
+        func take(_ name: String) -> String? { flags.removeValue(forKey: name) }
+        func requireId() throws -> String {
+            guard let raw = take("--id") else {
+                throw CLIUsageError("lease \(verb) needs --id <uuid>")
+            }
+            guard let id = AutomationLease.canonicalId(raw) else {
+                throw CLIUsageError("'\(raw)' is not a UUID (try: uuidgen)")
+            }
+            return id
+        }
+        func seconds(_ name: String) throws -> Int? {
+            guard let raw = take(name) else { return nil }
+            guard let value = Int(raw), value > 0 else {
+                throw CLIUsageError("'\(raw)' is not a positive number of seconds")
+            }
+            return value
+        }
+
+        let command: LeaseCommand
+        switch verb {
+        case "acquire":
+            let id = try requireId()
+            guard let tool = take("--tool"), !tool.isEmpty else {
+                throw CLIUsageError("lease acquire needs --tool <name>")
+            }
+            guard let task = take("--task"), !task.isEmpty else {
+                throw CLIUsageError("lease acquire needs --task <label>")
+            }
+            guard let ttl = try seconds("--ttl") else {
+                throw CLIUsageError("lease acquire needs --ttl <seconds>")
+            }
+            command = .acquire(
+                id: id,
+                owner: take("--owner"),
+                tool: tool,
+                task: task,
+                ttlSeconds: ttl,
+                maxLifetimeSeconds: try seconds("--max-lifetime"),
+                json: json
+            )
+        case "heartbeat":
+            command = .heartbeat(id: try requireId(), ttlSeconds: try seconds("--ttl"), json: json)
+        case "release":
+            command = .release(id: try requireId(), json: json)
+        case "list":
+            command = .list(json: json)
+        default:
+            throw CLIUsageError("unknown lease verb '\(verb)' (acquire, heartbeat, release, list)")
+        }
+        guard flags.isEmpty else {
+            throw CLIUsageError("unknown lease option '\(flags.keys.sorted().first!)'")
+        }
+        return command
+    }
+
+    /// Collects `--flag value` pairs (and the value-less `--json`), rejecting
+    /// anything that is not a recognised flag shape.
+    private static func leaseFlags(_ arguments: [String]) throws -> [String: String] {
+        var flags: [String: String] = [:]
+        var index = 0
+        while index < arguments.count {
+            let name = arguments[index]
+            guard name.hasPrefix("--") else {
+                throw CLIUsageError("unexpected argument '\(name)'")
+            }
+            if name == "--json" {
+                flags[name] = ""
+                index += 1
+                continue
+            }
+            guard index + 1 < arguments.count else {
+                throw CLIUsageError("\(name) needs a value")
+            }
+            guard flags[name] == nil else {
+                throw CLIUsageError("\(name) given twice")
+            }
+            flags[name] = arguments[index + 1]
+            index += 2
+        }
+        return flags
+    }
+
+    // MARK: - wake options
+
+    private static func parseWake(_ arguments: [String]) throws -> WakeCommand {
+        guard let verb = arguments.first else {
+            throw CLIUsageError("wake needs a verb: status, set, or clear")
+        }
+        var flags = try leaseFlags(Array(arguments.dropFirst()))
+        let json = flags.removeValue(forKey: "--json") != nil
+
+        let command: WakeCommand
+        switch verb {
+        case "status":
+            command = .status(json: json)
+        case "clear":
+            command = .clear(json: json)
+        case "set":
+            let oneShot = try flags.removeValue(forKey: "--at").map { raw -> Date in
+                guard let date = Self.parseWakeDate(raw) else {
+                    throw CLIUsageError("'\(raw)' is not a date like \"2026-07-24 07:30\"")
+                }
+                return date
+            }
+            let days = try flags.removeValue(forKey: "--repeat").map { raw -> String in
+                guard AutomationWakeControl.hasValidWeekdays(raw) else {
+                    throw CLIUsageError("'\(raw)' has no valid weekday letters (use MTWRFSU)")
+                }
+                return raw
+            }
+            let time = try flags.removeValue(forKey: "--time").map { raw -> String in
+                guard Self.isValidClockTime(raw) else {
+                    throw CLIUsageError("'\(raw)' is not a 24-hour time like 07:30")
+                }
+                return raw
+            }
+            guard (days == nil) == (time == nil) else {
+                throw CLIUsageError("--repeat and --time go together")
+            }
+            guard oneShot != nil || days != nil else {
+                throw CLIUsageError("wake set needs --at, or --repeat with --time")
+            }
+            command = .set(oneShot: oneShot, repeatDays: days, repeatTime: time, json: json)
+        default:
+            throw CLIUsageError("unknown wake verb '\(verb)' (status, set, clear)")
+        }
+        guard flags.isEmpty else {
+            throw CLIUsageError("unknown wake option '\(flags.keys.sorted().first!)'")
+        }
+        return command
+    }
+
+    /// "YYYY-MM-DD HH:MM", local time, the shape `wake set --at` accepts.
+    static func parseWakeDate(_ raw: String, calendar: Calendar = .current) -> Date? {
+        let parts = raw.split(separator: " ")
+        guard parts.count == 2 else { return nil }
+        let dateParts = parts[0].split(separator: "-")
+        let timeParts = parts[1].split(separator: ":")
+        guard dateParts.count == 3, timeParts.count == 2,
+              let year = Int(dateParts[0]), year >= 2000,
+              let month = Int(dateParts[1]), (1...12).contains(month),
+              let day = Int(dateParts[2]), (1...31).contains(day),
+              let hour = Int(timeParts[0]), (0...23).contains(hour),
+              let minute = Int(timeParts[1]), (0...59).contains(minute)
+        else { return nil }
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        components.hour = hour
+        components.minute = minute
+        guard let date = calendar.date(from: components) else { return nil }
+        // `date(from:)` normalizes out-of-range components instead of failing,
+        // so "2026-02-31" would silently schedule a March wake. Require the
+        // calendar to read back exactly what was requested.
+        let readBack = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        guard readBack.year == year, readBack.month == month, readBack.day == day,
+              readBack.hour == hour, readBack.minute == minute
+        else { return nil }
+        return date
+    }
+
+    /// HH:MM, 24-hour, the same shape ``URLCommand`` accepts in `until=`.
+    static func isValidClockTime(_ raw: String) -> Bool {
+        let parts = raw.split(separator: ":")
+        guard parts.count == 2,
+              let hour = Int(parts[0]), (0...23).contains(hour),
+              parts[1].count == 2,
+              let minute = Int(parts[1]), (0...59).contains(minute)
+        else { return false }
+        return true
+    }
+
+    // MARK: - hold flags
+
+    private static func parseHold(_ arguments: [String]) throws -> Hold {
+        var hold = Hold()
+        var sawBoundless = false
+        var index = 0
+        while index < arguments.count {
+            let argument = arguments[index]
+            switch argument {
+            case "-t", "--timeout":
+                guard index + 1 < arguments.count else {
+                    throw CLIUsageError("-t needs a value in seconds")
+                }
+                guard let seconds = Double(arguments[index + 1]), seconds > 0 else {
+                    throw CLIUsageError("'\(arguments[index + 1])' is not a positive number of seconds")
+                }
+                hold.timeoutSeconds = seconds
+                index += 2
+            case "-w", "--waitfor":
+                guard index + 1 < arguments.count else {
+                    throw CLIUsageError("-w needs a process id")
+                }
+                guard let pid = Int32(arguments[index + 1]), pid > 0 else {
+                    throw CLIUsageError("'\(arguments[index + 1])' is not a process id")
+                }
+                hold.waitForPID = pid
+                index += 2
+            default:
+                // A cluster of value-less flags, caffeinate-style: -diu.
+                guard argument.hasPrefix("-"), argument.count > 1 else {
+                    throw CLIUsageError("unknown option '\(argument)'")
+                }
+                for flag in argument.dropFirst() {
+                    switch flag {
+                    case "d": hold.display = true
+                    case "i": sawBoundless = true
+                    case "u": hold.declareUserActivity = true
+                    case "t", "w":
+                        throw CLIUsageError("-\(flag) takes a value, give it separately: -\(flag) <value>")
+                    default:
+                        throw CLIUsageError("unknown flag '-\(flag)' (run 'pervigil help')")
+                    }
+                }
+                index += 1
+            }
+        }
+        // `-u` alone is a one-shot wake; anything else without a bound holds
+        // until a signal, like bare `caffeinate`.
+        hold.oneShot = hold.declareUserActivity
+            && hold.timeoutSeconds == nil && hold.waitForPID == nil
+            && !sawBoundless && !hold.display
+        return hold
+    }
+}
+
+/// A bad command line; `message` is printed to stderr as-is.
+public struct CLIUsageError: Error, Equatable, Sendable {
+    public let message: String
+    public init(_ message: String) { self.message = message }
+}

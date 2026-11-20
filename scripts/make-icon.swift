@@ -1,16 +1,20 @@
 #!/usr/bin/env swift
 //
-// make-icon.swift — generate Keepresso's Liquid Glass icon source layers.
+// make-icon.swift: generate Pervigil's app icon from the brand mark.
 //
-// Splits the website's brand mark (espresso cup, crema stripe, handle, saucer,
-// three steam wisps) into stackable layers for Apple's Icon Composer (Xcode 26),
-// which assembles them into `Sources/Keepresso/AppIcon.icon` with the glass
-// material and the light / dark / tinted / clear appearances. Re-run after
-// tweaking the mark, then re-import the layers in Icon Composer:
+// The mark (docs/assets/brand/pervigil-mark.svg) is split into stackable
+// layers for Apple's Icon Composer (Xcode 26), which assembles them into
+// `Sources/Pervigil/AppIcon.icon` with the glass material and the light /
+// dark / tinted / clear appearances. The layers are also copied straight into
+// the .icon bundle's Assets folder, so a plain re-run keeps it current:
 //
 //   swift scripts/make-icon.swift
 //
-// Output: docs/assets/icon-layers/{background,cup,steam}-{light,dark}.png (1024px).
+// Output:
+//   docs/assets/icon-layers/{background,mark}-{light,dark}.png (1024px)
+//   Sources/Pervigil/AppIcon.icon/Assets/ (same files)
+//   docs/assets/icon.png (512px flattened icon for the README and project
+//   pickers that look for an icon.png)
 //
 import AppKit
 
@@ -18,156 +22,142 @@ import AppKit
 let scriptURL = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
 let root = scriptURL.deletingLastPathComponent().deletingLastPathComponent()
 
-func srgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat) -> NSColor {
-    NSColor(srgbRed: r / 255, green: g / 255, blue: b / 255, alpha: 1)
+func srgb(_ hex: UInt32) -> NSColor {
+    NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
 }
 
-/// The palette for one appearance, taken from the website's tokens.
+/// One appearance, from the colorways in docs/assets/brand/README.md.
 struct IconPalette {
     let backgroundTop: NSColor
     let backgroundBottom: NSColor
-    let cup: NSColor    // cup body, handle, saucer
-    let crema: NSColor  // the stripe inside the cup
-    let steam: NSColor
+    let markTop: NSColor
+    let markBottom: NSColor
 }
 
+/// "On blue": a white mark on the brand blue.
 let lightPalette = IconPalette(
-    backgroundTop: srgb(250, 245, 236),    // paper #FAF5EC
-    backgroundBottom: srgb(238, 223, 196), // deeper crema
-    cup: srgb(45, 32, 21),                 // dark roast ink
-    crema: srgb(180, 83, 9),               // caramel #B45309
-    steam: srgb(194, 65, 12)               // copper #C2410C
+    backgroundTop: srgb(0x69A9ED), backgroundBottom: srgb(0x2D8EF9),
+    markTop: srgb(0xFFFFFF), markBottom: srgb(0xFFFFFF)
 )
 
+/// "Blue" mark on the dark ground.
 let darkPalette = IconPalette(
-    backgroundTop: srgb(40, 30, 19),       // warm roast
-    backgroundBottom: srgb(18, 14, 10),    // deep roast #120E0A
-    cup: srgb(247, 241, 232),              // warm white ink #F7F1E8
-    crema: srgb(232, 163, 92),             // amber #E8A35C
-    steam: srgb(232, 163, 92)
+    backgroundTop: srgb(0x171717), backgroundBottom: srgb(0x010101),
+    markTop: srgb(0x6EAFF6), markBottom: srgb(0x007AFF)
 )
 
-/// The brand-mark geometry in the website SVG's 64-point grid (y pointing down).
-/// Fills: cup body and crema stripe. Strokes: handle, saucer, steam wisps.
-enum BrandMark {
-    static func cup() -> CGPath {
+/// The mark in the SVG's own grid (viewBox 0 0 562 650, y pointing down):
+/// a solid block with a notch on the left edge and a play triangle cut out.
+enum PervigilMark {
+    static let size = CGSize(width: 562, height: 650)
+
+    static func path() -> CGPath {
         let p = CGMutablePath()
-        p.move(to: CGPoint(x: 16, y: 28))
-        p.addLine(to: CGPoint(x: 44, y: 28))
-        p.addLine(to: CGPoint(x: 44, y: 38))
-        p.addArc(center: CGPoint(x: 35, y: 38), radius: 9,
-                 startAngle: 0, endAngle: .pi / 2, clockwise: false)
-        p.addLine(to: CGPoint(x: 25, y: 47))
-        p.addArc(center: CGPoint(x: 25, y: 38), radius: 9,
-                 startAngle: .pi / 2, endAngle: .pi, clockwise: false)
+        p.addLines(between: [
+            CGPoint(x: 0, y: 0), CGPoint(x: 562, y: 0), CGPoint(x: 562, y: 650),
+            CGPoint(x: 0, y: 650), CGPoint(x: 0, y: 231), CGPoint(x: 190, y: 231),
+            CGPoint(x: 0, y: 124),
+        ])
+        p.closeSubpath()
+        p.addLines(between: [CGPoint(x: 190, y: 231), CGPoint(x: 557, y: 438), CGPoint(x: 190, y: 645)])
         p.closeSubpath()
         return p
     }
-
-    static func crema() -> CGPath {
-        CGPath(roundedRect: CGRect(x: 20, y: 31.5, width: 20, height: 3.4),
-               cornerWidth: 1.7, cornerHeight: 1.7, transform: nil)
-    }
-
-    static func handle() -> CGPath {
-        let p = CGMutablePath()
-        p.move(to: CGPoint(x: 44, y: 31.5))
-        p.addLine(to: CGPoint(x: 46.5, y: 31.5))
-        p.addArc(center: CGPoint(x: 46.5, y: 37.5), radius: 6,
-                 startAngle: -.pi / 2, endAngle: .pi / 2, clockwise: false)
-        p.addLine(to: CGPoint(x: 43, y: 43.5))
-        return p
-    }
-
-    static func saucer() -> CGPath {
-        let p = CGMutablePath()
-        p.move(to: CGPoint(x: 15, y: 52))
-        p.addLine(to: CGPoint(x: 45, y: 52))
-        return p
-    }
-
-    /// Three staggered S-curve wisps above the cup, like the site's hero mark.
-    static func steamWisps() -> [CGPath] {
-        [(22.5, 12.0), (30.0, 9.0), (37.5, 12.0)].map { (x, y) in
-            let p = CGMutablePath()
-            p.move(to: CGPoint(x: x, y: y))
-            p.addCurve(to: CGPoint(x: x, y: y + 9.5),
-                       control1: CGPoint(x: x - 2.6, y: y + 3.2),
-                       control2: CGPoint(x: x + 2.6, y: y + 5.0))
-            return p
-        }
-    }
 }
 
-/// One separable layer of the mark, for the Liquid Glass (Icon Composer) build.
-enum IconLayer: String { case background, cup, steam }
+/// The mark's height as a share of the icon body it sits on.
+let markShare: CGFloat = 0.54
 
-/// Render a single layer onto its own canvas so Icon Composer can stack them
-/// and apply the Liquid Glass material per layer. The background is full-bleed
-/// (Icon Composer masks the icon shape); the cup and steam sit on transparency,
-/// centered with the same 80%-of-canvas transform.
-func renderLayer(_ layer: IconLayer, pixels: CGFloat, dark: Bool) -> Data {
-    let px = Int(pixels)
+/// Fill the mark, fitted to `markShare` of `body` and centered in it, with a
+/// top-to-bottom gradient (the brand gradient stops at 80%).
+func drawMark(in ctx: CGContext, body: CGRect, palette: IconPalette) {
+    let scale = body.height * markShare / PervigilMark.size.height
+    let w = PervigilMark.size.width * scale, h = PervigilMark.size.height * scale
+    ctx.saveGState()
+    // Flip into the SVG's y-down grid.
+    ctx.translateBy(x: body.midX - w / 2, y: body.midY + h / 2)
+    ctx.scaleBy(x: scale, y: -scale)
+    ctx.addPath(PervigilMark.path())
+    ctx.clip(using: .evenOdd)
+    let gradient = CGGradient(
+        colorsSpace: CGColorSpace(name: CGColorSpace.sRGB),
+        colors: [palette.markTop.cgColor, palette.markBottom.cgColor] as CFArray,
+        locations: [0, 0.8]
+    )!
+    ctx.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: PervigilMark.size.height),
+                           options: [.drawsAfterEndLocation])
+    ctx.restoreGState()
+}
+
+func drawBackground(in rect: NSRect, palette: IconPalette) {
+    NSGradient(starting: palette.backgroundTop, ending: palette.backgroundBottom)!
+        .draw(in: rect, angle: -90)
+}
+
+func render(pixels: Int, _ draw: (CGContext, CGFloat) -> Void) -> Data {
     let rep = NSBitmapImageRep(
-        bitmapDataPlanes: nil, pixelsWide: px, pixelsHigh: px,
+        bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels,
         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
     )!
     rep.size = NSSize(width: pixels, height: pixels)
-
     NSGraphicsContext.saveGraphicsState()
     let gc = NSGraphicsContext(bitmapImageRep: rep)!
     gc.imageInterpolation = .high
     NSGraphicsContext.current = gc
-    defer { NSGraphicsContext.restoreGraphicsState() }
-
-    let palette = dark ? darkPalette : lightPalette
-
-    if layer == .background {
-        // Full bleed: Icon Composer masks to the rounded-rect and adds the glass,
-        // so no inset/squircle here.
-        NSGradient(starting: palette.backgroundTop, ending: palette.backgroundBottom)!
-            .draw(in: NSRect(x: 0, y: 0, width: pixels, height: pixels), angle: -90)
-    } else {
-        let ctx = gc.cgContext
-        ctx.saveGState()
-        let scale = pixels * 0.80 / 64
-        let offset = (pixels - 64 * scale) / 2
-        ctx.translateBy(x: offset, y: pixels - offset)
-        ctx.scaleBy(x: scale, y: -scale)
-        ctx.setLineCap(.round)
-        if layer == .cup {
-            ctx.setFillColor(palette.cup.cgColor)
-            ctx.addPath(BrandMark.cup()); ctx.fillPath()
-            ctx.setFillColor(palette.crema.cgColor)
-            ctx.addPath(BrandMark.crema()); ctx.fillPath()
-            ctx.setStrokeColor(palette.cup.cgColor)
-            ctx.setLineWidth(3.4); ctx.addPath(BrandMark.handle()); ctx.strokePath()
-            ctx.setLineWidth(3.6); ctx.addPath(BrandMark.saucer()); ctx.strokePath()
-        } else { // steam
-            ctx.setStrokeColor(palette.steam.cgColor)
-            ctx.setLineWidth(3.2)
-            for wisp in BrandMark.steamWisps() { ctx.addPath(wisp); ctx.strokePath() }
-        }
-        ctx.restoreGState()
-    }
-
+    draw(gc.cgContext, CGFloat(pixels))
     gc.flushGraphics()
+    NSGraphicsContext.restoreGraphicsState()
     return rep.representation(using: .png, properties: [:])!
 }
 
-// The Liquid Glass source layers: the mark split into stackable 1024px layers,
-// light and dark. Icon Composer imports these and builds
-// Sources/Keepresso/AppIcon.icon (the shipped app icon); its Assets/ folder ends
-// up holding its own copy, so re-import after regenerating here.
-let layersDir = root.appendingPathComponent("docs/assets/icon-layers")
-try? FileManager.default.createDirectory(at: layersDir, withIntermediateDirectories: true)
-var layerFiles = 0
-for layer in [IconLayer.background, .cup, .steam] {
-    for (name, dark) in [("light", false), ("dark", true)] {
-        let data = renderLayer(layer, pixels: 1024, dark: dark)
-        try! data.write(to: layersDir.appendingPathComponent("\(layer.rawValue)-\(name).png"))
-        layerFiles += 1
+enum IconLayer: String { case background, mark }
+
+/// One Icon Composer layer: the background is full bleed (Icon Composer masks
+/// the icon shape and adds the glass); the mark sits on transparency.
+func renderLayer(_ layer: IconLayer, dark: Bool) -> Data {
+    let palette = dark ? darkPalette : lightPalette
+    return render(pixels: 1024) { ctx, side in
+        let full = NSRect(x: 0, y: 0, width: side, height: side)
+        switch layer {
+        case .background: drawBackground(in: full, palette: palette)
+        case .mark: drawMark(in: ctx, body: full, palette: palette)
+        }
     }
 }
-print("Wrote \(layerFiles) Liquid Glass source layers to \(layersDir.path)")
+
+/// The flattened icon on Apple's macOS grid: an 824pt rounded body inset in a
+/// 1024pt canvas, so it lines up with other app icons next to it.
+func renderFlattened(pixels: Int) -> Data {
+    render(pixels: pixels) { ctx, side in
+        let unit = side / 1024
+        let body = NSRect(x: 100 * unit, y: 100 * unit, width: 824 * unit, height: 824 * unit)
+        let shape = NSBezierPath(roundedRect: body, xRadius: 185 * unit, yRadius: 185 * unit)
+        NSGraphicsContext.saveGraphicsState()
+        shape.addClip()
+        drawBackground(in: body, palette: lightPalette)
+        NSGraphicsContext.restoreGraphicsState()
+        drawMark(in: ctx, body: body, palette: lightPalette)
+    }
+}
+
+let fm = FileManager.default
+let layersDir = root.appendingPathComponent("docs/assets/icon-layers")
+let iconAssets = root.appendingPathComponent("Sources/Pervigil/AppIcon.icon/Assets")
+for dir in [layersDir, iconAssets] {
+    try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+}
+var written = 0
+for layer in [IconLayer.background, .mark] {
+    for (name, dark) in [("light", false), ("dark", true)] {
+        let data = renderLayer(layer, dark: dark)
+        let file = "\(layer.rawValue)-\(name).png"
+        try! data.write(to: layersDir.appendingPathComponent(file))
+        try! data.write(to: iconAssets.appendingPathComponent(file))
+        written += 1
+    }
+}
+try! renderFlattened(pixels: 512).write(to: root.appendingPathComponent("docs/assets/icon.png"))
+print("Wrote \(written) layers to \(layersDir.path) and \(iconAssets.path), plus docs/assets/icon.png")

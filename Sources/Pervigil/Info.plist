@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Pervigil</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>de</string>
+		<string>es</string>
+		<string>fr</string>
+		<string>it</string>
+		<string>hu</string>
+		<string>pt-BR</string>
+		<string>tr</string>
+		<string>ru</string>
+		<string>ja</string>
+		<string>ko</string>
+		<string>pl</string>
+		<string>uk</string>
+		<string>zh-Hans</string>
+		<string>zh-Hant</string>
+	</array>
+	<key>CFBundleName</key>
+	<string>Pervigil</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.30.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>io.github.bubb4rd.pervigil</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>pervigil</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>47</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Pervigil checks which of your paired Bluetooth devices are connected so it can keep your Mac awake while a chosen device (like headphones) is in use.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Pervigil checks whether a calendar event is in progress so it can keep your Mac awake during your scheduled sessions.</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 Pervigil contributors. GNU GPL v3.0.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Pervigil reads Wi-Fi network names for your triggers and to find the hotspot you choose for automatic fallback.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Pervigil reads Wi-Fi network names for your triggers and to find the hotspot you choose for automatic fallback.</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/bubb4rd/pervigil/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>n3mCQxtsVXbnaHZEzhv5Yfzr94+Y6CzwBk4jHtrCmm4=</string>
+</dict>
+</plist>

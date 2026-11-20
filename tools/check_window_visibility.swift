@@ -1,6 +1,6 @@
 // Run from the repository root on macOS:
-// swiftc -parse-as-library Sources/Keepresso/WindowVisibility.swift tools/check_window_visibility.swift -o /tmp/keepresso-visibility-check
-// /tmp/keepresso-visibility-check
+// swiftc -parse-as-library Sources/Pervigil/WindowVisibility.swift tools/check_window_visibility.swift -o /tmp/pervigil-visibility-check
+// /tmp/pervigil-visibility-check
 // Uses isolated windows; does not load app settings or operate power controls.
 
 import AppKit
@@ -20,7 +20,7 @@ final class VisibilityWindow: NSWindow {
         for ignoreOcclusion in [false, true] {
             let window = VisibilityWindow(contentRect: NSRect(x: 100,y: 100,width: 200,height: 100), styleMask: [.titled], backing: .buffered, defer: false)
             window.isReleasedWhenClosed = false
-            window.title = "Keepresso visibility regression check"
+            window.title = "Pervigil visibility regression check"
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             drain()

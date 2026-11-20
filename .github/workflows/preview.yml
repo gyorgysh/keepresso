@@ -72,8 +72,8 @@ jobs:
         run: |
           xcodegen generate
           xcodebuild archive \
-            -project Keepresso.xcodeproj -scheme Keepresso -configuration Release \
-            -archivePath build/Keepresso.xcarchive -destination 'generic/platform=macOS' \
+            -project Pervigil.xcodeproj -scheme Pervigil -configuration Release \
+            -archivePath build/Pervigil.xcarchive -destination 'generic/platform=macOS' \
             DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$DEVELOPER_ID_APP"
           cat > build/ExportOptions.plist <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
@@ -84,10 +84,10 @@ jobs:
             <key>signingStyle</key><string>manual</string>
           </dict></plist>
           PLIST
-          xcodebuild -exportArchive -archivePath build/Keepresso.xcarchive \
+          xcodebuild -exportArchive -archivePath build/Pervigil.xcarchive \
             -exportOptionsPlist build/ExportOptions.plist -exportPath build/export
-          codesign --verify --deep --strict --verbose=2 "build/export/Keepresso.app"
-          python3 scripts/check-location-permission.py "build/export/Keepresso.app"
+          codesign --verify --deep --strict --verbose=2 "build/export/Pervigil.app"
+          python3 scripts/check-location-permission.py "build/export/Pervigil.app"
 
       - name: Set up Python for dmgbuild
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -103,8 +103,8 @@ jobs:
         run: |
           SHORT="${GITHUB_SHA:0:7}"
           mkdir -p dist
-          DMG="dist/Keepresso-preview-$SHORT.dmg"
-          scripts/package-dmg.sh "build/export/Keepresso.app" "$DMG" Keepresso
+          DMG="dist/Pervigil-preview-$SHORT.dmg"
+          scripts/package-dmg.sh "build/export/Pervigil.app" "$DMG" Pervigil
           codesign --force --sign "$DEVELOPER_ID_APP" "$DMG"
           echo "$NOTARY_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
           xcrun notarytool submit "$DMG" \
@@ -117,7 +117,7 @@ jobs:
       - name: Upload preview DMG
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: Keepresso-preview
+          name: Pervigil-preview
           path: dist/*.dmg
           retention-days: 14
 

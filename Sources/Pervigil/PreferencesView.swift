@@ -1,0 +1,2271 @@
+import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
+import PervigilCore
+
+/// The Preferences window. Holds the settings that used to crowd the menu
+/// dropdown: keep-awake options, triggers, the reminder, disk keep-alive, and
+/// launch-at-login, grouped into tabs.
+struct PreferencesView: View {
+    let updater: any Updating
+    @Bindable var model: AppModel
+    @State private var section: Section = .general
+    /// Closed Preferences windows stay alive on current macOS; unmount the
+    /// tabs while off screen so they stop observing AppModel every tick.
+    /// Starts false so a retained ordered-out scene does not mount Forms
+    /// until a real visibility probe (same pattern as WelcomeView).
+    @State private var windowVisible = false
+    /// Bumped on each hide so the next open does not reuse SwiftUI identity
+    /// for the previous tab tree (drops any leftover view storage).
+    @State private var mountGeneration = 0
+
+    /// The Preferences sections. A plain top tab strip rather than a
+    /// `TabView`, which macOS 26 renders as an obtrusive sidebar.
+    fileprivate enum Section: String, CaseIterable, Identifiable {
+        case general = "General"
+        case triggers = "Triggers"
+        case reminder = "Reminder"
+        case automation = "Automation"
+        case disk = "Disk"
+        case display = "Display"
+        case activity = "Activity"
+
+        var id: String { rawValue }
+    }
+
+    var body: some View {
+        Group {
+            if windowVisible {
+                VStack(spacing: 0) {
+                    SectionTabs(selection: $section)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                        .padding(.bottom, 12)
+
+                    Divider()
+
+                    content
+                        // topLeading, not top: a tab whose content hugs its width
+                        // (Triggers with the switch off) must still sit left like
+                        // every Form tab, not float centered.
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        // A fast crossfade between sections; no sliding.
+                        .animation(.easeOut(duration: 0.15), value: section)
+                }
+                .id(mountGeneration)
+                // The helper can be approved (or revoked) over in System Settings at
+                // any time; re-read on every open so the section tells the truth.
+                .onAppear { model.helper.refresh() }
+            } else {
+                Color.clear
+            }
+        }
+        // 580 leaves 540 for the tab strip, which fits every language after
+        // ``SectionTabs`` picks a text size for it.
+        .frame(width: 580, height: 560)
+        .tint(.pervigilAccent)
+        .glassWindowBackground()
+        .centersAndFrontsWindow()
+        .background(WindowVisibilityReader(isVisible: $windowVisible))
+        .onChange(of: windowVisible) { _, visible in
+            if visible {
+                model.helper.refresh()
+            } else {
+                mountGeneration &+= 1
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch section {
+        case .general: GeneralTab(updater: updater, model: model)
+        case .triggers: TriggersTab(model: model)
+        case .reminder: ReminderTab(model: model)
+        case .automation: AutomationTab(model: model)
+        case .disk: DiskTab(model: model)
+        case .display: DisplayTab(model: model)
+        case .activity: ActivityTab(model: model)
+        }
+    }
+}
+
+// MARK: - Section tabs
+
+/// The section switcher across the top of the Preferences window.
+///
+/// This was a segmented `Picker`, which fit until macOS 27 started giving
+/// every segment the width of the widest label. Seven equal segments ask for
+/// 655pt in English and 865pt in German against the 540pt this window has, so
+/// the strip ran off both edges with the first and last labels sliced in half.
+///
+/// A plain row of tab buttons sizes each tab to its own label again, and steps
+/// the text down a point at a time until the whole row fits, so no language
+/// runs off the edge. Widest today is Polish at 536pt, on the 12pt step.
+private struct SectionTabs: View {
+    @Binding var selection: PreferencesView.Section
+
+    var body: some View {
+        // First layout that fits wins. The last one is the floor: it also
+        // shrinks its labels, so a language longer than any shipped today
+        // still stays inside the window.
+        ViewThatFits(in: .horizontal) {
+            row(size: 13, padding: 12, minimumScale: 1)
+            row(size: 13, padding: 8, minimumScale: 1)
+            row(size: 12, padding: 6, minimumScale: 1)
+            row(size: 11, padding: 5, minimumScale: 0.8)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func row(size: CGFloat, padding: CGFloat, minimumScale: CGFloat) -> some View {
+        HStack(spacing: 2) {
+            ForEach(PreferencesView.Section.allCases) { section in
+                SectionTab(
+                    section: section,
+                    isSelected: selection == section,
+                    size: size,
+                    padding: padding,
+                    minimumScale: minimumScale
+                ) {
+                    selection = section
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Preferences sections")
+    }
+}
+
+/// One tab in ``SectionTabs``. Selection reads as the brew tint on a soft
+/// plate, the same way a picked row reads in the welcome window, rather than
+/// as a filled capsule: the label keeps its weight either way, so choosing a
+/// tab never changes how wide the row wants to be.
+private struct SectionTab: View {
+    let section: PreferencesView.Section
+    let isSelected: Bool
+    let size: CGFloat
+    let padding: CGFloat
+    let minimumScale: CGFloat
+    let select: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: select) {
+            Text(LocalizedStringKey(section.rawValue))
+                .font(.system(size: size))
+                .lineLimit(1)
+                .minimumScaleFactor(minimumScale)
+                .foregroundStyle(isSelected ? AnyShapeStyle(Color.pervigilAccent) : AnyShapeStyle(.secondary))
+                .padding(.horizontal, padding)
+                .padding(.vertical, 5)
+                .background(plate, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private var plate: Color {
+        if isSelected { return Color.pervigilAccent.opacity(0.14) }
+        return hovering ? Color.primary.opacity(0.06) : .clear
+    }
+}
+
+// MARK: - Activity (awake explainer)
+
+/// Answers "why is my Mac awake?" (every process's live power assertions) and
+/// "why did Pervigil act?" (the session decision log). Read-only.
+private struct ActivityTab: View {
+    @Bindable var model: AppModel
+
+    /// Live assertions, refreshed while the pane is mounted. Cleared on
+    /// disappear so a closed Preferences window does not keep the snapshot.
+    @State private var assertions: [PowerAssertionInfo] = []
+
+    var body: some View {
+        Form {
+            Section {
+                let relevant = assertions.filter { $0.effect != nil }
+                if relevant.isEmpty {
+                    Text("Nothing is holding the Mac awake right now.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(relevant) { assertion in
+                        assertionRow(assertion)
+                    }
+                }
+            } header: {
+                Text("Keeping the Mac awake now")
+            } footer: {
+                Text("Every app's live power assertions, not just Pervigil's, the same data pmset -g assertions prints.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                let stats = model.awakeStats
+                if stats.totalHeldSeconds < 1 {
+                    Text("No held-awake time in the last week.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(stats.days.filter { $0.heldSeconds >= 1 }) { day in
+                        HStack {
+                            Text(day.dayStart, format: .dateTime.month(.abbreviated).day())
+                                .font(.callout)
+                            Spacer()
+                            if let battery = day.batteryConsumed {
+                                Text(L("−%d%% battery", battery))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(formatHeld(day.heldSeconds))
+                                .font(.callout.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    HStack {
+                        Text("Total")
+                            .font(.callout.weight(.medium))
+                        Spacer()
+                        Text(formatHeld(stats.totalHeldSeconds))
+                            .font(.callout.monospacedDigit().weight(.medium))
+                    }
+                }
+            } header: {
+                Text("Awake this week")
+            } footer: {
+                Text("How long Pervigil held the Mac awake each day, from the decision log. Battery drop is shown when both ends of a session had a reading.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                let events = model.session.log.events
+                if events.isEmpty {
+                    Text("No session activity yet.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(events.reversed()) { event in
+                        eventRow(event)
+                    }
+                }
+            } header: {
+                Text("Pervigil decisions")
+            } footer: {
+                Text("Why each session started or stopped, newest first. Saved on disk and restored after a relaunch.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .onAppear {
+            assertions = model.currentAssertions()
+            model.refreshAwakeStats()
+        }
+        .onDisappear { assertions = [] }
+        // Parent Preferences unmounts this tab while the window is hidden; the
+        // receive only exists while mounted, so the poll dies with the tab.
+        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
+            assertions = model.currentAssertions()
+        }
+    }
+
+    private func formatHeld(_ seconds: TimeInterval) -> String {
+        let total = PervigilSettings.displaySeconds(seconds)
+        let h = total / 3600
+        let m = (total % 3600) / 60
+        if h > 0 { return L("%dh %dm", h, m) }
+        return L("%dm", max(m, 0))
+    }
+
+    private func assertionRow(_ assertion: PowerAssertionInfo) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Text(assertion.processName)
+                    .font(.callout.weight(.medium))
+                Spacer()
+                Text(assertion.effect ?? assertion.type)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if !assertion.name.isEmpty {
+                Text(assertion.name)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        }
+        .padding(.vertical, 1)
+    }
+
+    private func eventRow(_ event: SessionEvent) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: event.began ? "play.circle.fill" : "stop.circle")
+                .foregroundStyle(event.began ? Color.pervigilAccent : Color.secondary)
+                .font(.caption)
+            Text(event.reason)
+                .font(.callout)
+                .lineLimit(2)
+                .truncationMode(.tail)
+            Spacer()
+            Text(event.date, format: .dateTime.hour().minute().second())
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 1)
+    }
+}
+
+// MARK: - General
+
+private struct GeneralTab: View {
+    let updater: any Updating
+    @Bindable var model: AppModel
+    @Environment(\.openWindow) private var openWindow
+    @State private var launchAtLogin = LoginItem.isEnabled
+    /// Bumped when the lid-closed row is clicked while the automation owns it.
+    @State private var lidRowShakes = 0
+    /// The result of the last export/import, shown inline under the buttons.
+    @State private var transferNote: TransferNote?
+
+    /// A one-line outcome for the settings backup buttons.
+    private struct TransferNote { let message: String; let isError: Bool }
+
+    private var session: SessionController { model.session }
+
+    /// The duration presets offered by the quick-stop shortcut pickers.
+    private static let quickStopOptions: [TimeInterval] = [
+        5 * 60, 10 * 60, 15 * 60, 20 * 60, 30 * 60, 45 * 60,
+        60 * 60, 90 * 60, 2 * 60 * 60, 3 * 60 * 60, 4 * 60 * 60,
+    ]
+
+    /// The picker choices for one shortcut row: the shared presets plus the
+    /// row's current value when it isn't one of them (an imported custom
+    /// duration must not render as an empty selection).
+    private func quickStopChoices(including current: TimeInterval) -> [TimeInterval] {
+        Self.quickStopOptions.contains(current)
+            ? Self.quickStopOptions
+            : (Self.quickStopOptions + [current]).sorted()
+    }
+
+    /// The first preset not already used, seeding "Add Shortcut".
+    private var nextFreeQuickStop: TimeInterval? {
+        Self.quickStopOptions.first { !model.quickStopDurations.contains($0) }
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Button { updater.checkForUpdates() } label: {
+                    Text(updater.updateAvailable ? L("Update available…") : L("Check for Updates…"))
+                }
+                .disabled(!updater.canCheckForUpdates)
+            } header: {
+                Text("Updates")
+            }
+
+            Section {
+                Toggle("Prevent display sleep", isOn: optionBinding(\.preventDisplaySleep))
+                if session.options.preventDisplaySleep && model.brightnessSupported {
+                    Toggle("Dim the display when idle", isOn: dimBinding)
+                        .help("Instead of holding the screen at full brightness, lower it to its dimmest after a few minutes with no input, then bring it back the moment you return. The display stays awake, just dark: kinder to the panel and the battery on long overnight sessions.")
+                }
+                Toggle("Prevent system sleep", isOn: optionBinding(\.preventSystemSleep))
+            } header: {
+                sectionHeader("Keep awake", info: L("Two independent switches. Preventing system sleep keeps the Mac itself running: work finishes, downloads complete, and it stays reachable over the network, while the screen is still free to turn off. Preventing display sleep also keeps the screen lit, which is what you want for a dashboard or a video, and what drains a battery fastest. Most setups want system sleep prevented and display sleep left alone."))
+            }
+            Section {
+                Toggle("Launch at login", isOn: Binding(
+                    get: { launchAtLogin },
+                    set: { newValue in
+                        LoginItem.setEnabled(newValue)
+                        launchAtLogin = LoginItem.isEnabled
+                    }
+                ))
+                Toggle("Start keep-awake on launch", isOn: Binding(
+                    get: { model.startOnLaunch },
+                    set: { model.startOnLaunch = $0 }
+                ))
+            } header: {
+                sectionHeader("Startup", info: L("\u{201C}Launch at login\u{201D} starts Pervigil itself when you log in, so the cup is always in the menu bar. \u{201C}Start keep-awake on launch\u{201D} goes further and begins a session right away, using the default duration, for an always-on Mac that shouldn't need a rule to stay up. It's ignored while triggers are controlling activation, since your conditions decide then."))
+            } footer: {
+                sectionFooter("Starts a session as soon as Pervigil launches.")
+            }
+            Section {
+                LabeledContent("Toggle shortcut") {
+                    ShortcutRecorder(shortcut: Binding(
+                        get: { model.hotKey },
+                        set: { model.hotKey = $0 }
+                    ))
+                }
+            } header: {
+                sectionHeader("Global shortcut", info: L("System-wide, so it starts or stops keep-awake whatever app you're in. It needs at least one modifier key (Command, Option, Control, or Shift) so it can't fire while you're typing. Recording it asks for no Accessibility or Input Monitoring permission."))
+            } footer: {
+                sectionFooter("Starts or stops keep-awake from any app.")
+            }
+            Section {
+                Picker("App language", selection: Binding(
+                    get: { AppLanguage.current },
+                    set: { switchLanguage(to: $0) }
+                )) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(language.label).tag(language)
+                    }
+                }
+            } header: {
+                sectionHeader("Language", info: L("Fifteen languages are available. Changing this relaunches Pervigil, so the menu, every window, and notifications all switch together instead of drifting apart. Set it back to \u{201C}Follow System\u{201D} to follow your Mac's language again."))
+            } footer: {
+                sectionFooter("Pervigil follows your system language by default.")
+            }
+            // The slider sets Pervigil's own frost and wash under the panel,
+            // which show on every macOS, including 27 where the system draws
+            // the panel's glass itself.
+            Section {
+                LabeledContent("See-through") {
+                    HStack(spacing: 8) {
+                        Image(systemName: "snowflake")
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                        Slider(
+                            value: Binding(
+                                get: { Double(model.glassClarity) },
+                                set: { model.glassClarity = Int($0) }
+                            ),
+                            in: 0...100,
+                            step: 5
+                        )
+                        .frame(width: 180)
+                        .accessibilityLabel(L("Window transparency"))
+                        Image(systemName: "circle.dotted")
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                        Text(verbatim: "\(model.glassClarity)%")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(minWidth: 38, alignment: .trailing)
+                    }
+                }
+            } header: {
+                sectionHeader("Appearance", info: L("How see-through the menu-bar dropdown is. Frosty (0%) backs its glass with blur and a wash of the window color, so text stays crisp on any wallpaper. Sliding toward 100% thins that backing away until the panel is the system's bare Liquid Glass, letting the desktop shine through, with some contrast cost on busy or very dark wallpapers. Changes apply instantly, only to the dropdown (windows like this one keep their standard look), and the system's Reduce Transparency accessibility setting always wins."))
+            } footer: {
+                sectionFooter("The menu-bar dropdown's glass, from frosty to clear Liquid Glass.")
+            }
+            // High up on purpose: this is the one-time set-and-forget step that
+            // makes every privileged switch below (and AWDL pausing) silent.
+            Section {
+                HelperStatusRows(model: model)
+            } header: {
+                sectionHeader("Administrator helper", info: L("A small system service for the switches that need administrator rights: closed-display mode below, Keyboard Cleaner, the thermal fan boost, AWDL pausing in Gaming & Streaming, and flushing DNS from the Public Wi-Fi assistant. Without it, macOS asks for your password once per app run (and fan boost stays off entirely: fan control can't prompt). With it, everything is instant and silent: macOS asks once, when you approve the helper under Login Items, and the approval survives restarts and app updates. Updates never need a reinstall, the service replaces itself with the app. It can only flip those specific switches, everything it changes is restored if Pervigil quits or crashes, and you can remove it here at any time. It also puts the pervigil command-line tool on your PATH (Homebrew installs already have it). After removal, System Settings can keep showing a stale Login Items row until macOS refreshes its list. The status shown here is the real one."))
+            } footer: {
+                sectionFooter("Handles the privileged switches for Pervigil, with no password prompts.")
+            }
+            Section {
+                Toggle("Keep me active", isOn: Binding(
+                    get: { model.simulateUserActivity },
+                    set: { model.simulateUserActivity = $0 }
+                ))
+                if model.simulateUserActivity {
+                    Picker("Method", selection: Binding(
+                        get: { model.activitySimulationMethod },
+                        set: { model.activitySimulationMethod = $0 }
+                    )) {
+                        ForEach(ActivitySimulationMethod.allCases, id: \.self) { method in
+                            Text(presenceMethodLabel(method)).tag(method)
+                        }
+                    }
+                    if model.activitySimulationMethod == .specifiedKey {
+                        LabeledContent("Key") {
+                            PresenceKeyRecorder(key: Binding(
+                                get: { model.activitySimulationKey },
+                                set: { model.activitySimulationKey = $0 }
+                            ))
+                        }
+                    }
+                    if model.activitySimulationMethod.needsAccessibility && !model.accessibilityTrusted {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .foregroundStyle(.orange)
+                                .accessibilityHidden(true)
+                            Text("Needs Accessibility for this method.")
+                            Spacer(minLength: 8)
+                            Button("Open Settings") { model.openAccessibilitySettings() }
+                                .buttonStyle(.link)
+                        }
+                    }
+                    Toggle("Only after idle", isOn: Binding(
+                        get: { model.activityPokeIdleMinutes != nil },
+                        set: { model.activityPokeIdleMinutes = $0 ? 3 : nil }
+                    ))
+                    if model.activityPokeIdleMinutes != nil {
+                        Picker("Wait", selection: Binding(
+                            get: { model.activityPokeIdleMinutes ?? 3 },
+                            set: { model.activityPokeIdleMinutes = $0 }
+                        )) {
+                            ForEach(Self.pokeIdleMinuteChoices, id: \.self) { minutes in
+                                Text(L("%d min", minutes)).tag(minutes)
+                            }
+                        }
+                    }
+                    Toggle("Only while brewing", isOn: optionBinding(\.activityOnlyWhileBrewing))
+                }
+            } header: {
+                sectionHeader("Presence", info: L("Keeping the Mac awake stops it sleeping, but that does not keep you active in other software. Meeting and chat apps, remote desktop and VDI, cloud gaming, and many other tools still apply their own idle timeout: they mark you away, disconnect, or end the session. This reports activity so you stay present. The default method needs no extra permission. Some software only notices a real key or mouse, so you can pick F15, Shift, a specified key, or a posted mouse move. Those need Accessibility, requested only when you choose them, never at launch. F15 is the usual pick (most keyboards lack it, so nothing is typed). Shift is invisible. A specified key or mouse move covers software that only watches those. A letter or number will type into the front app. It only steps in once you've been idle a few seconds, so it never types or nudges while you're using the Mac. Off by default."))
+            } footer: {
+                Text(presenceFooter)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle("Show countdown in menu bar", isOn: Binding(
+                    get: { model.showCountdownInMenuBar },
+                    set: { model.showCountdownInMenuBar = $0 }
+                ))
+                Toggle("Customize menu sections", isOn: Binding(
+                    get: { model.menuCustomizationEnabled },
+                    set: { model.menuCustomizationEnabled = $0 }
+                ))
+                .help(L("Replaces the standard dropdown with your own layout. Open Customize Menu… to show, hide, or reorder controls, change their style and spacing, and choose what the menu-bar item shows."))
+                Button("Customize Menu…") {
+                    NSApp.activate(ignoringOtherApps: true)
+                    openWindow(id: PervigilApp.menuCustomizationWindowID)
+                }
+            } header: {
+                Text("Menu bar")
+            } footer: {
+                Text("Shows the remaining time next to the menu-bar icon during a timed session.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                ForEach(Array(model.quickStopDurations.enumerated()), id: \.offset) { index, duration in
+                    HStack {
+                        Picker(L("Shortcut %d", index + 1), selection: Binding(
+                            get: { duration },
+                            set: { newValue in
+                                var durations = model.quickStopDurations
+                                durations[index] = newValue
+                                model.quickStopDurations = durations
+                            }
+                        )) {
+                            ForEach(quickStopChoices(including: duration), id: \.self) { option in
+                                Text(MenuBarContent.shortDuration(option)).tag(option)
+                            }
+                        }
+                        Button {
+                            var durations = model.quickStopDurations
+                            durations.remove(at: index)
+                            model.quickStopDurations = durations
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel(L("Remove shortcut"))
+                    }
+                }
+                Button("Add Shortcut") {
+                    guard let next = nextFreeQuickStop else { return }
+                    model.quickStopDurations = model.quickStopDurations + [next]
+                }
+                .disabled(model.quickStopDurations.count >= PervigilSettings.maxQuickStopDurations
+                          || nextFreeQuickStop == nil)
+            } header: {
+                sectionHeader("Quick stop shortcuts", info: L("While a session runs, the menu shows these as one-click \u{201C}Stop in\u{201D} buttons. Clicking one converts the running session to end that much later, so the Mac goes back to sleeping on its own without you remembering to switch it off. It continues the session rather than restarting it, and clicking another button simply replaces the countdown. Up to four, and the list stays sorted."))
+            } footer: {
+                sectionFooter("One-click \u{201C}Stop in\u{201D} buttons shown in the menu while a session runs.")
+            }
+            if model.machineHasBattery {
+                Section {
+                    Toggle("Pause on low battery", isOn: Binding(
+                        get: { model.batteryAutoPauseEnabled },
+                        set: { model.batteryAutoPauseEnabled = $0 }
+                    ))
+                    if model.batteryAutoPauseEnabled {
+                        LabeledContent("Below") {
+                            BatteryThresholdSlider(percent: Binding(
+                                get: { model.pauseBelowBatteryPercent },
+                                set: { model.pauseBelowBatteryPercent = $0 }
+                            ))
+                        }
+                    }
+                } header: {
+                    sectionHeader("Battery", info: L("A safety net for a session you forget about. If the charge falls this low, Pervigil pauses the session and lets the Mac sleep, even mid-session, and tells you why in a notification. The menu-bar cup shows the pause as a last sip of low-power yellow. Plugging in resumes it on its own. This is the same slider as the one in the menu, so the two always agree."))
+                } footer: {
+                    sectionFooter("Lets the Mac sleep once charge drops below this level, and switches off closed-display mode so a lid-closed Mac can sleep too.")
+                }
+            }
+            // The thermal net is a lid-closed safety: a desktop has no lid to
+            // trap heat behind, so it gets no section (battery is the same
+            // laptop proxy the closed-display wording uses below).
+            if model.machineHasBattery {
+                thermalSection
+            }
+            closedDisplaySection
+            HotspotPreferencesSection(model: model)
+            Section {
+                HStack {
+                    Button("Export Settings\u{2026}") { exportSettings() }
+                    Button("Import Settings\u{2026}") { importSettings() }
+                }
+                if let note = transferNote {
+                    Label(note.message, systemImage: note.isError ? "exclamationmark.triangle" : "checkmark.circle")
+                        .font(.caption)
+                        .foregroundStyle(note.isError ? .orange : .secondary)
+                }
+            } header: {
+                sectionHeader("Backup", info: L("Writes everything you've configured (settings, trigger rules, and presets) to a JSON file, to keep as a backup or to carry to another Mac. The file is version-stamped and checked on import, so a file from a newer Pervigil is refused rather than half-read. Importing replaces your current configuration and ends any running session."))
+            } footer: {
+                sectionFooter("Save your settings, triggers, and presets to a JSON file.")
+            }
+            Section {
+                Button("Show Welcome Screen\u{2026}") {
+                    NSApp.activate(ignoringOtherApps: true)
+                    openWindow(id: PervigilApp.welcomeWindowID)
+                }
+            } header: {
+                Text("Welcome")
+            } footer: {
+                Text("Reopen the first-run welcome, with quick one-click setup for how you use your Mac.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        // Slide the conditional rows (battery threshold, error notes) in and
+        // out instead of popping them.
+        .animation(.snappy(duration: 0.25), value: model.batteryAutoPauseEnabled)
+        .animation(.snappy(duration: 0.25), value: model.thermalSafety)
+        .animation(.snappy(duration: 0.25), value: model.fanDryRun.phase)
+        .animation(.snappy(duration: 0.25), value: model.closedDisplayError)
+        .animation(.snappy(duration: 0.25), value: model.closedLidDisplayPolicy)
+        .animation(.snappy(duration: 0.25), value: model.closedDisplayAutoError)
+        .animation(.snappy(duration: 0.25), value: model.simulateUserActivity)
+        .animation(.snappy(duration: 0.25), value: model.activitySimulationMethod)
+        .animation(.snappy(duration: 0.25), value: model.accessibilityTrusted)
+        .onAppear {
+            model.refreshClosedDisplay()
+            model.refreshAccessibilityTrust()
+            // Re-read the login-item state on appear: it can drift if the user
+            // changed it in System Settings, or the app was moved out of
+            // /Applications, while this tab was built but not shown.
+            launchAtLogin = LoginItem.isEnabled
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            model.refreshAccessibilityTrust()
+        }
+    }
+
+    private func presenceMethodLabel(_ method: ActivitySimulationMethod) -> String {
+        switch method {
+        case .powerWarp: return L("Power / cursor warp")
+        case .f15: return L("F15 key every 60 s")
+        case .shift: return L("Shift every 60 s")
+        case .specifiedKey: return L("Specified key")
+        case .mouseMove: return L("Mouse move")
+        }
+    }
+
+    /// Idle waits offered by the "Only after idle" keep-active mode.
+    private static let pokeIdleMinuteChoices = [1, 2, 3, 4, 5, 10, 15, 20, 30]
+
+    private var presenceFooter: String {
+        guard model.simulateUserActivity else {
+            return L("Reports activity so you stay present in apps that have their own idle timeout.")
+        }
+        let base = switch model.activitySimulationMethod {
+        case .powerWarp:
+            L("Prompt-free. Some apps ignore this and need a key or mouse method.")
+        case .f15:
+            L("Posts F15 every 60 s. A common pick for software that watches the keyboard.")
+        case .shift:
+            L("Taps Shift every 60 s. Invisible, and nothing is typed.")
+        case .specifiedKey:
+            L("Taps the recorded key every 60 s. Prefer a function key or modifier.")
+                + " " + L("To keep browsers from showing focus rings, record F13 to F20 while holding Control, Option, or Command.")
+        case .mouseMove:
+            L("Posts a 1-pixel mouse move every 60 s. For software that watches the pointer.")
+        }
+        var footer = base
+        if let minutes = model.activityPokeIdleMinutes {
+            footer += " " + L("Only after %d min idle, never while a game is frontmost.", minutes)
+        }
+        if !session.options.activityOnlyWhileBrewing {
+            footer += " " + L("Also runs between sessions, which can keep the Mac from sleeping.")
+        }
+        return footer
+    }
+
+    /// The fan boost strength a fresh "Boost fans first" toggle starts at.
+    private static let defaultFanBoostPercent = 80
+
+    /// The thermal safety net: with the lid closed and the sleep override
+    /// holding the Mac awake, watch a heat signal, and once it stays over the
+    /// threshold for the sustain window, pause the session and lift the
+    /// override so the Mac can sleep and cool. The battery pause's sibling,
+    /// so it sits right beside it. Laptops only: the arming condition needs
+    /// a lid.
+    private var thermalSection: some View {
+        Section {
+            Toggle("Pause when running hot", isOn: Binding(
+                get: { model.thermalSafety != nil },
+                set: { model.thermalSafety = $0 ? ThermalSafetyConfig() : nil }
+            ))
+            if let config = model.thermalSafety {
+                Picker("Watch", selection: Binding(
+                    get: { if case .sensors = config.mode { return 1 } else { return 0 } },
+                    set: { kind in
+                        var updated = config
+                        updated.mode = kind == 1
+                            ? .sensors(ids: [], celsius: ThermalSafetyConfig.celsiusRange.upperBound - 15)
+                            : .pressure(atOrAbove: .serious)
+                        model.thermalSafety = updated
+                    }
+                )) {
+                    Text("System thermal pressure").tag(0)
+                    Text("Temperature sensors").tag(1)
+                }
+                switch config.mode {
+                case .pressure(let level):
+                    Picker("At or above", selection: Binding(
+                        get: { level },
+                        set: { newLevel in
+                            var updated = config
+                            updated.mode = .pressure(atOrAbove: newLevel)
+                            model.thermalSafety = updated
+                        }
+                    )) {
+                        // Labels come from Core so the level names localize once.
+                        ForEach([ThermalPressureLevel.fair, .serious, .critical], id: \.self) { level in
+                            Text(verbatim: level.label).tag(level)
+                        }
+                    }
+                case .sensors(let ids, let celsius):
+                    ThermalSensorPicker(model: model, selectedIDs: Binding(
+                        get: { ids },
+                        set: { newIDs in
+                            var updated = config
+                            updated.mode = .sensors(ids: newIDs, celsius: celsius)
+                            model.thermalSafety = updated
+                        }
+                    ))
+                    LabeledContent("Above") {
+                        TemperatureThresholdSlider(celsius: Binding(
+                            get: { celsius },
+                            set: { newCelsius in
+                                var updated = config
+                                updated.mode = .sensors(ids: ids, celsius: newCelsius)
+                                model.thermalSafety = updated
+                            }
+                        ))
+                    }
+                }
+                Picker("Sustained for", selection: Binding(
+                    get: { Int(config.sustainSeconds) },
+                    set: { seconds in
+                        var updated = config
+                        updated.sustainSeconds = TimeInterval(seconds)
+                        model.thermalSafety = updated
+                    }
+                )) {
+                    Text("15 seconds").tag(15)
+                    Text("30 seconds").tag(30)
+                    Text("1 minute").tag(60)
+                    Text("2 minutes").tag(120)
+                    Text("5 minutes").tag(300)
+                }
+                // Everything above (watching, thresholds, the pause itself)
+                // is unprivileged and always works. Everything below is the
+                // helper-only territory: fan writes are root-enforced by the
+                // SMC, and the automatic closed-display lift at the pause
+                // stage must be prompt-free. Without the helper the whole
+                // group collapses to one row that says what's locked and
+                // offers the install, instead of live-looking toggles with
+                // warning captions under each.
+                if model.helperInstalled {
+                    if model.machineHasFans {
+                        Toggle("Boost fans first", isOn: Binding(
+                            get: { config.fanBoostPercent != nil },
+                            set: { boost in
+                                var updated = config
+                                updated.fanBoostPercent = boost ? Self.defaultFanBoostPercent : nil
+                                model.thermalSafety = updated
+                            }
+                        ))
+                        if let percent = config.fanBoostPercent {
+                            LabeledContent("To") {
+                                FanBoostSlider(percent: Binding(
+                                    get: { percent },
+                                    set: { newPercent in
+                                        var updated = config
+                                        updated.fanBoostPercent = newPercent
+                                        model.thermalSafety = updated
+                                    }
+                                ))
+                            }
+                            FanTestRows(model: model)
+                        }
+                    }
+                } else {
+                    ThermalHelperLockedRow(model: model)
+                }
+            }
+            if model.machineHasFans {
+                Toggle("Minimum fan speed with the lid closed", isOn: Binding(
+                    get: { model.closedLidMinimumFanPercent != nil },
+                    set: { model.closedLidMinimumFanPercent = $0 ? ClosedLidFanFloor.defaultPercent : nil }
+                ))
+                .disabled((!model.helperInstalled || model.helper.daemonOutdated) && model.closedLidMinimumFanPercent == nil)
+                if let percent = model.closedLidMinimumFanPercent {
+                    LabeledContent("Minimum") {
+                        FanBoostSlider(percent: Binding(
+                            get: { percent }, set: { model.closedLidMinimumFanPercent = $0 }
+                        ), percentRange: ClosedLidFanFloor.percentRange)
+                    }
+                    Text("Applies only with the lid closed and closed-display mode active. Heat boost can raise this floor; boost and pause settings above stay independent. Returns fan control to the system when the mode ends.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if let hint = model.helperRecoveryHint {
+                        Label(hint, systemImage: "arrow.triangle.2.circlepath")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else if model.fanFloor.failed {
+                        HelperFeatureNotice(model: model, message: L("Fan minimum unavailable. Thermal protection remains unchanged."), helperOnly: true)
+                            .font(.caption)
+                    } else if let active = model.fanFloor.holdingPercent {
+                        Label(L("Minimum fan speed: %d%%", active), systemImage: "fan")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if model.thermalSafety == nil && !model.helperInstalled {
+                    ThermalHelperLockedRow(model: model)
+                }
+            }
+        } header: {
+            sectionHeader("Thermal", info: L("A safety net for a Mac left running with the lid closed, slid into a bag with a session still holding it awake. It acts only in that trapped state: lid shut, with \u{201C}Keep awake with the lid closed\u{201D} overriding sleep. Watch macOS's own thermal pressure (works everywhere, \u{201C}Serious\u{201D} is where throttling bites) or specific temperature sensors, and if the reading stays over the threshold for the chosen time, Pervigil escalates: first, optionally, it boosts the fans (never below what the system chose, needs the administrator helper), and if it stays hot for the same time again, it pauses the session and switches the sleep override off, so the Mac can finally sleep and cool, telling you why in a notification. Opening the lid, or readings recovering, undoes everything: fan control returns to the system, the override comes back, and the session resumes. Die sensors on modern Macs routinely run at 90-100 \u{00B0}C under load, so thresholds around 95-100 \u{00B0}C are sensible."))
+        } footer: {
+            sectionFooter("If the Mac runs hot with the lid closed, the session pauses so it can sleep and cool down.")
+        }
+    }
+
+    /// The pmset disablesleep switch. On a laptop it's "closed-display mode"
+    /// (keep running with the lid shut); a desktop has no lid, so the same
+    /// switch is presented as a hard "disable sleep" override. Shown on both,
+    /// so a desktop that latched the setting always has a way to unlatch it.
+    private var closedDisplaySection: some View {
+        Section {
+            Toggle(model.machineHasBattery ? "Keep awake with the lid closed" : "Disable system sleep",
+                   isOn: Binding(
+                get: { model.closedDisplayEnabled },
+                set: { model.setClosedDisplay($0) }
+            ))
+            // "Only while brewing" is authoritative: while it's on this row
+            // reports the automation's state instead of offering a manual
+            // override the next tick would undo. Clicking it shakes the line
+            // below, which names what is driving it. The section header's info
+            // button stays live, so the explanation is still one click away.
+            .disabled(model.closedDisplayBusy || model.closedDisplayOnlyWhileBrewing)
+            .overlay {
+                if model.closedDisplayOnlyWhileBrewing {
+                    Rectangle()
+                        .fill(.clear)
+                        .contentShape(Rectangle())
+                        .onTapGesture { lidRowShakes += 1 }
+                }
+            }
+            if model.closedDisplayBusy && !model.helperInstalled {
+                AdminAuthNote(purpose: model.machineHasBattery
+                    ? L("keep the Mac awake with the lid closed")
+                    : L("disable system sleep"))
+            }
+            if model.closedDisplayOnlyWhileBrewing {
+                Text("Follows the session while \u{201C}Only while brewing\u{201D} is on.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .shakes(on: lidRowShakes)
+            }
+            if let error = model.closedDisplayError {
+                HelperFeatureNotice(model: model, message: error)
+                    .font(.caption)
+            }
+            if model.machineHasBattery && model.closedDisplayEnabled {
+                Picker(L("If the lid shuts"), selection: Binding(
+                    get: { model.closedLidDisplayPolicy },
+                    set: { model.closedLidDisplayPolicy = $0 }
+                )) {
+                    ForEach(ClosedLidDisplayPolicy.allCases, id: \.self) { policy in
+                        Text(policy.label).tag(policy)
+                    }
+                }
+                Text(model.closedLidDisplayPolicy.explanation)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let reason = model.displayDarkeningReason {
+                    Label(reason, systemImage: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Toggle("Only while brewing", isOn: Binding(
+                get: { model.closedDisplayOnlyWhileBrewing },
+                set: { model.closedDisplayOnlyWhileBrewing = $0 }
+            ))
+            .disabled(model.closedDisplayAutoBusy)
+            if model.closedDisplayAutoBusy && !model.helperInstalled {
+                AdminAuthNote(purpose: model.machineHasBattery
+                    ? L("switch closed-display mode with the session")
+                    : L("switch the sleep override with the session"))
+            }
+            if let error = model.closedDisplayAutoError {
+                HelperFeatureNotice(model: model, message: error)
+                    .font(.caption)
+            }
+            if model.machineHasBattery {
+                Toggle("Low Power Mode while the lid is closed", isOn: Binding(
+                    get: { model.closedLidLowPower }, set: { model.closedLidLowPower = $0 }
+                ))
+                .disabled((!model.helperInstalled || model.helper.daemonOutdated) && !model.closedLidLowPower)
+                if model.closedLidLowPower {
+                    Toggle("Also use while plugged in", isOn: Binding(
+                        get: { model.closedLidLowPowerOnAC }, set: { model.closedLidLowPowerOnAC = $0 }
+                    ))
+                    .disabled((!model.helperInstalled || model.helper.daemonOutdated) && !model.closedLidLowPowerOnAC)
+                }
+                Text("Uses Low Power Mode with the lid closed and closed-display mode active. Battery only by default. Restores each power setting when the lid opens or the mode ends. Requires the administrator helper.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if model.closedLidLowPower || model.closedLidLowPowerController.failed {
+                    lowPowerStatus
+                }
+                Toggle("Mute built-in speakers while the lid is closed", isOn: Binding(
+                    get: { model.closedLidMuteSpeakers }, set: { model.closedLidMuteSpeakers = $0 }
+                ))
+                Text("Mutes the built-in speakers with the lid closed and closed-display mode active. Headphones and other outputs keep playing. Unmutes when the lid opens or the mode ends, unless you had muted them yourself.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Text("Turn this on and then quit, and Pervigil asks whether to turn it off first.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } header: {
+            model.machineHasBattery
+                ? sectionHeader("Closed-display mode", info: L("Normally a MacBook sleeps the moment you shut the lid unless a display is attached. This keeps it running with the lid shut and nothing plugged in, on power or battery. What the screen itself does when the lid closes is your choice below (\u{201C}If the lid shuts\u{201D}): turn it off, keep it powered at zero brightness so a remote session stays live, or leave it alone. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off: closed and on battery, the Mac can still drain over time, so don't leave it on in a bag. \u{201C}Only while brewing\u{201D} ties it to the session instead, on when a keep-awake session starts, off when it ends or Pervigil quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for \u{201C}Only while brewing\u{201D}."))
+                : sectionHeader("Disable sleep", info: L("Stops the Mac from sleeping at all, even with no session running. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off, even if Pervigil quits. The display still sleeps as usual. \u{201C}Only while brewing\u{201D} ties it to the session instead, on when a keep-awake session starts, off when it ends or Pervigil quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for \u{201C}Only while brewing\u{201D}."))
+        } footer: {
+            model.machineHasBattery
+                ? sectionFooter("Keeps running with the lid shut and no external display.")
+                : sectionFooter("Stops the Mac from sleeping at all until you turn it off.")
+        }
+    }
+
+    @ViewBuilder private var lowPowerStatus: some View {
+        switch model.closedLidLowPowerController.status {
+        case .off: EmptyView()
+        case .needsHelper:
+            if let hint = model.helperRecoveryHint {
+                Label(hint, systemImage: "arrow.triangle.2.circlepath")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                Label("Install or update the administrator helper to use Low Power Mode.", systemImage: "lock")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        case .waitingForClosedDisplay:
+            Label("Waiting for closed-display mode to be active.", systemImage: "info.circle")
+                .font(.caption).foregroundStyle(.secondary)
+        case .waitingForLid:
+            Label("Low Power Mode will turn on when the lid closes.", systemImage: "leaf")
+                .font(.caption).foregroundStyle(.secondary)
+        case .waitingForBattery:
+            Label("Waiting for battery power. Enable plugged-in use to include the power adapter.", systemImage: "powerplug")
+                .font(.caption).foregroundStyle(.secondary)
+        case .switching:
+            Label("Updating Low Power Mode…", systemImage: "hourglass")
+                .font(.caption).foregroundStyle(.secondary)
+        case .active:
+            Label("Low Power Mode is active.", systemImage: "leaf")
+                .font(.caption).foregroundStyle(.secondary)
+        case .failed:
+            HelperFeatureNotice(model: model, message: L("Could not update Low Power Mode. Pervigil will retry."), helperOnly: true)
+                .font(.caption)
+        }
+    }
+
+    /// Persist a new language choice and relaunch so every surface switches
+    /// at once (the `AppleLanguages` override only resolves at process start).
+    private func switchLanguage(to language: AppLanguage) {
+        guard language != AppLanguage.current else { return }
+        language.apply()
+        AppLanguage.relaunch()
+    }
+
+    // MARK: - Settings backup
+
+    private func exportSettings() {
+        let panel = NSSavePanel()
+        panel.title = L("Export Pervigil Settings")
+        panel.nameFieldStringValue = "Pervigil Settings.json"
+        panel.allowedContentTypes = [.json]
+        panel.isExtensionHidden = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try model.exportSettingsData().write(to: url)
+            transferNote = TransferNote(message: L("Exported to %@.", url.lastPathComponent), isError: false)
+        } catch {
+            transferNote = TransferNote(message: L("Couldn't export settings: %@", error.localizedDescription), isError: true)
+        }
+    }
+
+    private func importSettings() {
+        let panel = NSOpenPanel()
+        panel.title = L("Import Pervigil Settings")
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let disabledShellHooks = try model.importSettings(from: Data(contentsOf: url))
+            let message: String
+            if disabledShellHooks > 0 {
+                message = L(
+                    "Settings imported. %d command hook(s) were disabled for safety. Review them in Automation before turning them on.",
+                    disabledShellHooks
+                )
+            } else {
+                message = L("Settings imported.")
+            }
+            transferNote = TransferNote(message: message, isError: false)
+        } catch let error as SettingsTransferError {
+            transferNote = TransferNote(message: Self.message(for: error), isError: true)
+        } catch {
+            transferNote = TransferNote(message: L("Couldn't read the file: %@", error.localizedDescription), isError: true)
+        }
+    }
+
+    private static func message(for error: SettingsTransferError) -> String {
+        switch error {
+        case .unrecognizedFile:
+            return L("That file isn't a Pervigil settings export.")
+        case .unsupportedVersion:
+            return L("That export was made by a newer version of Pervigil.")
+        }
+    }
+
+    private func optionBinding(_ keyPath: WritableKeyPath<SleepPreventionOptions, Bool>) -> Binding<Bool> {
+        Binding(
+            get: { session.options[keyPath: keyPath] },
+            set: { newValue in model.updateOptions { $0[keyPath: keyPath] = newValue } }
+        )
+    }
+
+    /// How long with no input before dim-don't-sleep dims the panel.
+    private static let dimDefaultDelay: TimeInterval = 300
+
+    /// On/off binding for dim-don't-sleep. Turning it on picks a sensible delay
+    /// and clears the (never-surfaced) screen-saver yield, since after idle you
+    /// either let the display sleep or dim it, not both.
+    private var dimBinding: Binding<Bool> {
+        Binding(
+            get: { session.options.dimDisplayAfter != nil },
+            set: { on in
+                model.updateOptions {
+                    $0.dimDisplayAfter = on ? Self.dimDefaultDelay : nil
+                    if on { $0.allowScreenSaverAfter = nil }
+                }
+            }
+        )
+    }
+}
+
+// MARK: - Triggers
+
+private struct TriggersTab: View {
+    @Bindable var model: AppModel
+    @State private var newPresetName = ""
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Activate by triggers", isOn: Binding(
+                    get: { model.triggersEnabled },
+                    set: { model.triggersEnabled = $0 }
+                ))
+                if model.triggersEnabled && model.triggersPaused {
+                    HStack(spacing: 6) {
+                        Text("Set to Manual in the menu bar.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                        Spacer()
+                        Button("Switch to Automatic") { model.resumeTriggers() }
+                            .font(.caption)
+                    }
+                }
+            } header: {
+                sectionHeader("Triggers", info: L("A trigger is a condition Pervigil watches, checked once a second. With triggers on, they take over: Pervigil starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The menu then shows an Automatic and Manual switch: Manual sets the triggers aside without touching your rules, until you switch back or relaunch Pervigil."))
+            } footer: {
+                sectionFooter("The listed conditions control the session instead of the manual switch.")
+            }
+            if model.triggersEnabled {
+                Section {
+                    presetRows
+                } header: {
+                    sectionHeader("Presets", info: L("A preset is a named bundle of trigger rules you apply in one click. The built-ins cover common setups (AI Agent, Meetings, Cloud Gaming, Remote Control, and more), and applying one replaces your current rules. Save your own rules under a name to reuse them or move between setups. Renaming a built-in makes it yours, and Pervigil stops updating it. \u{201C}Restore default presets\u{201D} brings back any built-in you removed."))
+                }
+                Section {
+                    RulesView(model: model)
+                } header: {
+                    RulesView.combineHeader(model: model)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        // Every hook row refreshes its own tool's state on appear, but a row
+        // whose tool is undetected and unconnected renders nothing at all, and
+        // a Group hands its modifiers to children it doesn't have: no content,
+        // no onAppear, so the state that would have produced content is never
+        // read. That left the rows visible only after the setup window had
+        // happened to refresh them. Reading here, from a view that always
+        // exists, is what makes the rows appear on their own.
+        .onAppear { model.refreshAgentHookStatuses() }
+        .animation(.snappy(duration: 0.25), value: model.triggersEnabled)
+        .animation(.snappy(duration: 0.25), value: model.triggersPaused)
+    }
+
+    @ViewBuilder
+    private var presetRows: some View {
+        HStack {
+            Menu {
+                ForEach(model.presets) { preset in
+                    Button(preset.displayName) { model.applyPreset(preset) }
+                }
+                if !model.presets.isEmpty { Divider() }
+                ForEach(model.presets) { preset in
+                    Button(L("Remove \u{201C}%@\u{201D}", preset.displayName), role: .destructive) {
+                        model.removePreset(preset)
+                    }
+                }
+                if !model.missingBuiltInPresets.isEmpty {
+                    Divider()
+                    Button("Restore default presets") { model.restoreDefaultPresets() }
+                }
+            } label: {
+                Label("Apply or remove", systemImage: "list.bullet")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            Spacer()
+        }
+
+        HStack(spacing: 6) {
+            TextField("Save current rules as\u{2026}", text: $newPresetName)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit(savePreset)
+            Button("Save") { savePreset() }
+                .disabled(newPresetName.trimmingCharacters(in: .whitespaces).isEmpty || model.rules.isEmpty)
+        }
+    }
+
+    private func savePreset() {
+        model.saveCurrentRulesAsPreset(named: newPresetName)
+        newPresetName = ""
+    }
+}
+
+// MARK: - Reminder
+
+private struct ReminderTab: View {
+    @Bindable var model: AppModel
+
+    private static let options: [(label: String, interval: TimeInterval)] = [
+        ("15 minutes", 15 * 60),
+        ("30 minutes", 30 * 60),
+        ("1 hour", 60 * 60),
+        ("2 hours", 2 * 60 * 60),
+        ("4 hours", 4 * 60 * 60),
+        ("8 hours", 8 * 60 * 60),
+    ]
+
+    /// Lead times for the "ending soon" heads-up.
+    private static let noticeOptions: [(label: String, interval: TimeInterval)] = [
+        ("1 minute before", 60),
+        ("2 minutes before", 2 * 60),
+        ("5 minutes before", 5 * 60),
+        ("10 minutes before", 10 * 60),
+    ]
+
+    /// The picker rows: the presets plus the current value when it isn't one
+    /// of them, so an imported custom lead time doesn't render as an empty
+    /// selection.
+    private func noticeChoices(including current: TimeInterval) -> [TimeInterval] {
+        let presets = Self.noticeOptions.map(\.interval)
+        return presets.contains(current) ? presets : (presets + [current]).sorted()
+    }
+
+    private func noticeLabel(_ interval: TimeInterval) -> String {
+        if let preset = Self.noticeOptions.first(where: { $0.interval == interval }) {
+            return L(preset.label)
+        }
+        return L("%@ before", MenuBarContent.shortDuration(interval))
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Remind me it's still on", isOn: Binding(
+                    get: { model.reminderEnabled },
+                    set: { model.reminderEnabled = $0 }
+                ))
+                if model.reminderEnabled {
+                    Picker(model.reminderRepeats ? L("Every") : L("After"), selection: Binding(
+                        get: { model.reminderAfter },
+                        set: { model.reminderAfter = $0 }
+                    )) {
+                        ForEach(Self.options, id: \.interval) { option in
+                            Text(L(option.label)).tag(option.interval)
+                        }
+                    }
+                    Toggle("Repeat the reminder", isOn: Binding(
+                        get: { model.reminderRepeats },
+                        set: { model.reminderRepeats = $0 }
+                    ))
+                    Toggle("Play a sound", isOn: Binding(
+                        get: { model.reminderSound },
+                        set: { model.reminderSound = $0 }
+                    ))
+                }
+            } header: {
+                sectionHeader("Reminder", info: L("A nudge while a session is running, so a Mac left awake doesn't stay awake all night unnoticed. Left off, a one-time reminder tells you once, after the session has run this long. \u{201C}Repeat\u{201D} tells you again at every interval until you stop the session. This never stops anything itself, it only reminds you, and the sound is optional. If you'd rather the session end on its own, use a timed session or a quick-stop button instead."))
+            } footer: {
+                Text(model.reminderRepeats
+                     ? L("A recurring notification every interval while a session runs, so a Mac left awake keeps reminding you.")
+                     : L("A one-time notification once a session has run this long, in case you forget the Mac is awake."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .contentTransition(.opacity)
+            }
+            Section {
+                Toggle("Notify when a session ends", isOn: Binding(
+                    get: { model.notifyOnEnd },
+                    set: { model.notifyOnEnd = $0 }
+                ))
+                Toggle("Warn before a timed session ends", isOn: Binding(
+                    get: { model.endingSoonEnabled },
+                    set: { model.endingSoonEnabled = $0 }
+                ))
+                if model.endingSoonEnabled {
+                    Picker("Warn", selection: Binding(
+                        get: { model.endingSoonNotice },
+                        set: { model.endingSoonNotice = $0 }
+                    )) {
+                        ForEach(noticeChoices(including: model.endingSoonNotice), id: \.self) { interval in
+                            Text(noticeLabel(interval)).tag(interval)
+                        }
+                    }
+                }
+            } header: {
+                sectionHeader("Session end", info: L("These cover the times a session ends without you: a timer expiring, or trigger conditions dropping. Stopping it yourself stays silent, since you already know. The warning is a heads-up a few minutes before a timed session runs out, so you can extend it before the Mac drops off. Actions that put the Mac to sleep live under Automation."))
+            } footer: {
+                sectionFooter("Notifications fire when a session ends on its own, not when you stop it yourself.")
+            }
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .animation(.snappy(duration: 0.25), value: model.reminderEnabled)
+        .animation(.snappy(duration: 0.25), value: model.reminderRepeats)
+        .animation(.snappy(duration: 0.25), value: model.endingSoonEnabled)
+    }
+}
+
+// MARK: - Automation (end action + outbound hooks + wake)
+
+private struct AutomationTab: View {
+    @Bindable var model: AppModel
+    @State private var draft: HookDraft?
+    @State private var editingID: UUID?
+    /// Transient feedback after a copy action, with paste guidance. Cleared
+    /// after a few seconds; superseded by the next copy.
+    @State private var copiedConfirmation: String?
+    @State private var copiedResetTask: Task<Void, Never>?
+    /// A separate confirmation for the run-instructions copy in Scheduled AI
+    /// runs, kept apart so it shows next to that button, not up in the
+    /// Automation access section where ``copiedConfirmation`` lives.
+    @State private var runInstructionsCopied = false
+    @State private var runInstructionsResetTask: Task<Void, Never>?
+
+    private func flashCopied(_ message: String) {
+        copiedResetTask?.cancel()
+        withAnimation(.snappy(duration: 0.2)) { copiedConfirmation = message }
+        copiedResetTask = Task {
+            try? await Task.sleep(for: .seconds(6))
+            guard !Task.isCancelled else { return }
+            withAnimation(.snappy(duration: 0.3)) { copiedConfirmation = nil }
+        }
+    }
+
+    private func flashRunInstructionsCopied() {
+        runInstructionsResetTask?.cancel()
+        withAnimation(.snappy(duration: 0.2)) { runInstructionsCopied = true }
+        runInstructionsResetTask = Task {
+            try? await Task.sleep(for: .seconds(6))
+            guard !Task.isCancelled else { return }
+            withAnimation(.snappy(duration: 0.3)) { runInstructionsCopied = false }
+        }
+    }
+
+    private func copyMCP(_ format: AppModel.MCPSetupFormat) {
+        model.copyMCPSetup(format)
+        switch format {
+        case .serverPath:
+            flashCopied(L("Copied. Use it as the MCP server command in your agent's settings."))
+        case .mcpServersJSON, .codexTOML:
+            flashCopied(L("Copied. Paste it into your agent's MCP configuration file."))
+        }
+    }
+
+    // MARK: Scheduled AI runs (automation wake sync)
+
+    private var automationSyncSection: some View {
+        Section {
+            switch model.wakeHelperGate {
+            case .ready:
+                automationSyncReadyContent
+            case .needsHelper, .awaitingApproval, .helperUpdating:
+                automationSyncLockedContent
+            }
+        } header: {
+            sectionHeader("Scheduled AI runs", info: L("Pervigil reads the recurring tasks your local AI tools schedule (Claude Desktop local routines, Codex automations, tokenstat.ai automations), wakes the Mac a few minutes before each run, and holds it awake for a short window so the run is not skipped. It reads only the schedule and name, never the task's prompt. Cloud routines run on the vendor's servers even with the lid shut, so they are neither listed nor woken for. For a run longer than the window, have the agent hold a Pervigil lease (see the command line and MCP setup below) and the Mac stays awake until it releases."))
+        } footer: {
+            sectionFooter("Wake the Mac for local Claude Desktop, Codex, and tokenstat.ai tasks, then hold it awake while they run.")
+        }
+    }
+
+    /// Helper missing, approving, or updating: waking cannot work, so lock the
+    /// section like Scheduled wake above rather than offer live-looking switches
+    /// that do nothing. Already-discovered runs show read-only, so the value
+    /// waiting behind the helper is visible and worth installing for.
+    @ViewBuilder
+    private var automationSyncLockedContent: some View {
+        HelperLockedRow(model: model, context: .scheduledAIRuns)
+        if !model.syncedAutomations.isEmpty {
+            Text("These local runs would be woken for once the helper is installed.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(model.syncedAutomations) { automation in
+                automationPreviewRow(automation)
+            }
+        }
+    }
+
+    /// Helper ready: the live controls. The master switch reveals which sources
+    /// are scanned and when, the discovered runs (or an empty state), the next
+    /// armed wake, and the hold length.
+    @ViewBuilder
+    private var automationSyncReadyContent: some View {
+        Toggle("Wake for scheduled AI runs", isOn: Binding(
+            get: { model.automationSyncConfig.enabled },
+            set: { on in
+                var config = model.automationSyncConfig
+                config.enabled = on
+                model.automationSyncConfig = config
+            }
+        ))
+        if model.automationSyncConfig.enabled {
+            if model.syncedAutomations.isEmpty {
+                automationSyncEmptyState
+            } else {
+                automationSyncStatusRow
+                if model.automationSyncConfig.enabledSources.isEmpty {
+                    Text("Turn on a platform to wake for its runs. Left off, they stay listed but are never woken for.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                ForEach(automationSourcesWithRuns, id: \.self) { source in
+                    automationPlatformRow(source)
+                    ForEach(model.syncedAutomations.filter { $0.source == source }) { automation in
+                        automationRunRow(automation, sourceEnabled: model.isAutomationSourceEnabled(source))
+                    }
+                }
+                if let next = model.automationNextWakeTime {
+                    Label(L("Next wake %@", Self.wakeStamp.string(from: next)), systemImage: "alarm")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Picker("Stay awake for", selection: Binding(
+                    get: { model.automationSyncConfig.holdSeconds },
+                    set: { seconds in
+                        var config = model.automationSyncConfig
+                        config.holdSeconds = seconds
+                        model.automationSyncConfig = config
+                    }
+                )) {
+                    Text("5 minutes").tag(TimeInterval(5 * 60))
+                    Text("15 minutes").tag(TimeInterval(15 * 60))
+                    Text("30 minutes").tag(TimeInterval(30 * 60))
+                    Text("1 hour").tag(TimeInterval(60 * 60))
+                }
+                automationRunLeaseGuidance
+            }
+        }
+    }
+
+    /// Points past the fixed window: for a run that outlasts it, the task's own
+    /// agent should hold a lease for the whole session. Offers a paste-ready
+    /// directive to drop into the scheduled task's prompt, so this is something
+    /// a user can actually set up, not just read about in the tooltip.
+    @ViewBuilder
+    private var automationRunLeaseGuidance: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("This window is a fallback. For a run that lasts longer, have the task's own agent hold a Pervigil lease for the whole session, so the Mac stays awake until the work is done, then sleeps.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if !model.automationLeasesEnabled {
+                Label(L("Leases are off. Turn on \u{201C}Allow automation leases\u{201D} under Automation access for the agent's lease to hold."), systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Button("Copy Run Instructions") {
+                model.copyAutomationRunInstructions()
+                flashRunInstructionsCopied()
+            }
+            .controlSize(.small)
+            if runInstructionsCopied {
+                Label("Copied. Paste it into the scheduled task's prompt, so its agent holds the Mac awake for the run.", systemImage: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.green)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
+            }
+        }
+    }
+
+    /// Which sources are scanned, when they were last read, and a manual re-read.
+    private var automationSyncStatusRow: some View {
+        HStack(spacing: 8) {
+            Text(automationSyncStatusText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Button("Refresh") { model.refreshSyncedAutomations() }
+                .controlSize(.small)
+        }
+    }
+
+    private var automationSyncStatusText: String {
+        guard let checked = model.automationsLastChecked else {
+            return L("Scanning Claude Desktop, Codex, and tokenstat.ai")
+        }
+        return L("Scanning Claude Desktop, Codex, and tokenstat.ai · checked %@", Self.relativeChecked(checked))
+    }
+
+    /// Enabled with nothing discovered: an invitation, not a dead end. Says
+    /// where to create a run and offers a re-read.
+    private var automationSyncEmptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "calendar")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+            Text("No local scheduled runs found")
+                .font(.callout.weight(.medium))
+            Text("Add one in Claude Desktop (Routines ▸ New routine ▸ Local), Codex (Scheduled tasks ▸ Create), or tokenstat.ai (Automations), then refresh. Cloud routines run on the vendor's servers and need no wake.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Refresh") { model.refreshSyncedAutomations() }
+                .controlSize(.small)
+                .padding(.top, 2)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+    }
+
+    /// The sources that have discovered runs, in the list's existing order, so
+    /// only platforms the user actually has appear (no Codex switch for someone
+    /// who only runs Claude Desktop, and vice versa).
+    private var automationSourcesWithRuns: [ScheduledAutomation.Source] {
+        var ordered: [ScheduledAutomation.Source] = []
+        for automation in model.syncedAutomations where !ordered.contains(automation.source) {
+            ordered.append(automation.source)
+        }
+        return ordered
+    }
+
+    /// A platform header with its own on/off switch. Off by default, so the user
+    /// opts each platform in and none is forced on.
+    private func automationPlatformRow(_ source: ScheduledAutomation.Source) -> some View {
+        LabeledContent {
+            Toggle("", isOn: Binding(
+                get: { model.isAutomationSourceEnabled(source) },
+                set: { on in model.setAutomationSourceEnabled(source, on) }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .controlSize(.small)
+        } label: {
+            Text(source.label)
+                .font(.callout.weight(.medium))
+        }
+    }
+
+    /// One run under its platform. With the platform on, a switch mutes or
+    /// unmutes it; with the platform off (or the source itself paused it), the
+    /// run is still listed but dimmed and controlless, since it will not wake.
+    private func automationRunRow(_ automation: ScheduledAutomation, sourceEnabled: Bool) -> some View {
+        let woken = sourceEnabled && automation.enabled && !model.isAutomationMuted(automation.id)
+        return HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(automation.name)
+                Text(automationSyncSubtitle(automation))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            if sourceEnabled {
+                Toggle("", isOn: Binding(
+                    get: { !model.isAutomationMuted(automation.id) },
+                    set: { on in model.setAutomationMuted(automation.id, !on) }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .disabled(!automation.enabled)
+            }
+        }
+        .padding(.leading, 14)
+        .opacity(woken ? 1 : 0.5)
+    }
+
+    /// A read-only row for the locked state: name and schedule, no control.
+    private func automationPreviewRow(_ automation: ScheduledAutomation) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "clock")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(automation.name)
+                Text(automationSyncSubtitle(automation))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .opacity(0.6)
+    }
+
+    private func automationSyncSubtitle(_ automation: ScheduledAutomation) -> String {
+        guard automation.enabled else {
+            return L("Paused in %@", automation.source.label)
+        }
+        guard let next = automation.recurrence
+            .nextOccurrences(after: Date(), count: 1, calendar: .current).first else {
+            return automation.source.label
+        }
+        return L("%@ · next %@", automation.source.label, Self.wakeStamp.string(from: next))
+    }
+
+    /// Medium date + short time, shared by the row subtitles and the next-wake
+    /// line, so the section reads one way.
+    private static let wakeStamp: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f
+    }()
+
+    /// A short "checked …" hint. Very recent reads read as "just now" rather than
+    /// the formatter's blunter "0 seconds ago".
+    private static func relativeChecked(_ date: Date) -> String {
+        if Date().timeIntervalSince(date) < 45 { return L("just now") }
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f.localizedString(for: date, relativeTo: Date())
+    }
+
+    var body: some View {
+        Form {
+            endActionSection
+            automationLeasesSection
+            eventHooksSection
+            scheduledWakeSection
+            automationSyncSection
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .animation(.snappy(duration: 0.25), value: model.endAction)
+        .animation(.snappy(duration: 0.25), value: model.wakeSchedule != nil)
+        .animation(.snappy(duration: 0.25), value: model.automationSyncConfig.enabled)
+        .animation(.snappy(duration: 0.25), value: model.automationSyncConfig.enabledSources)
+        .animation(.snappy(duration: 0.25), value: model.helperInstalled)
+        .animation(.snappy(duration: 0.25), value: model.helper.awaitingApproval)
+        .animation(.snappy(duration: 0.25), value: model.helper.daemonOutdated)
+        .sheet(item: $draft) { draft in
+            HookEditorSheet(
+                draft: draft,
+                title: editingID == nil ? L("Add Hook") : L("Edit Hook"),
+                onCancel: {
+                    model.hooksEditing = false
+                    self.draft = nil
+                    editingID = nil
+                },
+                onSave: { saved in
+                    commit(saved)
+                    model.hooksEditing = false
+                    self.draft = nil
+                    editingID = nil
+                }
+            )
+        }
+        .onAppear {
+            model.helper.refresh()
+            model.refreshSystemWakeState()
+            model.refreshSyncedAutomations()
+        }
+        .onDisappear {
+            model.hooksEditing = false
+            copiedResetTask?.cancel()
+            copiedResetTask = nil
+            runInstructionsResetTask?.cancel()
+            runInstructionsResetTask = nil
+            copiedConfirmation = nil
+            runInstructionsCopied = false
+            draft = nil
+            editingID = nil
+        }
+    }
+
+    // MARK: End action
+
+    private var endActionSection: some View {
+        Section {
+            Picker("After the last session ends", selection: Binding(
+                get: { model.endAction },
+                set: { model.endAction = $0 }
+            )) {
+                ForEach(SessionEndAction.allCases, id: \.self) { action in
+                    Text(action.label).tag(action)
+                }
+            }
+            if let note = endActionAvailabilityNote {
+                Label(note, systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } header: {
+            sectionHeader("After the session ends", info: L("When the last thing keeping the Mac awake ends on its own (a timer expiring, trigger conditions dropping, or the final automation lease releasing), Pervigil can put the display to sleep, lock the screen, start the screen saver, or sleep the Mac. Leases count: while any lease is live the session continues and nothing fires. Off by default so a timed session never surprises you. Manual stops, and the battery and thermal safety pauses, never run this action. A brief debounce cancels it if the session restarts right away."))
+        } footer: {
+            sectionFooter("Fires a few seconds after a natural end, not on a manual stop or a safety pause.")
+        }
+    }
+
+    /// Contextual note under the end-action picker: only when the chosen
+    /// action has a privilege or TCC catch, so "Do nothing" stays quiet.
+    private var endActionAvailabilityNote: String? {
+        switch model.endAction {
+        case .none, .sleepDisplay, .startScreensaver:
+            return nil
+        case .lockScreen:
+            return L("Locks via System Events. macOS may ask once for Automation access for Pervigil.")
+        case .sleepMac:
+            if model.helperInstalled && !model.helper.daemonOutdated && !model.helper.awaitingApproval {
+                return L("Sleeps the Mac through the administrator helper (instant, no extra prompts).")
+            }
+            if model.helper.awaitingApproval {
+                return L("The helper is waiting for approval in System Settings. Until then, sleep falls back to System Events, which may ask for Automation access once.")
+            }
+            if model.helper.daemonOutdated {
+                return L("The helper is updating itself. Until that finishes, sleep falls back to System Events, which may ask for Automation access once.")
+            }
+            return L("Without the administrator helper, sleep uses System Events and may ask for Automation access once. Install the helper under Preferences ▸ General for instant, silent sleep.")
+        }
+    }
+
+    // MARK: Scheduled wake
+
+    private var scheduledWakeSection: some View {
+        Section {
+            switch model.wakeHelperGate {
+            case .ready:
+                wakeScheduleEditor
+            case .needsHelper, .awaitingApproval, .helperUpdating:
+                if model.wakeSchedule != nil {
+                    // Settings survived without a live helper: say so, do not
+                    // pretend the controls are live, offer clear + unlock.
+                    Label {
+                        Text(L("A wake schedule is saved, but it is not active on this Mac until the administrator helper is ready. The system will not wake from this plan."))
+                            .fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle")
+                            .foregroundStyle(.orange)
+                    }
+                    .foregroundStyle(.secondary)
+                    wakeScheduleSummary
+                    Button("Turn Off Wake Schedule", role: .destructive) {
+                        model.wakeSchedule = nil
+                    }
+                }
+                HelperLockedRow(model: model, context: .wakeSchedule)
+            }
+        } header: {
+            sectionHeader("Scheduled wake", info: L("Wake the Mac at a set time through the administrator helper (pmset schedule / repeat), then optionally start a keep-awake session so it does not fall back asleep before the job runs. Pair with an end-of-session action above for wake, work, sleep. Scheduled wake is reliable on AC power. On battery the firmware may skip it. macOS only allows one system-wide repeating power schedule, so enabling ours replaces whatever was there. The controls stay locked until the helper is installed and ready, the same rule as the thermal fan boost."))
+        } footer: {
+            wakeScheduleFooter
+        }
+    }
+
+    // MARK: Automation access
+
+    private var automationLeasesSection: some View {
+        Section {
+            Toggle("Allow automation leases", isOn: Binding(
+                get: { model.automationLeasesEnabled },
+                set: { model.automationLeasesEnabled = $0 }
+            ))
+            Text("Let AI agents and scripts keep the Mac awake while work is running. It cannot wake a sleeping Mac.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Toggle("Allow automation to change the wake schedule", isOn: Binding(
+                get: { model.automationWakeControlEnabled },
+                set: { model.automationWakeControlEnabled = $0 }
+            ))
+            Text("Let trusted tools set or clear the Mac's scheduled wake. It needs the administrator helper and does not keep the Mac awake after it wakes.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                Button("Copy Agent Instructions") {
+                    model.copyAgentInstructions()
+                    flashCopied(L("Copied. Paste it to your agent in a new chat to teach it to manage Pervigil."))
+                }
+                // A borderless button-style menu so it reads like the plain
+                // buttons beside it (accent text, a small chevron) and adapts to
+                // light and dark, instead of the default pull-down's bezel that
+                // looked like a washed-out gray fill on a dark background.
+                Menu("Copy MCP Setup") {
+                    Button("For Claude Code (JSON)") { copyMCP(.mcpServersJSON) }
+                    Button("For Gemini CLI (JSON)") { copyMCP(.mcpServersJSON) }
+                    Button("For Grok (JSON)") { copyMCP(.mcpServersJSON) }
+                    Button("For Codex (TOML)") { copyMCP(.codexTOML) }
+                    Divider()
+                    Button("Server path only") { copyMCP(.serverPath) }
+                }
+                .menuStyle(.button)
+                .buttonStyle(.borderless)
+                .fixedSize()
+                Button("Reveal Skill Folder") { model.revealAgentSkill() }
+                Spacer(minLength: 0)
+            }
+            .controlSize(.small)
+            if let copiedConfirmation {
+                Label(copiedConfirmation, systemImage: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.green)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
+            }
+        } header: {
+            sectionHeader("Automation access", info: L("A lease is a bounded keep-awake grant an outside tool asks for through the pervigil command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning leases off ends any live lease. The wake schedule switch is separate and off by default because a scheduled wake is a system-wide change applied by the administrator helper: leave it off unless a tool you trust should plan wake-ups for you."))
+        }
+    }
+
+    @ViewBuilder
+    private var wakeScheduleEditor: some View {
+        Toggle("Wake schedule", isOn: Binding(
+            get: { model.wakeSchedule != nil },
+            set: { on in
+                // Enabling is only offered when the helper is ready; the
+                // model also refuses a bare enable without it.
+                model.wakeSchedule = on ? (model.wakeSchedule ?? WakeScheduleConfig()) : nil
+            }
+        ))
+        if model.wakeSchedule != nil {
+            Toggle("One-shot wake", isOn: Binding(
+                get: { model.wakeSchedule?.oneShot != nil },
+                set: { on in
+                    updateWake {
+                        $0.oneShot = on
+                            ? ($0.oneShot ?? Date().addingTimeInterval(3600))
+                            : nil
+                    }
+                }
+            ))
+            if model.wakeSchedule?.oneShot != nil {
+                DatePicker(
+                    "Wake at",
+                    selection: Binding(
+                        get: { model.wakeSchedule?.oneShot ?? Date() },
+                        set: { date in updateWake { $0.oneShot = date } }
+                    ),
+                    displayedComponents: [.date, .hourAndMinute]
+                )
+            }
+            Toggle("Repeat daily / weekly", isOn: Binding(
+                get: { model.wakeSchedule?.repeatingEnabled ?? false },
+                set: { on in updateWake { $0.repeatingEnabled = on } }
+            ))
+            if model.wakeSchedule?.repeatingEnabled == true {
+                DatePicker(
+                    "Time",
+                    selection: Binding(
+                        get: {
+                            // Wall-clock components on both sides, never
+                            // elapsed time since midnight: on a DST
+                            // transition day the two differ by an hour, and
+                            // pmset takes wall-clock time.
+                            let secs = model.wakeSchedule?.repeatSecondsFromMidnight ?? 0
+                            let calendar = Calendar.current
+                            return calendar.date(
+                                bySettingHour: secs / 3600,
+                                minute: (secs % 3600) / 60,
+                                second: secs % 60,
+                                of: calendar.startOfDay(for: Date())
+                            ) ?? Date()
+                        },
+                        set: { date in
+                            let parts = Calendar.current.dateComponents(
+                                [.hour, .minute], from: date)
+                            updateWake {
+                                $0.repeatSecondsFromMidnight =
+                                    (parts.hour ?? 0) * 3600 + (parts.minute ?? 0) * 60
+                            }
+                        }
+                    ),
+                    displayedComponents: [.hourAndMinute]
+                )
+                Text(L("Uses every day (MTWRFSU). macOS allows only one system-wide repeating power schedule."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Toggle("Start keep-awake on wake", isOn: Binding(
+                get: { model.wakeSchedule?.startSessionOnWake ?? true },
+                set: { on in updateWake { $0.startSessionOnWake = on } }
+            ))
+            if model.wakeSchedule?.startSessionOnWake == true {
+                Picker("Session length", selection: Binding(
+                    get: { model.wakeSchedule?.sessionDurationSeconds ?? 0 },
+                    set: { value in
+                        updateWake { $0.sessionDurationSeconds = value > 0 ? value : nil }
+                    }
+                )) {
+                    Text(L("Indefinite")).tag(TimeInterval(0))
+                    Text(L("30 minutes")).tag(30 * 60 as TimeInterval)
+                    Text(L("1 hour")).tag(60 * 60 as TimeInterval)
+                    Text(L("2 hours")).tag(2 * 60 * 60 as TimeInterval)
+                    Text(L("4 hours")).tag(4 * 60 * 60 as TimeInterval)
+                }
+                Text(L("When the Mac wakes near this schedule, Pervigil starts a session so it does not fall back asleep. Works best with triggers off for that window, or with a trigger that stays satisfied."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if model.wakeSchedule?.isActive != true {
+                Label(L("Turn on a one-shot time, a repeating time, or both. With neither, nothing is installed on the system."), systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// Compact read-only summary when the schedule is saved but inactive.
+    @ViewBuilder
+    private var wakeScheduleSummary: some View {
+        if let config = model.wakeSchedule {
+            VStack(alignment: .leading, spacing: 2) {
+                if let oneShot = config.oneShot {
+                    Text(L("One-shot: %@", oneShot.formatted(date: .abbreviated, time: .shortened)))
+                }
+                if config.repeatingEnabled {
+                    Text(L("Repeating: every day at %@", config.repeatTimeString))
+                }
+                if config.startSessionOnWake {
+                    Text(L("Starts keep-awake on wake"))
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func updateWake(_ body: (inout WakeScheduleConfig) -> Void) {
+        guard var config = model.wakeSchedule else { return }
+        body(&config)
+        model.wakeSchedule = config
+    }
+
+    @ViewBuilder
+    private var wakeScheduleFooter: some View {
+        // When locked, the row above already names the helper requirement.
+        // Only show the AC caveat and live system state once the editor is open.
+        if model.wakeHelperGate == .ready {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L("Reliable on AC power. On battery the firmware may skip the wake."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if !model.systemWakeState.scheduledWakes.isEmpty {
+                    let next = model.systemWakeState.scheduledWakes
+                        .map { $0.formatted(date: .abbreviated, time: .shortened) }
+                        .joined(separator: ", ")
+                    Text(L("Scheduled wakes on this Mac: %@", next))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let repeating = model.systemWakeState.repeatingSummary {
+                    Text(L("Repeating wake on this Mac: %@", repeating))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if !model.systemWakeState.scheduledWakes.isEmpty
+                    || model.systemWakeState.repeatingSummary != nil {
+                    // The list above is the whole-Mac pmset schedule, not just
+                    // ours: say so, since a wake showing while our toggle is off
+                    // otherwise reads as a leftover we won't clear. Avoid
+                    // promising other apps' wakes are untouched: installing our
+                    // schedule runs pmset cancelall (see HelperEngine), which
+                    // clears them momentarily before macOS re-adds its own.
+                    Text(L("This is the Mac's whole wake schedule, including macOS's own (Do Not Disturb, backups). Turning Pervigil's schedule off clears the wake it set."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    // MARK: Event hooks
+
+    private var eventHooksSection: some View {
+        Section {
+            if model.eventHooks.isEmpty {
+                Text(L("No event hooks yet."))
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(model.eventHooks) { hook in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Toggle(isOn: Binding(
+                            get: { hook.enabled },
+                            set: { enabled in
+                                var hooks = model.eventHooks
+                                if let i = hooks.firstIndex(where: { $0.id == hook.id }) {
+                                    hooks[i].enabled = enabled
+                                    model.eventHooks = hooks
+                                }
+                            }
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(hook.event.label)
+                                Text(hook.action.label)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .toggleStyle(.switch)
+                        Spacer(minLength: 8)
+                        Button {
+                            beginEdit(hook)
+                        } label: {
+                            Image(systemName: "pencil")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Edit hook")
+                    }
+                }
+                .onDelete(perform: deleteHooks)
+            }
+            Button("Add Hook…") {
+                beginAdd()
+            }
+        } header: {
+            sectionHeader("Event hooks", info: L("When something happens in Pervigil, run a Shortcut, POST a webhook, or run a shell command. Useful for a push to your phone when an overnight agent finishes (ntfy, or a Shortcut that sends a notification). Hooks are suspended while you edit them, so a half-written command never runs. No administrator helper needed. User-authored shell commands are intentional in this unsandboxed app: only add commands you trust."))
+        } footer: {
+            sectionFooter("Run a Shortcut, post a webhook, or a shell command on session and trigger events. No helper required.")
+        }
+    }
+
+    private func beginAdd() {
+        model.hooksEditing = true
+        editingID = nil
+        draft = HookDraft(
+            event: .sessionEnded,
+            kind: .shortcut,
+            shortcutName: "",
+            webhookURL: "",
+            shellCommand: ""
+        )
+    }
+
+    private func beginEdit(_ hook: EventHook) {
+        model.hooksEditing = true
+        editingID = hook.id
+        draft = HookDraft(from: hook)
+    }
+
+    private func commit(_ draft: HookDraft) {
+        guard let action = draft.action else { return }
+        var hooks = model.eventHooks
+        if let id = editingID, let i = hooks.firstIndex(where: { $0.id == id }) {
+            hooks[i].event = draft.event
+            hooks[i].action = action
+        } else {
+            hooks.append(EventHook(event: draft.event, action: action))
+        }
+        model.eventHooks = hooks
+    }
+
+    private func deleteHooks(at offsets: IndexSet) {
+        var hooks = model.eventHooks
+        hooks.remove(atOffsets: offsets)
+        model.eventHooks = hooks
+    }
+}
+
+/// Locked stand-in for Automation features that need the administrator
+/// helper (scheduled wake). Same idea as ``ThermalHelperLockedRow``, but
+/// stacked: a side-by-side lock + long sentence + button squeezes the text
+/// into narrow columns and ugly mid-phrase wraps.
+/// Editable fields for one hook, independent of the live settings list.
+private struct HookDraft: Identifiable, Equatable {
+    enum Kind: String, CaseIterable, Identifiable {
+        case shortcut, webhook, shell
+        var id: String { rawValue }
+        /// Short enough for a three-way segmented control without clipping.
+        var label: String {
+            switch self {
+            case .shortcut: return L("Shortcut")
+            case .webhook:  return L("Webhook")
+            case .shell:    return L("Shell")
+            }
+        }
+    }
+
+    let id = UUID()
+    var event: HookEvent
+    var kind: Kind
+    var shortcutName: String
+    var webhookURL: String
+    var shellCommand: String
+
+    init(
+        event: HookEvent,
+        kind: Kind,
+        shortcutName: String,
+        webhookURL: String,
+        shellCommand: String
+    ) {
+        self.event = event
+        self.kind = kind
+        self.shortcutName = shortcutName
+        self.webhookURL = webhookURL
+        self.shellCommand = shellCommand
+    }
+
+    init(from hook: EventHook) {
+        self.event = hook.event
+        switch hook.action {
+        case .runShortcut(let name):
+            self.kind = .shortcut
+            self.shortcutName = name
+            self.webhookURL = ""
+            self.shellCommand = ""
+        case .webhook(let url):
+            self.kind = .webhook
+            self.shortcutName = ""
+            self.webhookURL = url
+            self.shellCommand = ""
+        case .shell(let command):
+            self.kind = .shell
+            self.shortcutName = ""
+            self.webhookURL = ""
+            self.shellCommand = command
+        }
+    }
+
+    var action: HookAction? {
+        switch kind {
+        case .shortcut:
+            let name = shortcutName.trimmingCharacters(in: .whitespacesAndNewlines)
+            return name.isEmpty ? nil : .runShortcut(name: name)
+        case .webhook:
+            let url = webhookURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            return url.isEmpty ? nil : .webhook(url: url)
+        case .shell:
+            let command = shellCommand.trimmingCharacters(in: .whitespacesAndNewlines)
+            return command.isEmpty ? nil : .shell(command: command)
+        }
+    }
+}
+
+private struct HookEditorSheet: View {
+    @State var draft: HookDraft
+    let title: String
+    let onCancel: () -> Void
+    let onSave: (HookDraft) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(title)
+                .font(.headline)
+            Form {
+                Picker("When", selection: $draft.event) {
+                    ForEach(HookEvent.allCases, id: \.self) { event in
+                        Text(event.label).tag(event)
+                    }
+                }
+                // Short labels only: "Run a Shortcut" / "POST a webhook" /
+                // "Run a shell command" overflow a three-way segment and clip
+                // to "hortcut" at this sheet width.
+                Picker("Do", selection: $draft.kind) {
+                    ForEach(HookDraft.Kind.allCases) { kind in
+                        Text(kind.label).tag(kind)
+                    }
+                }
+                .pickerStyle(.segmented)
+                switch draft.kind {
+                case .shortcut:
+                    TextField("Shortcut name", text: $draft.shortcutName)
+                        .textFieldStyle(.roundedBorder)
+                case .webhook:
+                    TextField("https://…", text: $draft.webhookURL)
+                        .textFieldStyle(.roundedBorder)
+                case .shell:
+                    TextField("/bin/sh -c …", text: $draft.shellCommand)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(.body, design: .monospaced))
+                }
+            }
+            .formStyle(.grouped)
+            HStack {
+                Spacer()
+                Button("Cancel", action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                Button("Save") { onSave(draft) }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(draft.action == nil)
+            }
+        }
+        .padding(20)
+        .frame(width: 440)
+    }
+}
+
+// MARK: - Display (experimental virtual display)
+
+private struct DisplayTab: View {
+    @Bindable var model: AppModel
+
+    private static let resolutions: [(label: String, width: Int, height: Int)] = [
+        ("1920 \u{00D7} 1080", 1920, 1080),
+        ("2560 \u{00D7} 1440", 2560, 1440),
+        ("2880 \u{00D7} 1620", 2880, 1620),
+        ("3840 \u{00D7} 2160 (4K)", 3840, 2160),
+    ]
+    private static let defaultConfig = VirtualDisplayConfig(width: 2560, height: 1440, hiDPI: true)
+
+    private static func key(_ width: Int, _ height: Int) -> String { "\(width)x\(height)" }
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Create a virtual display", isOn: Binding(
+                    get: { model.virtualDisplayEnabled },
+                    set: { on in model.setVirtualDisplay(on ? Self.defaultConfig : nil) }
+                ))
+                .disabled(!model.virtualDisplaySupported)
+
+                if !model.virtualDisplaySupported {
+                    Text("Not available on this macOS version.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let config = model.virtualDisplayConfig {
+                    Picker("Resolution", selection: Binding(
+                        get: { Self.key(config.width, config.height) },
+                        set: { newKey in
+                            guard let r = Self.resolutions.first(where: { Self.key($0.width, $0.height) == newKey }) else { return }
+                            model.setVirtualDisplay(VirtualDisplayConfig(width: r.width, height: r.height, hiDPI: config.hiDPI))
+                        }
+                    )) {
+                        ForEach(Self.resolutions, id: \.label) { r in
+                            Text(L(r.label)).tag(Self.key(r.width, r.height))
+                        }
+                    }
+                    Toggle("HiDPI (Retina)", isOn: Binding(
+                        get: { config.hiDPI },
+                        set: { model.setVirtualDisplay(VirtualDisplayConfig(width: config.width, height: config.height, hiDPI: $0)) }
+                    ))
+                    if let error = model.virtualDisplayError {
+                        Label(error, systemImage: "exclamationmark.triangle")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            } header: {
+                sectionHeader("Headless virtual display (experimental)", info: L("A Mac with no monitor attached falls back to a fuzzy 1920 \u{00D7} 1080, which is what makes Screen Sharing and VNC look soft. This creates a higher-resolution HiDPI display in software, so the remote picture is crisp without plugging anything in. It uses a private macOS API, so treat it as experimental and expect it may break on a macOS update. A hardware HDMI or DisplayPort dummy plug does the same job with no software at all."))
+            } footer: {
+                sectionFooter("For a Mac with no monitor: a sharper picture over Screen Sharing and VNC.")
+            }
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .animation(.snappy(duration: 0.25), value: model.virtualDisplayEnabled)
+    }
+}
+
+// MARK: - Disk
+
+private struct DiskTab: View {
+    @Bindable var model: AppModel
+
+    private static let intervals: [(label: String, interval: TimeInterval)] = [
+        ("Every 1 minute", 60),
+        ("Every 5 minutes", 5 * 60),
+        ("Every 10 minutes", 10 * 60),
+        ("Every 30 minutes", 30 * 60),
+    ]
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Keep a disk spinning", isOn: Binding(
+                    get: { model.diskKeepAliveEnabled },
+                    set: { on in on ? model.chooseDiskFolder() : model.disableDiskKeepAlive() }
+                ))
+                if model.diskKeepAliveEnabled {
+                    LabeledContent("Folder") {
+                        HStack(spacing: 6) {
+                            Text(model.diskKeepAliveDirectory?.lastPathComponent ?? L("None"))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Button("Change…") { model.chooseDiskFolder() }
+                                .buttonStyle(.link)
+                        }
+                    }
+                    Picker("Touch", selection: Binding(
+                        get: { model.diskKeepAliveInterval },
+                        set: { model.diskKeepAliveInterval = $0 }
+                    )) {
+                        ForEach(Self.intervals, id: \.interval) { option in
+                            Text(L(option.label)).tag(option.interval)
+                        }
+                    }
+                }
+            } header: {
+                sectionHeader("Disk", info: L("Many external drives and NAS volumes park or disconnect after a few minutes idle, and the next thing that touches them stalls while they spin back up. Pervigil rewrites a tiny hidden marker file in the folder you choose, just enough activity to keep the volume awake. Pick an interval shorter than the drive's own idle timeout. This runs whenever Pervigil is running, with or without a keep-awake session, so a drive stays ready even when the Mac is free to sleep."))
+            } footer: {
+                sectionFooter("Stops an external drive or NAS from spinning down.")
+            }
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .animation(.snappy(duration: 0.25), value: model.diskKeepAliveEnabled)
+    }
+}

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# build-dmg.sh — build, sign, notarize, and package Keepresso as a DMG.
+# build-dmg.sh — build, sign, notarize, and package Pervigil as a DMG.
 #
 # Produces a Developer-ID-signed, notarized, stapled DMG in dist/, ready to
 # attach to a GitHub Release. Run scripts/release.sh afterwards to sign the
@@ -27,9 +27,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
-SCHEME="Keepresso"
-APP_NAME="Keepresso"
-PROJECT="Keepresso.xcodeproj"
+SCHEME="Pervigil"
+APP_NAME="Pervigil"
+PROJECT="Pervigil.xcodeproj"
 BUILD_DIR="$ROOT_DIR/build"
 DIST_DIR="$ROOT_DIR/dist"
 ARCHIVE="$BUILD_DIR/$APP_NAME.xcarchive"

@@ -61,7 +61,7 @@ CORE = {
     'Enable automatic restart after a power failure.': '請開啟停電後自動重新開機。',
     'System sleep disabled': '已停用系統睡眠',
     'Idle system sleep is disabled, so the Mac stays reachable.': '已停用閒置系統睡眠，因此 Mac 會保持可連線狀態。',
-    'The Mac sleeps when idle; Keepresso prevents this while a session runs, but a global setting is safer headless.': 'Mac 閒置時會進入睡眠；Keepresso 會在工作階段進行時防止這一點，但在無螢幕環境下，使用全域設定較為保險。',
+    'The Mac sleeps when idle; Pervigil prevents this while a session runs, but a global setting is safer headless.': 'Mac 閒置時會進入睡眠；Pervigil 會在工作階段進行時防止這一點，但在無螢幕環境下，使用全域設定較為保險。',
     'Disable idle system sleep.': '請停用閒置系統睡眠。',
     'FileVault disabled': '已停用 FileVault',
     'FileVault is off, so the Mac can reboot unattended to the login window.': 'FileVault 已關閉，因此 Mac 可在無人操作下重新開機至登入畫面。',
@@ -72,11 +72,11 @@ CORE = {
     'Automatic login is on (%@), so the Mac reaches the desktop after a reboot without a keyboard.': '自動登入已開啟（%@），因此 Mac 重新開機後無需鍵盤即可進入桌面。',
     'Automatic login is off. After a reboot the Mac waits at the login window for a password.': '自動登入已關閉。重新開機後，Mac 會停在登入畫面等待輸入密碼。',
     'Turn on automatic login for this account.': '請為此帳號開啟自動登入。',
-    'Keepresso stopped': 'Keepresso 已停止',
+    'Pervigil stopped': 'Pervigil 已停止',
     'Your keep-awake session has ended.': '您的保持喚醒工作階段已結束。',
     'Paused on low battery': '因電量低而暫停',
-    'Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge.': '電量為 %d%%。Keepresso 將讓 Mac 進入睡眠，直到您接上電源充電為止。',
-    'Keepresso is still brewing': 'Keepresso 仍在運作中',
+    'Battery is at %d%%. Pervigil is letting the Mac sleep until you plug in to charge.': '電量為 %d%%。Pervigil 將讓 Mac 進入睡眠，直到您接上電源充電為止。',
+    'Pervigil is still brewing': 'Pervigil 仍在運作中',
     "Couldn't create a power assertion. The Mac may still sleep.": "無法建立電源斷言。Mac 仍可能進入睡眠。",
     "Your Mac is still awake. It's been %@.": '您的 Mac 仍處於喚醒狀態，已經過 %@。',
     'Your Mac has been kept awake for %@.': '您的 Mac 已保持喚醒 %@。',
@@ -101,8 +101,8 @@ CORE = {
     "The sleep watchdog couldn't be started.": '無法啟動睡眠看門狗。',
     "Couldn't run the sleep setting command.": '無法執行睡眠設定指令。',
     "The sleep setting couldn't be changed.": '無法變更睡眠設定。',
-    "The Keepresso helper isn't responding.": 'Keepresso 輔助程式無回應。',
-    "The Keepresso helper couldn't change the setting.": 'Keepresso 輔助程式無法變更設定。',
+    "The Pervigil helper isn't responding.": 'Pervigil 輔助程式無回應。',
+    "The Pervigil helper couldn't change the setting.": 'Pervigil 輔助程式無法變更設定。',
     "Virtual displays aren't available on this macOS version.": '此 macOS 版本不支援虛擬螢幕。',
     "Couldn't create the virtual display.": '無法建立虛擬螢幕。',
     'Preventing system sleep': '正在防止系統睡眠',
@@ -151,21 +151,21 @@ CORE = {
     "Xbox Cloud Gaming and the web versions of GeForce NOW run in a browser tab, so there's no app for the gaming condition to spot. The “Audio playing” condition covers them: game sound keeps the session brewing.": 'Xbox Cloud Gaming 與網頁版 GeForce NOW 皆在瀏覽器分頁中執行，因此沒有 App 可供遊戲條件偵測。「正在播放音訊」條件可涵蓋這類情況：遊戲音效會讓工作階段持續運作。',
     'Add it under Preferences ▸ Triggers ▸ Add ▸ Apps & Activity ▸ Media.': '請在「偏好設定 ▸ 觸發條件 ▸ 新增 ▸ App 與活動 ▸ 媒體」中新增。',
     'Location Services and Wi-Fi scans': '定位服務與 Wi-Fi 掃描',
-    'Location Services triggers independent Wi-Fi scans, another source of occasional blips. Keepresso itself uses Location to read Wi-Fi network names for triggers, so weigh that before turning anything off.': '定位服務會觸發獨立的 Wi-Fi 掃描，這也是偶發短暫延遲的另一個來源。Keepresso 本身也會使用定位服務來讀取 Wi-Fi 網路名稱，供觸發條件使用，因此請在關閉前自行衡量。',
+    'Location Services triggers independent Wi-Fi scans, another source of occasional blips. Pervigil itself uses Location to read Wi-Fi network names for triggers, so weigh that before turning anything off.': '定位服務會觸發獨立的 Wi-Fi 掃描，這也是偶發短暫延遲的另一個來源。Pervigil 本身也會使用定位服務來讀取 Wi-Fi 網路名稱，供觸發條件使用，因此請在關閉前自行衡量。',
     'Review which apps use Location:': '查看哪些 App 使用定位服務：',
     'Why streams stutter once a second': '為何串流每秒會頓卡一次',
     'The Wi-Fi radio hops off-channel for AWDL (AirDrop, Handoff, Sidecar, Continuity) roughly every second, which shows up as 50-100 ms ping spikes. The jitter test reproduces the diagnosis; the AWDL watchdog is the session-scoped fix.': 'Wi-Fi 無線電大約每秒會為了 AWDL（AirDrop、Handoff、Sidecar、接續互通）而切換到其他頻道，這會表現為 50 至 100 毫秒的 ping 值突增。抖動測試可重現此診斷；AWDL 看門狗則是僅限本次工作階段的修正方式。',
     'The full story:': '完整說明：',
-    'Keepresso stops soon': 'Keepresso 即將停止',
+    'Pervigil stops soon': 'Pervigil 即將停止',
     'Your keep-awake session ends in about %@.': '您的保持喚醒工作階段將在約 %@ 後結束。',
     'AI agent working': 'AI 智能體工作中',
 }
 
 WIDGET = {
     'Keep Awake': '保持喚醒',
-    'See and control whether Keepresso is keeping the Mac awake.': '查看並控制 Keepresso 是否讓 Mac 保持喚醒。',
+    'See and control whether Pervigil is keeping the Mac awake.': '查看並控制 Pervigil 是否讓 Mac 保持喚醒。',
     'Start or stop keeping the Mac awake.': '開始或停止讓 Mac 保持喚醒。',
-    'Keepresso': 'Keepresso',
+    'Pervigil': 'Pervigil',
     'Brewing': '運作中',
     'Off': '關閉',
     'Keeping the Mac awake': '正在讓 Mac 保持喚醒',
@@ -198,7 +198,7 @@ CORE.update({
 CORE.update({
     "Critical": "危急",
     "Fair": "普通",
-    "Keepresso stopped the keep-awake session so the Mac can cool down. It resumes when temperatures recover.": "Keepresso 已停止保持喚醒工作階段，讓 Mac 得以降溫。溫度恢復後會自動繼續。",
+    "Pervigil stopped the keep-awake session so the Mac can cool down. It resumes when temperatures recover.": "Pervigil 已停止保持喚醒工作階段，讓 Mac 得以降溫。溫度恢復後會自動繼續。",
     "Nominal": "正常",
     "Not started, the Mac is running hot": "未啟動，Mac 過熱",
     "Paused on high temperature": "因溫度過高而暫停",
@@ -225,7 +225,7 @@ CORE.update({
 })
 
 
-# v1.17 automation leases (keepresso CLI / MCP server)
+# v1.17 automation leases (pervigil CLI / MCP server)
 CORE.update({
     'Automation lease: %@': '自動化租約：%@',
     'Automation lease acquired': '已取得自動化租約',
@@ -248,7 +248,7 @@ CORE.update({
 # 1.23 strings
 CORE.update({
     "Brightness control is unavailable, turning the display off instead.": "無法控制亮度，因此改為關閉螢幕。",
-    "Keepresso never touches the display.": "Keepresso 不會碰觸螢幕。",
+    "Pervigil never touches the display.": "Pervigil 不會碰觸螢幕。",
     "Leave the display alone": "讓螢幕維持原狀",
     "Stay on at 0% brightness": "以 0% 亮度保持開啟",
     "The display sleeps when the lid shuts. A remote session sees a sleeping display.": "闔蓋時螢幕會進入睡眠。遠端工作階段會看到睡眠中的螢幕。",

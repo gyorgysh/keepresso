@@ -35,7 +35,7 @@ jobs:
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
           xcode-version: latest-stable
-      - name: Build & test KeepressoCore
+      - name: Build & test PervigilCore
         # The anonymous-XPC rendezvous tests run in their own step below:
         # under the thousand-test herd on 3-core runners their background
         # hop and reply dispatch starve, while in isolation they pass in
@@ -60,11 +60,11 @@ jobs:
         run: brew install xcodegen
       - name: Generate project
         run: xcodegen generate
-      - name: Build Keepresso
+      - name: Build Pervigil
         run: |
           xcodebuild build \
-            -project Keepresso.xcodeproj \
-            -scheme Keepresso \
+            -project Pervigil.xcodeproj \
+            -scheme Pervigil \
             -destination 'platform=macOS' \
             CODE_SIGNING_ALLOWED=NO
 
@@ -95,9 +95,9 @@ jobs:
         run: brew install xcodegen
       - name: Generate project
         run: xcodegen generate
-      - name: Build Keepresso
+      - name: Build Pervigil
         run: |
           xcodebuild build \
-            -project Keepresso.xcodeproj -scheme Keepresso \
+            -project Pervigil.xcodeproj -scheme Pervigil \
             -configuration Release -destination 'generic/platform=macOS' \
             CODE_SIGNING_ALLOWED=NO

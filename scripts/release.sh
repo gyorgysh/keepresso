@@ -2,7 +2,7 @@
 #
 # release.sh — sign the Sparkle appcast and publish a GitHub Release.
 #
-# Run scripts/build-dmg.sh first to produce dist/Keepresso-<version>.dmg, then:
+# Run scripts/build-dmg.sh first to produce dist/Pervigil-<version>.dmg, then:
 #
 #   ./scripts/release.sh
 #
@@ -34,7 +34,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
 DIST_DIR="$ROOT_DIR/dist"
-REPO="gyorgysh/keepresso"   # update if the repo moves
+REPO="bubb4rd/pervigil"   # update if the repo moves
 
 info() { printf '\033[1;34m==>\033[0m %s\n' "$1"; }
 die()  { printf '\033[1;31mError:\033[0m %s\n' "$1" >&2; exit 1; }
@@ -45,7 +45,7 @@ read -r VERSION _ < <("$SCRIPT_DIR/check-versions.sh") \
   || die "project.yml version literals disagree (see above)"
 [ -n "$VERSION" ] || die "Couldn't read MARKETING_VERSION from project.yml"
 TAG="v$VERSION"
-DMG_PATH="$DIST_DIR/Keepresso-$VERSION.dmg"
+DMG_PATH="$DIST_DIR/Pervigil-$VERSION.dmg"
 [ -f "$DMG_PATH" ] || die "Missing $DMG_PATH — run scripts/build-dmg.sh first"
 
 # Locate generate_appcast.
@@ -86,7 +86,7 @@ if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
 else
   gh release create "$TAG" "$DMG_PATH" "$APPCAST" \
     --repo "$REPO" \
-    --title "Keepresso $VERSION" \
+    --title "Pervigil $VERSION" \
     --notes-file "$ROOT_DIR/build/RELEASE_NOTES.md" --generate-notes
 fi
 

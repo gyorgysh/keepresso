@@ -1,0 +1,6 @@
+// Objective-C symbols exposed to Swift in the Pervigil app target.
+#import <notify.h>
+#import "KPVirtualDisplay.h"
+#import "KPHIDSensors.h"
+#import "KPBrightness.h"
+#import "KPKeyboardBrightness.h"

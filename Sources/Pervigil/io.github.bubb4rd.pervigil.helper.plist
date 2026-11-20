@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The privileged helper daemon, registered from the app via
+	     SMAppService.daemon(plistName:). BundleProgram is resolved relative to
+	     the app bundle, so the helper ships (and updates) inside the app; the
+	     label and the mach service must match HelperService.machServiceLabel. -->
+	<key>Label</key>
+	<string>io.github.bubb4rd.pervigil.helper</string>
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/pervigil-helper</string>
+	<key>MachServices</key>
+	<dict>
+		<key>io.github.bubb4rd.pervigil.helper</key>
+		<true/>
+	</dict>
+	<!-- Shown under the app's name in System Settings > Login Items. -->
+	<key>AssociatedBundleIdentifiers</key>
+	<array>
+		<string>io.github.bubb4rd.pervigil</string>
+	</array>
+	<!-- Run once at boot so state left by a crash or power loss mid-hold
+	     (pmset disablesleep still on) is restored; it exits again once idle. -->
+	<key>RunAtLoad</key>
+	<true/>
+</dict>
+</plist>

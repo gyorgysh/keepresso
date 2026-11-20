@@ -13,38 +13,37 @@
   background, not from the system appearance, so dark labels stay readable
   on this paper in both light and dark mode.
 
-  Type and colour follow keepresso.com: Atkinson Hyperlegible Next and
-  JetBrains Mono, warm paper with copper and mocha washes, the burnt-copper
-  accent. The render script supplies the font files.
+  Type is the system font. Colour follows the brand colorways in
+  docs/assets/brand: a cool neutral ground with blue washes and the brand
+  blue accent.
 -->
 <html><head><meta charset="utf-8"><style>
-@font-face { font-family: Atkinson; src: url(atkinsonhyperlegiblenext-latin.woff2) format("woff2"); font-weight: 200 800 }
-@font-face { font-family: "JetBrains Mono"; src: url(jetbrainsmono-latin.woff2) format("woff2"); font-weight: 400 700 }
 html, body { margin: 0; width: 660px; height: 400px; overflow: hidden }
-body { position: relative; background: #faf6ee; font-family: Atkinson; -webkit-font-smoothing: antialiased }
+body { position: relative; background: #f4f4f4; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; -webkit-font-smoothing: antialiased }
 .wash { position: absolute; inset: 0 }
-.copper { background: radial-gradient(75% 90% at 8% -10%, rgba(179, 68, 30, .11), rgba(179, 68, 30, 0) 60%) }
-.mocha { background: radial-gradient(80% 100% at 105% 110%, rgba(138, 90, 60, .12), rgba(138, 90, 60, 0) 60%) }
-.mark { position: absolute; top: 42px; width: 100%; text-align: center; font-weight: 800; font-size: 27px; letter-spacing: -.02em; color: #241a10 }
-.tagline { position: absolute; top: 82px; width: 100%; text-align: center; font-weight: 500; font-size: 13px; color: #6b6156 }
-svg { position: absolute; left: 0; top: 0 }
-.hint { position: absolute; top: 322px; left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 999px; background: #f0e4d4; color: #773417; font-weight: 700; font-size: 12px; white-space: nowrap }
-.domain { position: absolute; bottom: 22px; width: 100%; text-align: center; font-family: "JetBrains Mono"; font-weight: 500; font-size: 10.5px; letter-spacing: .32em; color: #b3441e }
+.sky { background: radial-gradient(75% 90% at 8% -10%, rgba(110, 175, 246, .16), rgba(110, 175, 246, 0) 60%) }
+.deep { background: radial-gradient(80% 100% at 105% 110%, rgba(0, 122, 255, .10), rgba(0, 122, 255, 0) 60%) }
+.mark { position: absolute; top: 40px; width: 100%; display: flex; justify-content: center; align-items: center; gap: 10px; font-weight: 700; font-size: 27px; letter-spacing: -.02em; color: #111 }
+.mark svg { position: static; width: 20px; height: 23px }
+.tagline { position: absolute; top: 82px; width: 100%; text-align: center; font-weight: 500; font-size: 13px; color: #5f6368 }
+svg.arrow { position: absolute; left: 0; top: 0 }
+.hint { position: absolute; top: 322px; left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 999px; background: #e3edf9; color: #0a5ec2; font-weight: 600; font-size: 12px; white-space: nowrap }
+.note { position: absolute; bottom: 22px; width: 100%; text-align: center; font-size: 10.5px; color: #8a8f96 }
 </style></head><body>
-<div class="wash copper"></div>
-<div class="wash mocha"></div>
-<div class="mark">Keepresso</div>
+<div class="wash sky"></div>
+<div class="wash deep"></div>
+<div class="mark"><svg viewBox="0 0 562 650" aria-hidden="true"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6EAFF6"/><stop offset=".8" stop-color="#007AFF"/></linearGradient></defs><path fill="url(#g)" fill-rule="evenodd" d="M0 0H562V650H0V231H190L0 124ZM190 231 557 438 190 645Z"/></svg>Pervigil</div>
 <div class="tagline">Keep your Mac awake, on your terms</div>
-<svg width="660" height="400" viewBox="0 0 660 400">
+<svg class="arrow" width="660" height="400" viewBox="0 0 660 400">
   <defs>
     <linearGradient id="trail" x1="290" x2="368" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#b3441e" stop-opacity=".3"/>
-      <stop offset="1" stop-color="#b3441e"/>
+      <stop offset="0" stop-color="#007AFF" stop-opacity=".3"/>
+      <stop offset="1" stop-color="#007AFF"/>
     </linearGradient>
   </defs>
   <path d="M290 205 H366" stroke="url(#trail)" stroke-width="2.5" stroke-linecap="round"/>
-  <path d="M359 197 L367.5 205 L359 213" fill="none" stroke="#b3441e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M359 197 L367.5 205 L359 213" fill="none" stroke="#007AFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
 <div class="hint">Drag to Applications</div>
-<div class="domain">KEEPRESSO.COM</div>
+<div class="note">An unofficial fork of Keepresso</div>
 </body></html>

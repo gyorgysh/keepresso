@@ -33,7 +33,7 @@ import sys
 from pathlib import Path
 
 expected = dict(zip(("CFBundleShortVersionString", "CFBundleVersion"), sys.argv[1:]))
-for target in ("Keepresso", "KeepressoWidget", "keepresso-helper"):
+for target in ("Pervigil", "PervigilWidget", "pervigil-helper"):
     path = Path("Sources") / target / "Info.plist"
     with path.open("rb") as source:
         info = plistlib.load(source)

@@ -2,7 +2,7 @@
 """Generate the animated README demo cards (docs/assets/demo_*.svg).
 
 Each card is a self-contained SVG: the dark menu-bar popover (tokens from the
-keepresso.com hero, dark theme) driven by CSS keyframes. No script, no external
+pervigil.com hero, dark theme) driven by CSS keyframes. No script, no external
 fonts, so GitHub renders it through a plain <img>.
 
 Every scene is a fixed loop of L seconds. Visual state is described as time
@@ -31,18 +31,18 @@ SUB = "#a8a8ad"
 DIM = "#8e8e93"
 HAIR = "rgba(255,255,255,.09)"
 CTL = "rgba(255,255,255,.11)"
-AMBER = "#eda158"
-BTN = "#e2913f"
-BTNTX = "#2e1c07"
+AMBER = "#64a8f5"
+BTN = "#0a84ff"
+BTNTX = "#ffffff"
 SW_OFF = "#5b5b60"
-SW_ON = "#e2913f"
-CUP = "#e2a35c"
-CREMA = "#fbe3c4"
+SW_ON = "#0a84ff"
+CUP = "#3d95fa"
+CREMA = "#d6e8fd"
 CLAUDE = "#d97757"
 MONOFG = "#f2f2f2"
 GREEN = "#2fd158"
-KICKER = "#d39a62"
-HEADLINE = "#f6efe6"
+KICKER = "#6eaff6"
+HEADLINE = "#f2f4f7"
 
 
 class Scene:
@@ -125,28 +125,20 @@ def g(inner, cls=None, extra=""):
     return f"<g{c}{extra}>{inner}</g>"
 
 
+MARK_D = "M0 0H562V650H0V231H190L0 124ZM190 231 557 438 190 645Z"
+
+
 def cup(x, y, size, on_cls=None, off_cls=None, steam_cls=None, menubar=False):
-    """Keepresso cup (64-unit grid). `on`/`off` classes crossfade the two looks."""
+    """Pervigil mark in a 64-unit box. `on`/`off` classes crossfade the two
+    looks; `steam_cls` is kept for the call sites and wraps nothing."""
     s = size / 64
-    if menubar:
-        body, crema, line, steam = "#f2ede6", "#d98136", "#f2ede6", CUP
-    else:
-        body, crema, line, steam = CUP, CREMA, CUP, CUP
-    steam_paths = ("M24 12c-2.6 3.2 2.6 5 0 9.5", "M32 9c-2.6 3.2 2.6 5 0 9.5",
-                   "M40 12c-2.6 3.2 2.6 5 0 9.5")
-    if menubar:
-        steam_paths = ("M26 11c-2.6 3.2 2.6 5 0 9.5", "M35 9c-2.6 3.2 2.6 5 0 9.5")
-    st = "".join(f'<path class="steam s{i + 1}" d="{d}" stroke="{steam}" stroke-width="3.2" '
-                 f'stroke-linecap="round" fill="none"/>' for i, d in enumerate(steam_paths))
-    on = (f'<path d="M16 28h28v10a9 9 0 0 1-9 9h-10a9 9 0 0 1-9-9V28Z" fill="{body}"/>'
-          f'<rect x="20" y="31.5" width="20" height="3.4" rx="1.7" fill="{crema}"/>'
-          f'<path d="M44 31.5h2.5a6 6 0 0 1 0 12H43" stroke="{line}" stroke-width="3.4" stroke-linecap="round" fill="none"/>'
-          f'<path d="M15 52h30" stroke="{line}" stroke-width="3.6" stroke-linecap="round"/>')
-    off_c = SUB
-    off = (f'<path d="M16 28h28v10a9 9 0 0 1-9 9h-10a9 9 0 0 1-9-9V28Z" fill="none" stroke="{off_c}" stroke-width="3.2"/>'
-           f'<path d="M44 31.5h2.5a6 6 0 0 1 0 12H43" stroke="{off_c}" stroke-width="3.4" stroke-linecap="round" fill="none"/>'
-           f'<path d="M15 52h30" stroke="{off_c}" stroke-width="3.6" stroke-linecap="round"/>')
-    parts = [g(st, steam_cls), g(on, on_cls)]
+    k = 44 / 650  # the mark is 44 units tall, centred in the box
+    place = f'transform="translate({(64 - 562 * k) / 2:.3f} {(64 - 44) / 2}) scale({k:.5f})"'
+    fill = "#f2f2f2" if menubar else CUP
+    on = f'<path {place} d="{MARK_D}" fill="{fill}" fill-rule="evenodd"/>'
+    off = (f'<path {place} d="{MARK_D}" fill="none" fill-rule="evenodd" stroke="{SUB}" '
+           f'stroke-width="{3.2 / k:.1f}" stroke-linejoin="round"/>')
+    parts = [g("", steam_cls), g(on, on_cls)]
     if off_cls:
         parts.append(g(off, off_cls))
     return f'<g transform="translate({x} {y}) scale({s:.4f})">{"".join(parts)}</g>'
@@ -288,8 +280,8 @@ def invert(windows, L):
 
 def defs():
     return f"""<defs>
-<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#231a13"/><stop offset="1" stop-color="#110d0a"/></linearGradient>
-<radialGradient id="glow" cx="18%" cy="4%" r="60%"><stop offset="0" stop-color="#a64b23" stop-opacity=".32"/><stop offset="1" stop-color="#a64b23" stop-opacity="0"/></radialGradient>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a1b1e"/><stop offset="1" stop-color="#0b0b0c"/></linearGradient>
+<radialGradient id="glow" cx="18%" cy="4%" r="60%"><stop offset="0" stop-color="#1f6fd1" stop-opacity=".32"/><stop offset="1" stop-color="#1f6fd1" stop-opacity="0"/></radialGradient>
 <filter id="pop" x="-20%" y="-10%" width="140%" height="130%"><feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#000" flood-opacity=".55"/></filter>
 <filter id="knob" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="1" stdDeviation=".8" flood-color="#000" flood-opacity=".4"/></filter>
 <filter id="cur" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000" flood-opacity=".6"/></filter>
@@ -308,12 +300,12 @@ def chrome_top(kicker, headline, clock):
         + text(W / 2, 60, headline, size=19, fill=HEADLINE, weight=800, anchor="middle", extra=' letter-spacing="-.3"')
         + f'<rect x="{pill_x}" y="76" width="{pill_w}" height="28" rx="11" fill="rgba(255,255,255,.055)" stroke="rgba(255,255,255,.1)"/>'
         # wifi
-        + f'<g transform="translate(103 81) scale(.75)" fill="none" stroke="#bdb6ac" stroke-width="2" stroke-linecap="round">'
+        + f'<g transform="translate(103 81) scale(.75)" fill="none" stroke="#b6b9bf" stroke-width="2" stroke-linecap="round">'
           f'<path d="M5 12.55a11 11 0 0 1 14.08 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></g>'
         # battery
-        + f'<g transform="translate(130 83.5) scale(.8)" fill="none" stroke="#bdb6ac" stroke-width="1.5">'
+        + f'<g transform="translate(130 83.5) scale(.8)" fill="none" stroke="#b6b9bf" stroke-width="1.5">'
           f'<rect x="1" y="3" width="22" height="10" rx="3"/><path d="M26 6.5v3" stroke-linecap="round"/>'
-          f'<rect x="3" y="5" width="14" height="6" rx="1.5" fill="#bdb6ac" stroke="none"/></g>'
+          f'<rect x="3" y="5" width="14" height="6" rx="1.5" fill="#b6b9bf" stroke="none"/></g>'
         + clock
     )
 
@@ -323,7 +315,7 @@ def menubar_cup(on_cls, off_cls, steam_cls):
 
 
 def clock_text(s, cls=None):
-    return text(198, 95, s, size=13, fill="#ece6dd", weight=500, cls=cls,
+    return text(198, 95, s, size=13, fill="#e6e8eb", weight=500, cls=cls,
                 extra=' style="font-variant-numeric:tabular-nums"')
 
 
@@ -455,7 +447,7 @@ def scene_manual():
             + header(cup(48, P + 18, 30, on, off, steam), titles)
             + rows + footer()
             + cursor_markup(move, tap, vis))
-    return wrap(sc, body, "Keepresso menu: switching keep-awake on, picking a one hour session that counts down, then switching it off")
+    return wrap(sc, body, "Pervigil menu: switching keep-awake on, picking a one hour session that counts down, then switching it off")
 
 
 def scene_triggers():
@@ -499,7 +491,7 @@ def scene_triggers():
             + popover()
             + header(cup(48, P + 18, 30, on, off, steam), titles)
             + rows + footer())
-    return wrap(sc, body, "Keepresso menu: AI agents and a network condition hold the Mac awake, then it goes idle when the work stops")
+    return wrap(sc, body, "Pervigil menu: AI agents and a network condition hold the Mac awake, then it goes idle when the work stops")
 
 
 def scene_lid():
@@ -533,7 +525,7 @@ def scene_lid():
 
     # Display off: the whole card dims, the work keeps going in the dark.
     dark_w = [(DARK, LIGHT)]
-    dark = (f'<rect width="{W}" height="{H}" fill="#050403" class="{sc.vis(dark_w, 0.6)}"/>'
+    dark = (f'<rect width="{W}" height="{H}" fill="#030304" class="{sc.vis(dark_w, 0.6)}"/>'
             + g(cup(156, 168, 48, None, None, None)
                 + text(W / 2, 254, "Lid closed", size=17, fill=HEADLINE, weight=700, anchor="middle")
                 + text(W / 2, 276, "Display off. Mac still awake.", size=12.5, fill=SUB, anchor="middle")
@@ -561,7 +553,7 @@ def scene_lid():
             + rows + footer()
             + cursor_markup(move, tap, vis)
             + dark)
-    return wrap(sc, body, "Keepresso menu: turning on keep awake with lid closed, the display goes dark while an AI agent keeps working")
+    return wrap(sc, body, "Pervigil menu: turning on keep awake with lid closed, the display goes dark while an AI agent keeps working")
 
 
 def main():

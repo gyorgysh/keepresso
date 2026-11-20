@@ -1,0 +1,245 @@
+import Foundation
+import PervigilCore
+import UserNotifications
+
+/// App-side wiring for ``StaleBundleSweep``: remembers where this bundle runs
+/// from (a bookmark in `UserDefaults`) and, on later runs, deletes that
+/// previous copy once an update has pushed it into the Trash. Without this,
+/// Background Task Management's own bookmark keeps resolving the helper's
+/// record into the Trash and disabling the daemon after every Homebrew or
+/// drag-install update (seen live on macOS 26: `invalidateLaunchItem` firing
+/// minutes after each re-registration, as long as the old copy sat in
+/// `~/.Trash`).
+enum StaleBundleCleaner {
+    private static let bookmarkKey = "PreviousBundleBookmark"
+
+    /// Set when a poisonous copy sits in a Trash the app has no permission to
+    /// touch. Only the user can fix it (tested live: the Trash's TCC
+    /// protection blocks the app, the root helper, and Finder scripting
+    /// alike), so the launch path tells them via ``notifyIfSweepNeedsUser()``.
+    /// Lock-backed: detached sweeps write it while the main actor reads it.
+    static private(set) var unremovableTrashPath: String? {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return unremovableTrashPathStorage }
+        set { stateLock.lock(); defer { stateLock.unlock() }; unremovableTrashPathStorage = newValue }
+    }
+    private static let stateLock = NSLock()
+    private static var unremovableTrashPathStorage: String?
+
+    /// Stable notification identifier: repeat launches update one notice
+    /// instead of stacking them, and the notification delegate recognizes a
+    /// click on it (``UserNotificationReminder``) to open the Trash.
+    static let notificationIdentifier = "io.github.bubb4rd.pervigil.stale-trash"
+
+    /// Tell the user about a copy the app may not remove. Called after the app
+    /// model exists: the notification-center delegate must already be in
+    /// place, or a banner posted while the app is frontmost (which it is,
+    /// during launch) gets silently dropped.
+    static func notifyIfSweepNeedsUser() {
+        if let path = unremovableTrashPath,
+           !FileManager.default.fileExists(atPath: path) {
+            unremovableTrashPath = nil
+        }
+        guard unremovableTrashPath != nil else { return }
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = L("Old copy stuck in the Trash")
+            content.body = L("An old copy of Pervigil in the Trash keeps the background helper from working. Please delete it from the Trash, or empty the Trash.")
+            center.add(UNNotificationRequest(
+                identifier: notificationIdentifier,
+                content: content,
+                trigger: nil
+            ))
+        }
+    }
+
+    /// The launch sweep, run synchronously before anything in the process
+    /// touches `SMAppService` or BTM: even a plain status read makes BTM
+    /// revalidate the helper's record, so the poisonous Trash copy has to be
+    /// gone before the first contact, not cleaned up sometime after.
+    ///
+    /// The bookmark pass runs every launch (a few file stats). The deeper
+    /// pass, reading BTM's own records and probing the obvious Trash path,
+    /// runs only when this looks like the first launch after an update, so
+    /// ordinary launches pay nothing for it.
+    static func sweepAtStartup(afterUpdate: Bool) {
+        guard AppRelocator.runsFromApplications else { return }
+        let result = sweepAndRemember()
+        // The copy Sparkle or Homebrew just trashed under our own name,
+        // whether or not BTM has a record of it. Runs every launch (one file
+        // stat when the Trash is clean), never gated on `afterUpdate` or the
+        // bookmark: the bookmark can resolve to the new bundle at the same
+        // path instead of following the old one into the Trash, and the
+        // update flag can't fire on the first update from a build that
+        // predates its record. Both gaps left the trashed 1.11.x copy behind
+        // and got the helper disabled right after the update.
+        removeTrashedCopyUnderOwnName()
+        guard afterUpdate || result != .nothingToSweep else { return }
+        // BTM's records name every copy it still tracks; any of them inside
+        // a Trash folder is exactly the poison that gets the daemon disabled.
+        if let bundleID = Bundle.main.bundleIdentifier,
+           let dump = SFLToolBTMDumper().dumpBTM() {
+            let findings = BTMInspection.findings(
+                inDump: dump,
+                bundleIdentifier: bundleID,
+                helperLabel: HelperService.machServiceLabel
+            )
+            if !findings.staleCopyPaths.isEmpty {
+                removeTrashedCopies(at: findings.staleCopyPaths)
+            }
+        }
+    }
+
+    /// The bookmark pass plus the direct probe under our own name, for the
+    /// helper repair paths (verify, reinstall): a repair can't stick while a
+    /// trashed copy remains, however it got missed at launch. Blocking file
+    /// work; call it off the main actor.
+    static func sweepNow() {
+        guard AppRelocator.runsFromApplications else { return }
+        _ = sweepAndRemember()
+        removeTrashedCopyUnderOwnName()
+    }
+
+    /// Probe the user's Trash for a copy under this bundle's own file name
+    /// and delete it. The Trash itself can't be enumerated without Full Disk
+    /// Access, but a direct path needs none.
+    private static func removeTrashedCopyUnderOwnName() {
+        guard let trash = FileManager.default.urls(for: .trashDirectory, in: .userDomainMask).first
+        else { return }
+        let candidate = trash.appendingPathComponent(Bundle.main.bundleURL.lastPathComponent)
+        removeTrashedCopies(at: [candidate.path])
+    }
+
+    /// Delete the trashed previous copy if there is one, then remember the
+    /// current bundle for the run after the next update. Blocking file work;
+    /// call it off the main actor (or from `sweepAtStartup`, before the UI
+    /// exists).
+    @discardableResult
+    static func sweepAndRemember() -> StaleBundleSweepResult {
+        guard AppRelocator.runsFromApplications else { return .nothingToSweep }
+        let bundleURL = Bundle.main.bundleURL
+        guard let bundleID = Bundle.main.bundleIdentifier else { return .nothingToSweep }
+        let defaults = UserDefaults.standard
+        let result = StaleBundleSweep.sweep(
+            previousBookmark: defaults.data(forKey: bookmarkKey),
+            currentBundleURL: bundleURL,
+            expectedBundleIdentifier: bundleID,
+            resolveBookmark: { data in
+                var isStale = false
+                return try? URL(
+                    resolvingBookmarkData: data,
+                    options: [.withoutUI, .withoutMounting],
+                    relativeTo: nil,
+                    bookmarkDataIsStale: &isStale
+                )
+            },
+            bundleIdentifier: { Bundle(url: $0)?.bundleIdentifier },
+            removeItem: { try FileManager.default.removeItem(at: $0) }
+        )
+        switch result {
+        case .nothingToSweep:
+            break
+        case .leftAlone(let path, let reason):
+            NSLog("Pervigil: previous copy at %@ left alone (%@)", path, reason)
+        case .removed(let path):
+            NSLog("Pervigil: deleted stale previous copy at %@", path)
+        case .removalFailed(let path, let message):
+            NSLog("Pervigil: couldn't delete stale previous copy at %@: %@", path, message)
+        }
+        if case .removalFailed(let path, _) = result {
+            unremovableTrashPath = path
+            return result
+        }
+        if case .removed(let path) = result, path == unremovableTrashPath {
+            unremovableTrashPath = nil
+        }
+        if let bookmark = try? bundleURL.bookmarkData() {
+            defaults.set(bookmark, forKey: bookmarkKey)
+        }
+        return result
+    }
+
+    /// Delete copies of the app found in a Trash folder (the own-name probe
+    /// and the BTM dump both funnel here), with the same guards as the
+    /// bookmark sweep: never the running bundle, only inside a Trash folder,
+    /// only this app. Blocking file work; call it off the main actor.
+    ///
+    /// Identification reads the copy's Info.plist directly rather than
+    /// through `Bundle(url:)`: reads inside the Trash can themselves be
+    /// blocked (TCC), and an unreadable plist must not silently veto the
+    /// sweep, that's exactly how the poisonous copy survives. A copy that
+    /// can't be read but sits under this app's own bundle file name is still
+    /// swept (the name plus the Trash location is the validation); anything
+    /// else unreadable is left alone, loudly.
+    static func removeTrashedCopies(at paths: [String]) {
+        guard AppRelocator.runsFromApplications else { return }
+        guard let bundleID = Bundle.main.bundleIdentifier else { return }
+        let current = Bundle.main.bundleURL.standardizedFileURL
+        for path in paths {
+            let url = URL(fileURLWithPath: path)
+            guard url.standardizedFileURL != current,
+                  StaleBundleSweep.isInTrash(url),
+                  FileManager.default.fileExists(atPath: url.path)
+            else { continue }
+            let plist = url.appendingPathComponent("Contents/Info.plist")
+            let foundID = NSDictionary(contentsOf: plist)?["CFBundleIdentifier"] as? String
+            if let foundID, foundID != bundleID {
+                NSLog("Pervigil: trashed copy at %@ left alone (bundle identifier differs)", path)
+                continue
+            }
+            if foundID == nil, url.lastPathComponent != current.lastPathComponent {
+                NSLog("Pervigil: trashed item at %@ left alone (can't read its Info.plist)", path)
+                continue
+            }
+            do {
+                try FileManager.default.removeItem(at: url)
+                NSLog("Pervigil: deleted stale copy at %@", path)
+                if path == unremovableTrashPath { unremovableTrashPath = nil }
+            } catch let error as NSError {
+                // The Trash is TCC-protected: unless the user granted Full
+                // Disk Access, the delete fails with Cocoa 513, and there is
+                // no fallback worth trying (tested live: the root daemon
+                // can't bypass TCC either, and Finder scripting proxies the
+                // caller's file rights, error -5000). Only the user can
+                // delete it; tell them.
+                if error.domain == NSCocoaErrorDomain, error.code == NSFileWriteNoPermissionError {
+                    unremovableTrashPath = path
+                    NSLog("Pervigil: couldn't delete stale copy at %@ (the Trash is TCC-protected); asking the user", path)
+                } else {
+                    NSLog("Pervigil: couldn't delete stale copy at %@: %@ (domain %@ code %ld)",
+                          path, error.localizedDescription, error.domain, error.code)
+                }
+            }
+        }
+    }
+}
+
+/// Detects the first launch after an update by comparing the build number
+/// against the one recorded on the previous run. The flag drives the two
+/// version-boundary chores: the deep stale-bundle sweep above, and retiring
+/// the helper daemon so launchd's next spawn runs the freshly installed
+/// binary instead of the old image it kept in memory.
+enum UpdateArrival {
+    private static let key = "LastRunBuild"
+
+    /// Whether the build changed since the last run, recording the current
+    /// one either way. A genuinely first launch reports false: there is no
+    /// previous version to clean up after.
+    static func checkAndRecord() -> Bool {
+        guard AppRelocator.runsFromApplications else { return false }
+        let defaults = UserDefaults.standard
+        let previous = defaults.string(forKey: key)
+        guard let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        else { return false }
+        defaults.set(current, forKey: key)
+        if let previous { return current != previous }
+        // No build recorded: either a fresh install (nothing to clean up
+        // after) or the first run after updating from a build that predates
+        // this record. Saved settings tell the two apart, a fresh install
+        // has none yet, so an update from any pre-record build still gets
+        // its version-boundary chores (missing them is what got the helper
+        // disabled on the 1.12.0 update).
+        return defaults.data(forKey: UserDefaultsSettingsStore.defaultKey) != nil
+    }
+}

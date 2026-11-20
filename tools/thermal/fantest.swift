@@ -5,8 +5,8 @@
 // Build and run from the repo root:
 //
 //   swiftc -parse-as-library -o /tmp/fantest \
-//     Sources/KeepressoCore/SMC.swift Sources/KeepressoCore/Thermal.swift \
-//     Sources/KeepressoCore/HelperEngine.swift Sources/KeepressoCore/Localization.swift \
+//     Sources/PervigilCore/SMC.swift Sources/PervigilCore/Thermal.swift \
+//     Sources/PervigilCore/HelperEngine.swift Sources/PervigilCore/Localization.swift \
 //     tools/thermal/fantest.swift
 //   /tmp/fantest              # read-only: fans, sensors
 //   sudo /tmp/fantest boost   # forced-fan test: boost to 70% for 15 s, restore

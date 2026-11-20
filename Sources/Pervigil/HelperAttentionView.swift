@@ -1,0 +1,200 @@
+import SwiftUI
+import AppKit
+
+/// The helper attention window: opened automatically (see `MenuBarLabelView`)
+/// when the self-heal for the privileged helper gets stuck on something only
+/// the user can do, either the one-time approval again or a reinstall. It
+/// walks that single step, watches the live status, and flips to a success
+/// state on its own the moment the daemon answers, so the user always sees
+/// the loop close.
+struct HelperAttentionView: View {
+    @Bindable var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    /// Closed attention windows stay alive on current macOS; unmount the body
+    /// while off screen so helper Observation churn stops. Starts false so a
+    /// retained ordered-out scene does not mount (or steam) until visible.
+    @State private var windowVisible = false
+
+    /// What the window is showing right now, derived from the live helper
+    /// state so approval progress observed by the manager's poll moves the
+    /// window forward without any action here.
+    private enum Stage {
+        case checking
+        case needsApproval
+        case broken
+        case allSet
+    }
+
+    private var stage: Stage {
+        if model.helperOperationInFlight || model.helper.isChecking
+            || model.helperRecoveryPhase == .initializing || model.helperRecoveryPhase == .updating { return .checking }
+        if model.helperRecoveryPhase == .unavailable { return .broken }
+        if model.helper.awaitingApproval { return .needsApproval }
+        switch model.helperAttention {
+        case .needsApproval: return .needsApproval
+        case .broken: return .broken
+        case nil: return .allSet
+        }
+    }
+
+    var body: some View {
+        Group {
+            if windowVisible {
+                VStack(spacing: 16) {
+                    BrandMarkView(isActive: true, scale: 2.4)
+                        .padding(.top, 4)
+
+                    VStack(spacing: 6) {
+                        Text(title)
+                            .font(.title3.bold())
+                        Text(message)
+                            .font(.callout)
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    statusRow
+
+                    actions
+                }
+                .padding(24)
+                .animation(.smooth(duration: 0.3), value: stageKey)
+                // The manager polls while the user is over in System Settings; the
+                // moment the approval lands, confirm the daemon really answers, which
+                // flips this window to All set by itself.
+                .onChange(of: model.helper.status) { _, status in
+                    if status == .enabled { model.verifyHelper() }
+                }
+            } else {
+                Color.clear
+                    .frame(width: 380)
+            }
+        }
+        .frame(width: 380)
+        .tint(.pervigilAccent)
+        .glassWindowBackground()
+        // This window exists to be seen: Pervigil is a background agent, so
+        // an ordinary window would open behind whatever the user is doing.
+        // Floating is deliberate here, unlike the other windows: an attention
+        // dialog that landed behind something would defeat its purpose.
+        .background(WindowPlacement(floating: true))
+        .background(WindowVisibilityReader(isVisible: $windowVisible))
+    }
+
+    /// `Stage` isn't Equatable-friendly for `animation(value:)` with derived
+    /// state; a plain key is.
+    private var stageKey: Int {
+        switch stage {
+        case .checking: 0
+        case .needsApproval: 1
+        case .broken: 2
+        case .allSet: 3
+        }
+    }
+
+    private var title: String {
+        switch stage {
+        case .checking: L("Checking the helper")
+        case .needsApproval: L("One approval needed")
+        case .broken: L("Pervigil Helper")
+        case .allSet: L("All set")
+        }
+    }
+
+    private var message: String {
+        switch stage {
+        case .checking:
+            L("Making sure Pervigil's helper is awake and answering.")
+        case .needsApproval:
+            L("macOS turned the helper's background switch off, so it needs your approval again: in System Settings, under Login Items & Extensions, find Pervigil in App Background Activity and turn it on. Everything is password-free again right after.")
+        case .broken:
+            model.helper.lastError ?? L("The helper couldn't be registered.")
+        case .allSet:
+            L("The helper is back. Closed-display mode and AWDL pausing work without password prompts again.")
+        }
+    }
+
+    @ViewBuilder
+    private var statusRow: some View {
+        switch stage {
+        case .checking:
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Contacting the helper\u{2026}")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 2)
+        case .needsApproval:
+            statusBadge(icon: "hourglass", text: L("Waiting for the switch in System Settings; this updates by itself."))
+        case .broken:
+            EmptyView()
+        case .allSet:
+            AllSetBadge()
+        }
+    }
+
+    /// The success line, with a single seal bounce when it lands. One shot on
+    /// appear, never a loop.
+    private struct AllSetBadge: View {
+        @State private var landed = false
+
+        var body: some View {
+            Label("Helper installed and responding", systemImage: "checkmark.seal.fill")
+                .font(.callout)
+                .foregroundStyle(.green)
+                .symbolEffect(.bounce, value: landed)
+                .transition(.scale(scale: 0.85).combined(with: .opacity))
+                .onAppear { landed = true }
+        }
+    }
+
+    private func statusBadge(icon: String, text: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .foregroundStyle(Color.pervigilAccent)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard(cornerRadius: 8, tint: Color.pervigilAccent.opacity(0.14))
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        switch stage {
+        case .checking:
+            Button("Close") { closeWindow() }
+        case .needsApproval:
+            HStack {
+                Button("Later") { closeWindow() }
+                Spacer()
+                Button("Open Login Items") { model.helper.openApprovalSettings() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        case .broken:
+            HStack {
+                Button("Later") { closeWindow() }
+                Spacer()
+                Button("Refresh") { model.verifyHelper() }
+                    .disabled(model.helper.isChecking)
+                Button("Reinstall Helper") { model.reinstallHelper() }
+                    .disabled(model.helperOperationInFlight)
+                    .keyboardShortcut(.defaultAction)
+            }
+        case .allSet:
+            Button("Done") { closeWindow() }
+                .keyboardShortcut(.defaultAction)
+        }
+    }
+
+    private func closeWindow() {
+        model.dismissHelperAttention()
+        dismiss()
+    }
+}

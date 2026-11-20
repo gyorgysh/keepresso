@@ -22,7 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
 VERSION="${1:?usage: appcast-notes.sh <version> [owner/repo] [tag]}"
-REPO="${2:-gyorgysh/keepresso}"
+REPO="${2:-bubb4rd/pervigil}"
 TAG="${3:-v$VERSION}"
 APPCAST="${APPCAST:-dist/appcast.xml}"
 RELEASE_URL="https://github.com/$REPO/releases/tag/$TAG"

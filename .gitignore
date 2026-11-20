@@ -1,5 +1,5 @@
 # Generated Xcode project (regenerated from project.yml via xcodegen)
-Keepresso.xcodeproj/
+Pervigil.xcodeproj/
 
 # Swift / SwiftPM
 .build/
@@ -56,9 +56,13 @@ docs/V1.7-FEATURES.md
 docs/NEXT-PLAN.md
 docs/V1.9-FINDINGS.md
 
-# Icon Composer's rendered preview exports (local; Sources/Keepresso/AppIcon.icon
+# Icon Composer's rendered preview exports (local; Sources/Pervigil/AppIcon.icon
 # is the source of truth, and docs/assets/icon-layers holds the layer sources).
 docs/assets/AppIcon Exports/
 __pycache__/
 docs/AGENT-DETECTION-WORKLOG.md
 docs/HELPER_RECOVERY.md
+
+# Raw brand/design exports (large PNGs). The vector source of truth lives in
+# docs/assets/brand; see its README.
+media/

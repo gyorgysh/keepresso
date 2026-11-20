@@ -1,0 +1,404 @@
+import Testing
+import Foundation
+@testable import PervigilCore
+
+// MARK: - Interface state parsing
+
+@Test func awdlParserReadsTheUpFlag() {
+    let up = """
+    awdl0: flags=8863<UP,BROADCAST,SMART,RUNNING,SIMPLEX,MULTICAST> mtu 1500
+    \tether 96:49:75:46:f0:6a
+    """
+    #expect(IfconfigAWDLReader.parseIsUp(from: up) == true)
+
+    let down = "awdl0: flags=8862<BROADCAST,SMART,RUNNING,SIMPLEX,MULTICAST> mtu 1500"
+    #expect(IfconfigAWDLReader.parseIsUp(from: down) == false)
+}
+
+@Test func awdlParserRefusesToGuess() {
+    #expect(IfconfigAWDLReader.parseIsUp(from: nil) == nil)
+    #expect(IfconfigAWDLReader.parseIsUp(from: "") == nil)
+    #expect(IfconfigAWDLReader.parseIsUp(from: "ifconfig: interface awdl0 does not exist") == nil)
+}
+
+// MARK: - Watchdog command shape
+
+@Test func watchdogCommandIsFlagFollowingPidScopedAndSelfRestoring() {
+    let command = OsascriptAWDLWatchdog.watchdogCommand(
+        flagPath: "/Users/g/Library/Application Support/Pervigil/awdl-watchdog.flag",
+        appPID: 4242
+    )
+    // The helper must live with the app's pid (so a crash tears it down),
+    // follow the flag file (down while present, restore once when gone, then
+    // idle so re-enabling needs no new prompt), keep re-downing the interface
+    // (macOS re-raises it), and background itself so the admin prompt returns.
+    #expect(command.contains("kill -0 4242"))
+    // The flag path is single-quoted so it stays one literal word to /bin/sh.
+    #expect(command.contains("if [ -f '/Users/g/Library/Application Support/Pervigil/awdl-watchdog.flag' ]"))
+    #expect(command.contains("/sbin/ifconfig awdl0 down"))
+    #expect(command.contains("elif [ -n \"$DOWNED\" ]; then /sbin/ifconfig awdl0 up"))
+    #expect(command.contains("sleep 3"))
+    #expect(command.hasSuffix("&"))
+    // Exit cleanup removes the flag only when this app run stamped it, so a
+    // quickly relaunched app's flag survives the old loop winding down.
+    #expect(command.contains(
+        "if [ \"$(cat '/Users/g/Library/Application Support/Pervigil/awdl-watchdog.flag' 2>/dev/null)\" = \"4242\" ]; "
+            + "then rm -f '/Users/g/Library/Application Support/Pervigil/awdl-watchdog.flag'; fi; "))
+}
+
+@Test func appleScriptEscapingSurvivesQuotedPaths() {
+    let escaped = OsascriptAWDLWatchdog.appleScriptEscaped(#"[ -f "/tmp/a flag" ]"#)
+    #expect(escaped == #"[ -f \"/tmp/a flag\" ]"#)
+}
+
+@Test func shellSingleQuotingKeepsAHostilePathLiteral() {
+    // Single quotes stop shell substitution: a path can't break out to run
+    // code even though the whole command is executed as root via osascript.
+    #expect(OsascriptAWDLWatchdog.shellSingleQuoted("/plain/flag") == "'/plain/flag'")
+    #expect(OsascriptAWDLWatchdog.shellSingleQuoted("it's") == #"'it'\''s'"#)
+
+    let hostile = #"/tmp/$(touch /tmp/pwned)/`id`/".flag"#
+    let command = OsascriptAWDLWatchdog.watchdogCommand(flagPath: hostile, appPID: 1)
+    // The path appears only inside its single-quoted form, so `$( )`, backticks
+    // and the stray double quote are all inert.
+    #expect(command.contains(OsascriptAWDLWatchdog.shellSingleQuoted(hostile)))
+    #expect(!command.contains("[ -f \"")) // never double-quoted around the path
+}
+
+// MARK: - Controller
+
+private final class FakeWatchdogLauncher: AWDLWatchdogLaunching, @unchecked Sendable {
+    var flagPresent = false
+    var result: AWDLWatchdogStartResult = .started
+    /// Helper spawns, i.e. how often the user was asked for a password.
+    var startCalls = 0
+
+    func isFlagPresent() -> Bool { flagPresent }
+    func createFlag() -> Bool {
+        flagPresent = true
+        return true
+    }
+    func removeFlag() { flagPresent = false }
+    func startHelper(appPID: Int32) -> AWDLWatchdogStartResult {
+        startCalls += 1
+        return result
+    }
+}
+
+private final class FakeAWDLReader: AWDLStateReading, @unchecked Sendable {
+    var up: Bool?
+    init(up: Bool?) { self.up = up }
+    func isUp() -> Bool? { up }
+}
+
+@MainActor
+@Test func watchdogControllerStartsAndStops() async {
+    let launcher = FakeWatchdogLauncher()
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+    #expect(!controller.isRunning)
+
+    let result = await controller.start()
+    #expect(result == .started)
+    #expect(controller.isRunning)
+    #expect(controller.lastError == nil)
+
+    await controller.stop()
+    #expect(!controller.isRunning)
+    #expect(!launcher.flagPresent)
+}
+
+@MainActor
+@Test func watchdogPromptsOnlyOncePerAppRun() async {
+    // The first activation spawns the helper (the password prompt); every
+    // later toggle is flag-file-only.
+    let launcher = FakeWatchdogLauncher()
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+
+    _ = await controller.start()
+    await controller.stop()
+    let again = await controller.start()
+    #expect(again == .started)
+    #expect(controller.isRunning)
+    #expect(launcher.flagPresent)
+    #expect(launcher.startCalls == 1)
+}
+
+@MainActor
+@Test func primeAuthorizesWithoutPausingThenAutoStartIsPromptFree() async {
+    // Priming spawns the helper (one prompt) but leaves AWDL up, so a later
+    // automatic start during a game needs no prompt and never interrupts play.
+    let launcher = FakeWatchdogLauncher()
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+    controller.autoWithGaming = true
+    #expect(!controller.isAuthorized)
+
+    let result = await controller.prime()
+    #expect(result == .started)
+    #expect(controller.isAuthorized)
+    #expect(controller.isRunning == false)   // AWDL left untouched by priming
+    #expect(launcher.flagPresent == false)
+    #expect(launcher.startCalls == 1)         // one prompt
+
+    // A game comes forward: auto activation is now a flag write, no new prompt.
+    await controller.autoTick(gamingActive: true)
+    #expect(controller.isRunning)
+    #expect(launcher.startCalls == 1)
+
+    // Priming again is a no-op (already authorized): still no extra prompt.
+    _ = await controller.prime()
+    #expect(launcher.startCalls == 1)
+}
+
+@MainActor
+@Test func holdAutoOffPreventsReengageDuringGrace() async {
+    // The reported "jumps back": a manual stop during the auto grace was undone
+    // by the next tick (grace still active). holdAutoOff must suppress that until
+    // the bout fully ends.
+    let launcher = FakeWatchdogLauncher()
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+    controller.autoWithGaming = true
+
+    await controller.autoTick(gamingActive: true) // game running: auto pauses
+    #expect(controller.isRunning)
+
+    await controller.stop()      // user turns "Pause AWDL now" off...
+    controller.holdAutoOff()     // ...which holds auto off
+    #expect(!controller.isRunning)
+
+    await controller.autoTick(gamingActive: true) // grace still active: must NOT re-pause
+    #expect(!controller.isRunning)
+
+    await controller.autoTick(gamingActive: false) // bout ends: clears the hold
+    await controller.autoTick(gamingActive: true)  // a new game: auto free to engage again
+    #expect(controller.isRunning)
+}
+
+@MainActor
+@Test func retryEngageLetsAFailedAutoStartTryAgainMidGame() async {
+    // A failed auto start holds off until the bout ends; after an external
+    // fix (the helper daemon was repaired) retryEngage lets the next tick try
+    // again while the game is still running.
+    let launcher = FakeWatchdogLauncher()
+    launcher.result = .failed("helper down")
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+    controller.autoWithGaming = true
+
+    await controller.autoTick(gamingActive: true)
+    #expect(!controller.isRunning)
+    await controller.autoTick(gamingActive: true) // held off, no retry on its own
+    #expect(launcher.startCalls == 1)
+
+    launcher.result = .started
+    controller.retryEngage()
+    await controller.autoTick(gamingActive: true)
+    #expect(controller.isRunning)
+    #expect(launcher.startCalls == 2)
+}
+
+@MainActor
+@Test func retryEngageLeavesAManualOffAndACancelledPromptAlone() async {
+    // A repaired helper is not permission to undo the user's answer. Only a
+    // start that failed on its own is retried.
+    let launcher = FakeWatchdogLauncher()
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+    controller.autoWithGaming = true
+
+    await controller.autoTick(gamingActive: true) // game running: auto pauses
+    await controller.stop()                       // user turns the pause off...
+    controller.holdAutoOff()                      // ...which holds auto off
+
+    controller.retryEngage()                      // a helper check comes back healthy
+    await controller.autoTick(gamingActive: true)
+    #expect(!controller.isRunning)                // still the user's choice
+
+    // The bout ending clears it, as it always did.
+    await controller.autoTick(gamingActive: false)
+    await controller.autoTick(gamingActive: true)
+    #expect(controller.isRunning)
+
+    // A cancelled prompt holds off the same way: no second prompt this bout.
+    let cancelling = FakeWatchdogLauncher()
+    cancelling.result = .cancelled
+    let second = AWDLWatchdogController(launcher: cancelling, reader: FakeAWDLReader(up: true), appPID: 1)
+    second.autoWithGaming = true
+
+    await second.autoTick(gamingActive: true)
+    #expect(cancelling.startCalls == 1)
+    cancelling.result = .started
+    second.retryEngage()
+    await second.autoTick(gamingActive: true)
+    #expect(!second.isRunning)
+    #expect(cancelling.startCalls == 1)
+}
+
+@MainActor
+@Test func stopIfAutoLeavesAManualRunAlone() async {
+    let launcher = FakeWatchdogLauncher()
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+
+    _ = await controller.start()   // a manual run
+    await controller.stopIfAuto()
+    #expect(controller.isRunning)  // untouched: it wasn't auto-started
+
+    controller.autoWithGaming = true
+    await controller.stop()
+    await controller.autoTick(gamingActive: true) // now an auto run
+    #expect(controller.isRunning)
+    await controller.stopIfAuto()
+    #expect(!controller.isRunning) // auto run is stopped
+}
+
+@MainActor
+@Test func aCancelledPromptLeavesNoFlagBehind() async {
+    // The flag is written before the prompt (the helper reads it on its first
+    // cycle); a cancel or failure must clean it up so the next helper start
+    // doesn't instantly re-engage.
+    let launcher = FakeWatchdogLauncher()
+    launcher.result = .cancelled
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+    _ = await controller.start()
+    #expect(!launcher.flagPresent)
+    #expect(!controller.isRunning)
+
+    // The helper never started, so the next attempt prompts again.
+    launcher.result = .started
+    _ = await controller.start()
+    #expect(launcher.startCalls == 2)
+    #expect(controller.isRunning)
+}
+
+@MainActor
+@Test func watchdogControllerSurfacesFailuresButNotCancellations() async {
+    let launcher = FakeWatchdogLauncher()
+    launcher.result = .failed("no admin rights")
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+    _ = await controller.start()
+    #expect(controller.lastError == "no admin rights")
+    #expect(!controller.isRunning)
+
+    launcher.result = .cancelled
+    _ = await controller.start()
+    #expect(controller.lastError == nil)
+    #expect(!controller.isRunning)
+}
+
+@MainActor
+@Test func watchdogRefreshReadsFlagAndInterface() async {
+    let launcher = FakeWatchdogLauncher()
+    launcher.flagPresent = true
+    let reader = FakeAWDLReader(up: false)
+    let controller = AWDLWatchdogController(launcher: launcher, reader: reader, appPID: 1)
+    await controller.refresh()
+    #expect(controller.isRunning)
+    #expect(controller.isInterfaceUp == false)
+}
+
+@MainActor
+@Test func autoModeStartsWithGamingAndStopsAfter() async {
+    let launcher = FakeWatchdogLauncher()
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+    controller.autoWithGaming = true
+
+    await controller.autoTick(gamingActive: true)
+    #expect(controller.isRunning)
+    #expect(launcher.startCalls == 1)
+
+    // Further gaming ticks don't re-prompt.
+    await controller.autoTick(gamingActive: true)
+    #expect(launcher.startCalls == 1)
+
+    await controller.autoTick(gamingActive: false)
+    #expect(!controller.isRunning)
+}
+
+@MainActor
+@Test func autoModeRespectsACancelUntilTheBoutEnds() async {
+    let launcher = FakeWatchdogLauncher()
+    launcher.result = .cancelled
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+    controller.autoWithGaming = true
+
+    await controller.autoTick(gamingActive: true)
+    await controller.autoTick(gamingActive: true)
+    #expect(launcher.startCalls == 1) // cancelled once, not nagged again
+
+    // A new bout may ask once more.
+    await controller.autoTick(gamingActive: false)
+    launcher.result = .started
+    await controller.autoTick(gamingActive: true)
+    #expect(launcher.startCalls == 2)
+    #expect(controller.isRunning)
+}
+
+@MainActor
+@Test func autoModeNeverStopsAManualRun() async {
+    let launcher = FakeWatchdogLauncher()
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+    controller.autoWithGaming = true
+
+    _ = await controller.start() // manual
+    await controller.autoTick(gamingActive: false)
+    #expect(controller.isRunning)
+}
+
+@MainActor
+@Test func autoModeDoesNothingWhenOff() async {
+    let launcher = FakeWatchdogLauncher()
+    let controller = AWDLWatchdogController(launcher: launcher, reader: FakeAWDLReader(up: true), appPID: 1)
+    await controller.autoTick(gamingActive: true)
+    #expect(launcher.startCalls == 0)
+}
+
+// MARK: - Settings
+
+@Test func awdlAutoSettingDefaultsOffAndRoundTrips() throws {
+    let empty = try JSONDecoder().decode(PervigilSettings.self, from: "{}".data(using: .utf8)!)
+    #expect(!empty.awdlAutoWithGaming)
+
+    var settings = PervigilSettings.default
+    settings.awdlAutoWithGaming = true
+    let data = try JSONEncoder().encode(settings)
+    let decoded = try JSONDecoder().decode(PervigilSettings.self, from: data)
+    #expect(decoded.awdlAutoWithGaming)
+}
+
+@Test func awdlGraceSettingDefaultsToAMinuteAndRoundTrips() throws {
+    // Absent in older saved blobs: falls back to the pre-picker minute.
+    let empty = try JSONDecoder().decode(PervigilSettings.self, from: "{}".data(using: .utf8)!)
+    #expect(empty.awdlGraceSeconds == 60)
+
+    var settings = PervigilSettings.default
+    settings.awdlGraceSeconds = 300
+    let data = try JSONEncoder().encode(settings)
+    let decoded = try JSONDecoder().decode(PervigilSettings.self, from: data)
+    #expect(decoded.awdlGraceSeconds == 300)
+}
+
+@Test func gracePeriodRetunesLive() {
+    // The picker changes the grace mid-run; a linger already counting down
+    // measures against the new value on the next read, both shortening and
+    // lengthening.
+    var now = Date(timeIntervalSinceReferenceDate: 0)
+    let game = StubGamingTrigger()
+    let watcher = GracePeriodTrigger(wrapping: game, grace: 60, now: { now })
+
+    game.active = true
+    watcher.tick()
+    game.active = false
+    now += 30
+    watcher.tick()
+    #expect(watcher.isSatisfied()) // 30s < 60s: lingering
+
+    watcher.grace = 10
+    #expect(!watcher.isSatisfied()) // 30s > 10s: the shorter pick applies now
+
+    watcher.grace = 120
+    #expect(watcher.isSatisfied()) // 30s < 120s: and so does a longer one
+}
+
+private final class StubGamingTrigger: Trigger {
+    var active = false
+    var label: String { "game" }
+    func tick() {}
+    func isSatisfied() -> Bool { active }
+}

@@ -1,14 +1,14 @@
-name: Keepresso
+name: Pervigil
 
 options:
-  bundleIdPrefix: sh.gyorgy
+  bundleIdPrefix: io.github.bubb4rd
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
   developmentRegion: en
 
 packages:
-  KeepressoCore:
+  PervigilCore:
     path: .
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
@@ -18,17 +18,17 @@ packages:
     exactVersion: "2.10.1"
 
 targets:
-  Keepresso:
+  Pervigil:
     type: application
     platform: macOS
     sources:
-      - path: Sources/Keepresso
+      - path: Sources/Pervigil
         excludes:
-          - sh.gyorgy.keepresso.helper.plist
+          - io.github.bubb4rd.pervigil.helper.plist
           - AgentSkill
       # The privileged helper's launchd plist. SMAppService.daemon(plistName:)
       # requires it at Contents/Library/LaunchDaemons inside the app bundle.
-      - path: Sources/Keepresso/sh.gyorgy.keepresso.helper.plist
+      - path: Sources/Pervigil/io.github.bubb4rd.pervigil.helper.plist
         buildPhase:
           copyFiles:
             destination: wrapper
@@ -36,31 +36,31 @@ targets:
       # The bundled agent skill, copied as a folder so users can copy the
       # whole directory into their agent's skills folder (see Preferences ▸
       # Automation and docs). Lands at Contents/Resources/AgentSkill.
-      - path: Sources/Keepresso/AgentSkill
+      - path: Sources/Pervigil/AgentSkill
         type: folder
         buildPhase: resources
     dependencies:
-      - package: KeepressoCore
-        product: KeepressoCore
+      - package: PervigilCore
+        product: PervigilCore
       - package: Sparkle
         product: Sparkle
-      - target: KeepressoWidget
+      - target: PervigilWidget
         embed: true
       # The command-line tool, copied into Contents/Helpers and signed with
       # the app so the one existing notarization covers it; the Homebrew cask
       # symlinks it onto PATH with a `binary` stanza. Not Contents/MacOS: on
-      # a case-insensitive filesystem `keepresso` there would overwrite the
-      # `Keepresso` app executable.
-      - target: keepresso-cli
+      # a case-insensitive filesystem `pervigil` there would overwrite the
+      # `Pervigil` app executable.
+      - target: pervigil-cli
         embed: true
         codeSign: true
         copy:
           destination: wrapper
           subpath: Contents/Helpers
       # The privileged helper daemon (SMAppService LaunchDaemon). Its plist's
-      # BundleProgram points at Contents/MacOS/keepresso-helper; no name clash
+      # BundleProgram points at Contents/MacOS/pervigil-helper; no name clash
       # with the app executable, unlike the CLI.
-      - target: keepresso-helper
+      - target: pervigil-helper
         embed: true
         codeSign: true
         copy:
@@ -69,17 +69,17 @@ targets:
       # The MCP stdio server, next to the CLI in Contents/Helpers. Agents
       # reference it by absolute path in their MCP configuration; nothing
       # symlinks it onto PATH.
-      - target: keepresso-mcp
+      - target: pervigil-mcp
         embed: true
         codeSign: true
         copy:
           destination: wrapper
           subpath: Contents/Helpers
     info:
-      path: Sources/Keepresso/Info.plist
+      path: Sources/Pervigil/Info.plist
       properties:
-        CFBundleName: Keepresso
-        CFBundleDisplayName: Keepresso
+        CFBundleName: Pervigil
+        CFBundleDisplayName: Pervigil
         CFBundleShortVersionString: "1.30.0"
         CFBundleVersion: "47"
         LSUIElement: true            # menu-bar agent: no Dock icon
@@ -87,28 +87,28 @@ targets:
         # The shipped localizations (Localizable.strings under *.lproj); keep
         # in sync with tools/localization/gen_strings.py.
         CFBundleLocalizations: [en, de, es, fr, it, hu, pt-BR, tr, ru, ja, ko, pl, uk, zh-Hans, zh-Hant]
-        NSHumanReadableCopyright: "© 2026 Keepresso contributors. GNU GPL v3.0."
-        # keepresso://start[?duration=<minutes>] / stop / toggle, so scripts and
+        NSHumanReadableCopyright: "© 2026 Pervigil and Keepresso contributors. GNU GPL v3.0."
+        # pervigil://start[?duration=<minutes>] / stop / toggle, so scripts and
         # launchers (Shortcuts, Raycast, Alfred) can drive a session.
         CFBundleURLTypes:
-          - CFBundleURLName: sh.gyorgy.keepresso
-            CFBundleURLSchemes: [keepresso]
+          - CFBundleURLName: io.github.bubb4rd.pervigil
+            CFBundleURLSchemes: [pervigil]
         # Reading the joined Wi-Fi SSID (for Wi-Fi triggers) needs Location access.
-        NSLocationWhenInUseUsageDescription: "Keepresso reads Wi-Fi network names for your triggers and to find the hotspot you choose for automatic fallback."
-        NSLocationUsageDescription: "Keepresso reads Wi-Fi network names for your triggers and to find the hotspot you choose for automatic fallback."
+        NSLocationWhenInUseUsageDescription: "Pervigil reads Wi-Fi network names for your triggers and to find the hotspot you choose for automatic fallback."
+        NSLocationUsageDescription: "Pervigil reads Wi-Fi network names for your triggers and to find the hotspot you choose for automatic fallback."
         # Listing paired Bluetooth devices (for Bluetooth triggers) is TCC-gated.
-        NSBluetoothAlwaysUsageDescription: "Keepresso checks which of your paired Bluetooth devices are connected so it can keep your Mac awake while a chosen device (like headphones) is in use."
+        NSBluetoothAlwaysUsageDescription: "Pervigil checks which of your paired Bluetooth devices are connected so it can keep your Mac awake while a chosen device (like headphones) is in use."
         # Reading calendar events (for the calendar trigger) needs full access.
-        NSCalendarsFullAccessUsageDescription: "Keepresso checks whether a calendar event is in progress so it can keep your Mac awake during your scheduled sessions."
+        NSCalendarsFullAccessUsageDescription: "Pervigil checks whether a calendar event is in progress so it can keep your Mac awake during your scheduled sessions."
         # Sparkle auto-update. The appcast is published as an asset on the GitHub
         # Releases page; SUPublicEDKey is the EdDSA key that verifies each update.
         # Generate the key pair once with Sparkle's `generate_keys` tool and paste
         # the printed public key below (the private key stays in the Keychain).
-        SUFeedURL: "https://github.com/gyorgysh/keepresso/releases/latest/download/appcast.xml"
+        SUFeedURL: "https://github.com/bubb4rd/pervigil/releases/latest/download/appcast.xml"
         SUPublicEDKey: "n3mCQxtsVXbnaHZEzhv5Yfzr94+Y6CzwBk4jHtrCmm4="
         SUEnableAutomaticChecks: true
     entitlements:
-      path: Sources/Keepresso/Keepresso.entitlements
+      path: Sources/Pervigil/Pervigil.entitlements
       properties:
         # Location is restricted by Hardened Runtime even without App Sandbox.
         com.apple.security.personal-information.location: true
@@ -118,37 +118,37 @@ targets:
         # (WidgetBridge.appGroupID). Team-ID-prefixed groups also avoid the
         # macOS 15+ group-container prompt.
         com.apple.security.application-groups:
-          - $(TeamIdentifierPrefix)sh.gyorgy.keepresso
+          - $(TeamIdentifierPrefix)io.github.bubb4rd.pervigil
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: sh.gyorgy.keepresso
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.bubb4rd.pervigil
         MARKETING_VERSION: "1.30.0"
         CURRENT_PROJECT_VERSION: "47"
         SWIFT_VERSION: "5.9"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Bridges the Objective-C virtual-display wrapper (private CG API) to Swift.
-        SWIFT_OBJC_BRIDGING_HEADER: Sources/Keepresso/Keepresso-Bridging-Header.h
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/Pervigil/Pervigil-Bridging-Header.h
         ENABLE_HARDENED_RUNTIME: true
         CODE_SIGN_STYLE: Automatic
         # Not sandboxed by design: App Sandbox blocks IOPMAssertion. This is why
-        # Keepresso ships via GitHub/Homebrew, not the Mac App Store.
+        # Pervigil ships via GitHub/Homebrew, not the Mac App Store.
         ENABLE_APP_SANDBOX: false
 
-  # The caffeinate-style `keepresso` CLI. Also buildable as a SwiftPM
+  # The caffeinate-style `pervigil` CLI. Also buildable as a SwiftPM
   # executable (`swift build`) for the toolchain-only dev loop; this target
   # exists so the release archive builds, embeds, and signs it with the app.
-  keepresso-cli:
+  pervigil-cli:
     type: tool
     platform: macOS
     deploymentTarget: "14.0"
     sources:
-      - path: Sources/keepresso-cli
+      - path: Sources/pervigil-cli
     dependencies:
-      - package: KeepressoCore
-        product: KeepressoCore
+      - package: PervigilCore
+        product: PervigilCore
     settings:
       base:
-        PRODUCT_NAME: keepresso
+        PRODUCT_NAME: pervigil
         SWIFT_VERSION: "5.9"
         ENABLE_HARDENED_RUNTIME: true
         CODE_SIGN_STYLE: Automatic
@@ -157,18 +157,18 @@ targets:
 
   # The MCP stdio server: automation leases and status for AI agents, over
   # newline-delimited JSON-RPC. Same dual-build arrangement as the CLI.
-  keepresso-mcp:
+  pervigil-mcp:
     type: tool
     platform: macOS
     deploymentTarget: "14.0"
     sources:
-      - path: Sources/keepresso-mcp
+      - path: Sources/pervigil-mcp
     dependencies:
-      - package: KeepressoCore
-        product: KeepressoCore
+      - package: PervigilCore
+        product: PervigilCore
     settings:
       base:
-        PRODUCT_NAME: keepresso-mcp
+        PRODUCT_NAME: pervigil-mcp
         SWIFT_VERSION: "5.9"
         ENABLE_HARDENED_RUNTIME: true
         CODE_SIGN_STYLE: Automatic
@@ -178,24 +178,24 @@ targets:
   # LaunchDaemon (one admin approval, ever) and driven over XPC, so
   # closed-display mode and the AWDL watchdog stop asking for the password on
   # every app run. Also buildable with `swift build` for the dev loop.
-  keepresso-helper:
+  pervigil-helper:
     type: tool
     platform: macOS
     deploymentTarget: "14.0"
     sources:
-      - path: Sources/keepresso-helper
+      - path: Sources/pervigil-helper
     dependencies:
-      - package: KeepressoCore
-        product: KeepressoCore
+      - package: PervigilCore
+        product: PervigilCore
     # Embedded as an __info_plist section (no bundle around a bare tool):
     # codesign takes the signing identifier from CFBundleIdentifier, giving
     # the deterministic identifier the XPC peer checks require, in ad-hoc dev
     # builds and Developer ID release builds alike.
     info:
-      path: Sources/keepresso-helper/Info.plist
+      path: Sources/pervigil-helper/Info.plist
       properties:
-        CFBundleName: keepresso-helper
-        CFBundleIdentifier: sh.gyorgy.keepresso.helper
+        CFBundleName: pervigil-helper
+        CFBundleIdentifier: io.github.bubb4rd.pervigil.helper
         # Keep in lockstep with the app and widget versions on every release
         # bump (the release scripts read the app's, the first in this file).
         # Literals, not $(MARKETING_VERSION): this plist is embedded as an
@@ -206,10 +206,10 @@ targets:
         CFBundleVersion: "47"
     settings:
       base:
-        PRODUCT_NAME: keepresso-helper
+        PRODUCT_NAME: pervigil-helper
         # The code-signing identifier both sides verify over XPC; must match
         # HelperService.helperCodeSignIdentifier.
-        PRODUCT_BUNDLE_IDENTIFIER: sh.gyorgy.keepresso.helper
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.bubb4rd.pervigil.helper
         CREATE_INFOPLIST_SECTION_IN_BINARY: true
         SWIFT_VERSION: "5.9"
         ENABLE_HARDENED_RUNTIME: true
@@ -220,27 +220,27 @@ targets:
   # Widget extension: desktop widgets on macOS 14+, plus the Control Center
   # toggle where it exists (macOS 26+, availability-gated in code). Sandboxed
   # as widgets must be; only the appex, the app stays unsandboxed.
-  KeepressoWidget:
+  PervigilWidget:
     type: app-extension
     platform: macOS
     deploymentTarget: "14.0"
     sources:
-      - path: Sources/KeepressoWidget
+      - path: Sources/PervigilWidget
       # The shared brand-mark geometry (CoreGraphics only), so the widgets
       # draw the real cup instead of an SF Symbols lookalike.
-      - path: Sources/Keepresso/BrandCupMark.swift
+      - path: Sources/Pervigil/BrandCupMark.swift
       # The widget/control intents, compiled into both targets so
       # `openAppWhenRun` can run them in the app process (launching it when
       # needed); appex-only intent types make that flag a silent no-op.
-      - path: Sources/Keepresso/WidgetIntents.swift
+      - path: Sources/Pervigil/WidgetIntents.swift
     dependencies:
-      - package: KeepressoCore
-        product: KeepressoCore
+      - package: PervigilCore
+        product: PervigilCore
     info:
-      path: Sources/KeepressoWidget/Info.plist
+      path: Sources/PervigilWidget/Info.plist
       properties:
-        CFBundleName: KeepressoWidget
-        CFBundleDisplayName: Keepresso
+        CFBundleName: PervigilWidget
+        CFBundleDisplayName: Pervigil
         CFBundleShortVersionString: "1.30.0"
         CFBundleVersion: "47"
         # Same 15 localizations as the app; keep in sync with
@@ -249,7 +249,7 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
-      path: Sources/KeepressoWidget/KeepressoWidget.entitlements
+      path: Sources/PervigilWidget/PervigilWidget.entitlements
       properties:
         # Widget extensions must be sandboxed (only the appex; the app itself
         # stays unsandboxed for IOPMAssertion).
@@ -257,10 +257,10 @@ targets:
         # Shared session state with the app; same signing-time expansion as
         # the app target (see WidgetBridge.appGroupID).
         com.apple.security.application-groups:
-          - $(TeamIdentifierPrefix)sh.gyorgy.keepresso
+          - $(TeamIdentifierPrefix)io.github.bubb4rd.pervigil
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: sh.gyorgy.keepresso.widget
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.bubb4rd.pervigil.widget
         # Brand caramel as the widget accent, else interactive widget buttons
         # fall back to system blue.
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
@@ -273,9 +273,9 @@ targets:
         CODE_SIGN_STYLE: Automatic
 
 schemes:
-  Keepresso:
+  Pervigil:
     build:
       targets:
-        Keepresso: all
+        Pervigil: all
     run:
       config: Debug

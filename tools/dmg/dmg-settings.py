@@ -1,4 +1,4 @@
-# dmgbuild settings for the Keepresso disk image. scripts/package-dmg.sh passes
+# dmgbuild settings for the Pervigil disk image. scripts/package-dmg.sh passes
 # the app bundle, the background TIFF and the volume icon in with -D.
 #
 # The icon centres here are the ones background.html draws its arrow between.

@@ -1,4 +1,4 @@
-// Reproduce macOS status-item scene diagnostics without Keepresso or SwiftUI.
+// Reproduce macOS status-item scene diagnostics without Pervigil or SwiftUI.
 // Build: xcrun swiftc -parse-as-library tools/diagnostics/status-item-lifecycle.swift -o /tmp/status-item-lifecycle
 // Run /tmp/status-item-lifecycle create or /tmp/status-item-lifecycle highlight.
 // Each run exits after 30 cycles. Inspect unified logs for the printed PID,

@@ -3,8 +3,8 @@
 // brand cup must be a real symbol there).
 //
 // Regenerate after changing the mark's geometry:
-//   swiftc scripts/make-symbol.swift Sources/Keepresso/BrandCupMark.swift -o /tmp/make-symbol
-//   /tmp/make-symbol > "Sources/KeepressoWidget/Assets.xcassets/keepresso.cup.symbolset/keepresso.cup.svg"
+//   swiftc scripts/make-symbol.swift Sources/Pervigil/BrandCupMark.swift -o /tmp/make-symbol
+//   /tmp/make-symbol > "Sources/PervigilWidget/Assets.xcassets/pervigil.cup.symbolset/pervigil.cup.svg"
 //
 // The strokes (handle, saucer, steam) are flattened to filled outlines and the
 // crema stripe is punched with the even-odd rule, so the symbol needs no

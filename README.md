@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/assets/icon.png" width="128" height="128" alt="Keepresso app icon">
+  <img src="docs/assets/icon.png" width="128" height="128" alt="Pervigil app icon">
 </p>
 
-<h1 align="center">Keepresso</h1>
+<h1 align="center">Pervigil</h1>
 
 <p align="center">
   Keep your Mac awake, on your terms, with smart triggers, presets, timed
@@ -11,12 +11,12 @@
 </p>
 
 <p align="center">
-  <a href="https://keepresso.com"><b>keepresso.com</b></a>
+  <sub>An unofficial fork of <a href="https://github.com/gyorgysh/keepresso">Keepresso</a>.
+  Not affiliated with or endorsed by the Keepresso project or pueev OÜ.</sub>
 </p>
 
 <p align="center">
-  <a href="https://github.com/gyorgysh/keepresso/actions/workflows/ci.yml"><img src="https://github.com/gyorgysh/keepresso/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/gyorgysh/keepresso/releases"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fkeepresso.com%2Fapi%2Fdownloads%2Fbadge.json&amp;color=green" alt="Keepresso app downloads" title="DMG downloads across all releases, including updates"></a>
+  <a href="https://github.com/bubb4rd/pervigil/actions/workflows/ci.yml"><img src="https://github.com/bubb4rd/pervigil/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-blue" alt="macOS 14+">
   <img src="https://img.shields.io/badge/Swift-SwiftUI-orange" alt="Swift + SwiftUI">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPLv3-green" alt="GPL-3.0 License"></a>
@@ -24,17 +24,17 @@
 
 ---
 
-Keepresso is a native **Swift + SwiftUI** menu-bar app. It uses macOS power
+Pervigil is a native **Swift + SwiftUI** menu-bar app. It uses macOS power
 assertions (`IOPMAssertion`) to prevent system and display sleep, and layers on
 condition-based **triggers** so your Mac only stays awake when it actually should.
 It lives quietly in the menu bar, no Dock icon, no clutter.
 
 <p align="center">
-  <img src="docs/assets/demo_manual.svg" width="270" alt="Animated Keepresso menu: switching keep-awake on, picking a one hour session that counts down, then switching it off">
+  <img src="docs/assets/demo_manual.svg" width="270" alt="Animated Pervigil menu: switching keep-awake on, picking a one hour session that counts down, then switching it off">
   &nbsp;
-  <img src="docs/assets/demo_triggers.svg" width="270" alt="Animated Keepresso menu: AI agents and a network condition hold the Mac awake, then it goes idle when the work stops">
+  <img src="docs/assets/demo_triggers.svg" width="270" alt="Animated Pervigil menu: AI agents and a network condition hold the Mac awake, then it goes idle when the work stops">
   &nbsp;
-  <img src="docs/assets/demo_lid.svg" width="270" alt="Animated Keepresso menu: turning on keep awake with lid closed, the display goes dark while an AI agent keeps working">
+  <img src="docs/assets/demo_lid.svg" width="270" alt="Animated Pervigil menu: turning on keep awake with lid closed, the display goes dark while an AI agent keeps working">
 </p>
 
 ## Features
@@ -86,8 +86,8 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   the Cursor and Antigravity apps, which run inside the editor and have no
   process of their own to watch, and each chat inside one editor is tracked on
   its own. The menu lists every session with a live working / idle state and
-  where it runs. OMP loads Keepresso's extension the next time it starts.
-- ⏰ **Wake for scheduled AI runs.** Keepresso reads the recurring tasks your
+  where it runs. OMP loads Pervigil's extension the next time it starts.
+- ⏰ **Wake for scheduled AI runs.** Pervigil reads the recurring tasks your
   local AI tools schedule (Claude Desktop routines, Codex automations,
   tokenstat.ai), wakes the
   Mac a few minutes before each run, and holds it awake long enough to finish,
@@ -143,7 +143,7 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   Display Connected, Remote Session (SSH), Backup Running, Media Render) or
   your own saved rule sets. Deleted a built-in? "Restore default presets"
   brings it back.
-- 👋 **First-run setup.** A welcome window on a new Mac points out that Keepresso
+- 👋 **First-run setup.** A welcome window on a new Mac points out that Pervigil
   lives in the menu bar (no Dock icon) and sets you up in one click for how you
   work: agentic coding, gaming and streaming, meetings and calls, or remote
   access. Reopen it any time from Preferences.
@@ -154,15 +154,15 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 - 🔍 **Awake explainer.** The Activity pane shows every app's live power
   assertions, a readable `pmset -g assertions`, so you can see exactly what's
   preventing sleep (whoever's doing it), a seven-day held-awake summary, and a
-  decision log of why each Keepresso session started or stopped that survives
+  decision log of why each Pervigil session started or stopped that survives
   relaunch. The menu bar even names another app that's holding the Mac awake
-  ("Held by Google Chrome") when Keepresso itself is idle.
+  ("Held by Google Chrome") when Pervigil itself is idle.
 - 🪪 **Auto app detection.** Caffeinate while listed apps run or are frontmost,
   with an optional grace period before it lets go.
 - 🔋 **Battery-aware auto-pause.** Let the Mac sleep once charge drops below a
   threshold you choose, even mid-session, so it never runs the battery flat.
 - 🌡️ **Thermal safety net.** Holding a Mac awake through heavy load can also
-  hold in the heat, so Keepresso can watch it: macOS's own thermal pressure
+  hold in the heat, so Pervigil can watch it: macOS's own thermal pressure
   (works on every Mac) or specific temperature sensors picked from a live
   list. If the reading stays over your threshold for a sustained time it
   escalates, first (optionally) boosting the fans to a chosen strength, never
@@ -179,14 +179,14 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   any app, recorded in Preferences (Carbon-based, so no Input Monitoring or
   Accessibility permission).
 - 🚀 **Start on launch.** Optionally begin a keep-awake session the moment
-  Keepresso launches, for an always-on Mac that shouldn't need a rule.
+  Pervigil launches, for an always-on Mac that shouldn't need a rule.
 - 💾 **Export and import.** Back up your settings, triggers, and presets to a JSON
   file, or move them to another Mac, from Preferences > General. The file is
   version-stamped and validated on import.
 - 🔗 **Shortcuts and URL scheme.** Native Shortcuts actions (Start, Stop,
   Toggle) for Shortcuts, Spotlight, and Siri, plus a URL scheme for Raycast,
-  Alfred, or a shell script: `keepresso://start?duration=60`,
-  `keepresso://start?until=18:00`, `stop`, or `toggle`.
+  Alfred, or a shell script: `pervigil://start?duration=60`,
+  `pervigil://start?until=18:00`, `stop`, or `toggle`.
 - 💻 **Closed-display mode.** Keep running with the **lid shut** and no external
   display, on power or battery, for an always-on Mac or one you carry mid-task.
   What the screen itself does is your choice: turn it off, keep it powered at
@@ -200,12 +200,12 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   never with the administrator helper.
 - 📱 **Hotspot fallback.** In Preferences > General, opt into a selected Wi-Fi
   hotspot when the Mac loses its network connection. Scope it to active
-  keep-awake sessions (the default), closed-display mode, or whenever Keepresso
+  keep-awake sessions (the default), closed-display mode, or whenever Pervigil
   runs. Choose the delay, retry interval, battery minimum, and connection
   notifications. Passwords stay in Keychain and are never included in settings
   backups. Requires Location access and a broadcasting, secured hotspot. For
   iPhone discovery, use macOS Wi-Fi settings > Ask to join hotspots > Automatic.
-  Keepresso does not enable the phone's hotspot remotely, interrupt an existing
+  Pervigil does not enable the phone's hotspot remotely, interrupt an existing
   route, or switch away from a connected hotspot with no internet access.
   A network handoff can briefly interrupt requests; agents must handle their
   own reconnects.
@@ -231,13 +231,13 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   needed.
 - 🔑 **One password, ever.** An optional **administrator helper**, a small
   system service installed from Preferences > General (or the welcome screen),
-  handles the privileged switches for Keepresso: closed-display mode, the
+  handles the privileged switches for Pervigil: closed-display mode, the
   thermal fan boost, and the AWDL pause become instant and silent, with no
   password prompt on any launch. macOS asks for your password once, when you
   approve the helper under Login Items, and the approval survives restarts
   and updates, and app updates replace the service automatically, never a
   reinstall. The helper can only flip those specific switches, restores
-  everything if the app quits or crashes, puts the `keepresso` CLI on PATH
+  everything if the app quits or crashes, puts the `pervigil` CLI on PATH
   for DMG installs, and can be removed at any time. Without it, everything
   still works the old way, with a once-per-run prompt (now always announced
   by a notification), except the fan boost, which stays off rather than ever
@@ -309,7 +309,7 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 
 **The only app you'll ever need for a headless Mac setup**, whether it's running
 AI agents, a server, a render farm, or anything reachable over HTTP or SSH.
-Keepresso fits the way Macs are used now, and where they're headed:
+Pervigil fits the way Macs are used now, and where they're headed:
 
 - 🤖 **AI agents.** Keep a Mac awake and reachable so agents can operate it around
   the clock without it dozing off mid-task.
@@ -339,42 +339,41 @@ anything that can run a command:
 
 ```sh
 ID=$(uuidgen)
-keepresso lease acquire --id "$ID" --tool render --task "overnight export" --ttl 600
-# ... long work with periodic: keepresso lease heartbeat --id "$ID"
-keepresso lease release --id "$ID"
+pervigil lease acquire --id "$ID" --tool render --task "overnight export" --ttl 600
+# ... long work with periodic: pervigil lease heartbeat --id "$ID"
+pervigil lease release --id "$ID"
 ```
 
 MCP-capable agents get the same operations from the bundled server; point
 your MCP configuration at:
 
 ```
-/Applications/Keepresso.app/Contents/Helpers/keepresso-mcp
+/Applications/Pervigil.app/Contents/Helpers/pervigil-mcp
 ```
 
 A ready-to-copy agent skill ships in the app at
 `Contents/Resources/AgentSkill/keep-awake`. Agents can also read the system
-wake schedule with `keepresso wake status`, and, if you flip the default-off
+wake schedule with `pervigil wake status`, and, if you flip the default-off
 switch in Preferences ▸ Automation, schedule wake-ups with
-`keepresso wake set`.
+`pervigil wake set`.
 
 ## Install
 
 **Homebrew:**
 
 ```sh
-brew install --cask gyorgysh/keepresso/keepresso
+brew install --cask bubb4rd/pervigil/pervigil
 ```
 
 **Manual:** download the latest signed, notarized DMG from
-[keepresso.com](https://keepresso.com) or
-[Releases](https://github.com/gyorgysh/keepresso/releases), drag **Keepresso** to
+[Releases](https://github.com/bubb4rd/pervigil/releases), drag **Pervigil** to
 Applications, and launch it.
 
-Either way, Keepresso keeps itself up to date from there.
+Either way, Pervigil keeps itself up to date from there.
 
-## Using Keepresso
+## Using Pervigil
 
-Click the cup in the menu bar to open Keepresso. Right-click (or control-click)
+Click the cup in the menu bar to open Pervigil. Right-click (or control-click)
 it for a compact context menu with the app entries: Preferences, Headless
 Setup, Gaming & Streaming, Keyboard Cleaner, Public Wi-Fi, About, Check for
 Updates, and Quit.
@@ -409,7 +408,7 @@ Updates, and Quit.
   safety warnings remain visible, with their settings reachable in Preferences.
 - **Show less.** The disclosure row at the bottom of the panel folds the option
   toggles and app entries away, leaving just the status and the keep-awake
-  controls. Keepresso remembers the choice, and everything hidden stays
+  controls. Pervigil remembers the choice, and everything hidden stays
   reachable from the right-click menu.
 - **Keep awake with lid closed.** Toggle it right from the menu before you shut
   the lid or unplug. It flips a system setting (`pmset disablesleep`), so it
@@ -443,76 +442,76 @@ Updates, and Quit.
 - **Public Wi-Fi** diagnoses captive portals that never show a login page and
   offers Open login page, Flush DNS, and a Wi-Fi cycle.
 
-Keepresso has no Dock icon by design. Everything lives in the menu bar.
+Pervigil has no Dock icon by design. Everything lives in the menu bar.
 
 ### Driving it from Shortcuts or a script
 
-Keepresso ships native **Shortcuts actions**: Start Keeping Awake (optionally
+Pervigil ships native **Shortcuts actions**: Start Keeping Awake (optionally
 for _N_ minutes), Stop Keeping Awake, and Toggle Keep Awake, usable from the
 Shortcuts app, Spotlight, and Siri.
 
-It also registers a `keepresso://` URL scheme so Raycast, Alfred, or a shell
+It also registers a `pervigil://` URL scheme so Raycast, Alfred, or a shell
 script can start or stop a session without opening the menu:
 
 ```
-open "keepresso://start"              # indefinite session
-open "keepresso://start?duration=60"  # timed session, in minutes
-open "keepresso://start?until=18:00"  # until a wall-clock time (24h HH:MM)
-open "keepresso://stop"
-open "keepresso://toggle"
+open "pervigil://start"              # indefinite session
+open "pervigil://start?duration=60"  # timed session, in minutes
+open "pervigil://start?until=18:00"  # until a wall-clock time (24h HH:MM)
+open "pervigil://stop"
+open "pervigil://toggle"
 ```
 
 Either way, if triggers are on they pause first (same as the menu's Pause
 Triggers), so the command actually takes effect.
 
-### The `keepresso` command-line tool
+### The `pervigil` command-line tool
 
 The app bundle ships a caffeinate-style CLI. The Homebrew cask links it onto
 your PATH; on a DMG install, the administrator helper creates the
-`/usr/local/bin/keepresso` link for you. It drives the app for session
+`/usr/local/bin/pervigil` link for you. It drives the app for session
 commands and can also hold its own assertion when you need to block in a
 pipeline:
 
 ```sh
-keepresso start --for 90     # tell the app to brew for 90 minutes
-keepresso stop               # end the session
-keepresso status             # exit 0 awake, 1 not, 2 app not running
-keepresso status --json      # machine-readable, jq-friendly
+pervigil start --for 90     # tell the app to brew for 90 minutes
+pervigil stop               # end the session
+pervigil status             # exit 0 awake, 1 not, 2 app not running
+pervigil status --json      # machine-readable, jq-friendly
 
-keepresso -t 3600            # hold an assertion itself for an hour
-keepresso -w $!              # stay awake until a process exits
-keepresso -d -i              # also keep the display awake, until Ctrl-C
-keepresso -u                 # wake the display now
+pervigil -t 3600            # hold an assertion itself for an hour
+pervigil -w $!              # stay awake until a process exits
+pervigil -d -i              # also keep the display awake, until Ctrl-C
+pervigil -u                 # wake the display now
 ```
 
-The standalone holds work even when the app is not running; `keepresso help`
+The standalone holds work even when the app is not running; `pervigil help`
 lists everything. Installed from a DMG instead of Homebrew? Symlink it
-yourself: `ln -s /Applications/Keepresso.app/Contents/Helpers/keepresso /usr/local/bin/`.
+yourself: `ln -s /Applications/Pervigil.app/Contents/Helpers/pervigil /usr/local/bin/`.
 
 ## Why not the Mac App Store?
 
-The App Sandbox blocks the `IOPMAssertion` power APIs Keepresso depends on, so
+The App Sandbox blocks the `IOPMAssertion` power APIs Pervigil depends on, so
 it's distributed **outside** the store, as a direct, notarized DMG download.
 
 ## Building from source
 
-Keepresso uses **[XcodeGen](https://github.com/yonaskolb/XcodeGen)** to generate
+Pervigil uses **[XcodeGen](https://github.com/yonaskolb/XcodeGen)** to generate
 the Xcode project from [`project.yml`](project.yml) (the `.xcodeproj` is **not**
 checked in), and **Swift Package Manager** for the testable core
-([`KeepressoCore`](Sources/KeepressoCore)).
+([`PervigilCore`](Sources/PervigilCore)).
 
 **Requirements:** macOS 14+, Xcode 16+, `xcodegen` (`brew install xcodegen`).
 
 ```sh
-git clone https://github.com/gyorgysh/keepresso.git
-cd keepresso
+git clone https://github.com/bubb4rd/pervigil.git
+cd pervigil
 
 ./scripts/run.sh            # generate the project and open it in Xcode (⌘R to run)
 ```
 
 ### Working on the core logic
 
-The sleep-control state machine lives in `KeepressoCore` and is fully unit
+The sleep-control state machine lives in `PervigilCore` and is fully unit
 tested, independent of any UI:
 
 ```sh
@@ -524,11 +523,11 @@ swift test       # run the test suite (requires the full Xcode toolchain)
 
 Two layers, by design:
 
-- **`KeepressoCore`** is a SwiftUI-free SwiftPM library: the `SessionController`
+- **`PervigilCore`** is a SwiftUI-free SwiftPM library: the `SessionController`
   state machine plus protocol seams over every system touchpoint (power
   assertions, power source, displays, network, workspace, disk, notifications).
   This is where behavior lives and where the tests are.
-- **`Keepresso`** is the thin SwiftUI `MenuBarExtra` app: views and lifecycle
+- **`Pervigil`** is the thin SwiftUI `MenuBarExtra` app: views and lifecycle
   glue wired to the real system backends.
 
 The controller doesn't run its own timer; the app ticks it once a second. Tests
@@ -550,14 +549,13 @@ Issues and pull requests are welcome, security fixes included. See
 
 ## License
 
-[GNU GPL v3.0](LICENSE) © 2026 Keepresso contributors.
+[GNU GPL v3.0](LICENSE) © 2026 Pervigil and Keepresso contributors.
 
-Keepresso is free software: use it, study it, fork it, and contribute back. The
+Pervigil is free software: use it, study it, fork it, and contribute back. The
 copyleft terms mean any distributed version (including forks and modifications)
 must stay open-source under the same license, so nobody can take it closed and
 ship a proprietary product from it.
 
-The license covers the code, not the name. Forks and fan projects must use their
-own name and say they are unofficial, see [TRADEMARK.md](TRADEMARK.md).
-
-If Keepresso is useful to you, you can [support its development](https://gyorgy.sh/donate).
+Pervigil is derived from the [Keepresso](https://github.com/gyorgysh/keepresso)
+source code. The Keepresso name, logo, and app icon belong to pueev OÜ; Pervigil
+uses its own name and branding, see [TRADEMARK.md](TRADEMARK.md).

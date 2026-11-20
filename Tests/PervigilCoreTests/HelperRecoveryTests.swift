@@ -1,0 +1,157 @@
+import Foundation
+import Testing
+@testable import PervigilCore
+
+@Test func helperOwnershipRejectsDevelopmentAndTrashCopies() {
+    let home = URL(fileURLWithPath: "/Users/test")
+    for path in ["/Applications/Pervigil.app", "/Users/test/Applications/Pervigil.app"] {
+        #expect(HelperInstallation.ownsRegistration(bundleURL: URL(fileURLWithPath: path), homeURL: home))
+    }
+    for path in [
+        "/Users/test/Library/Developer/Xcode/DerivedData/Pervigil/Build/Products/Debug/Pervigil.app",
+        "/Users/test/.Trash/Applications/Pervigil.app",
+        // The app at a DMG's root, which is where it actually sits when run
+        // from the mounted image. Not "/Volumes/<name>/Applications/...":
+        // that is the drag-install symlink to /Applications, and
+        // `resolvingSymlinksInPath` reads the real filesystem, so with the
+        // release DMG mounted the fixture would resolve into /Applications
+        // and the case would flip.
+        "/Volumes/Pervigil/Pervigil.app",
+        "/tmp/Applications/Pervigil.app",
+        "/Users/other/Applications/Pervigil.app"
+    ] {
+        #expect(!HelperInstallation.ownsRegistration(bundleURL: URL(fileURLWithPath: path), homeURL: home))
+    }
+}
+
+@Test @MainActor func helperRecoveryWaitsForLaunchdWithoutChangingRegistration() async {
+    var replies: [Int?] = [nil, nil, 9]
+    var delays: [TimeInterval] = []
+    let version = await HelperRecoveryProbe.version(
+        ping: {
+            guard !replies.isEmpty else { Issue.record("Pinged more than three times"); return nil }
+            return replies.removeFirst()
+        },
+        wait: { delays.append($0) }
+    )
+    #expect(version == 9)
+    #expect(delays == [1, 3])
+    #expect(replies.isEmpty)
+}
+
+@Test @MainActor func helperRecoveryAcceptsAnOldDaemonAsAlive() async {
+    var pings = 0
+    let version = await HelperRecoveryProbe.version(
+        ping: { pings += 1; return 8 },
+        wait: { _ in Issue.record("A responding daemon must not be retried") }
+    )
+    #expect(version == 8)
+    #expect(pings == 1)
+}
+
+@Test @MainActor func helperRecoveryStopsAfterThreeFailedHandshakes() async {
+    var pings = 0
+    let version = await HelperRecoveryProbe.version(
+        ping: { pings += 1; return nil }, wait: { _ in }
+    )
+    #expect(version == nil)
+    #expect(pings == 3)
+}
+
+@Test @MainActor func helperRecoveryHonorsACustomSchedule() async {
+    // The post-update handshake waits out a slow launchd spawn on extra
+    // rounds instead of giving up after the default three pings.
+    var replies: [Int?] = [nil, nil, nil, 9]
+    var delays: [TimeInterval] = []
+    let version = await HelperRecoveryProbe.version(
+        ping: { replies.isEmpty ? nil : replies.removeFirst() },
+        wait: { delays.append($0) },
+        delays: [0.0, 1.0, 3.0, 30.0]
+    )
+    #expect(version == 9)
+    #expect(delays == [1.0, 3.0, 30.0])
+    #expect(replies.isEmpty)
+}
+
+@Test @MainActor func helperRecoveryWaitsOutASlowColdStartSpawn() async {
+    // The cold-start schedule: pings at roughly 0, 1, 4, 14, 34, 64, 94 and
+    // 124 seconds. A daemon launchd only hands over after a minute and a half
+    // is still found, instead of being called broken at the old ~30s ceiling.
+    let schedule: [TimeInterval] = [0.0, 1.0, 3.0, 10.0, 20.0, 30.0, 30.0, 30.0]
+    var replies: [Int?] = [nil, nil, nil, nil, nil, nil, 7]
+    var waited: [TimeInterval] = []
+    let version = await HelperRecoveryProbe.version(
+        ping: { replies.isEmpty ? nil : replies.removeFirst() },
+        wait: { waited.append($0) },
+        delays: schedule
+    )
+    #expect(version == 7)
+    // Answered on the seventh ping, so six waits elapsed: ~94 seconds in.
+    #expect(waited == [1.0, 3.0, 10.0, 20.0, 30.0, 30.0])
+    #expect(waited.reduce(0, +) == 94)
+}
+
+@Test @MainActor func helperRecoveryGivesUpOnceTheScheduleIsSpent() async {
+    // Nothing ever answers: every round is spent and the probe reports a
+    // genuinely dead daemon rather than waiting forever.
+    var pings = 0
+    let version = await HelperRecoveryProbe.version(
+        ping: { pings += 1; return nil },
+        wait: { _ in },
+        delays: [0.0, 1.0, 3.0, 10.0, 20.0, 30.0, 30.0, 30.0]
+    )
+    #expect(version == nil)
+    #expect(pings == 8)
+}
+
+@Test @MainActor func helperRecoveryPostUpdateSettlingWaitsQuietlyForMinutes() async {
+    // The in-place update schedule: quiet 30 to 60 second waits for a few
+    // minutes while the old daemon image retires and launchd starts the new
+    // binary. A new helper answering late still clears instead of reading as
+    // broken.
+    let schedule = HelperRecoveryProbe.postUpdateSettlingDelays
+    #expect(schedule.allSatisfy { $0 == 30 || $0 == 60 })
+    #expect(schedule.reduce(0, +) >= 120)
+    var replies: [Int?] = [nil, nil, nil, nil, 12]
+    var waited: [TimeInterval] = []
+    let version = await HelperRecoveryProbe.version(
+        ping: { replies.isEmpty ? nil : replies.removeFirst() },
+        wait: { waited.append($0) },
+        delays: [0.0] + schedule
+    )
+    #expect(version == 12)
+    #expect(waited == Array(schedule.prefix(waited.count)))
+    #expect(replies.isEmpty)
+}
+
+@Test @MainActor func helperRecoveryDoesNotRetryAfterCancellation() async {
+    var pings = 0
+    let version = await HelperRecoveryProbe.version(
+        ping: { pings += 1; return nil }, wait: { _ in throw CancellationError() }
+    )
+    #expect(version == nil)
+    #expect(pings == 1)
+}
+
+@Test func helperPresentationKeepsColdStartAndUpdateNeutralUntilRecoveryIsExhausted() {
+    func phase(checking: Bool = false, outdated: Bool = false, hasReply: Bool = false,
+               pending: Bool = false, exhausted: Bool = false, installed: Bool = true,
+               approval: Bool = false) -> HelperRecoveryPhase {
+        .resolve(installed: installed, awaitingApproval: approval, checking: checking,
+                 outdated: outdated, hasReply: hasReply, recoveryPending: pending,
+                 recoveryExhausted: exhausted)
+    }
+    #expect(phase() == .initializing)
+    #expect(phase(checking: true) == .initializing)
+    #expect(phase(hasReply: true, pending: true) == .initializing)
+    #expect(phase(outdated: true, hasReply: true) == .updating)
+    #expect(phase(hasReply: true) == .ready)
+    #expect(phase(checking: true, pending: true, exhausted: true) == .unavailable)
+    #expect(phase(pending: true, exhausted: true, approval: true) == .needsApproval)
+    #expect(phase(pending: true, exhausted: true, installed: false) == .inactive)
+    #expect(HelperRecoveryPhase.resolve(installed: true, awaitingApproval: false, checking: false,
+        outdated: false, hasReply: false, recoveryPending: false, recoveryExhausted: false,
+        healthCheckCompleted: true) == .unavailable)
+    #expect(HelperRecoveryPhase.isHelperConnectionError(L("The Pervigil helper isn't responding.")))
+    #expect(!HelperRecoveryPhase.isHelperConnectionError("Disk access failed"))
+}

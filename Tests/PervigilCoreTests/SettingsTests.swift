@@ -1,0 +1,496 @@
+import Testing
+import Foundation
+@testable import PervigilCore
+
+@Test func settingsRoundTripCarriesTheHotKey() throws {
+    var settings = PervigilSettings.default
+    settings.hotKey = HotKeyShortcut(keyCode: 40, modifierFlags: 1_048_576) // ⌘K-ish
+    let data = try JSONEncoder().encode(settings)
+    let decoded = try JSONDecoder().decode(PervigilSettings.self, from: data)
+    #expect(decoded.hotKey == settings.hotKey)
+}
+
+@Test func settingsWithoutAHotKeyDecodeToNilWithoutThrowing() throws {
+    // A blob saved before the hotKey field existed must still decode, keeping
+    // the user's other settings rather than resetting to defaults.
+    let json = """
+    { "triggersEnabled": true, "showCountdownInMenuBar": true }
+    """
+    let decoded = try JSONDecoder().decode(PervigilSettings.self, from: Data(json.utf8))
+    #expect(decoded.hotKey == nil)
+    #expect(decoded.triggersEnabled == true)
+    #expect(decoded.showCountdownInMenuBar == true)
+}
+
+@Test func onboardingDefaultsOffForFreshInstallButOnForExistingSettings() throws {
+    // A fresh install sees the welcome window once...
+    #expect(PervigilSettings.default.hasOnboarded == false)
+    // ...but a blob saved before the field existed is an existing user, who
+    // should not be shown it on upgrade, so it decodes to true.
+    let json = """
+    { "triggersEnabled": true }
+    """
+    let decoded = try JSONDecoder().decode(PervigilSettings.self, from: Data(json.utf8))
+    #expect(decoded.hasOnboarded == true)
+    // And it round-trips once actually set.
+    var settings = PervigilSettings.default
+    settings.hasOnboarded = true
+    let data = try JSONEncoder().encode(settings)
+    #expect(try JSONDecoder().decode(PervigilSettings.self, from: data).hasOnboarded == true)
+}
+
+@Test func thermalSafetyRoundTripsAndDefaultsOff() throws {
+    // Absent key (any pre-thermal blob) decodes to off.
+    let json = """
+    { "triggersEnabled": true }
+    """
+    let decoded = try JSONDecoder().decode(PervigilSettings.self, from: Data(json.utf8))
+    #expect(decoded.thermalSafety == nil)
+    // A full config survives the settings round-trip.
+    var settings = PervigilSettings.default
+    settings.thermalSafety = ThermalSafetyConfig(
+        mode: .sensors(ids: ["Tp09"], celsius: 98),
+        sustainSeconds: 60,
+        fanBoostPercent: 80,
+        stopBrewing: true
+    )
+    let data = try JSONEncoder().encode(settings)
+    #expect(try JSONDecoder().decode(PervigilSettings.self, from: data).thermalSafety == settings.thermalSafety)
+}
+
+@Test func menuPanelExpandedDefaultsOnAndRoundTripsCollapsed() throws {
+    // A blob saved before the field existed keeps today's full panel.
+    let json = """
+    { "triggersEnabled": true }
+    """
+    let decoded = try JSONDecoder().decode(PervigilSettings.self, from: Data(json.utf8))
+    #expect(decoded.menuPanelExpanded == true)
+    // And a collapsed panel stays collapsed across a save/load.
+    var settings = PervigilSettings.default
+    settings.menuPanelExpanded = false
+    let data = try JSONEncoder().encode(settings)
+    #expect(try JSONDecoder().decode(PervigilSettings.self, from: data).menuPanelExpanded == false)
+}
+
+@Test func menuCustomizationIsOptInAndRoundTrips() throws {
+    // A settings blob from before menu customization keeps the standard menu.
+    let json = """
+    { "triggersEnabled": true }
+    """
+    let upgraded = try JSONDecoder().decode(PervigilSettings.self, from: Data(json.utf8))
+    #expect(!upgraded.menuCustomizationEnabled)
+    #expect(upgraded.menuLayout == nil)
+
+    var settings = PervigilSettings.default
+    settings.menuCustomizationEnabled = true
+    settings.setMenuLayout(.profile(.minimal))
+    let data = try JSONEncoder().encode(settings)
+    let decoded = try JSONDecoder().decode(PervigilSettings.self, from: data)
+    #expect(decoded == settings)
+    #expect(decoded.customizedMenuLayout == MenuLayout.profile(.minimal).normalized())
+}
+
+@Test func disablingCustomizationRestoresStandardLayoutWithoutLosingChoices() throws {
+    var settings = PervigilSettings(menuPanelExpanded: false, menuCustomizationEnabled: true)
+    settings.setMenuLayout(.profile(.detailed))
+    let chosen = settings.menuLayout
+    #expect(settings.customizedMenuLayout == chosen)
+
+    settings.menuCustomizationEnabled = false
+    let data = try JSONEncoder().encode(settings)
+    let restored = try JSONDecoder().decode(PervigilSettings.self, from: data)
+    // Nil selects the original adaptive panel, even with a saved layout.
+    #expect(restored.customizedMenuLayout == nil)
+    #expect(restored == settings)
+
+    settings.menuCustomizationEnabled = true
+    #expect(settings.customizedMenuLayout == chosen)
+}
+
+@Test(arguments: [true, false])
+func unknownMenuKeysDoNotOptUsersIn(expanded: Bool) throws {
+    // Keys this version doesn't know (from a development build or a newer
+    // release) must not change which layout is chosen.
+    let json = """
+    {
+      "triggersEnabled": true,
+      "menuPanelExpanded": \(expanded),
+      "showQuickSettingsInMenu": false,
+      "showToolsInMenu": false,
+      "toolsSectionExpanded": true,
+      "menuSectionOrder": ["toolsAndShortcuts", "manualSession"]
+    }
+    """
+    let settings = try JSONDecoder().decode(PervigilSettings.self, from: Data(json.utf8))
+    #expect(settings.customizedMenuLayout == nil)
+    #expect(settings.menuPanelExpanded == expanded)
+    #expect(settings.triggersEnabled)
+}
+
+@Test func malformedCustomizationDoesNotDiscardExistingSettings() throws {
+    let legacyJSON = """
+    {
+      "triggersEnabled": true,
+      "menuPanelExpanded": false,
+      "showCountdownInMenuBar": true,
+      "closedDisplayOnlyWhileBrewing": true,
+      "pauseBelowBatteryPercent": 40,
+      "glassClarity": 75,
+      "quickStopDurations": [900, 5400]
+    }
+    """
+    let legacy = try JSONDecoder().decode(PervigilSettings.self, from: Data(legacyJSON.utf8))
+    var object = try #require(JSONSerialization.jsonObject(with: Data(legacyJSON.utf8)) as? [String: Any])
+    object["menuCustomizationEnabled"] = "yes"
+    object["menuLayout"] = "custom"
+    let data = try JSONSerialization.data(withJSONObject: object)
+    let recovered = try JSONDecoder().decode(PervigilSettings.self, from: data)
+    #expect(recovered == legacy)
+}
+
+@Test func optionsWithoutSimulateActivityDecodeToItsDefault() throws {
+    // Same guarantee one level down: an options blob from before keep-active
+    // existed still decodes (simulateUserActivity defaults off).
+    let json = """
+    { "preventSystemSleep": true, "preventDisplaySleep": true }
+    """
+    let decoded = try JSONDecoder().decode(SleepPreventionOptions.self, from: Data(json.utf8))
+    #expect(decoded.simulateUserActivity == false)
+    #expect(decoded.activitySimulationMethod == .powerWarp)
+    #expect(decoded.activitySimulationKeyCode == nil)
+    #expect(decoded.activityPokeIdleMinutes == nil)
+    #expect(decoded.activityOnlyWhileBrewing == true)
+    #expect(decoded.preventDisplaySleep == true)
+}
+
+@Test func optionsKeepActiveMethodRoundTrips() throws {
+    let options = SleepPreventionOptions(
+        preventSystemSleep: true,
+        simulateUserActivity: true,
+        activitySimulationMethod: .specifiedKey,
+        activitySimulationKeyCode: 113,
+        activityPokeIdleMinutes: 5,
+        activityOnlyWhileBrewing: false
+    )
+    let data = try JSONEncoder().encode(options)
+    let decoded = try JSONDecoder().decode(SleepPreventionOptions.self, from: data)
+    #expect(decoded.simulateUserActivity)
+    #expect(decoded.activitySimulationMethod == .specifiedKey)
+    #expect(decoded.activitySimulationKeyCode == 113)
+    #expect(decoded.activityPokeIdleMinutes == 5)
+    #expect(decoded.activityOnlyWhileBrewing == false)
+    #expect(decoded.activityPokeKind == .key(113))
+}
+
+@Test func quickStopAndEndingSoonRoundTripAndDefault() throws {
+    var settings = PervigilSettings.default
+    let defaults: [TimeInterval] = [900, 1800, 3600]
+    #expect(settings.quickStopDurations == defaults)
+    #expect(settings.endingSoonNoticeSeconds == nil)
+
+    let custom: [TimeInterval] = [300, 2700]
+    settings.quickStopDurations = custom
+    settings.endingSoonNoticeSeconds = 120
+    let data = try JSONEncoder().encode(settings)
+    let decoded = try JSONDecoder().decode(PervigilSettings.self, from: data)
+    #expect(decoded.quickStopDurations == custom)
+    #expect(decoded.endingSoonNoticeSeconds == 120)
+
+    // A blob from before the fields existed decodes to the defaults.
+    let json = """
+    { "triggersEnabled": true }
+    """
+    let old = try JSONDecoder().decode(PervigilSettings.self, from: Data(json.utf8))
+    #expect(old.quickStopDurations == PervigilSettings.defaultQuickStopDurations)
+    #expect(old.endingSoonNoticeSeconds == nil)
+}
+
+@Test func quickStopDurationsAreNormalizedFromAnySource() throws {
+    // Drops non-positive entries, dedupes, sorts, and caps at the maximum.
+    let raw: [TimeInterval] = [1800, -60, 900, 0, 1800, 7200, 3600, 5400]
+    let normalized = PervigilSettings.normalizedQuickStopDurations(raw)
+    let expected: [TimeInterval] = [900, 1800, 3600, 5400]
+    #expect(normalized == expected)
+
+    // The decoder applies the same cleanup to hand-edited or imported blobs.
+    let json = """
+    { "quickStopDurations": [1800, 900, -5, 900] }
+    """
+    let decoded = try JSONDecoder().decode(PervigilSettings.self, from: Data(json.utf8))
+    let cleaned: [TimeInterval] = [900, 1800]
+    #expect(decoded.quickStopDurations == cleaned)
+}
+
+@Test func outOfRangeImportsAreNormalizedOnDecode() throws {
+    // A non-positive ending-soon lead would show the feature enabled while
+    // the notice can never fire; an out-of-range battery threshold would be
+    // live while the slider displays its clamp. Both are cleaned on decode.
+    let json = """
+    { "endingSoonNoticeSeconds": -30, "pauseBelowBatteryPercent": 95 }
+    """
+    let decoded = try JSONDecoder().decode(PervigilSettings.self, from: Data(json.utf8))
+    #expect(decoded.endingSoonNoticeSeconds == nil)
+    #expect(decoded.pauseBelowBatteryPercent == 90)
+
+    let low = try JSONDecoder().decode(
+        PervigilSettings.self,
+        from: Data(#"{ "pauseBelowBatteryPercent": 3 }"#.utf8))
+    #expect(low.pauseBelowBatteryPercent == 10)
+
+    // In-range values pass through untouched.
+    let fine = try JSONDecoder().decode(
+        PervigilSettings.self,
+        from: Data(#"{ "endingSoonNoticeSeconds": 120, "pauseBelowBatteryPercent": 40 }"#.utf8))
+    #expect(fine.endingSoonNoticeSeconds == 120)
+    #expect(fine.pauseBelowBatteryPercent == 40)
+}
+
+@Test func automationLeasesDefaultOnAndDecodeForgivingly() throws {
+    #expect(PervigilSettings().automationLeasesEnabled)
+    // A blob saved before the field existed keeps the default.
+    let decoded = try JSONDecoder().decode(PervigilSettings.self, from: Data("{}".utf8))
+    #expect(decoded.automationLeasesEnabled)
+    let off = try JSONDecoder().decode(
+        PervigilSettings.self,
+        from: Data(#"{"automationLeasesEnabled":false}"#.utf8)
+    )
+    #expect(!off.automationLeasesEnabled)
+}
+
+@Test func positiveIntervalHasACapAndAFloor() throws {
+    // `reminderAfter` is also a divisor (`elapsed / reminderAfter`): a
+    // denormal like 1e-300 would trap `Int(_:)` on the 1 Hz reconcile path,
+    // and an absurd value would never fire. Both are cleaned on decode.
+    let tiny = try JSONDecoder().decode(
+        PervigilSettings.self,
+        from: Data(#"{ "reminderAfter": 1e-300 }"#.utf8))
+    #expect(tiny.reminderAfter == 1)
+
+    let huge = try JSONDecoder().decode(
+        PervigilSettings.self,
+        from: Data(#"{ "reminderAfter": 1e300, "awdlGraceSeconds": 1e300 }"#.utf8))
+    let cap = SessionMode.maxTimedMinutes * 60
+    #expect(huge.reminderAfter == cap)
+    #expect(huge.awdlGraceSeconds == cap)
+
+    // The programmatic init applies the same cleanup as the decoder.
+    #expect(PervigilSettings(reminderAfter: 0.001).reminderAfter == 1)
+    #expect(PervigilSettings(awdlGraceSeconds: -5).awdlGraceSeconds == 60)
+
+    // Sane values pass through untouched.
+    let fine = try JSONDecoder().decode(
+        PervigilSettings.self,
+        from: Data(#"{ "reminderAfter": 1800, "awdlGraceSeconds": 90 }"#.utf8))
+    #expect(fine.reminderAfter == 1800)
+    #expect(fine.awdlGraceSeconds == 90)
+}
+
+@Test func hotKeySanitizedOnBothInitPaths() throws {
+    // A corrupt imported shortcut is dropped rather than trapping the
+    // Carbon conversion later, on decode and on programmatic init alike.
+    let bad = try JSONDecoder().decode(
+        PervigilSettings.self,
+        from: Data(#"{ "hotKey": { "keyCode": -1, "modifierFlags": 1048576 } }"#.utf8))
+    #expect(bad.hotKey == nil)
+    #expect(PervigilSettings(hotKey: HotKeyShortcut(keyCode: -1, modifierFlags: 0)).hotKey == nil)
+
+    // The bound is the RegisterEventHotKey parameter width (UInt32).
+    let wide = HotKeyShortcut(keyCode: Int(UInt32.max), modifierFlags: 1_048_576)
+    #expect(PervigilSettings(hotKey: wide).hotKey == wide)
+    let fine = HotKeyShortcut(keyCode: 40, modifierFlags: 1_048_576)
+    #expect(PervigilSettings(hotKey: fine).hotKey == fine)
+}
+
+@Test func freshInstallDefaultsOnlyTouchUnsaved() {
+    // A first launch (nothing persisted) starts session-scoped; anything
+    // saved, including an explicit off, passes through untouched.
+    let fresh = PervigilSettings.default.withFreshInstallDefaults(hasStoredSettings: false)
+    #expect(fresh.closedDisplayOnlyWhileBrewing)
+
+    var savedOff = PervigilSettings.default
+    savedOff.closedDisplayOnlyWhileBrewing = false
+    #expect(savedOff.withFreshInstallDefaults(hasStoredSettings: true) == savedOff)
+
+    // Everything else passes through on a fresh install too.
+    #expect(fresh.reminderAfter == PervigilSettings.default.reminderAfter)
+    #expect(fresh.options == PervigilSettings.default.options)
+}
+
+@Test func storeKnowsWhetherAnythingWasPersisted() {
+    let defaults = UserDefaults(suiteName: "pervigil.tests.firstlaunch")!
+    defaults.removePersistentDomain(forName: "pervigil.tests.firstlaunch")
+    let store = UserDefaultsSettingsStore(defaults: defaults, key: "k")
+    #expect(!store.hasStoredSettings)
+    store.save(PervigilSettings.default)
+    #expect(store.hasStoredSettings)
+}
+
+@Test func displaySecondsNeverTraps() {
+    #expect(PervigilSettings.displaySeconds(90.4) == 90)
+    #expect(PervigilSettings.displaySeconds(-3) == 0)
+    #expect(PervigilSettings.displaySeconds(.nan) == 0)
+    #expect(PervigilSettings.displaySeconds(.infinity) == 0)
+    #expect(PervigilSettings.displaySeconds(1e308) > Int.max / 4)
+}
+
+@Test(arguments: [true, false])
+func customizationUpgradePreservesAComplete125SettingsBlob(expanded: Bool) throws {
+    // Produced by the settings encoder at f231b07 (1.25.0), before menu
+    // customization existed. Keep the serialized representation here so an
+    // upgrade exercises the previous release's data, including its enum shape.
+    let fixture = """
+    {
+      "options": {
+        "preventSystemSleep": false, "preventDisplaySleep": true,
+        "allowScreenSaverAfter": 400, "dimFloor": 0.25,
+        "simulateUserActivity": true, "activitySimulationMethod": "specifiedKey",
+        "activitySimulationKeyCode": 40, "activityPokeIdleMinutes": 5
+      },
+      "defaultMode": {"timed": {"duration": 12345}},
+      "triggersEnabled": true,
+      "ruleSet": {"combine": "all", "rules": [{"process": {"_0": "ffmpeg"}}, {"externalDisplay": {}}]},
+      "reminderAfter": 1800, "reminderRepeats": true, "reminderSound": false,
+      "notifyOnEnd": true, "endingSoonNoticeSeconds": 120,
+      "quickStopDurations": [900, 5400], "endAction": "lockScreen",
+      "eventHooks": [{
+        "id": "E7A6D53C-E07A-48AE-9194-EEBF2C38A38B", "enabled": true,
+        "event": "sessionStarted", "action": {"runShortcut": {"name": "Mine"}}
+      }],
+      "wakeSchedule": {
+        "repeatingEnabled": true, "repeatSecondsFromMidnight": 42300,
+        "repeatWeekdays": "MTWRF", "startSessionOnWake": true,
+        "sessionDurationSeconds": 6000, "presetID": "custom"
+      },
+      "automationSync": {
+        "enabled": true, "enabledSources": [], "mutedIDs": ["hidden"],
+        "holdSeconds": 2400, "leadSeconds": 120
+      },
+      "diskKeepAlive": {"directory": "file:///Volumes/Archive", "interval": 200},
+      "virtualDisplay": {"width": 1920, "height": 1080, "hiDPI": false},
+      "thermalSafety": {
+        "mode": {"sensors": {"ids": ["Tp09"], "celsius": 98}},
+        "sustainSeconds": 60, "fanBoostPercent": 80, "stopBrewing": true
+      },
+      "pauseBelowBatteryPercent": 40, "showCountdownInMenuBar": true,
+      "menuPanelExpanded": true, "glassClarity": 75,
+      "awdlAutoWithGaming": true, "awdlNotifications": true, "awdlGraceSeconds": 150,
+      "closedDisplayOnlyWhileBrewing": false, "closedLidDisplayPolicy": "displayOff",
+      "hotKey": {"keyCode": 40, "modifierFlags": 1048576}, "startOnLaunch": true,
+      "presets": [{
+        "id": "custom", "name": "Render",
+        "ruleSet": {"combine": "all", "rules": [{"process": {"_0": "ffmpeg"}}, {"externalDisplay": {}}]}
+      }],
+      "seededPresetIDs": ["user-deleted-built-in"], "hasOnboarded": true,
+      "automationLeasesEnabled": false, "automationWakeControlEnabled": true,
+      "gamePriorityBoost": true, "controllerPokeWhileGaming": true
+    }
+    """
+    var oldFields = try #require(JSONSerialization.jsonObject(with: Data(fixture.utf8)) as? [String: Any])
+    oldFields["menuPanelExpanded"] = expanded
+    let oldData = try JSONSerialization.data(withJSONObject: oldFields)
+    let upgraded = try JSONDecoder().decode(PervigilSettings.self, from: oldData)
+    #expect(!upgraded.menuCustomizationEnabled)
+    #expect(upgraded.menuLayout == nil)
+    #expect(upgraded.customizedMenuLayout == nil)
+    #expect(upgraded.menuPanelExpanded == expanded)
+    #expect(!upgraded.closedDisplayOnlyWhileBrewing)
+    #expect(upgraded.withFreshInstallDefaults(hasStoredSettings: true) == upgraded)
+
+    // Fields added since 1.25 are dropped at both levels (top level and the
+    // nested options), so this checks every old field survives unchanged.
+    let oldOptionKeys = Set((oldFields["options"] as? [String: Any])?.keys ?? [:].keys)
+    func previousReleaseFields(_ settings: PervigilSettings) throws -> NSDictionary {
+        var encoded = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(settings)) as? [String: Any])
+        if let options = encoded["options"] as? [String: Any] {
+            encoded["options"] = options.filter { oldOptionKeys.contains($0.key) }
+        }
+        return encoded.filter { oldFields.keys.contains($0.key) } as NSDictionary
+    }
+    #expect(try previousReleaseFields(upgraded) == oldFields as NSDictionary)
+
+    let suite = "pervigil.tests.customizationUpgrade." + UUID().uuidString
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set(oldData, forKey: UserDefaultsSettingsStore.defaultKey)
+    let store = UserDefaultsSettingsStore(defaults: defaults)
+    #expect(store.hasStoredSettings)
+    #expect(store.load() == upgraded)
+    store.save(upgraded)
+    #expect(store.load() == upgraded)
+
+    let oldExport = try JSONSerialization.data(withJSONObject: [
+        "format": SettingsTransfer.formatName, "version": 1,
+        "appVersion": "1.25.0", "settings": oldFields,
+    ])
+    #expect(try SettingsTransfer.importSettings(from: oldExport) == upgraded)
+
+    var customized = upgraded
+    customized.menuCustomizationEnabled = true
+    customized.setMenuLayout(.profile(.statusOnly))
+    #expect(try previousReleaseFields(customized) == oldFields as NSDictionary)
+    let imported = try SettingsTransfer.importSettings(from: SettingsTransfer.exportData(customized))
+    #expect(imported == customized)
+    customized.menuCustomizationEnabled = false
+    store.save(customized)
+    let restored = store.load()
+    #expect(restored.customizedMenuLayout == nil)
+    #expect(restored.menuLayout == customized.menuLayout)
+    #expect(try previousReleaseFields(restored) == oldFields as NSDictionary)
+}
+
+// MARK: - Presence scope compatibility
+
+@Test func presenceFromBeforeTheBrewingScopeKeepsSessionOnlyBehavior() throws {
+    // A 1.27 options blob has no scope key. Presence was session-only then,
+    // so it must decode as "Only while brewing" on and keep every other field.
+    let json = """
+    { "preventSystemSleep": true, "simulateUserActivity": true,
+      "activitySimulationMethod": "f15", "activityPokeIdleMinutes": 5 }
+    """
+    let decoded = try JSONDecoder().decode(SleepPreventionOptions.self, from: Data(json.utf8))
+    #expect(decoded.activityOnlyWhileBrewing)
+    #expect(decoded.simulateUserActivity)
+    #expect(decoded.activitySimulationMethod == .f15)
+    #expect(decoded.activityPokeIdleMinutes == 5)
+}
+
+@Test func unreadableOptionFieldsFallBackWithoutLosingTheRest() throws {
+    // A method only a newer build knows (read after a downgrade) and wrong
+    // types from a hand-edited import: each field falls back on its own.
+    let json = """
+    { "preventDisplaySleep": true, "simulateUserActivity": true,
+      "activitySimulationMethod": "someFutureMethod",
+      "activityOnlyWhileBrewing": "no", "dimFloor": "dark",
+      "activityPokeIdleMinutes": 7 }
+    """
+    let decoded = try JSONDecoder().decode(SleepPreventionOptions.self, from: Data(json.utf8))
+    #expect(decoded.activitySimulationMethod == .powerWarp)
+    #expect(decoded.activityOnlyWhileBrewing)
+    #expect(decoded.dimFloor == 0)
+    #expect(decoded.preventDisplaySleep)
+    #expect(decoded.simulateUserActivity)
+    #expect(decoded.activityPokeIdleMinutes == 7)
+}
+
+@Test func brokenOptionsNeverDiscardTheRestOfTheSettings() throws {
+    let json = """
+    { "options": "not an object", "triggersEnabled": true,
+      "reminderAfter": 1800, "hasOnboarded": true }
+    """
+    let decoded = try JSONDecoder().decode(PervigilSettings.self, from: Data(json.utf8))
+    #expect(decoded.options == .default)
+    #expect(decoded.triggersEnabled)
+    #expect(decoded.reminderAfter == 1800)
+}
+
+@Test func presenceScopeSurvivesStoreAndBackupRoundTrips() throws {
+    var settings = PervigilSettings()
+    settings.options.simulateUserActivity = true
+    settings.options.activityOnlyWhileBrewing = false
+    let stored = try JSONDecoder().decode(
+        PervigilSettings.self, from: JSONEncoder().encode(settings))
+    #expect(stored.options.activityOnlyWhileBrewing == false)
+    let imported = try SettingsTransfer.importSettings(from:
+        SettingsTransfer.exportData(settings, appVersion: "1.28.0"))
+    #expect(imported.options.activityOnlyWhileBrewing == false)
+}

@@ -1,7 +1,18 @@
 # Changelog
 
-All notable changes to Keepresso are documented here, grouped by release.
-Versions follow [Semantic Versioning](https://semver.org).
+All notable changes to Pervigil are documented here, grouped by release.
+Versions follow [Semantic Versioning](https://semver.org). Releases up to
+1.30.0 shipped as Keepresso, which Pervigil is forked from; their entries are
+kept as written.
+
+## [Unreleased]
+
+### Changed
+
+- Renamed to Pervigil, an unofficial fork of Keepresso, with its own mark, app
+  icon, bundle identifiers (`io.github.bubb4rd.pervigil`), URL scheme
+  (`pervigil://`), CLI (`pervigil`), MCP server (`pervigil-mcp`), and update
+  feed. Settings from a Keepresso install are not carried over.
 
 ## [1.30.0] - 2026-11-10
 

@@ -1,11 +1,11 @@
-# Contributing to Keepresso
+# Contributing to Pervigil
 
 Issues and pull requests are welcome. Bug reports, fixes, new triggers,
 translations, and docs all help.
 
 ## Before you start
 
-- For a bug, open an issue with your macOS version, Mac model, Keepresso
+- For a bug, open an issue with your macOS version, Mac model, Pervigil
   version, and the steps to reproduce it.
 - For a larger feature, open an issue first so we can agree on the shape before
   you spend time on it.
@@ -22,12 +22,12 @@ conventions. It is written for coding agents but reads fine for humans.
 
 ## Making a change
 
-- New behavior goes in `Sources/KeepressoCore` behind a protocol seam when it
-  touches the system, with tests in `Tests/KeepressoCoreTests`. The SwiftUI app
+- New behavior goes in `Sources/PervigilCore` behind a protocol seam when it
+  touches the system, with tests in `Tests/PervigilCoreTests`. The SwiftUI app
   stays a thin layer on top.
 - Keep the App Sandbox off (`ENABLE_APP_SANDBOX: false`). The power APIs the app
   depends on do not work inside it.
-- Never commit the generated `Keepresso.xcodeproj`.
+- Never commit the generated `Pervigil.xcodeproj`.
 - UI strings live in the Python catalogs under `tools/localization/`. Do not
   hand-edit the `.strings` files. If you can't translate a new string into every
   language, say so in the pull request and we will fill in the rest.
@@ -52,7 +52,7 @@ python3 scripts/check-location-permission.py
 
 ## License
 
-Keepresso is licensed under the [GNU GPL v3.0](LICENSE). By contributing, you
+Pervigil is licensed under the [GNU GPL v3.0](LICENSE). By contributing, you
 agree that your contribution is released under the same license. There is no
 CLA.
 

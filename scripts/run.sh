@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# run.sh — one-shot dev launcher for Keepresso.
+# run.sh — one-shot dev launcher for Pervigil.
 #
 # Ensures XcodeGen is installed (via Homebrew), regenerates the Xcode project
 # from project.yml, and opens it in Xcode ready to ⌘R.
@@ -16,8 +16,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
-PROJECT="Keepresso.xcodeproj"
-SCHEME="Keepresso"
+PROJECT="Pervigil.xcodeproj"
+SCHEME="Pervigil"
 DO_BUILD=false
 DO_OPEN=true
 

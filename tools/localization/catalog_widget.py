@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
-# KeepressoWidget localized strings: English source -> {lang: translation}.
+# PervigilWidget localized strings: English source -> {lang: translation}.
 # Desktop widget + Control Center toggle. Product/technical terms kept
-# verbatim: Keepresso, Mac, macOS. "Brewing"/"Off" and the trigger controls
+# verbatim: Pervigil, Mac, macOS. "Brewing"/"Off" and the trigger controls
 # match the app catalog's own wording for the same commands.
 
 WIDGET = {
     # Gallery + Control Center names and descriptions
     "Keep Awake": {"hu": "Ébren tartás", "es": "Mantener despierto", "fr": "Garder éveillé", "de": "Wach halten", "zh-Hans": "保持唤醒"},
-    "See and control whether Keepresso is keeping the Mac awake.": {"hu": "Nézze meg és vezérelje, hogy a Keepresso ébren tartja-e a Macet.", "es": "Consulta y controla si Keepresso mantiene el Mac despierto.", "fr": "Voyez et contrôlez si Keepresso garde le Mac éveillé.", "de": "Sieh und steuere, ob Keepresso den Mac wach hält.", "zh-Hans": "查看并控制 Keepresso 是否让 Mac 保持唤醒。"},
+    "See and control whether Pervigil is keeping the Mac awake.": {"hu": "Nézze meg és vezérelje, hogy a Pervigil ébren tartja-e a Macet.", "es": "Consulta y controla si Pervigil mantiene el Mac despierto.", "fr": "Voyez et contrôlez si Pervigil garde le Mac éveillé.", "de": "Sieh und steuere, ob Pervigil den Mac wach hält.", "zh-Hans": "查看并控制 Pervigil 是否让 Mac 保持唤醒。"},
     "Start or stop keeping the Mac awake.": {"hu": "Az ébrentartás indítása vagy leállítása.", "es": "Inicia o detén el mantener el Mac despierto.", "fr": "Démarrez ou arrêtez le maintien du Mac en éveil.", "de": "Starte oder stoppe das Wachhalten des Mac.", "zh-Hans": "开始或停止让 Mac 保持唤醒。"},
 
     # Brand header (kept verbatim)
-    "Keepresso": {"hu": "Keepresso", "es": "Keepresso", "fr": "Keepresso", "de": "Keepresso", "zh-Hans": "Keepresso"},
+    "Pervigil": {"hu": "Pervigil", "es": "Pervigil", "fr": "Pervigil", "de": "Pervigil", "zh-Hans": "Pervigil"},
 
     # Small tile / Control Center glyph state words
     "Brewing": {"hu": "Főzés", "es": "En marcha", "fr": "Infusion", "de": "Brüht", "zh-Hans": "运行中"},
