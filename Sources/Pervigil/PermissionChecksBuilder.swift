@@ -127,8 +127,8 @@ final class PermissionChecksBuilder {
             id: "perm-notifications",
             title: L("Notifications"),
             authorized: status == .authorized || status == .provisional,
-            okDetail: L("Pervigil can post the “still brewing” reminder."),
-            warnDetail: L("Notifications are off, so the “still brewing” reminder can't appear."),
+            okDetail: L("Pervigil can post the “still awake” reminder."),
+            warnDetail: L("Notifications are off, so the “still awake” reminder can't appear."),
             hint: L("Allow notifications for Pervigil."),
             settingsURL: "x-apple.systempreferences:com.apple.preference.notifications"
         )

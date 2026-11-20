@@ -38,7 +38,7 @@ struct AboutView: View {
         }
         .padding(28)
         .frame(width: 360)
-        .tint(.pervigilBrew)
+        .tint(.pervigilAccent)
         .glassWindowBackground()
         .centersAndFrontsWindow()
     }

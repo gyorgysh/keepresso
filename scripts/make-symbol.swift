@@ -1,14 +1,13 @@
-// Exports BrandCupMark as a custom SF Symbol SVG for the widget extension's
+// Exports BrandMark as a custom SF Symbol SVG for the widget extension's
 // asset catalog (Control Center controls only render symbol images, so the
-// brand cup must be a real symbol there).
+// brand mark must be a real symbol there).
 //
 // Regenerate after changing the mark's geometry:
-//   swiftc scripts/make-symbol.swift Sources/Pervigil/BrandCupMark.swift -o /tmp/make-symbol
-//   /tmp/make-symbol > "Sources/PervigilWidget/Assets.xcassets/pervigil.cup.symbolset/pervigil.cup.svg"
+//   swiftc scripts/make-symbol.swift Sources/Pervigil/BrandMark.swift -o /tmp/make-symbol
+//   /tmp/make-symbol > "Sources/PervigilWidget/Assets.xcassets/pervigil.mark.symbolset/pervigil.mark.svg"
 //
-// The strokes (handle, saucer, steam) are flattened to filled outlines and the
-// crema stripe is punched with the even-odd rule, so the symbol needs no
-// stroke support from the renderer.
+// The mark is one even-odd path (the play triangle reads as a hole), so the
+// symbol needs no stroke support from the renderer.
 
 import CoreGraphics
 import Foundation
@@ -25,11 +24,12 @@ struct MakeSymbol {
         let canvas: CGFloat = 400
         let canvasHeight: CGFloat = 1000
 
-        let ink = BrandCupMark.fullInk
+        let ink = BrandMark.viewBox
         // Overshoot the cap-to-baseline band like real SF Symbols do: fitting
         // the band exactly renders noticeably smaller than neighboring system
-        // glyphs (Control Center made the cup look tiny at 1.0).
-        let glyphScale = bandHeight * 1.3 / ink.height
+        // glyphs in Control Center. The mark is a dense block, so it
+        // overshoots less than an open glyph would.
+        let glyphScale = bandHeight * 1.2 / ink.height
         let margin = ink.width * glyphScale * 0.08
         let left = canvas / 2 - ink.width * glyphScale / 2 - margin
         let right = canvas / 2 + ink.width * glyphScale / 2 + margin
@@ -41,22 +41,7 @@ struct MakeSymbol {
             let ty = (baseline - bandHeight / 2) - ink.midY * glyphScale
             var transform = CGAffineTransform(translationX: tx, y: ty)
                 .scaledBy(x: glyphScale, y: glyphScale)
-
-            // Cup with the crema stripe punched out (even-odd: the stripe
-            // sits fully inside the cup, so it reads as a hole).
-            let cupAndCrema = CGMutablePath()
-            cupAndCrema.addPath(BrandCupMark.cup())
-            cupAndCrema.addPath(BrandCupMark.crema())
-
-            var result: [(d: String, rule: String)] = [
-                (svgPathData(cupAndCrema.copy(using: &transform)!), "evenodd"),
-                (svgPathData(stroked(BrandCupMark.handle(), width: BrandCupMark.outlineWidth).copy(using: &transform)!), "nonzero"),
-                (svgPathData(stroked(BrandCupMark.saucer(), width: BrandCupMark.saucerWidth).copy(using: &transform)!), "nonzero"),
-            ]
-            for wisp in BrandCupMark.steamWisps() {
-                result.append((svgPathData(stroked(wisp, width: BrandCupMark.steamWidth).copy(using: &transform)!), "nonzero"))
-            }
-            return result
+            return [(svgPathData(BrandMark.path().copy(using: &transform)!), "evenodd")]
         }
 
         var svg = """
@@ -110,9 +95,5 @@ struct MakeSymbol {
         }
     }
         return d.trimmingCharacters(in: .whitespaces)
-    }
-
-    static func stroked(_ path: CGPath, width: CGFloat) -> CGPath {
-        path.copy(strokingWithWidth: width, lineCap: .round, lineJoin: .round, miterLimit: 4)
     }
 }

@@ -49,7 +49,7 @@ struct SessionEntry: TimelineEntry {
 }
 
 struct SessionProvider: TimelineProvider {
-    /// A friendly preview for the widget gallery: mid-brew with time left.
+    /// A friendly preview for the widget gallery: a running session with time left.
     func placeholder(in context: Context) -> SessionEntry {
         SessionEntry(
             date: .now,
@@ -117,35 +117,38 @@ struct KeepAwakeWidget: Widget {
     }
 }
 
-/// The brand's copper palette (matching `Theme.pervigilBrew`), fixed rather
-/// than appearance-driven because the widget paints its own background. The
-/// dark-mode variants apply: everything sits on the dark roast.
+/// The brand palette (matching `Theme.pervigilAccent` and the mark's
+/// gradient), fixed rather than appearance-driven because the widget paints
+/// its own background: everything sits on the brand's dark colorway.
 private enum WidgetPalette {
-    static let brew = Color(red: 217 / 255, green: 143 / 255, blue: 82 / 255)
-    static let steam = Color(red: 208 / 255, green: 130 / 255, blue: 74 / 255)
-    static let roast = Color(red: 43 / 255, green: 26 / 255, blue: 14 / 255)
-    static let idleRoast = Color(red: 32 / 255, green: 26 / 255, blue: 22 / 255)
-    static let cream = Color(red: 248 / 255, green: 236 / 255, blue: 221 / 255)
-    /// Secondary text and idle strokes. Fixed like the background: adaptive
-    /// styles (.primary/.secondary) resolve to near-black in light mode and
-    /// vanish against the dark roast.
-    static let creamDim = cream.opacity(0.6)
+    /// The accent, the dark-mode Pervigil blue (#2D8EF9).
+    static let accent = Color(red: 45 / 255, green: 142 / 255, blue: 249 / 255)
+    /// The mark's gradient, #6EAFF6 at the top to #007AFF at the bottom.
+    static let markTop = Color(red: 110 / 255, green: 175 / 255, blue: 246 / 255)
+    static let markBottom = Color(red: 0 / 255, green: 122 / 255, blue: 255 / 255)
+    /// The dark colorway's background, #171717 to #010101.
+    static let surfaceTop = Color(red: 23 / 255, green: 23 / 255, blue: 23 / 255)
+    static let surfaceBottom = Color(red: 1 / 255, green: 1 / 255, blue: 1 / 255)
+    static let ink = Color.white
+    /// Secondary text and the idle outline. Fixed like the background:
+    /// adaptive styles (.primary/.secondary) resolve to near-black in light
+    /// mode and vanish against the dark surface.
+    static let inkDim = ink.opacity(0.6)
 }
 
-/// Deep roast with a caramel glow while brewing; flat and dim while idle.
+/// The dark surface with a soft blue glow rising from the bottom while a
+/// session runs; the plain dark gradient while idle.
 private struct WidgetBackground: View {
     let isActive: Bool
 
     var body: some View {
-        if isActive {
-            LinearGradient(
-                colors: [WidgetPalette.roast, WidgetPalette.steam.opacity(0.55)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        } else {
-            WidgetPalette.idleRoast
-        }
+        LinearGradient(
+            colors: isActive
+                ? [WidgetPalette.surfaceTop, WidgetPalette.accent.opacity(0.45)]
+                : [WidgetPalette.surfaceTop, WidgetPalette.surfaceBottom],
+            startPoint: .top,
+            endPoint: .bottom
+        )
     }
 }
 
@@ -164,11 +167,11 @@ struct KeepAwakeWidgetView: View {
     private var small: some View {
         Button(intent: ToggleKeepAwakeWidgetIntent()) {
             VStack(spacing: 6) {
-                BrandCupBadge(active: state.isActive)
+                BrandMarkBadge(active: state.isActive)
                     .frame(width: 44, height: 44)
-                Text(state.isActive ? L("Brewing") : L("Off"))
+                Text(state.isActive ? L("Awake") : L("Off"))
                     .font(.headline)
-                    .foregroundStyle(state.isActive ? WidgetPalette.cream : WidgetPalette.creamDim)
+                    .foregroundStyle(state.isActive ? WidgetPalette.ink : WidgetPalette.inkDim)
                 countdown
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -181,15 +184,15 @@ struct KeepAwakeWidgetView: View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
-                    BrandCupBadge(active: state.isActive)
+                    BrandMarkBadge(active: state.isActive)
                         .frame(width: 24, height: 24)
                     Text("Pervigil")
                         .font(.headline)
-                        .foregroundStyle(state.isActive ? WidgetPalette.cream : WidgetPalette.cream.opacity(0.9))
+                        .foregroundStyle(state.isActive ? WidgetPalette.ink : WidgetPalette.ink.opacity(0.9))
                 }
                 Text(state.isActive ? L("Keeping the Mac awake") : L("The Mac can sleep"))
                     .font(.subheadline)
-                    .foregroundStyle(WidgetPalette.creamDim)
+                    .foregroundStyle(WidgetPalette.inkDim)
                 countdown
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -200,7 +203,7 @@ struct KeepAwakeWidgetView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(WidgetPalette.brew)
+                .tint(WidgetPalette.accent)
 
                 if state.triggersEnabled {
                     Button(intent: SetTriggersPausedWidgetIntent(paused: !state.triggersPaused)) {
@@ -211,11 +214,11 @@ struct KeepAwakeWidgetView: View {
                         // Explicit brand color: the bordered style's label
                         // ignored .tint in widget rendering and came out
                         // system blue.
-                        .foregroundStyle(WidgetPalette.brew)
+                        .foregroundStyle(WidgetPalette.accent)
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
-                    .tint(WidgetPalette.brew)
+                    .tint(WidgetPalette.accent)
                 }
             }
             .fixedSize(horizontal: true, vertical: false)
@@ -228,49 +231,37 @@ struct KeepAwakeWidgetView: View {
         if state.isActive, let endsAt = state.endsAt, endsAt > .now {
             Text(timerInterval: Date.now ... endsAt, countsDown: true)
                 .font(.caption.monospacedDigit())
-                .foregroundStyle(WidgetPalette.cream.opacity(0.85))
+                .foregroundStyle(WidgetPalette.ink.opacity(0.85))
         }
     }
 }
 
-/// The real brand mark, drawn from the shared ``BrandCupMark`` geometry:
-/// filled caramel cup with steam while brewing, a quiet outline while idle.
-private struct BrandCupBadge: View {
+/// The brand mark, drawn from the shared ``BrandMark`` geometry: solid in
+/// the brand gradient while a session runs, a quiet outline while idle (the
+/// same states as the menu bar icon).
+private struct BrandMarkBadge: View {
     var active: Bool
+
+    private static let eoFill = FillStyle(eoFill: true)
 
     var body: some View {
         GeometryReader { geo in
-            let ink = active ? BrandCupMark.fullInk : BrandCupMark.cupInk
-            let scale = min(geo.size.width / ink.width, geo.size.height / ink.height)
-            let transform = CGAffineTransform(scaleX: scale, y: scale)
-                .translatedBy(x: -ink.minX, y: -ink.minY)
-
-            ZStack {
-                if active {
-                    Path(BrandCupMark.cup()).applying(transform)
-                        .fill(WidgetPalette.brew)
-                    Path(BrandCupMark.crema()).applying(transform)
-                        .fill(.black)
-                        .blendMode(.destinationOut)
-                    Path(BrandCupMark.handle()).applying(transform)
-                        .stroke(WidgetPalette.brew, style: .init(
-                            lineWidth: BrandCupMark.outlineWidth * scale, lineCap: .round))
-                    ForEach(Array(BrandCupMark.steamWisps().enumerated()), id: \.offset) { _, wisp in
-                        Path(wisp).applying(transform)
-                            .stroke(WidgetPalette.steam, style: .init(
-                                lineWidth: BrandCupMark.steamWidth * scale, lineCap: .round))
-                    }
-                } else {
-                    Path(BrandCupMark.cupAndHandle()).applying(transform)
-                        .stroke(WidgetPalette.creamDim, style: .init(
-                            lineWidth: BrandCupMark.outlineWidth * scale, lineCap: .round))
-                }
-                Path(BrandCupMark.saucer()).applying(transform)
-                    .stroke(active ? WidgetPalette.brew : WidgetPalette.creamDim, style: .init(
-                        lineWidth: BrandCupMark.saucerWidth * scale, lineCap: .round))
+            let rect = CGRect(origin: .zero, size: geo.size)
+            let mark = Path(BrandMark.path(fitting: rect))
+            if active {
+                mark.fill(
+                    LinearGradient(colors: [WidgetPalette.markTop, WidgetPalette.markBottom],
+                                   startPoint: .top, endPoint: .bottom),
+                    style: Self.eoFill)
+            } else {
+                // An inner stroke (stroked at twice the width, clipped to
+                // the mark), so the outline keeps the solid mark's footprint.
+                let markHeight = min(geo.size.height, geo.size.width / BrandMark.aspectRatio)
+                mark.stroke(WidgetPalette.inkDim, lineWidth: max(1, markHeight * 0.08) * 2)
+                    .clipShape(mark, style: Self.eoFill)
             }
-            .compositingGroup() // confine destinationOut to the glyph's layers
         }
+        .aspectRatio(BrandMark.aspectRatio, contentMode: .fit)
     }
 }
 
@@ -285,11 +276,11 @@ struct KeepAwakeControl: ControlWidget {
                 isOn: isOn,
                 action: SetKeepAwakeControlIntent()
             ) { on in
-                // The brand cup as a custom symbol (generated by
+                // The brand mark as a custom symbol (generated by
                 // scripts/make-symbol.swift); controls only render symbols.
-                Label(on ? L("Brewing") : L("Off"), image: "pervigil.cup")
+                Label(on ? L("Awake") : L("Off"), image: "pervigil.mark")
             }
-            .tint(WidgetPalette.brew)
+            .tint(WidgetPalette.accent)
         }
         .displayName("Keep Awake")
         .description("Start or stop keeping the Mac awake.")

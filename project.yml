@@ -227,8 +227,8 @@ targets:
     sources:
       - path: Sources/PervigilWidget
       # The shared brand-mark geometry (CoreGraphics only), so the widgets
-      # draw the real cup instead of an SF Symbols lookalike.
-      - path: Sources/Pervigil/BrandCupMark.swift
+      # draw the real mark instead of an SF Symbols lookalike.
+      - path: Sources/Pervigil/BrandMark.swift
       # The widget/control intents, compiled into both targets so
       # `openAppWhenRun` can run them in the app process (launching it when
       # needed); appex-only intent types make that flag a silent no-op.

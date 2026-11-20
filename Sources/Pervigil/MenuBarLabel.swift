@@ -2,15 +2,14 @@ import SwiftUI
 import Combine
 import PervigilCore
 
-/// The icon shown in the system menu bar: the brand cup as a template image,
-/// filled with steam while brewing, an outline while idle (``MenuBarIcon``),
-/// so the bar matches the app icon and the website mark instead of the stock
-/// `cup.and.saucer` SF Symbol.
+/// The icon shown in the system menu bar: the Pervigil mark as a template
+/// image, solid while a session runs and an outline while idle
+/// (``MenuBarIcon``), so the bar matches the app icon.
 ///
 /// The label stays static by design: a `MenuBarExtra` label is snapshotted to
 /// a template image, so a Canvas renders blank, `TimelineView` freezes the
-/// app, and SwiftUI animations don't run there. State reads through the fill
-/// and the steam, not motion. The optional countdown text next to the icon
+/// app, and SwiftUI animations don't run there. State reads through solid
+/// versus outline, not motion. The optional countdown text next to the icon
 /// updates via a plain `Timer.publish` tick for the same reason.
 struct MenuBarLabel: View {
     @Bindable var session: SessionController
@@ -61,7 +60,7 @@ struct MenuBarLabel: View {
 
     private func customLabel(_ layout: MenuLayout) -> some View {
         HStack(spacing: 3) {
-            // Always one Image: hiding the cup swaps in a blank sliver rather
+            // Always one Image: hiding the icon swaps in a blank sliver rather
             // than removing the view, since a re-added sibling Image gets clipped.
             Image(nsImage: layout.showMenuBarIcon ? icon : MenuBarIcon.hidden)
             if layout.menuBarTextStyle != .iconOnly {
@@ -78,7 +77,7 @@ struct MenuBarLabel: View {
 
     private func refreshCustomText(_ layout: MenuLayout) {
         let status = session.pausedByBattery || session.pausedByThermal
-            ? L("Paused") : (session.isActive ? L("Brewing") : L("Idle"))
+            ? L("Paused") : (session.isActive ? L("Awake") : L("Idle"))
         switch layout.menuBarTextStyle {
         case .existing: customText = Self.format(session.remaining)
         case .iconOnly: customText = ""
@@ -97,7 +96,7 @@ struct MenuBarLabel: View {
 
     private var accessibilityText: String {
         if session.pausedByBattery { return L("Pervigil: paused, battery low") }
-        return session.isActive ? L("Pervigil: brewing") : L("Pervigil: idle")
+        return session.isActive ? L("Pervigil: awake") : L("Pervigil: idle")
     }
 
     /// "12:03" for under an hour, "1:02:03" once it reaches an hour.

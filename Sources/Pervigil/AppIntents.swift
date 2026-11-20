@@ -84,7 +84,7 @@ struct PervigilShortcuts: AppShortcutsProvider {
                 "Keep my Mac awake with \(.applicationName)",
             ],
             shortTitle: "Start Keeping Awake",
-            systemImageName: "cup.and.saucer.fill"
+            systemImageName: "bolt.fill"
         )
         AppShortcut(
             intent: StopKeepingAwakeIntent(),
@@ -93,7 +93,7 @@ struct PervigilShortcuts: AppShortcutsProvider {
                 "Let my Mac sleep with \(.applicationName)",
             ],
             shortTitle: "Stop Keeping Awake",
-            systemImageName: "cup.and.saucer"
+            systemImageName: "bolt"
         )
     }
 }

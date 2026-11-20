@@ -4,7 +4,7 @@ import PervigilCore
 
 // The widget and Control Center intents, compiled into BOTH the app and the
 // widget extension (project.yml adds this file to the appex target, the same
-// sharing as BrandCupMark.swift). That dual membership is what makes
+// sharing as BrandMark.swift). That dual membership is what makes
 // `openAppWhenRun` work: the system runs an open-app intent in the app's own
 // process, so the type must exist there; when it lived only in the appex the
 // flag made `perform()` silently never run (the inert-toggle bug). With it,

@@ -48,7 +48,7 @@ enum AppRelocator {
             .appendingPathComponent(bundleURL.lastPathComponent)
 
         // If the installed copy is already running, hand over to it instead of
-        // spawning a second instance (two cups, both holding assertions). If
+        // spawning a second instance (two menu-bar icons, both holding assertions). If
         // it's an older version, Sparkle will offer the update from there.
         if let running = runningInstance(at: dest) {
             isRelocating = true

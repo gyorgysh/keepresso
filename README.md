@@ -39,7 +39,7 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
 
 ## Features
 
-- ☕ **Keep awake, your way.** Prevent system sleep and/or display sleep as
+- ⚡ **Keep awake, your way.** Prevent system sleep and/or display sleep as
   independent toggles, indefinitely, for a timed session (presets or any custom
   duration), or **until a wall-clock time** ("until 18:00", today or tomorrow).
 - 🌙 **Yield the screen saver.** Let the screen saver or display sleep kick in
@@ -148,7 +148,7 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   work: agentic coding, gaming and streaming, meetings and calls, or remote
   access. Reopen it any time from Preferences.
 - 🧩 **Desktop widgets and a Control Center toggle.** A small widget that's a
-  one-tap toggle (the brand cup fills and steams while brewing, with a live
+  one-tap toggle (the Pervigil mark lights up while awake, with a live
   countdown), a medium widget with Start/Stop and Pause/Resume Triggers
   buttons, and on macOS 26 a Keep Awake control for Control Center.
 - 🔍 **Awake explainer.** The Activity pane shows every app's live power
@@ -173,7 +173,7 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   can trust the boost before a heavy render needs it. Watching and pausing
   work everywhere. The fan boost runs through the administrator helper, so
   it's silent and never prompts.
-- ⏱️ **Menu-bar countdown.** An optional live countdown next to the cup icon for
+- ⏱️ **Menu-bar countdown.** An optional live countdown next to the menu-bar icon for
   timed sessions.
 - ⌨️ **Global hotkey.** A system-wide keyboard shortcut to toggle keep-awake from
   any app, recorded in Preferences (Carbon-based, so no Input Monitoring or
@@ -194,7 +194,7 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   **Prevent display sleep** enabled, **Stay on at 0% brightness** also keeps
   display-sleep prevention active under the closed lid. A configured screen-saver
   delay still applies. An optional
-  **"Only while brewing"** mode ties it to the session instead of leaving it on
+  **"Only while awake"** mode ties it to the session instead of leaving it on
   globally: on when a keep-awake session starts, off when it ends (or the app
   quits, even after a crash), with the password asked once per app run, or
   never with the administrator helper.
@@ -242,7 +242,7 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   still works the old way, with a once-per-run prompt (now always announced
   by a notification), except the fan boost, which stays off rather than ever
   prompting from a background safety action.
-- 🔔 **Reminders, end actions, and event hooks.** A "still brewing" notification
+- 🔔 **Reminders, end actions, and event hooks.** A "still awake" notification
   (with an optional sound) after _N_ minutes, one-time or recurring, so a
   forgotten session can't quietly drain the battery. When a session ends on its
   own (a timer expiring, triggers dropping), optionally notify, then sleep the
@@ -261,7 +261,7 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   create a higher-resolution HiDPI virtual display so Screen Sharing and VNC look
   crisp instead of a fuzzy 1920×1080. Off by default; uses a private macOS API,
   so it's a no-dummy-plug software alternative you should treat as experimental.
-- ✨ **Native and quiet.** A menu-bar agent with an animated cup while brewing, a
+- ✨ **Native and quiet.** A menu-bar agent with a filled icon while awake, a
   live summary of what's holding the session on, a Liquid Glass app icon (Icon
   Composer, with light, dark, and tinted appearances), and Liquid Glass window
   styling on macOS 26+. The dropdown's glass is yours to tune, from frosty to
@@ -373,18 +373,18 @@ Either way, Pervigil keeps itself up to date from there.
 
 ## Using Pervigil
 
-Click the cup in the menu bar to open Pervigil. Right-click (or control-click)
+Click the Pervigil icon in the menu bar to open Pervigil. Right-click (or control-click)
 it for a compact context menu with the app entries: Preferences, Headless
 Setup, Gaming & Streaming, Keyboard Cleaner, Public Wi-Fi, About, Check for
 Updates, and Quit.
 
 - **Quick toggle.** Flip **Keep awake** on or off and pick a duration:
   indefinitely, a preset (15 minutes, 1 hour, 4 hours), any custom duration, or
-  until a time of day. The cup fills and animates while brewing.
+  until a time of day. The icon fills while a session is active.
 - **Customize the menu.** Open **Customize Menu…** in Preferences > General >
   Menu bar for a live preview beside the editor. Enable **Customize menu
   sections**, then start with
-  **Minimal**, **Compact**, **Balanced**, **Lid controls**, **Brewing controls**,
+  **Minimal**, **Compact**, **Balanced**, **Lid controls**, **Session controls**,
   **Status only**, or **Detailed**, then hide, reorder, pin, or move any of the 39
   controls between groups. Choose spacing, panel width, status style, group
   headings and disclosures, trigger and agent detail, and menu-bar text. Session
@@ -394,7 +394,7 @@ Updates, and Quit.
   keep the standard 280-point width. Settings and tools start collapsed; the
   session controls adapt to manual and trigger
   sessions. The two small switch variants add just closed-display mode or
-  Only while brewing to Compact.
+  Only while awake to Compact.
   Status only shows information without session buttons. Preview controls cannot
   change a session or feature setting.
   “Show less” can retain pinned controls, the first few groups, or everything.
@@ -415,7 +415,7 @@ Updates, and Quit.
   needs administrator rights: silent with the helper installed, one password
   ask without it. Works on power or battery; turn it off when you're done, on
   battery in a bag it can drain and heat up. Or set it to **"Only while
-  brewing"** in Preferences > General and it follows the session on its own:
+  awake"** in Preferences > General and it follows the session on its own:
   on at session start, off at session end or app quit.
 - **Preferences** (⌘,) holds the set-and-forget configuration, in tabs:
   - **General**: what to keep awake, the administrator helper, menu-bar
@@ -423,10 +423,10 @@ Updates, and Quit.
     settings backup (export/import), and the welcome screen.
   - **Triggers**: turn on rule-based activation, apply a preset, and build your
     rule set.
-  - **Reminder**: a one-time or recurring "still brewing" alert, with a sound,
+  - **Reminder**: a one-time or recurring "still awake" alert, with a sound,
     plus end notifications and the ending-soon warning.
   - **Automation**: end-of-session actions, outbound event hooks, and scheduled
-    wake (with optional wake-and-brew).
+    wake (with optional auto-start on wake).
   - **Disk**: choose a volume to keep spun up and how often to touch it.
   - **Display**: create an experimental high-resolution headless virtual display.
   - **Activity**: what's keeping the Mac awake right now, a weekly held-awake
@@ -473,7 +473,7 @@ commands and can also hold its own assertion when you need to block in a
 pipeline:
 
 ```sh
-pervigil start --for 90     # tell the app to brew for 90 minutes
+pervigil start --for 90     # tell the app to keep awake for 90 minutes
 pervigil stop               # end the session
 pervigil status             # exit 0 awake, 1 not, 2 app not running
 pervigil status --json      # machine-readable, jq-friendly

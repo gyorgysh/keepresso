@@ -1231,7 +1231,7 @@ public final class SessionController {
         let body = reminderRepeats
             ? L("Your Mac is still awake. It's been %@.", elapsed)
             : L("Your Mac has been kept awake for %@.", elapsed)
-        reminder?.notify(title: L("Pervigil is still brewing"), body: body, sound: reminderSound)
+        reminder?.notify(title: L("Pervigil is still keeping your Mac awake"), body: body, sound: reminderSound)
     }
 
     /// Arm the one-shot ``endingSoonNotice`` for a countdown with this much

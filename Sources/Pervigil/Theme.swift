@@ -11,10 +11,6 @@ extension Color {
             : NSColor(srgbRed: 0 / 255, green: 122 / 255, blue: 255 / 255, alpha: 1)
     })
 
-    /// The legacy name for ``pervigilAccent``, kept while a few views still
-    /// spell it this way.
-    static var pervigilBrew: Color { pervigilAccent }
-
     /// The top of the brand mark's gradient (#6EAFF6), fading down to
     /// #007AFF (``brandMarkBottom``). The mark is drawn with this gradient
     /// wherever it appears in color.
@@ -470,7 +466,7 @@ extension View {
     /// Liquid Glass material, tinted faintly toward the window background color
     /// so its content keeps contrast over dark desktops; on earlier systems it
     /// falls back to a frosted `ultraThinMaterial`, which reads as glass too.
-    /// Pass a `tint` for an accented card (the copper callouts, the warning
+    /// Pass a `tint` for an accented card (the accent callouts, the warning
     /// banner); it replaces the neutral wash on both paths.
     ///
     /// `followsClarity` is for cards living inside the menu panel: their

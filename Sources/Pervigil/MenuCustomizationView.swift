@@ -38,7 +38,7 @@ extension MenuItem {
         case .screenSaverYield: L("Allow screen saver after")
         case .dimDisplay: L("Dim after idle")
         case .closedDisplay: L("Closed-display mode")
-        case .brewingOnly: L("Only while brewing")
+        case .brewingOnly: L("Only while awake")
         case .lidPolicy: L("If the lid shuts")
         case .batteryPause: L("Pause on low battery")
         case .batteryThreshold: L("Battery threshold")
@@ -69,7 +69,7 @@ extension MenuLayoutProfile {
         case .compact: L("Compact")
         case .balanced: L("Balanced")
         case .lidControls: L("Lid controls")
-        case .brewingControls: L("Brewing controls")
+        case .brewingControls: L("Session controls")
         case .statusOnly: L("Status only")
         case .detailed: L("Detailed")
         }
@@ -198,7 +198,7 @@ struct MenuCustomizationView: View {
                         Button("Reset customization") { model.updateMenuLayout { $0 = MenuLayout() } }
                             .disabled(!model.menuCustomizationEnabled)
                         Spacer()
-                        InfoButton(text: L("Warnings stay visible. Preferences and Quit are also available by right-clicking the cup."))
+                        InfoButton(text: L("Warnings stay visible. Preferences and Quit are also available by right-clicking the icon."))
                     }.padding(20)
                 }
                 .frame(minWidth: 360, maxWidth: 440)
@@ -268,7 +268,7 @@ struct MenuCustomizationView: View {
                 Picker("Menu bar", selection: binding(\.menuBarTextStyle)) {
                     ForEach(MenuBarTextStyle.allCases) { Text($0.label).tag($0) }
                 }
-                Toggle("Show cup icon", isOn: binding(\.showMenuBarIcon))
+                Toggle("Show menu-bar icon", isOn: binding(\.showMenuBarIcon))
                     .disabled([.existing, .iconOnly].contains(layout.menuBarTextStyle))
             } header: { Text("Menu bar") }
         }
@@ -409,7 +409,7 @@ extension MenuLayoutProfile {
         case .compact: L("A small session menu with status and quick timers.")
         case .balanced: L("The familiar menu, with settings and tools tucked away.")
         case .lidControls: L("A compact session menu with the closed-display switch.")
-        case .brewingControls: L("A compact session menu with Only while brewing.")
+        case .brewingControls: L("A compact session menu with Only while awake.")
         case .statusOnly: L("Status and activity only, without session buttons.")
         case .detailed: L("All controls available. Settings, conditions, and shortcuts start collapsed.")
         }

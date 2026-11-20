@@ -4,7 +4,7 @@
 "See and control whether Pervigil is keeping the Mac awake." = "Nézze meg és vezérelje, hogy a Pervigil ébren tartja-e a Macet.";
 "Start or stop keeping the Mac awake." = "Az ébrentartás indítása vagy leállítása.";
 "Pervigil" = "Pervigil";
-"Brewing" = "Főzés";
+"Awake" = "Ébren";
 "Off" = "Ki";
 "Keeping the Mac awake" = "A Mac ébren van tartva";
 "The Mac can sleep" = "A Mac elalhat";

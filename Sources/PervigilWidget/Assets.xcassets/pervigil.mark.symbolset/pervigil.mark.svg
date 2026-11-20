@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400" height="1000" xmlns="http://www.w3.org/2000/svg">
+ <g id="Notes"/>
+ <g id="Guides">
+  <line id="Baseline-S" x1="0" y1="256" x2="400" y2="256"/>
+  <line id="Capline-S" x1="0" y1="126" x2="400" y2="126"/>
+  <line id="Baseline-M" x1="0" y1="556" x2="400" y2="556"/>
+  <line id="Capline-M" x1="0" y1="426" x2="400" y2="426"/>
+  <line id="Baseline-L" x1="0" y1="856" x2="400" y2="856"/>
+  <line id="Capline-L" x1="0" y1="726" x2="400" y2="726"/>
+  <line id="left-margin" x1="121.77" y1="126" x2="121.77" y2="256"/>
+  <line id="right-margin" x1="278.23" y1="126" x2="278.23" y2="256"/>
+ </g>
+ <g id="Symbols">
+  <g id="Regular-S">
+   <path d="M 132.56 113.00 L 267.44 113.00 L 267.44 269.00 L 132.56 269.00 L 132.56 168.44 L 178.16 168.44 L 132.56 142.76 Z M 178.16 168.44 L 266.24 218.12 L 178.16 267.80 Z" fill-rule="evenodd"/>
+  </g>
+  <g id="Regular-M">
+   <path d="M 132.56 413.00 L 267.44 413.00 L 267.44 569.00 L 132.56 569.00 L 132.56 468.44 L 178.16 468.44 L 132.56 442.76 Z M 178.16 468.44 L 266.24 518.12 L 178.16 567.80 Z" fill-rule="evenodd"/>
+  </g>
+  <g id="Regular-L">
+   <path d="M 132.56 713.00 L 267.44 713.00 L 267.44 869.00 L 132.56 869.00 L 132.56 768.44 L 178.16 768.44 L 132.56 742.76 Z M 178.16 768.44 L 266.24 818.12 L 178.16 867.80 Z" fill-rule="evenodd"/>
+  </g>
+ </g>
+</svg>

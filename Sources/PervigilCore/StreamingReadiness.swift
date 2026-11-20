@@ -284,7 +284,7 @@ public extension ReadinessCheck {
             id: "stream-browser-gaming",
             title: L("Cloud gaming in the browser"),
             status: .tip,
-            detail: L("Xbox Cloud Gaming and the web versions of GeForce NOW run in a browser tab, so there's no app for the gaming condition to spot. The \u{201C}Audio playing\u{201D} condition covers them: game sound keeps the session brewing."),
+            detail: L("Xbox Cloud Gaming and the web versions of GeForce NOW run in a browser tab, so there's no app for the gaming condition to spot. The \u{201C}Audio playing\u{201D} condition covers them: game sound keeps the session running."),
             remediation: Remediation(
                 hint: L("Add it under Preferences \u{25B8} Triggers \u{25B8} Add \u{25B8} Apps & Activity \u{25B8} Media.")
             )

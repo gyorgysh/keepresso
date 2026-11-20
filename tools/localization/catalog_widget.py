@@ -14,7 +14,7 @@ WIDGET = {
     "Pervigil": {"hu": "Pervigil", "es": "Pervigil", "fr": "Pervigil", "de": "Pervigil", "zh-Hans": "Pervigil"},
 
     # Small tile / Control Center glyph state words
-    "Brewing": {"hu": "Főzés", "es": "En marcha", "fr": "Infusion", "de": "Brüht", "zh-Hans": "运行中"},
+    "Awake": {"hu": "Ébren", "es": "Despierto", "fr": "Éveillé", "de": "Wach", "zh-Hans": "已唤醒"},
     "Off": {"hu": "Ki", "es": "Desactivado", "fr": "Désactivé", "de": "Aus", "zh-Hans": "关闭"},
 
     # Medium widget status lines

@@ -26,9 +26,9 @@ APP = {
         "hu": "Elfelejtette kikapcsolni?", "es": "¿Olvidaste desactivarlo?", "fr": "Avez-vous oublié de le désactiver ?", "de": "Hast du vergessen, es auszuschalten?", "zh-Hans": "忘记把它关掉了吗？",
         "it": "Hai dimenticato di spegnerlo?", "ja": "オフにするのを忘れていませんか？", "ko": "끄는 것을 잊으셨나요?", "ru": "Вы забыли его выключить?", "pt-BR": "Esqueceu de desligar?", "tr": "Kapatmayı mı unuttun?", "pl": "Zapomniałeś to wyłączyć?", "uk": "Забув це вимкнути?", "zh-Hant": "忘記關閉了嗎？",
     },
-    "Quit while still brewing?": {
-        "hu": "Kilépés főzés közben?", "es": "¿Salir mientras sigue en marcha?", "fr": "Quitter pendant l’infusion ?", "de": "Beim Brühen beenden?", "zh-Hans": "在仍在运行时退出？",
-        "it": "Esci mentre è ancora in infusione?", "ja": "抽出中に終了しますか？", "ko": "아직 실행 중인데 종료하시겠습니까?", "ru": "Завершить, пока заваривание продолжается?", "pt-BR": "Sair enquanto ainda está em execução?", "tr": "Hâlâ demlenirken çıkılsın mı?", "pl": "Zamknąć mimo trwającego parzenia?", "uk": "Вийти, коли ще заварюється?", "zh-Hant": "仍在執行中要結束嗎？",
+    "Quit while keeping awake?": {
+        "hu": "Kilépés ébrentartás közben?", "es": "¿Salir mientras se mantiene despierto?", "fr": "Quitter pendant le maintien en éveil ?", "de": "Während des Wachhaltens beenden?", "zh-Hans": "在保持唤醒时退出？",
+        "it": "Uscire mentre mantiene sveglio il Mac?", "ja": "スリープ防止中に終了しますか？", "ko": "깨어 있게 유지 중인데 종료하시겠습니까?", "ru": "Завершить во время поддержания активности?", "pt-BR": "Sair enquanto mantém o Mac acordado?", "tr": "Uyanık tutarken çıkılsın mı?", "pl": "Zamknąć podczas czuwania?", "uk": "Вийти під час підтримки активності?", "zh-Hant": "要在保持喚醒時結束嗎？",
     },
     "Turn off and quit": {
         "hu": "Kikapcsolás és kilépés", "es": "Desactivar y salir", "fr": "Désactiver et quitter", "de": "Ausschalten und beenden", "zh-Hans": "关闭并退出",
@@ -38,13 +38,13 @@ APP = {
         "hu": "Kilépés mindenképp", "es": "Salir de todos modos", "fr": "Quitter quand même", "de": "Trotzdem beenden", "zh-Hans": "仍要退出",
         "it": "Esci comunque", "ja": "このまま終了", "ko": "그래도 종료", "ru": "Всё равно завершить", "pt-BR": "Sair mesmo assim", "tr": "Yine de çık", "pl": "Zamknij mimo to", "uk": "Все одно вийти", "zh-Hant": "仍要結束",
     },
-    "Stop brewing and quit": {
-        "hu": "A főzés leállítása és kilépés", "es": "Detener la marcha y salir", "fr": "Arrêter l’infusion et quitter", "de": "Brühen stoppen und beenden", "zh-Hans": "停止运行并退出",
-        "it": "Ferma l'infusione ed esci", "ja": "抽出を停止して終了", "ko": "실행을 중지하고 종료", "ru": "Остановить заваривание и завершить", "pt-BR": "Parar e sair", "tr": "Demlemeyi durdur ve çık", "pl": "Przerwij parzenie i zamknij", "uk": "Зупинити заварювання й вийти", "zh-Hant": "停止執行並結束",
+    "Stop session and quit": {
+        "hu": "Munkamenet leállítása és kilépés", "es": "Detener sesión y salir", "fr": "Arrêter la session et quitter", "de": "Sitzung stoppen und beenden", "zh-Hans": "停止会话并退出",
+        "it": "Interrompi sessione ed esci", "ja": "セッションを停止して終了", "ko": "세션 중지 후 종료", "ru": "Остановить сеанс и завершить", "pt-BR": "Encerrar sessão e sair", "tr": "Oturumu durdur ve çık", "pl": "Zatrzymaj sesję i zamknij", "uk": "Зупинити сеанс і вийти", "zh-Hant": "停止工作階段並結束",
     },
-    "A keep-awake session is still brewing. Quitting stops it now instead of at its timer.": {
-        "hu": "Egy ébrentartási munkamenet még főz. A kilépés most állítja le, nem az időzítő lejártakor.", "es": "Una sesión sigue en marcha. Salir la detiene ahora en lugar de esperar a su temporizador.", "fr": "Une session est toujours en cours d’infusion. Quitter l’arrête maintenant au lieu d’attendre son minuteur.", "de": "Eine Wachhalte-Sitzung brüht noch. Beenden stoppt sie jetzt statt erst bei ihrem Timer.", "zh-Hans": "一个保持唤醒会话仍在运行中。现在退出会立即停止它，而不是等到计时结束。",
-        "it": "Una sessione di veglia è ancora in infusione. Uscire la interrompe ora invece che al suo timer.", "ja": "スリープ防止セッションがまだ抽出中です。終了すると、タイマーではなく今すぐ停止します。", "ko": "깨어 있게 유지 세션이 아직 실행 중입니다. 종료하면 타이머가 끝날 때까지 기다리지 않고 지금 중지됩니다.", "ru": "Сеанс поддержания активности всё ещё заваривается. Выход остановит его сейчас, а не по таймеру.", "pt-BR": "Uma sessão de vigília ainda está em preparo. Sair a interrompe agora em vez de aguardar o timer.", "tr": "Bir uyanık tutma oturumu hâlâ demleniyor. Çıkmak, zamanlayıcısını beklemek yerine onu şimdi durdurur.", "pl": "Sesja czuwania wciąż się parzy. Zakończenie przerywa ją teraz zamiast czekać na licznik czasu.", "uk": "Сеанс підтримки активності ще заварюється. Вихід зупиняє його зараз замість очікування таймера.", "zh-Hant": "保持喚醒工作階段仍在運作中。結束會立即停止它，而不等計時器結束。",
+    "A keep-awake session is still running. Quitting stops it now instead of at its timer.": {
+        "hu": "Egy ébrentartási munkamenet még fut. A kilépés most állítja le, nem az időzítő lejártakor.", "es": "Una sesión sigue en marcha. Salir la detiene ahora en lugar de esperar a su temporizador.", "fr": "Une session de maintien en éveil est toujours en cours. Quitter l’arrête maintenant au lieu d’attendre son minuteur.", "de": "Eine Wachhalte-Sitzung läuft noch. Beenden stoppt sie jetzt statt erst bei ihrem Timer.", "zh-Hans": "一个保持唤醒会话仍在运行中。现在退出会立即停止它，而不是等到计时结束。",
+        "it": "Una sessione di veglia è ancora in corso. Uscire la interrompe ora invece che al suo timer.", "ja": "スリープ防止セッションがまだ実行中です。終了すると、タイマーではなく今すぐ停止します。", "ko": "깨어 있게 유지 세션이 아직 실행 중입니다. 종료하면 타이머가 끝날 때까지 기다리지 않고 지금 중지됩니다.", "ru": "Сеанс поддержания активности всё ещё выполняется. Выход остановит его сейчас, а не по таймеру.", "pt-BR": "Uma sessão de vigília ainda está em andamento. Sair a interrompe agora em vez de aguardar o timer.", "tr": "Bir uyanık tutma oturumu hâlâ çalışıyor. Çıkmak, zamanlayıcısını beklemek yerine onu şimdi durdurur.", "pl": "Sesja czuwania wciąż trwa. Zakończenie przerywa ją teraz zamiast czekać na licznik czasu.", "uk": "Сеанс підтримки активності ще триває. Вихід зупиняє його зараз замість очікування таймера.", "zh-Hant": "保持喚醒工作階段仍在執行中。結束會立即停止它，而不等計時器結束。",
     },
     "%@ would stay awake with the lid shut and nothing managing it.": {
         "hu": "%@ csukott fedéllel is ébren maradna, és semmi sem tartaná ébren.", "es": "%@ seguiría despierto con la tapa cerrada y sin nada que lo mantenga.", "fr": "%@ resterait éveillé capot fermé sans rien pour le maintenir éveillé.", "de": "%@ würde bei geschlossenem Deckel wach bleiben, ohne dass etwas es wach hält.", "zh-Hans": "%@ 会在合盖且没有任何因素管理时保持唤醒。",

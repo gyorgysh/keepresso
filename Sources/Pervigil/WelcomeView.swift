@@ -81,10 +81,10 @@ struct WelcomeView: View {
     /// last-remembered step.
     @State private var windowVisible = false
 
-    /// Whether the hero cup is brewing: a live session, or a use case just
-    /// picked (the pour is the payoff for the choice; the manual opt-out
-    /// keeps the cup honest and empty).
-    private var cupBrewing: Bool {
+    /// Whether the hero mark shows as active: a live session, or a use case
+    /// just picked (lighting the mark is the payoff for the choice; the
+    /// manual opt-out keeps it an honest outline).
+    private var markActive: Bool {
         model.session.isActive
             || (selectedUseCase != nil && selectedUseCase != Self.manualID)
     }
@@ -125,10 +125,10 @@ struct WelcomeView: View {
         Group {
             if windowVisible {
                 VStack(spacing: 0) {
-                    // The cup is a fixed header across every step, so the brand stays
-                    // put and picking a use case still "pours" it (the payoff for the
+                    // The mark is a fixed header across every step, so the brand stays
+                    // put and picking a use case still lights it (the payoff for the
                     // choice) no matter which step you're on.
-                    BrandMarkView(isActive: cupBrewing, scale: 2.0 * type.scale)
+                    BrandMarkView(isActive: markActive, scale: 2.0 * type.scale)
                         .padding(.top, 22)
                         .padding(.bottom, 4)
                     ScrollView {
@@ -258,7 +258,7 @@ struct WelcomeView: View {
                 .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 10) {
                 pointRow("cursorarrow.click",
-                         "Click the cup in the menu bar to keep your Mac awake, and click again to let it sleep.")
+                         "Click the Pervigil icon in the menu bar to keep your Mac awake, and click again to let it sleep.")
                 pointRow("wand.and.stars",
                          "Or set up triggers, so it stays awake automatically only while you are on a call, downloading, or gaming.")
                 pointRow("checkmark.shield",
@@ -374,7 +374,7 @@ struct WelcomeView: View {
                     .controlSize(.small)
                 }
             }
-            Text("Pervigil runs in the menu bar. Click the cup at any time, or open Preferences for everything else.")
+            Text("Pervigil runs in the menu bar. Click the Pervigil icon at any time, or open Preferences for everything else.")
                 .font(type.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -426,7 +426,7 @@ struct WelcomeView: View {
                 }
             }
             if model.closedDisplayOnlyWhileBrewing {
-                Text("Follows the session while \u{201C}Only while brewing\u{201D} is on.")
+                Text("Follows the session while \u{201C}Only while awake\u{201D} is on.")
                     .font(type.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -458,14 +458,13 @@ struct WelcomeView: View {
     /// callout shape as the gaming and agent tips on the use-case step.
     private var onlyWhileBrewingHint: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "cup.and.saucer.fill")
-                .font(type.title3)
-                .foregroundStyle(Color.pervigilAccent)
-                .frame(width: 26 * type.scale)
+            BrandMarkShape()
+                .fill(Color.pervigilAccent, style: FillStyle(eoFill: true))
+                .frame(width: 26 * type.scale, height: 20 * type.scale)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Handle it automatically")
                     .font(type.callout.weight(.medium))
-                Text("Enable \u{201C}Only while brewing\u{201D} so closed-display follows each keep-awake session (your triggers or a manual brew) and turns off when nothing is holding the Mac awake.")
+                Text("Enable \u{201C}Only while awake\u{201D} so closed-display follows each keep-awake session (your triggers or a manual session) and turns off when nothing is holding the Mac awake.")
                     .font(type.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

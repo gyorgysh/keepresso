@@ -62,7 +62,7 @@ struct RulesView: View {
             .labelsHidden()
             .fixedSize()
             Text("of these are true:")
-            InfoButton(text: L("\u{201C}any\u{201D} keeps the Mac awake while at least one condition holds, so the rules pile up: add three and any of them is enough. \u{201C}all\u{201D} needs every one true at once, which narrows things down (on AC power and an external display connected means only while docked). Conditions are checked once a second, and Pervigil stops brewing as soon as they stop being met."))
+            InfoButton(text: L("\u{201C}any\u{201D} keeps the Mac awake while at least one condition holds, so the rules pile up: add three and any of them is enough. \u{201C}all\u{201D} needs every one true at once, which narrows things down (on AC power and an external display connected means only while docked). Conditions are checked once a second, and Pervigil stops as soon as they stop being met."))
         }
     }
 

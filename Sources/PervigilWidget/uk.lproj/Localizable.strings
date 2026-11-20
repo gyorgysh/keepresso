@@ -4,7 +4,7 @@
 "See and control whether Pervigil is keeping the Mac awake." = "Перегляньте та керуйте тим, чи Pervigil не дає Mac заснути.";
 "Start or stop keeping the Mac awake." = "Почніть або зупиніть підтримку активності Mac.";
 "Pervigil" = "Pervigil";
-"Brewing" = "Заварюється";
+"Awake" = "Не спить";
 "Off" = "Вимкнено";
 "Keeping the Mac awake" = "Mac не спить";
 "The Mac can sleep" = "Mac може заснути";

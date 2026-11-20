@@ -3,12 +3,12 @@ import PervigilCore
 
 /// The quit modal: brand art with looping native animation, variant copy, and
 /// a warning badge, run app-modal while termination waits. It deliberately
-/// mirrors ``HelperAttentionView`` (centered copy, copper badge and
-/// bronze-tinted buttons) so a quit-time warning reads as the same app.
+/// mirrors ``HelperAttentionView`` (centered copy, accent badge and
+/// accent-tinted buttons) so a quit-time warning reads as the same app.
 /// Every string reuses an existing catalog key, so no language falls back.
 ///
-/// The art is drawn, not loaded: ``SessionArt`` pours nothing and waits for
-/// no appear event (a static filled glyph plus timeline steam), and
+/// The art is drawn, not loaded: ``SessionArt`` is the static active mark
+/// and waits for no appear event, and
 /// ``LidClosedArt`` warns about the lid-shut override with a breathing sleep
 /// LED and rising Zzz. Both honor Reduce Motion with a steady frame.
 struct QuitSleepModalView: View {
@@ -42,7 +42,7 @@ struct QuitSleepModalView: View {
                 Text(verbatim: title)
                     .font(.title3.bold())
                 if showsSessionLine {
-                    Text(verbatim: L("A keep-awake session is still brewing. Quitting stops it now instead of at its timer."))
+                    Text(verbatim: L("A keep-awake session is still running. Quitting stops it now instead of at its timer."))
                         .font(.callout)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.secondary)
@@ -91,14 +91,14 @@ struct QuitSleepModalView: View {
                     Button("Turn off and quit") { decide(.turnOffAndQuit) }
                         .keyboardShortcut(.defaultAction)
                 } else {
-                    Button("Stop brewing and quit") { decide(.stopBrewingAndQuit) }
+                    Button("Stop session and quit") { decide(.stopBrewingAndQuit) }
                         .keyboardShortcut(.defaultAction)
                 }
             }
         }
         .padding(24)
         .frame(width: 380)
-        // The bronze buttons: without this the default action renders
+        // The accent buttons: without this the default action renders
         // system blue, which belongs to no part of this app.
         .tint(.pervigilAccent)
     }
@@ -107,7 +107,7 @@ struct QuitSleepModalView: View {
     /// keys: a renamed literal must never silently fall back to English.
     private var title: String {
         switch coverage {
-        case .session: L("Quit while still brewing?")
+        case .session: L("Quit while keeping awake?")
         default: L("Did you forget to turn it off?")
         }
     }
@@ -138,11 +138,9 @@ struct QuitSleepModalView: View {
     }
 }
 
-/// The brand mark itself, brewing, at modal size. Deliberately
-/// ``BrandMarkView`` rather than a local redraw: the cup, the steam
-/// geometry, the wisp count and spacing, the loop timing and the Reduce
-/// Motion frame all have one definition, so the modal cannot drift away from
-/// the menu bar and the dropdown.
+/// The brand mark itself, active, at modal size. Deliberately
+/// ``BrandMarkView`` rather than a local redraw, so the modal cannot drift
+/// away from the menu bar and the dropdown.
 private struct SessionArt: View {
     var body: some View {
         BrandMarkView(isActive: true, scale: 4.6)
@@ -152,7 +150,7 @@ private struct SessionArt: View {
 
 /// The website's LidClose figure, ported to SwiftUI: a MacBook whose lid
 /// snaps shut with an overshoot bounce on a 6.5s loop while the green awake
-/// LED and the copper activity bars never stop, over the site's steam
+/// LED and the accent activity bars never stop, on the site's loop
 /// timing. Geometry and keyframes mirror home.jsx (viewBox 380x260),
 /// colors resolve to the app palette. Draws the full closed-lid frame even
 /// when the timeline never ticks; steady closed frame under Reduce Motion.
@@ -230,7 +228,7 @@ private struct LidCloseFigure: View {
 
             // The brand mark beside the Mac, standing on the same desk line.
             BrandMarkView(isActive: true, scale: 1.5)
-                .position(x: 40, y: Self.deskY - 26.6 * 1.5 / 2)
+                .position(x: 40, y: Self.deskY - BrandMarkView.baseHeight * 1.5 / 2)
         }
         .frame(width: 200, height: 140)
     }

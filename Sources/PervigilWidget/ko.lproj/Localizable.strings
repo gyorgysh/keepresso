@@ -4,7 +4,7 @@
 "See and control whether Pervigil is keeping the Mac awake." = "Pervigil가 Mac을 깨어 있게 유지하고 있는지 확인하고 제어합니다.";
 "Start or stop keeping the Mac awake." = "Mac을 깨어 있게 유지하기를 시작하거나 중지합니다.";
 "Pervigil" = "Pervigil";
-"Brewing" = "실행 중";
+"Awake" = "깨어 있음";
 "Off" = "꺼짐";
 "Keeping the Mac awake" = "Mac을 깨어 있게 유지 중";
 "The Mac can sleep" = "Mac이 잠들 수 있음";

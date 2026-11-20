@@ -393,7 +393,7 @@ private struct GeneralTab: View {
                     set: { model.startOnLaunch = $0 }
                 ))
             } header: {
-                sectionHeader("Startup", info: L("\u{201C}Launch at login\u{201D} starts Pervigil itself when you log in, so the cup is always in the menu bar. \u{201C}Start keep-awake on launch\u{201D} goes further and begins a session right away, using the default duration, for an always-on Mac that shouldn't need a rule to stay up. It's ignored while triggers are controlling activation, since your conditions decide then."))
+                sectionHeader("Startup", info: L("\u{201C}Launch at login\u{201D} starts Pervigil itself when you log in, so the icon is always in the menu bar. \u{201C}Start keep-awake on launch\u{201D} goes further and begins a session right away, using the default duration, for an always-on Mac that shouldn't need a rule to stay up. It's ignored while triggers are controlling activation, since your conditions decide then."))
             } footer: {
                 sectionFooter("Starts a session as soon as Pervigil launches.")
             }
@@ -512,7 +512,7 @@ private struct GeneralTab: View {
                             }
                         }
                     }
-                    Toggle("Only while brewing", isOn: optionBinding(\.activityOnlyWhileBrewing))
+                    Toggle("Only while awake", isOn: optionBinding(\.activityOnlyWhileBrewing))
                 }
             } header: {
                 sectionHeader("Presence", info: L("Keeping the Mac awake stops it sleeping, but that does not keep you active in other software. Meeting and chat apps, remote desktop and VDI, cloud gaming, and many other tools still apply their own idle timeout: they mark you away, disconnect, or end the session. This reports activity so you stay present. The default method needs no extra permission. Some software only notices a real key or mouse, so you can pick F15, Shift, a specified key, or a posted mouse move. Those need Accessibility, requested only when you choose them, never at launch. F15 is the usual pick (most keyboards lack it, so nothing is typed). Shift is invisible. A specified key or mouse move covers software that only watches those. A letter or number will type into the front app. It only steps in once you've been idle a few seconds, so it never types or nudges while you're using the Mac. Off by default."))
@@ -595,7 +595,7 @@ private struct GeneralTab: View {
                         }
                     }
                 } header: {
-                    sectionHeader("Battery", info: L("A safety net for a session you forget about. If the charge falls this low, Pervigil pauses the session and lets the Mac sleep, even mid-session, and tells you why in a notification. The menu-bar cup shows the pause as a last sip of low-power yellow. Plugging in resumes it on its own. This is the same slider as the one in the menu, so the two always agree."))
+                    sectionHeader("Battery", info: L("A safety net for a session you forget about. If the charge falls this low, Pervigil pauses the session and lets the Mac sleep, even mid-session, and tells you why in a notification. The menu-bar icon shows a yellow band while paused for low battery. Plugging in resumes it on its own. This is the same slider as the one in the menu, so the two always agree."))
                 } footer: {
                     sectionFooter("Lets the Mac sleep once charge drops below this level, and switches off closed-display mode so a lid-closed Mac can sleep too.")
                 }
@@ -883,7 +883,7 @@ private struct GeneralTab: View {
                     : L("disable system sleep"))
             }
             if model.closedDisplayOnlyWhileBrewing {
-                Text("Follows the session while \u{201C}Only while brewing\u{201D} is on.")
+                Text("Follows the session while \u{201C}Only while awake\u{201D} is on.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .shakes(on: lidRowShakes)
@@ -910,7 +910,7 @@ private struct GeneralTab: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Toggle("Only while brewing", isOn: Binding(
+            Toggle("Only while awake", isOn: Binding(
                 get: { model.closedDisplayOnlyWhileBrewing },
                 set: { model.closedDisplayOnlyWhileBrewing = $0 }
             ))
@@ -951,8 +951,8 @@ private struct GeneralTab: View {
                 .foregroundStyle(.secondary)
         } header: {
             model.machineHasBattery
-                ? sectionHeader("Closed-display mode", info: L("Normally a MacBook sleeps the moment you shut the lid unless a display is attached. This keeps it running with the lid shut and nothing plugged in, on power or battery. What the screen itself does when the lid closes is your choice below (\u{201C}If the lid shuts\u{201D}): turn it off, keep it powered at zero brightness so a remote session stays live, or leave it alone. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off: closed and on battery, the Mac can still drain over time, so don't leave it on in a bag. \u{201C}Only while brewing\u{201D} ties it to the session instead, on when a keep-awake session starts, off when it ends or Pervigil quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for \u{201C}Only while brewing\u{201D}."))
-                : sectionHeader("Disable sleep", info: L("Stops the Mac from sleeping at all, even with no session running. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off, even if Pervigil quits. The display still sleeps as usual. \u{201C}Only while brewing\u{201D} ties it to the session instead, on when a keep-awake session starts, off when it ends or Pervigil quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for \u{201C}Only while brewing\u{201D}."))
+                ? sectionHeader("Closed-display mode", info: L("Normally a MacBook sleeps the moment you shut the lid unless a display is attached. This keeps it running with the lid shut and nothing plugged in, on power or battery. What the screen itself does when the lid closes is your choice below (\u{201C}If the lid shuts\u{201D}): turn it off, keep it powered at zero brightness so a remote session stays live, or leave it alone. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off: closed and on battery, the Mac can still drain over time, so don't leave it on in a bag. \u{201C}Only while awake\u{201D} ties it to the session instead, on when a keep-awake session starts, off when it ends or Pervigil quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for \u{201C}Only while awake\u{201D}."))
+                : sectionHeader("Disable sleep", info: L("Stops the Mac from sleeping at all, even with no session running. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off, even if Pervigil quits. The display still sleeps as usual. \u{201C}Only while awake\u{201D} ties it to the session instead, on when a keep-awake session starts, off when it ends or Pervigil quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for \u{201C}Only while awake\u{201D}."))
         } footer: {
             model.machineHasBattery
                 ? sectionFooter("Keeps running with the lid shut and no external display.")
@@ -1102,7 +1102,7 @@ private struct TriggersTab: View {
                     }
                 }
             } header: {
-                sectionHeader("Triggers", info: L("A trigger is a condition Pervigil watches, checked once a second. With triggers on, they take over: Pervigil starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The menu then shows an Automatic and Manual switch: Manual sets the triggers aside without touching your rules, until you switch back or relaunch Pervigil."))
+                sectionHeader("Triggers", info: L("A trigger is a condition Pervigil watches, checked once a second. With triggers on, they take over: Pervigil starts a session the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The menu then shows an Automatic and Manual switch: Manual sets the triggers aside without touching your rules, until you switch back or relaunch Pervigil."))
             } footer: {
                 sectionFooter("The listed conditions control the session instead of the manual switch.")
             }

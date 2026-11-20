@@ -4,7 +4,7 @@
 "See and control whether Pervigil is keeping the Mac awake." = "Consulta y controla si Pervigil mantiene el Mac despierto.";
 "Start or stop keeping the Mac awake." = "Inicia o detén el mantener el Mac despierto.";
 "Pervigil" = "Pervigil";
-"Brewing" = "En marcha";
+"Awake" = "Despierto";
 "Off" = "Desactivado";
 "Keeping the Mac awake" = "Manteniendo el Mac despierto";
 "The Mac can sleep" = "El Mac puede suspenderse";

@@ -271,7 +271,7 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
     controller.reconcile(battery: .onAC)
     #expect(controller.isActive)
     controller.reconcile()
-    #expect(reminder.notices.filter { $0.title == "Pervigil is still brewing" }.count == 1)
+    #expect(reminder.notices.filter { $0.title == "Pervigil is still keeping your Mac awake" }.count == 1)
 }
 
 @MainActor

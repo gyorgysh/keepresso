@@ -206,7 +206,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// macOS normally refuses to launch a second instance of a running bundle,
     /// but a click on one of our notifications can make Launch Services spawn
-    /// one anyway (seen after launching from Xcode): two menu-bar cups, each
+    /// one anyway (seen after launching from Xcode): two menu-bar icons, each
     /// with its own assertions. Detect that here, before the ticker or any
     /// assertion starts, and hand back to the original instead.
     func applicationWillFinishLaunching(_ notification: Notification) {

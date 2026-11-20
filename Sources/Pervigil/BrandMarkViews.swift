@@ -66,15 +66,16 @@ enum MenuBarIcon {
             // stroke, so the outline keeps the solid mark's exact footprint.
             ctx.addPath(mark)
             ctx.clip(using: .evenOdd)
-            if state == .lowBattery {
-                let level = rect.height * BrandMark.lowBatteryLevel
-                ctx.setFillColor(NSColor.systemYellow.cgColor)
-                ctx.fill(CGRect(x: rect.minX, y: rect.maxY - level, width: rect.width, height: level))
-            }
             ctx.setStrokeColor(ink)
             ctx.setLineWidth(outlineWidth * 2)
             ctx.addPath(mark)
             ctx.strokePath()
+            if state == .lowBattery {
+                // Over the outline, so the band reads as one solid level.
+                let level = rect.height * BrandMark.lowBatteryLevel
+                ctx.setFillColor(NSColor.systemYellow.cgColor)
+                ctx.fill(CGRect(x: rect.minX, y: rect.maxY - level, width: rect.width, height: level))
+            }
             return true
         }
         image.isTemplate = state != .lowBattery
@@ -120,13 +121,14 @@ struct BrandMarkGlyph: View {
             let lineWidth = max(1, geo.size.height * MenuBarIcon.outlineWidth / MenuBarIcon.markHeight)
             ZStack {
                 ZStack {
+                    BrandMarkShape()
+                        .stroke(Color.secondary, lineWidth: lineWidth * 2)
+                    // Over the outline, so the band reads as one solid level.
                     if lowBattery {
                         Color(nsColor: .systemYellow)
                             .frame(height: geo.size.height * BrandMark.lowBatteryLevel)
                             .frame(maxHeight: .infinity, alignment: .bottom)
                     }
-                    BrandMarkShape()
-                        .stroke(Color.secondary, lineWidth: lineWidth * 2)
                 }
                 .clipShape(BrandMarkShape(), style: Self.eoFill)
                 .opacity(1 - fill)

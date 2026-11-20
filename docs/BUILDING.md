@@ -29,7 +29,7 @@ xcodegen generate          # creates Pervigil.xcodeproj from project.yml
 open Pervigil.xcodeproj    # then press Cmd-R to build and run
 ```
 
-The cup appears in your menu bar. Pervigil is a menu-bar agent, so it has no Dock
+The Pervigil icon appears in your menu bar. Pervigil is a menu-bar agent, so it has no Dock
 icon: look up top, not in the Dock.
 
 There's also a one-step helper that does the generate-and-open for you:

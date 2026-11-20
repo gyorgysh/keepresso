@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Generate the animated README demo cards (docs/assets/demo_*.svg).
 
-Each card is a self-contained SVG: the dark menu-bar popover (tokens from the
-pervigil.com hero, dark theme) driven by CSS keyframes. No script, no external
+Each card is a self-contained SVG: the dark menu-bar popover (tokens adapted from the
+upstream site hero, dark theme, recoloured to the Pervigil blue) driven by CSS keyframes. No script, no external
 fonts, so GitHub renders it through a plain <img>.
 
 Every scene is a fixed loop of L seconds. Visual state is described as time

@@ -12,7 +12,7 @@ struct HelperAttentionView: View {
     @Environment(\.dismiss) private var dismiss
     /// Closed attention windows stay alive on current macOS; unmount the body
     /// while off screen so helper Observation churn stops. Starts false so a
-    /// retained ordered-out scene does not mount (or steam) until visible.
+    /// retained ordered-out scene does not mount until visible.
     @State private var windowVisible = false
 
     /// What the window is showing right now, derived from the live helper

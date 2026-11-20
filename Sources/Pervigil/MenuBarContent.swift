@@ -128,7 +128,7 @@ struct MenuBarContent: View {
         // Tear the heavy body down while ordered out. A closed MenuBarExtra
         // panel keeps this shell alive; leaving the full tree mounted would
         // keep observing SessionController / MenuPanelSnapshot every reconcile
-        // and grow the Observation graph without bound (and leave steam/spark
+        // and grow the Observation graph without bound (and leave spark
         // TimelineViews ticking). The visibility probe stays mounted outside
         // the `if` so reopen can remount the body.
         Group {
@@ -542,7 +542,7 @@ struct MenuBarContent: View {
                 AdminAuthNote(purpose: model.machineHasBattery ? L("keep the Mac awake with the lid closed") : L("disable system sleep"))
             }
             if model.closedDisplayOnlyWhileBrewing {
-                Text("Follows the session while \u{201C}Only while brewing\u{201D} is on.")
+                Text("Follows the session while \u{201C}Only while awake\u{201D} is on.")
                     .font(type.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     .shakes(on: lidRowShakes)
             }
@@ -558,7 +558,7 @@ struct MenuBarContent: View {
 
     private var advancedBrewingOnly: some View {
         VStack(alignment: .leading, spacing: 6) {
-            switchRow("Only while brewing", isOn: Binding(get: { model.closedDisplayOnlyWhileBrewing }, set: { model.closedDisplayOnlyWhileBrewing = $0 }),
+            switchRow("Only while awake", isOn: Binding(get: { model.closedDisplayOnlyWhileBrewing }, set: { model.closedDisplayOnlyWhileBrewing = $0 }),
                       info: model.machineHasBattery
                         ? L("Turns closed-display mode on when a keep-awake session starts and off when it ends or Pervigil quits.")
                         : L("Turns the sleep override on when a keep-awake session starts and off when it ends or Pervigil quits."))
@@ -575,7 +575,7 @@ struct MenuBarContent: View {
                     .frame(width: style == .card ? 36 : 24, height: style == .card ? 36 : 24)
                     .accessibilityHidden(true)
             }
-            Text(session.pausedByBattery || session.pausedByThermal ? L("Paused") : (session.isActive ? L("Brewing") : L("Idle")))
+            Text(session.pausedByBattery || session.pausedByThermal ? L("Paused") : (session.isActive ? L("Awake") : L("Idle")))
                 .font(style == .card ? type.headline : type.body.weight(.medium))
             Spacer(minLength: 0)
         }
@@ -773,7 +773,7 @@ struct MenuBarContent: View {
                 : L("disable system sleep"))
         }
         if model.closedDisplayOnlyWhileBrewing {
-            Text("Follows the session while \u{201C}Only while brewing\u{201D} is on.")
+            Text("Follows the session while \u{201C}Only while awake\u{201D} is on.")
                 .font(type.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -814,7 +814,7 @@ struct MenuBarContent: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
 
-        switchRow("Only while brewing", isOn: Binding(
+        switchRow("Only while awake", isOn: Binding(
             get: { model.closedDisplayOnlyWhileBrewing },
             set: { model.closedDisplayOnlyWhileBrewing = $0 }
         ), info: model.machineHasBattery
@@ -1022,7 +1022,7 @@ struct MenuBarContent: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text((session.pausedByBattery || session.pausedByThermal)
                     ? L("Paused")
-                    : (session.isActive ? L("Brewing") : L("Idle")))
+                    : (session.isActive ? L("Awake") : L("Idle")))
                     .font(type.headline)
                     .contentTransition(.opacity)
                 Text(statusDetail)
@@ -1040,7 +1040,7 @@ struct MenuBarContent: View {
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .menuPreviewCard(preview: preview != nil, followsClarity: true)
-        // A faint warm wash behind the glass while brewing, like a lit burner.
+        // A faint accent wash behind the glass while a session runs.
         .background(
             Color.pervigilAccent.opacity(session.isActive ? 0.08 : 0),
             in: RoundedRectangle(cornerRadius: 12, style: .continuous)

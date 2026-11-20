@@ -4,7 +4,7 @@
 "See and control whether Pervigil is keeping the Mac awake." = "Pervigil'nun Mac'i uyanık tutup tutmadığını görün ve denetleyin.";
 "Start or stop keeping the Mac awake." = "Mac'i uyanık tutmayı başlatın veya durdurun.";
 "Pervigil" = "Pervigil";
-"Brewing" = "Demleniyor";
+"Awake" = "Uyanık";
 "Off" = "Kapalı";
 "Keeping the Mac awake" = "Mac uyanık tutuluyor";
 "The Mac can sleep" = "Mac uyuyabilir";

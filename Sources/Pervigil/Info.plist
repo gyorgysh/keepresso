@@ -58,7 +58,7 @@
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Pervigil checks whether a calendar event is in progress so it can keep your Mac awake during your scheduled sessions.</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>© 2026 Pervigil contributors. GNU GPL v3.0.</string>
+	<string>© 2026 Pervigil and Keepresso contributors. GNU GPL v3.0.</string>
 	<key>NSLocationUsageDescription</key>
 	<string>Pervigil reads Wi-Fi network names for your triggers and to find the hotspot you choose for automatic fallback.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

@@ -267,7 +267,7 @@ struct StreamingSetupView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Text("Turns the pause on right now and keeps it on until you turn it off or quit Pervigil (it isn't tied to whether a keep-awake session is brewing). While it's on, AirDrop, Handoff, Sidecar, and Continuity Camera take a break, and the once-a-second lag spikes stop. Everything comes back the moment you turn it off or quit Pervigil; even if the app crashes, macOS is restored automatically. With the administrator helper installed the switch is always instant and silent; without it, macOS asks for your password once per launch (the system dialog may show “osascript”, which is Pervigil running the command).")
+            Text("Turns the pause on right now and keeps it on until you turn it off or quit Pervigil (it isn't tied to whether a keep-awake session is running). While it's on, AirDrop, Handoff, Sidecar, and Continuity Camera take a break, and the once-a-second lag spikes stop. Everything comes back the moment you turn it off or quit Pervigil; even if the app crashes, macOS is restored automatically. With the administrator helper installed the switch is always instant and silent; without it, macOS asks for your password once per launch (the system dialog may show “osascript”, which is Pervigil running the command).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
