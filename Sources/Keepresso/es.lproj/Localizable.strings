@@ -938,3 +938,5 @@
 "Low Power Mode is active." = "El modo de bajo consumo está activo.";
 "Initializing the helper…" = "Iniciando el asistente…";
 "Updating the helper…" = "Actualizando el asistente…";
+"Notify when paused" = "Notificar al pausar";
+"Pauses brewing below the battery cutoff and resumes when you plug in. Turning off the notification keeps the battery protection active." = "Pausa el mantenimiento en actividad por debajo del umbral de batería y lo reanuda al conectar el cargador. Desactivar la notificación mantiene activa la protección de batería.";

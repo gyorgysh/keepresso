@@ -938,3 +938,5 @@
 "Low Power Mode is active." = "Stromsparmodus ist aktiv.";
 "Initializing the helper…" = "Helfer wird gestartet…";
 "Updating the helper…" = "Helfer wird aktualisiert…";
+"Notify when paused" = "Beim Pausieren benachrichtigen";
+"Pauses brewing below the battery cutoff and resumes when you plug in. Turning off the notification keeps the battery protection active." = "Pausiert das Wachhalten unterhalb des Akkugrenzwerts und setzt es beim Anschließen des Ladegeräts fort. Auch ohne Benachrichtigung bleibt der Akkuschutz aktiv.";

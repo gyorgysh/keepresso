@@ -1645,6 +1645,71 @@ private final class FakeReminder: ReminderNotifying {
     func cancelPending() {}
 }
 
+@MainActor @Test(arguments: [false, true])
+func batteryPauseNoticeCanBeOffWithoutWeakeningSafety(endNotices: Bool) {
+    let power = FakeAssertions()
+    let reminder = FakeReminder()
+    let actions = RecordingEndActor()
+    let clock = Clock()
+    let controller = SessionController(assertions: power, reminder: reminder,
+        activity: FakeActivity(), endActor: actions, now: { clock.now })
+    controller.pauseBelowBatteryPercent = 20
+    controller.notifyOnBatteryPause = false
+    controller.notifyOnEnd = endNotices
+    controller.endAction = .sleepMac
+    controller.start(mode: .timed(duration: 600))
+
+    controller.reconcile(battery: .discharging(19))
+    #expect(controller.pausedByBattery)
+    #expect(!controller.isActive)
+    #expect(power.held.isEmpty)
+    #expect(controller.log.events.last?.kind == .batteryPaused)
+    #expect(reminder.notices.isEmpty)
+    clock.advance(SessionController.endActionDebounce + 1)
+    controller.reconcile(battery: .discharging(18))
+    #expect(actions.performed.isEmpty)
+    #expect(reminder.notices.isEmpty)
+
+    controller.reconcile(battery: .onAC)
+    #expect(!controller.pausedByBattery)
+    #expect(controller.isActive)
+    #expect(power.held == [.system])
+    #expect(reminder.notices.isEmpty)
+}
+
+@MainActor @Test
+func batteryPauseNoticeChangeAppliesToNextEpisodeOnly() {
+    let reminder = FakeReminder()
+    let controller = SessionController(assertions: FakeAssertions(), reminder: reminder,
+        activity: FakeActivity(), endActor: RecordingEndActor())
+    controller.pauseBelowBatteryPercent = 20
+    controller.notifyOnBatteryPause = false
+    controller.start()
+    controller.reconcile(battery: .discharging(19))
+    controller.notifyOnBatteryPause = true
+    controller.reconcile(battery: .discharging(18))
+    #expect(reminder.notices.isEmpty)
+    controller.reconcile(battery: .onAC)
+    controller.reconcile(battery: .discharging(19))
+    #expect(reminder.notices.count == 1)
+    #expect(reminder.notices.first?.title == "Paused on low battery")
+}
+
+@MainActor @Test
+func batteryPauseNoticeOptOutDoesNotMuteThermalPause() {
+    let reminder = FakeReminder()
+    let controller = SessionController(assertions: FakeAssertions(), reminder: reminder,
+        activity: FakeActivity(), endActor: RecordingEndActor())
+    controller.notifyOnBatteryPause = false
+    controller.pauseWhenHot = true
+    controller.start()
+    controller.reconcile(thermal: .hot)
+    #expect(controller.pausedByThermal)
+    #expect(!controller.isActive)
+    #expect(reminder.notices.count == 1)
+    #expect(reminder.notices.first?.title == "Paused on high temperature")
+}
+
 @MainActor
 @Test func batteryPauseExplainsItselfInANotification() {
     let reminder = FakeReminder()

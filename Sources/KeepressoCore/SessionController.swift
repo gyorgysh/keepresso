@@ -80,9 +80,11 @@ public final class SessionController {
     /// Whether the reminder also plays the system sound. Default true.
     public var reminderSound = true
 
-    /// Post a notification when a session ends on its own (timed expiry, trigger
-    /// drop, low-battery pause), not on a manual stop. Default false.
+    /// Post a notification on timed expiry or trigger release, not on a manual
+    /// stop. Safety-pause notices have their own policy. Default false.
     public var notifyOnEnd = false
+    /// Announce battery safety pauses independently of ordinary session endings.
+    public var notifyOnBatteryPause = true
 
     /// Post a heads-up this many seconds before a timed session stops on its
     /// own, or `nil` (the default) for no heads-up. One-shot per session:
@@ -446,7 +448,7 @@ public final class SessionController {
         case natural(kind: SessionEventKind)
         /// Safety pause (battery / thermal): notification only, never the end
         /// action. Those pauses already manage sleep on their own.
-        case safetyPause(kind: SessionEventKind)
+        case safetyPause(kind: SessionEventKind, notify: Bool = true)
     }
 
     /// The shared teardown: logs `reason` when a session was actually running
@@ -455,8 +457,8 @@ public final class SessionController {
     /// ends) schedule the end action; a manual stop stays silent so it never
     /// surprise-sleeps the Mac. A `notice` replaces the generic end
     /// notification with a specific explanation (the battery pause), delivered
-    /// even when ``notifyOnEnd`` is off: that stop is invisible otherwise,
-    /// which is the notice's whole point.
+    /// independently of ``notifyOnEnd``, unless that stop explicitly opts out
+    /// of its notification.
     private func stop(
         reason: String,
         effects: StopEffects = .none,
@@ -466,7 +468,7 @@ public final class SessionController {
         let kind: SessionEventKind? = {
             switch effects {
             case .none: return wasActive ? .sessionEnded : nil
-            case .natural(let kind), .safetyPause(let kind): return kind
+            case .natural(let kind), .safetyPause(let kind, _): return kind
             }
         }()
         if isActive {
@@ -501,8 +503,12 @@ public final class SessionController {
             break
         case .natural:
             performEndEffects(notice: notice, scheduleAction: true)
-        case .safetyPause:
-            performEndEffects(notice: notice, scheduleAction: false)
+        case .safetyPause(_, let notify):
+            // Opting out of a safety notice must not substitute the generic
+            // session-ended banner or run an end action.
+            if notify {
+                performEndEffects(notice: notice, scheduleAction: false)
+            }
         }
     }
 
@@ -760,7 +766,7 @@ public final class SessionController {
                 if isActive {
                     safetyStop(
                         reason: L("Paused, battery below %d%%", threshold),
-                        effects: .safetyPause(kind: .batteryPaused),
+                        effects: .safetyPause(kind: .batteryPaused, notify: notifyOnBatteryPause),
                         notice: (
                             title: L("Paused on low battery"),
                             body: L("Battery is at %d%%. Keepresso is letting the Mac sleep until you plug in to charge.", percent)

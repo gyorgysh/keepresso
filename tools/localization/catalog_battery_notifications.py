@@ -1,0 +1,36 @@
+"""Optional battery-pause notification, independent of the safety cutoff."""
+
+APP = {
+    "Notify when paused": {
+        "hu": "Értesítés szüneteltetéskor",
+        "es": "Notificar al pausar",
+        "fr": "Notifier lors de la mise en pause",
+        "de": "Beim Pausieren benachrichtigen",
+        "zh-Hans": "暂停时通知",
+        "it": "Notifica quando viene messo in pausa",
+        "ja": "一時停止時に通知",
+        "ko": "일시 정지 시 알림",
+        "ru": "Уведомлять о приостановке",
+        "pt-BR": "Notificar ao pausar",
+        "tr": "Duraklatıldığında bildir",
+        "pl": "Powiadom o wstrzymaniu",
+        "uk": "Сповіщати про призупинення",
+        "zh-Hant": "暫停時通知",
+    },
+    "Pauses brewing below the battery cutoff and resumes when you plug in. Turning off the notification keeps the battery protection active.": {
+        "hu": "Szünetelteti az ébren tartást, ha az akkumulátor töltöttsége a határérték alá esik, és folytatja, ha töltőre csatlakoztatod. Az értesítés kikapcsolása nem kapcsolja ki az akkumulátorvédelmet.",
+        "es": "Pausa el mantenimiento en actividad por debajo del umbral de batería y lo reanuda al conectar el cargador. Desactivar la notificación mantiene activa la protección de batería.",
+        "fr": "Suspend le maintien en éveil sous le seuil de batterie et le reprend au branchement. Désactiver la notification laisse la protection de la batterie active.",
+        "de": "Pausiert das Wachhalten unterhalb des Akkugrenzwerts und setzt es beim Anschließen des Ladegeräts fort. Auch ohne Benachrichtigung bleibt der Akkuschutz aktiv.",
+        "zh-Hans": "电量低于阈值时暂停保持唤醒，接通电源后恢复。关闭通知不会关闭电池保护。",
+        "it": "Mette in pausa il mantenimento della veglia sotto la soglia della batteria e lo riprende collegando l’alimentatore. Disattivare la notifica mantiene attiva la protezione della batteria.",
+        "ja": "バッテリー残量がしきい値を下回るとスリープ防止を一時停止し、電源接続時に再開します。通知をオフにしてもバッテリー保護は有効です。",
+        "ko": "배터리가 기준 이하가 되면 깨어 있기 유지를 일시 정지하고 전원 연결 시 재개합니다. 알림을 꺼도 배터리 보호는 유지됩니다.",
+        "ru": "Приостанавливает поддержание бодрствования при низком заряде и возобновляет его при подключении питания. Отключение уведомления не отключает защиту батареи.",
+        "pt-BR": "Pausa a manutenção de atividade abaixo do limite de bateria e retoma ao conectar o carregador. Desativar a notificação mantém a proteção da bateria ativa.",
+        "tr": "Pil eşik değerin altına düştüğünde uyanık tutmayı duraklatır, güç bağlandığında sürdürür. Bildirimi kapatmak pil korumasını devre dışı bırakmaz.",
+        "pl": "Wstrzymuje utrzymywanie aktywności poniżej progu baterii i wznawia je po podłączeniu zasilania. Wyłączenie powiadomienia nie wyłącza ochrony baterii.",
+        "uk": "Призупиняє підтримання активності за низького заряду та поновлює його після підключення живлення. Вимкнення сповіщення не вимикає захист акумулятора.",
+        "zh-Hant": "電量低於閾值時暫停保持喚醒，接上電源後恢復。關閉通知不會關閉電池保護。",
+    },
+}

@@ -55,6 +55,8 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     /// Force-stop an active session (and hold off reactivating) once battery
     /// charge drops below this percentage, or `nil` (the default) for off.
     public var pauseBelowBatteryPercent: Int?
+    /// Announce a low-battery pause. Off silences only its notification.
+    public var notifyOnBatteryPause: Bool
     /// Whether the menu-bar icon shows a live countdown for timed sessions.
     public var showCountdownInMenuBar: Bool
     /// Whether the menu panel shows its option toggles and app entries, or the
@@ -149,6 +151,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         virtualDisplay: VirtualDisplayConfig? = nil,
         thermalSafety: ThermalSafetyConfig? = nil,
         pauseBelowBatteryPercent: Int? = nil,
+        notifyOnBatteryPause: Bool = true,
         showCountdownInMenuBar: Bool = false,
         menuPanelExpanded: Bool = true,
         menuCustomizationEnabled: Bool = false,
@@ -192,6 +195,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         self.virtualDisplay = virtualDisplay
         self.thermalSafety = thermalSafety
         self.pauseBelowBatteryPercent = pauseBelowBatteryPercent.map(Self.clampedBatteryPausePercent)
+        self.notifyOnBatteryPause = notifyOnBatteryPause
         self.showCountdownInMenuBar = showCountdownInMenuBar
         self.menuPanelExpanded = menuPanelExpanded
         self.menuCustomizationEnabled = menuCustomizationEnabled
@@ -302,6 +306,7 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         thermalSafety = try c.decodeIfPresent(ThermalSafetyConfig.self, forKey: .thermalSafety)
         pauseBelowBatteryPercent = try c.decodeIfPresent(Int.self, forKey: .pauseBelowBatteryPercent)
             .map(Self.clampedBatteryPausePercent)
+        notifyOnBatteryPause = try c.decodeIfPresent(Bool.self, forKey: .notifyOnBatteryPause) ?? true
         showCountdownInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showCountdownInMenuBar) ?? false
         menuPanelExpanded = try c.decodeIfPresent(Bool.self, forKey: .menuPanelExpanded) ?? true
         // Menu customization was introduced as an opt-in. A settings blob from

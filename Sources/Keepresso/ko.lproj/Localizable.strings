@@ -938,3 +938,5 @@
 "Low Power Mode is active." = "저전력 모드가 켜져 있습니다.";
 "Initializing the helper…" = "도우미 초기화 중…";
 "Updating the helper…" = "도우미 업데이트 중…";
+"Notify when paused" = "일시 정지 시 알림";
+"Pauses brewing below the battery cutoff and resumes when you plug in. Turning off the notification keeps the battery protection active." = "배터리가 기준 이하가 되면 깨어 있기 유지를 일시 정지하고 전원 연결 시 재개합니다. 알림을 꺼도 배터리 보호는 유지됩니다.";
