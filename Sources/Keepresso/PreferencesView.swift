@@ -593,9 +593,13 @@ private struct GeneralTab: View {
                                 set: { model.pauseBelowBatteryPercent = $0 }
                             ))
                         }
+                        Toggle("Notify when paused", isOn: Binding(
+                            get: { model.notifyOnBatteryPause },
+                            set: { model.notifyOnBatteryPause = $0 }
+                        ))
                     }
                 } header: {
-                    sectionHeader("Battery", info: L("A safety net for a session you forget about. If the charge falls this low, Keepresso pauses the session and lets the Mac sleep, even mid-session, and tells you why in a notification. The menu-bar cup shows the pause as a last sip of low-power yellow. Plugging in resumes it on its own. This is the same slider as the one in the menu, so the two always agree."))
+                    sectionHeader("Battery", info: L("Pauses brewing below the battery cutoff and resumes when you plug in. Turning off the notification keeps the battery protection active."))
                 } footer: {
                     sectionFooter("Lets the Mac sleep once charge drops below this level, and switches off closed-display mode so a lid-closed Mac can sleep too.")
                 }

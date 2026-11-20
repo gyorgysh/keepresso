@@ -938,3 +938,5 @@
 "Low Power Mode is active." = "Düşük Güç Modu etkin.";
 "Initializing the helper…" = "Yardımcı başlatılıyor…";
 "Updating the helper…" = "Yardımcı güncelleniyor…";
+"Notify when paused" = "Duraklatıldığında bildir";
+"Pauses brewing below the battery cutoff and resumes when you plug in. Turning off the notification keeps the battery protection active." = "Pil eşik değerin altına düştüğünde uyanık tutmayı duraklatır, güç bağlandığında sürdürür. Bildirimi kapatmak pil korumasını devre dışı bırakmaz.";

@@ -2,6 +2,21 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
+@Test(arguments: [false, true])
+func batteryPauseNoticeDefaultsOnAndRoundTrips(enabled: Bool) throws {
+    #expect(KeepressoSettings.default.notifyOnBatteryPause)
+    let legacy = try JSONDecoder().decode(KeepressoSettings.self,
+        from: Data("{\"pauseBelowBatteryPercent\":20}".utf8))
+    #expect(legacy.notifyOnBatteryPause)
+    #expect(legacy.pauseBelowBatteryPercent == 20)
+
+    let settings = KeepressoSettings(pauseBelowBatteryPercent: 20, notifyOnBatteryPause: enabled)
+    let decoded = try JSONDecoder().decode(KeepressoSettings.self,
+        from: JSONEncoder().encode(settings))
+    #expect(decoded.notifyOnBatteryPause == enabled)
+    #expect(decoded.pauseBelowBatteryPercent == 20)
+}
+
 @Test func settingsRoundTripCarriesTheHotKey() throws {
     var settings = KeepressoSettings.default
     settings.hotKey = HotKeyShortcut(keyCode: 40, modifierFlags: 1_048_576) // ⌘K-ish

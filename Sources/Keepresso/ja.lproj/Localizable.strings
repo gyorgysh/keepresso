@@ -938,3 +938,5 @@
 "Low Power Mode is active." = "低電力モードが有効です。";
 "Initializing the helper…" = "ヘルパーを初期化中…";
 "Updating the helper…" = "ヘルパーを更新中…";
+"Notify when paused" = "一時停止時に通知";
+"Pauses brewing below the battery cutoff and resumes when you plug in. Turning off the notification keeps the battery protection active." = "バッテリー残量がしきい値を下回るとスリープ防止を一時停止し、電源接続時に再開します。通知をオフにしてもバッテリー保護は有効です。";

@@ -938,3 +938,5 @@
 "Low Power Mode is active." = "Режим низького енергоспоживання активний.";
 "Initializing the helper…" = "Запуск помічника…";
 "Updating the helper…" = "Оновлення помічника…";
+"Notify when paused" = "Сповіщати про призупинення";
+"Pauses brewing below the battery cutoff and resumes when you plug in. Turning off the notification keeps the battery protection active." = "Призупиняє підтримання активності за низького заряду та поновлює його після підключення живлення. Вимкнення сповіщення не вимикає захист акумулятора.";

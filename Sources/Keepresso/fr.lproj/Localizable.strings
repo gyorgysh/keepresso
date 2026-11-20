@@ -938,3 +938,5 @@
 "Low Power Mode is active." = "Le mode économie d’énergie est actif.";
 "Initializing the helper…" = "Initialisation de l’assistant…";
 "Updating the helper…" = "Mise à jour de l’assistant…";
+"Notify when paused" = "Notifier lors de la mise en pause";
+"Pauses brewing below the battery cutoff and resumes when you plug in. Turning off the notification keeps the battery protection active." = "Suspend le maintien en éveil sous le seuil de batterie et le reprend au branchement. Désactiver la notification laisse la protection de la batterie active.";

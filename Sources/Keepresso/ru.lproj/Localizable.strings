@@ -938,3 +938,5 @@
 "Low Power Mode is active." = "Режим энергосбережения включён.";
 "Initializing the helper…" = "Запуск помощника…";
 "Updating the helper…" = "Обновление помощника…";
+"Notify when paused" = "Уведомлять о приостановке";
+"Pauses brewing below the battery cutoff and resumes when you plug in. Turning off the notification keeps the battery protection active." = "Приостанавливает поддержание бодрствования при низком заряде и возобновляет его при подключении питания. Отключение уведомления не отключает защиту батареи.";

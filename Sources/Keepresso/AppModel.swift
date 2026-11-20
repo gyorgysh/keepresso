@@ -189,6 +189,7 @@ final class AppModel {
         self.session.endingSoonNotice = loaded.endingSoonNoticeSeconds
         self.session.endAction = loaded.endAction
         self.session.pauseBelowBatteryPercent = loaded.pauseBelowBatteryPercent
+        self.session.notifyOnBatteryPause = loaded.notifyOnBatteryPause
         self.session.pauseWhenHot = loaded.thermalSafety?.stopBrewing ?? false
         // Leases surviving a relaunch are picked up by the first tick's
         // directory scan; no launch-time special case.
@@ -1307,8 +1308,7 @@ final class AppModel {
 
     /// Whether an active session force-stops (letting the Mac sleep) once
     /// battery charge drops below ``pauseBelowBatteryPercent``. Enabling it
-    /// requests notification permission: the pause announces itself in a
-    /// notification (an otherwise silent stop just looks like the app quit).
+    /// requests notification permission only when its notice is enabled.
     var batteryAutoPauseEnabled: Bool {
         get { settings.pauseBelowBatteryPercent != nil }
         set {
@@ -1316,7 +1316,17 @@ final class AppModel {
                 ? (settings.pauseBelowBatteryPercent ?? Self.defaultPauseBelowBatteryPercent)
                 : nil
             session.pauseBelowBatteryPercent = settings.pauseBelowBatteryPercent
-            if newValue { notifier.requestAuthorization() }
+            if newValue && settings.notifyOnBatteryPause { notifier.requestAuthorization() }
+            persist()
+        }
+    }
+
+    var notifyOnBatteryPause: Bool {
+        get { settings.notifyOnBatteryPause }
+        set {
+            settings.notifyOnBatteryPause = newValue
+            session.notifyOnBatteryPause = newValue
+            if newValue && batteryAutoPauseEnabled { notifier.requestAuthorization() }
             persist()
         }
     }
@@ -1888,6 +1898,7 @@ final class AppModel {
         session.endingSoonNotice = newSettings.endingSoonNoticeSeconds
         session.endAction = newSettings.endAction
         session.pauseBelowBatteryPercent = newSettings.pauseBelowBatteryPercent
+        session.notifyOnBatteryPause = newSettings.notifyOnBatteryPause
         session.pauseWhenHot = newSettings.thermalSafety?.stopBrewing ?? false
         session.leases = newSettings.automationLeasesEnabled ? leaseEngine : nil
         hookDispatcher.hooks = newSettings.eventHooks
@@ -1917,7 +1928,7 @@ final class AppModel {
         // setters request it. Without this, an import on a Mac that never
         // granted notifications would let a battery or thermal pause stop the
         // session with no banner, looking as if the app just quit.
-        if newSettings.pauseBelowBatteryPercent != nil
+        if (newSettings.pauseBelowBatteryPercent != nil && newSettings.notifyOnBatteryPause)
             || newSettings.thermalSafety?.stopBrewing == true
             || newSettings.reminderAfter != nil
             || newSettings.notifyOnEnd

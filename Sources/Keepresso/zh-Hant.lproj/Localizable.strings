@@ -938,3 +938,5 @@
 "Low Power Mode is active." = "低耗電模式已啟用。";
 "Initializing the helper…" = "正在初始化輔助程式…";
 "Updating the helper…" = "正在更新輔助程式…";
+"Notify when paused" = "暫停時通知";
+"Pauses brewing below the battery cutoff and resumes when you plug in. Turning off the notification keeps the battery protection active." = "電量低於閾值時暫停保持喚醒，接上電源後恢復。關閉通知不會關閉電池保護。";

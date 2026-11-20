@@ -161,6 +161,8 @@ It lives quietly in the menu bar, no Dock icon, no clutter.
   with an optional grace period before it lets go.
 - 🔋 **Battery-aware auto-pause.** Let the Mac sleep once charge drops below a
   threshold you choose, even mid-session, so it never runs the battery flat.
+  Turn off **Notify when paused** in Preferences > General > Battery to keep
+  the protection without its notification.
 - 🌡️ **Thermal safety net.** Holding a Mac awake through heavy load can also
   hold in the heat, so Keepresso can watch it: macOS's own thermal pressure
   (works on every Mac) or specific temperature sensors picked from a live
