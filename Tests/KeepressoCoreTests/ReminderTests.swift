@@ -290,6 +290,7 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
 @Test func aStaleTimedExpirySuppressesTheEndAction() {
     let (controller, reminder, endActor, clock) = makeEndController()
     controller.notifyOnEnd = true
+    controller.notifyOnBatteryPause = false
     controller.endAction = .lockScreen
     controller.start(mode: .timed(duration: 60))
 
