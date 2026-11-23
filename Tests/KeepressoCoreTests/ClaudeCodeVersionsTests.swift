@@ -59,6 +59,16 @@ private typealias V = ClaudeCodeVersions.Version
     #expect(!found.supportsStopFailure)
 }
 
+@Test func homebrewLatestCaskVersionIsRead() {
+    // `brew install --cask claude-code@latest` keeps its versions under the
+    // cask's own name, suffix included.
+    let found = ClaudeCodeVersions.detect(home: home, files: files(
+        links: ["/opt/homebrew/bin/claude": "/opt/homebrew/Caskroom/claude-code@latest/2.1.330/claude"]))
+    #expect(found.known == [V(2, 1, 330)])
+    #expect(found.unknownCount == 0)
+    #expect(found.supportsStopFailure)
+}
+
 @Test func anOldInstallAnywhereVetoesStopFailure() {
     let found = ClaudeCodeVersions.detect(home: home, files: files(
         links: ["\(home)/.local/bin/claude": "\(home)/.local/share/claude/versions/2.1.77"],

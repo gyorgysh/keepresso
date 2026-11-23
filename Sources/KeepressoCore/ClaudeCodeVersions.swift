@@ -115,7 +115,8 @@ public struct ClaudeCodeVersions: Equatable, Sendable {
     ///   usual per-user npm, bun, Volta, and nvm bins. Resolved through their
     ///   symlinks, the version comes from the native installer's
     ///   `versions/<version>` folder, a Homebrew cask's
-    ///   `Caskroom/claude-code/<version>` folder, or the npm package's
+    ///   `Caskroom/claude-code/<version>` folder (or a channel cask's, such
+    ///   as `Caskroom/claude-code@latest/<version>`), or the npm package's
     ///   `package.json` (beside the target, or in a `node_modules` next to a
     ///   wrapper script). A launcher that resolves to none of those is
     ///   counted as unknown.
@@ -177,9 +178,10 @@ public struct ClaudeCodeVersions: Equatable, Sendable {
            let v = Version(components[i + 1]) {
             return v
         }
-        // Homebrew cask: .../Caskroom/claude-code/<version>/claude
+        // Homebrew cask: .../Caskroom/claude-code/<version>/claude, or a
+        // channel cask such as claude-code@latest under its own name.
         if let i = components.lastIndex(of: "Caskroom"), i + 2 < components.count,
-           components[i + 1] == "claude-code",
+           components[i + 1] == "claude-code" || components[i + 1].hasPrefix("claude-code@"),
            let v = Version(components[i + 2]) {
             return v
         }
