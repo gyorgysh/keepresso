@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-/// Scripted agent-session source standing in for the `ps`-backed monitor.
 private final class FakeAgentActivity: AgentActivityMonitoring {
     var current: AgentSnapshot
     init(_ sessions: [AgentSession] = []) { current = AgentSnapshot(sessions: sessions) }
@@ -12,7 +11,6 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     AgentSession(pid: pid, agent: agent, tty: tty, cpuPercent: cpu)
 }
 
-// MARK: - ps output parsing
 
 @Test func parseReadsWellFormedRowsAndSkipsMalformedOnes() {
     let raw = """
@@ -25,13 +23,10 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     let samples = PSAgentActivityMonitor.parse(raw)
     #expect(samples.count == 3)
     #expect(samples[0] == .init(pid: 812, ppid: 1, pcpu: 12.5, tty: "s003", command: "node /opt/homebrew/bin/claude"))
-    // A "??" terminal reads as nil; the "tty" prefix is dropped for display.
     #expect(samples[1].tty == nil)
-    // The command keeps its embedded spaces intact.
     #expect(samples[2].command == "/bin/zsh -c swift build --verbose")
 }
 
-// MARK: - Root matching
 
 @Test func agentNameMatchesRootCommandBasenameOnly() {
     let agents = PSAgentActivityMonitor.agentCommands
@@ -40,30 +35,22 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     }
     #expect(match("claude --resume") == "claude")
     #expect(match("/opt/homebrew/bin/codex exec") == "codex")
-    // Case-sensitive on purpose: the Claude desktop app's Electron binary is
-    // "Claude", and matching it would root the session at the whole app.
     #expect(match("CLAUDE") == nil)
     #expect(match("/Applications/Claude.app/Contents/MacOS/Claude") == nil)
     #expect(match("/Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer).app/Contents/MacOS/Claude Helper (Renderer)") == nil)
-    // The Claude Code copy embedded in the desktop app is lowercase and real.
     #expect(match("/Users/x/Library/Application Support/Claude/claude-code/2.1.209/claude.app/Contents/MacOS/claude") == "claude")
-    // A runtime wrapper is skipped to the script it runs, past its flags.
     #expect(match("node /Users/x/.volta/bin/claude") == "claude")
     #expect(match("node --max-old-space-size=4096 /usr/local/bin/claude chat") == "claude")
-    // Mentions of an agent anywhere else must not count.
     #expect(match("grep claude notes.txt") == nil)
     #expect(match("vim notes-about-claude.md") == nil)
     #expect(match("/bin/ps -axww") == nil)
     #expect(match("node server.js") == nil)
     #expect(match("/Users/x/.kimi-code/bin/kimi") == "kimi")
-    // OMP and the Cline CLI use exact, standalone names.
     #expect(match("omp --resume") == "omp")
-    // A Bun or npm install runs OMP's script under the runtime.
     #expect(match("bun /Users/x/.bun/bin/omp -p hello") == "omp")
     #expect(match("node /usr/local/bin/omp") == "omp")
     #expect(match("bun run dev") == nil)
     #expect(match("/opt/homebrew/bin/cline --tui") == "cline")
-    // Existing popular harnesses remain recognized.
     #expect(match("gemini") == "gemini")
     #expect(match("grok") == "grok")
     #expect(match("opencode") == "opencode")
@@ -81,7 +68,6 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
                command: "\(root)/node/bin/node --expose-gc \(root)/lib/cli.js"),
         Sample(pid: 102, ppid: 101, pcpu: 39.1, tty: "s009",
                command: "\(root)/node/bin/node --expose-gc \(root)/lib/cli.js"),
-        // A mention outside Qwen's bundled runtime is not a session.
         Sample(pid: 200, ppid: 1, pcpu: 1, tty: "s010",
                command: "/usr/bin/grep qwen-code/lib/cli.js"),
     ]
@@ -92,35 +78,27 @@ private func session(pid: Int32, agent: String = "claude", tty: String? = "s003"
     #expect(abs(sessions[0].cpuPercent - 39.4) < 0.001)
 }
 
-// MARK: - Session reduction
 
 @Test func sessionsFoldNestedAgentsAndSumSubtreeCPU() {
     typealias Sample = PSAgentActivityMonitor.ProcessSample
     let samples: [Sample] = [
         Sample(pid: 100, ppid: 1, pcpu: 2.0, tty: "s003", command: "claude"),
-        // A tool call two levels down: counts toward pid 100's subtree.
         Sample(pid: 200, ppid: 100, pcpu: 1.0, tty: "s003", command: "/bin/zsh -c swift build"),
         Sample(pid: 201, ppid: 200, pcpu: 40.0, tty: "s003", command: "swift-frontend compile"),
-        // A claude-spawned subagent: folded into pid 100, not its own row.
         Sample(pid: 300, ppid: 200, pcpu: 5.0, tty: "s003", command: "claude --subagent"),
-        // An unrelated process.
         Sample(pid: 400, ppid: 1, pcpu: 90.0, tty: nil, command: "/usr/libexec/thing"),
-        // A second, independent session on another terminal.
         Sample(pid: 500, ppid: 1, pcpu: 0.1, tty: "s007", command: "codex"),
     ]
     let sessions = PSAgentActivityMonitor.sessions(from: samples)
     #expect(sessions.count == 2)
     #expect(sessions[0].pid == 100)
     #expect(sessions[0].agent == "claude")
-    #expect(abs(sessions[0].cpuPercent - 48.0) < 0.001) // 2 + 1 + 40 + 5
+    #expect(abs(sessions[0].cpuPercent - 48.0) < 0.001)
     #expect(sessions[1].pid == 500)
     #expect(sessions[1].agent == "codex")
 }
 
-// MARK: - Antigravity's in-editor agent
 
-/// The real `ps` line for the process hosting Antigravity's in-editor agent,
-/// trimmed of the flags that don't matter here.
 private let antigravityHostCommand =
     "/Applications/Antigravity.app/Contents/Resources/bin/language_server --standalone"
     + " --override_ide_name antigravity --subclient_type hub --override_ide_version 2.3.1"
@@ -129,8 +107,6 @@ private let antigravityHostCommand =
     typealias Sample = PSAgentActivityMonitor.ProcessSample
     let samples: [Sample] = [
         Sample(pid: 71776, ppid: 71363, pcpu: 0.0, tty: nil, command: antigravityHostCommand),
-        // A dev server the agent started for a preview. It outlives the turn by
-        // hours, so it must not be summed into anything that reads as work.
         Sample(pid: 62669, ppid: 71776, pcpu: 30.0, tty: nil,
                command: "/opt/homebrew/.../Python -m http.server 8080 -d /tmp/site"),
     ]
@@ -145,7 +121,6 @@ private let antigravityHostCommand =
 
 @Test func aPlainLanguageServerIsNotAnAgent() {
     typealias Sample = PSAgentActivityMonitor.ProcessSample
-    // Every editor ships one; only the IDE-name flag makes it Antigravity's.
     let samples: [Sample] = [
         Sample(pid: 10, ppid: 1, pcpu: 5.0, tty: nil,
                command: "/Applications/Other.app/Contents/Resources/bin/language_server --standalone"),
@@ -155,14 +130,11 @@ private let antigravityHostCommand =
 
 @Test func anEditorHostWorksOnEvidenceAloneNoMatterTheCPU() {
     typealias Trigger = AgentActivityTrigger
-    // Busy-looking CPU with no fresh write is the editor, not its agent.
     var state = Trigger.State()
     for _ in 0..<20 {
         state = Trigger.step(state, sample: 90, freshEvidence: false, evidenceOnly: true)
     }
     #expect(!state.isWorking)
-    // A fresh write with no CPU at all is the agent waiting on a command that
-    // burns nothing, which is exactly the overnight case.
     state = Trigger.step(state, sample: 0, freshEvidence: true, evidenceOnly: true)
     #expect(state.isWorking)
     state = Trigger.step(state, sample: 0, freshEvidence: false, evidenceOnly: true)
@@ -170,21 +142,15 @@ private let antigravityHostCommand =
 }
 
 @Test func burstyAgentsGetTheirOwnEvidenceWindow() {
-    // Measured on a working Antigravity session: writes a median 5s apart. Wide
-    // enough not to blink between steps, and no wider: bridging a real pause is
-    // the rule's grace, and padding here would add itself to that grace.
     #expect(PSAgentActivityMonitor.evidenceWindow(for: "antigravity") == 20)
     #expect(PSAgentActivityMonitor.evidenceWindow(for: "agy") == 20)
-    // Live Bionic coding turns write often, but cloud waits leave longer gaps.
     #expect(PSAgentActivityMonitor.evidenceWindow(for: "bionic") == 45)
     #expect(PSAgentActivityMonitor.evidenceWindow(for: "kimi") == 45)
     #expect(PSAgentActivityMonitor.evidenceWindow(for: "claude")
         == PSAgentActivityMonitor.evidenceFreshWindow)
 }
 
-// MARK: - LM Studio Bionic
 
-/// Real `ps` line shape for a Bionic workspace renderer (trimmed).
 private let bionicHostCommand =
     "/Applications/Bionic.app/Contents/Frameworks/Bionic Helper (Renderer).app"
     + "/Contents/MacOS/Bionic Helper (Renderer) --type=renderer"
@@ -195,14 +161,11 @@ private let bionicHostCommand =
 @Test func bionicMainAndRendererFoldIntoOneEvidenceOnlySession() {
     typealias Sample = PSAgentActivityMonitor.ProcessSample
     let samples: [Sample] = [
-        // Main app is a host: stable when the renderer keeps a stale project id.
         Sample(pid: 12740, ppid: 1, pcpu: 2.0, tty: nil,
                command: "/Applications/Bionic.app/Contents/MacOS/Bionic"),
-        // GPU helper: never a session.
         Sample(pid: 12792, ppid: 12740, pcpu: 18.0, tty: nil,
                command: "/Applications/Bionic.app/Contents/Frameworks/Bionic Helper.app"
                    + "/Contents/MacOS/Bionic Helper --type=gpu-process"),
-        // Workspace renderer: also a host, but folds under the main app.
         Sample(pid: 12834, ppid: 12740, pcpu: 40.0, tty: nil, command: bionicHostCommand),
         Sample(pid: 13000, ppid: 12834, pcpu: 55.0, tty: nil,
                command: "/usr/bin/python3 /tmp/bionic-tool.py"),
@@ -246,7 +209,6 @@ private let bionicHostCommand =
 
 @Test func aLmstudioFlagWithoutBionicPathIsNotAnAgent() {
     typealias Sample = PSAgentActivityMonitor.ProcessSample
-    // Future LM Studio flag reuse must not match without a Bionic path hint.
     let samples: [Sample] = [
         Sample(pid: 10, ppid: 1, pcpu: 5.0, tty: nil,
                command: "/Applications/LM Studio.app/Contents/MacOS/LM Studio"
@@ -288,8 +250,6 @@ private let bionicHostCommand =
 }
 
 @Test func bionicSessionWriteIgnoresNonSessionFilesInInternal() throws {
-    // Only ng-sessions.sqlite* count; other .internal churn must not keep
-    // the evidence-only host "working".
     let root = FileManager.default.temporaryDirectory
         .appendingPathComponent("keepresso-bionic-noise-\(UUID().uuidString)", isDirectory: true)
     let storeDir = root.appendingPathComponent(
@@ -310,10 +270,8 @@ private let bionicHostCommand =
 }
 
 @Test func bionicEvidenceOnlySessionWorksOnFreshSessionWrite() async throws {
-    // End-to-end: Bionic host + injected session-store mtime → hasFreshEvidence
-    // → evidenceOnly step is working only while inside the 45s window.
     var now = Date(timeIntervalSince1970: 200_000)
-    let writeAt = Date(timeIntervalSince1970: 200_000 - 10) // 10s ago, within 45s
+    let writeAt = Date(timeIntervalSince1970: 200_000 - 10)
     let monitor = PSAgentActivityMonitor(
         ttl: 3,
         now: { now },
@@ -334,7 +292,6 @@ private let bionicHostCommand =
         state, sample: 40, freshEvidence: true, evidenceOnly: true)
     #expect(state.isWorking)
 
-    // Past the 45s Bionic window the same write is stale.
     now = now.addingTimeInterval(60)
     _ = monitor.current
     try await Task.sleep(for: .milliseconds(200))
@@ -346,8 +303,6 @@ private let bionicHostCommand =
 
 @Test func sessionsSurviveAPpidCycleFromRacedPSOutput() {
     typealias Sample = PSAgentActivityMonitor.ProcessSample
-    // A pid reused mid-scan can appear as its own ancestor; both walks must
-    // terminate rather than loop.
     let samples: [Sample] = [
         Sample(pid: 100, ppid: 200, pcpu: 1.0, tty: "s003", command: "claude"),
         Sample(pid: 200, ppid: 100, pcpu: 2.0, tty: "s003", command: "/bin/zsh"),
@@ -363,14 +318,12 @@ private let bionicHostCommand =
 }
 
 @Test func sessionLabelPrefersClassifiedOrigin() {
-    // An app or IDE session is named as such even when it holds a pty.
     var app = session(pid: 13, cpu: 0)
     app.origin = .claudeApp
     #expect(app.label == "claude (Claude app)")
     var ide = session(pid: 14, cpu: 0)
     ide.origin = .ide
     #expect(ide.label == "claude (IDE)")
-    // A terminal-classified session keeps the more specific tty when present.
     var cli = session(pid: 15, cpu: 0)
     cli.origin = .terminal
     #expect(cli.label == "claude (s003)")
@@ -381,9 +334,6 @@ private let bionicHostCommand =
 
 @Test func desktopAppTreeRootsAtTheEmbeddedCLI() {
     typealias Sample = PSAgentActivityMonitor.ProcessSample
-    // The real shape of a Claude desktop app running Claude Code: the Electron
-    // main and its helpers must not match, so the session roots at the
-    // embedded lowercase claude and counts only that subtree's CPU.
     let samples: [Sample] = [
         Sample(pid: 10, ppid: 1, pcpu: 30.0, tty: nil, command: "/Applications/Claude.app/Contents/MacOS/Claude"),
         Sample(pid: 11, ppid: 10, pcpu: 25.0, tty: nil, command: "/Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer).app/Contents/MacOS/Claude Helper (Renderer)"),
@@ -400,15 +350,11 @@ private let bionicHostCommand =
 
 @Test func bareAgentLauncherMatchesThroughItsResolvedPath() {
     typealias Sample = PSAgentActivityMonitor.ProcessSample
-    // Cursor's CLI installs a `cursor-agent` symlink and a bare `agent` one.
-    // A session started through the short name has "agent" as its basename,
-    // which names no tool; only the resolved executable path does.
     let samples: [Sample] = [
         Sample(pid: 100, ppid: 1, pcpu: 1.0, tty: "s000",
                command: "/Users/x/.local/bin/agent --use-system-ca /Users/x/.local/share/cursor-agent/versions/2026.07.23/index.js"),
         Sample(pid: 101, ppid: 100, pcpu: 7.0, tty: "s000",
                command: "/Users/x/.local/share/cursor-agent/versions/2026.07.23/node /Users/x/.local/share/cursor-agent/versions/2026.07.23/index.js worker-server"),
-        // Merely mentioning the tool is not enough: the executable decides.
         Sample(pid: 200, ppid: 1, pcpu: 3.0, tty: "s001",
                command: "grep -r cursor-agent /Users/x/.local/share"),
     ]
@@ -421,23 +367,11 @@ private let bionicHostCommand =
     #expect(sessions.count == 1)
     #expect(sessions[0].pid == 100)
     #expect(sessions[0].agent == "cursor-agent")
-    // The worker process folds into the root session's subtree.
     #expect(abs(sessions[0].cpuPercent - 8.0) < 0.001)
 }
 
 @Test func npmInstalledAgentIsMatchedThroughItsRuntimeWrapper() {
     typealias Sample = PSAgentActivityMonitor.ProcessSample
-    // pi installs as an npm bin: a symlink to a `#!/usr/bin/env node` script,
-    // so the kernel runs node. It then rewrites its own argv on the first line
-    // of its entry point (`process.title = APP_NAME`), so one pi session shows
-    // up as two different command lines over its life, and both were captured
-    // from real pi processes:
-    //
-    //   for a moment at startup:  node <prefix>/bin/pi
-    //   for the rest of its life: pi
-    //
-    // The executable resolves to node either way, so the path fallback finds
-    // nothing and the name has to come off the command line both times.
     let samples: [Sample] = [
         Sample(pid: 100, ppid: 1, pcpu: 3.0, tty: "s011",
                command: "node /Users/gyorgy/.nvm/versions/node/v24.16.0/bin/pi"),
@@ -451,9 +385,6 @@ private let bionicHostCommand =
 }
 
 @Test func shortAgentNamesNeverMatchAPathComponent() {
-    // A two or three letter name is far too common a folder name to trust in
-    // a path. The worst case is a user account called "pi": every executable
-    // under /Users/pi would otherwise resolve to the pi agent.
     let agents = PSAgentActivityMonitor.agentCommands
     #expect(AgentHooks.agentMatch(
         comm: nil, path: "/Users/pi/.local/bin/some-unrelated-tool", agents: agents) == nil)
@@ -461,22 +392,17 @@ private let bionicHostCommand =
         comm: nil, path: "/opt/amp/bin/helper", agents: agents) == nil)
     #expect(AgentHooks.agentMatch(
         comm: nil, path: "/opt/agy/bin/helper", agents: agents) == nil)
-    // The names long enough to be distinctive keep the path fallback, which
-    // is what finds a versioned or aliased install.
     #expect(AgentHooks.agentMatch(
         comm: nil, path: "/Users/x/.local/share/claude/versions/2.1.219", agents: agents) == "claude")
     #expect(AgentHooks.agentMatch(
         comm: nil, path: "/Users/x/.local/share/cursor-agent/versions/2026.07.23/node",
         agents: agents) == "cursor-agent")
-    // A short name is still matched exactly, by the process's own comm.
     #expect(AgentHooks.agentMatch(comm: "pi", path: nil, agents: agents) == "pi")
     #expect(AgentHooks.agentMatch(comm: "agy", path: nil, agents: agents) == "agy")
 }
 
 @Test func resolvedPathLookupIsSkippedForUnrelatedCommands() {
     typealias Sample = PSAgentActivityMonitor.ProcessSample
-    // The prefilter must keep the syscall off the hot path: a command line
-    // naming no agent never reaches the path lookup at all.
     var probed: [Int32] = []
     let samples: [Sample] = [
         Sample(pid: 300, ppid: 1, pcpu: 1.0, tty: nil, command: "/usr/libexec/thing"),
@@ -487,17 +413,10 @@ private let bionicHostCommand =
 }
 
 @Test func monitorSurfacesAnIDESessionThatHasNoProcess() async throws {
-    // The Cursor app runs its agent inside the editor, so the `ps` scan finds
-    // nothing at all: the hook record is the whole session. Every construction
-    // in this file injects `hookRecords` for the same reason this test exists,
-    // that the monitor's default reads the real hooks folder and would
-    // otherwise let a live session on the developer's own Mac decide the
-    // result.
     let now = Date(timeIntervalSince1970: 100_000)
     let monitor = PSAgentActivityMonitor(
         ttl: 3,
         now: { now },
-        // A terminal claude session, and no Cursor process anywhere.
         fetch: { "  100     1  0.1 ttys003  claude" },
         evidence: { _, _, _ in nil },
         hookRecords: { _ in
@@ -515,20 +434,16 @@ private let bionicHostCommand =
     #expect(ide.origin == .ide)
     #expect(ide.hookState == .working)
     #expect(ide.label == "cursor (IDE)")
-    // No process, so nothing for the CPU heuristic to read; the hook decides.
     #expect(ide.cpuPercent == 0)
     #expect(ide.pid < 0)
 }
 
-// MARK: - Transcript evidence
 
 @Test func transcriptDirectoryNamesMatchEachAgentsEncoding() {
     #expect(PSAgentActivityMonitor.claudeProjectDirName(forCwd: "/Users/x/git/pueev_web")
             == "-Users-x-git-pueev-web")
     #expect(PSAgentActivityMonitor.claudeProjectDirName(forCwd: "/private/tmp")
             == "-private-tmp")
-    // The alphanumeric class is ASCII-only upstream: an accented letter
-    // flattens to "-" too, or the computed directory would never exist.
     #expect(PSAgentActivityMonitor.claudeProjectDirName(forCwd: "/Users/józsef/café")
             == "-Users-j-zsef-caf-")
     #expect(PSAgentActivityMonitor.grokSessionDirName(forCwd: "/Users/x/git/demo")
@@ -544,17 +459,15 @@ private let bionicHostCommand =
         now: { now },
         fetch: { "  100     1  0.1 ttys003  claude\n  200     1  0.1 ttys004  aider" },
         evidence: { agent, _, _ in
-            // claude's transcript was written 5s ago; aider has none.
             agent == "claude" ? Date(timeIntervalSince1970: 100_000 - 5) : nil
         },
         hookRecords: { _ in [] }
     )
-    _ = monitor.current // kick the refresh
+    _ = monitor.current
     try await Task.sleep(for: .milliseconds(200))
     let sessions = monitor.current.sessions
     #expect(sessions.map(\.hasFreshEvidence) == [true, false])
 
-    // Past the freshness window the same write no longer counts.
     now = now.addingTimeInterval(60)
     _ = monitor.current
     try await Task.sleep(for: .milliseconds(200))
@@ -589,28 +502,20 @@ private let bionicHostCommand =
     #expect(seen.value.isSuperset(of: [100, 200]))
 }
 
-// MARK: - Working/idle smoothing
 
 @Test func stepJudgesWorkRelativeToTheSessionsOwnBaseline() {
-    // A hot-idle TUI (agy-style: animates at 6-12% while doing nothing)
-    // settles as idle: its baseline is learned at its own level.
     var hot = AgentActivityTrigger.State()
     for sample in [7.1, 11.4, 7.1, 6.2, 11.7, 6.8, 8.0, 9.0, 7.5, 8.5] {
         hot = AgentActivityTrigger.step(hot, sample: sample)
     }
     #expect(hot.isWorking == false)
 
-    // Real work lifts it clearly above its own baseline.
     for _ in 0..<6 { hot = AgentActivityTrigger.step(hot, sample: 30) }
     #expect(hot.isWorking)
 
-    // Back to its hot idle: releases, even though it still idles above the
-    // level at which a quiet agent would count as working.
     for _ in 0..<40 { hot = AgentActivityTrigger.step(hot, sample: 8) }
     #expect(hot.isWorking == false)
 
-    // A quiet agent (grok-style, idle ~2.5%) flips on a small absolute rise
-    // that a fixed global threshold would have missed.
     var quiet = AgentActivityTrigger.State()
     for _ in 0..<10 { quiet = AgentActivityTrigger.step(quiet, sample: 2.5) }
     #expect(quiet.isWorking == false)
@@ -619,26 +524,16 @@ private let bionicHostCommand =
 }
 
 @Test func stepHardFloorCatchesASessionFirstSeenMidTask() {
-    // First sample arrives mid-task: the baseline is learned at the working
-    // level, so the relative test can't fire, but the absolute floor does.
     var state = AgentActivityTrigger.State()
     state = AgentActivityTrigger.step(state, sample: 60)
     #expect(state.isWorking)
 
-    // The task ends: the average decays below the floor and it releases,
-    // after which the true idle level becomes the new baseline.
     for _ in 0..<20 { state = AgentActivityTrigger.step(state, sample: 1) }
     #expect(state.isWorking == false)
     #expect((state.baseline ?? 99) < 3)
 }
 
 @Test func stepAdoptsAnIdleFloorThatRoseDuringTheEpisode() {
-    // Baseline learned at a quiet idle, then work starts and leaves behind a
-    // hotter idle floor (a dev server or watcher the agent started, still
-    // running as its child). The subtree settles flat above the off
-    // dead-band, which with a frozen baseline would read "working" until the
-    // agent process exits: the baseline must creep up to the new floor and
-    // release.
     var state = AgentActivityTrigger.State()
     for _ in 0..<10 { state = AgentActivityTrigger.step(state, sample: 0.5) }
     for _ in 0..<10 { state = AgentActivityTrigger.step(state, sample: 30) }
@@ -650,18 +545,13 @@ private let bionicHostCommand =
         ticks += 1
     }
     #expect(state.isWorking == false)
-    #expect(ticks < 180) // minutes, not process-lifetime
+    #expect(ticks < 180)
 
-    // And the raised floor is now the baseline, so the next real burst
-    // still reads as work.
     for _ in 0..<10 { state = AgentActivityTrigger.step(state, sample: 15) }
     #expect(state.isWorking)
 }
 
 @Test func stepBurstyWorkKeepsItsHeadroomOverALongSession() {
-    // On/off tool bursts for many minutes: the dips pull each episode's
-    // floor back near the true idle level, so the creeping baseline never
-    // adopts the working level and a late burst still reads as work.
     var state = AgentActivityTrigger.State()
     for _ in 0..<10 { state = AgentActivityTrigger.step(state, sample: 1.0) }
     for _ in 0..<30 {
@@ -674,12 +564,10 @@ private let bionicHostCommand =
 }
 
 @Test func stepFreshTranscriptEvidenceWinsOverQuietCPU() {
-    // A long network wait: near-zero CPU, but the transcript is streaming.
     var state = AgentActivityTrigger.State()
     for _ in 0..<5 { state = AgentActivityTrigger.step(state, sample: 0.3, freshEvidence: true) }
     #expect(state.isWorking)
 
-    // Evidence goes stale and CPU stays flat: back to idle.
     for _ in 0..<5 { state = AgentActivityTrigger.step(state, sample: 0.3, freshEvidence: false) }
     #expect(state.isWorking == false)
 }
@@ -690,13 +578,12 @@ private let bionicHostCommand =
         session(pid: 2, agent: "codex", tty: "s007", cpu: 0),
     ])
     let trigger = AgentActivityTrigger(monitor: monitor)
-    #expect(trigger.isSatisfied() == false) // nothing ticked yet
+    #expect(trigger.isSatisfied() == false)
 
     for _ in 0..<5 { trigger.tick() }
     #expect(trigger.isSatisfied())
     #expect(trigger.sessionStates.map(\.isWorking) == [true, false])
 
-    // The busy session goes quiet: the trigger releases once its EMA decays.
     monitor.current = AgentSnapshot(sessions: [
         session(pid: 1, cpu: 0),
         session(pid: 2, agent: "codex", tty: "s007", cpu: 0),
@@ -711,8 +598,6 @@ private let bionicHostCommand =
     for _ in 0..<5 { trigger.tick() }
     #expect(trigger.isSatisfied())
 
-    // The session exits; a NEW session reusing the pid starts from a fresh
-    // average instead of inheriting the old "working" verdict.
     monitor.current = AgentSnapshot(sessions: [])
     trigger.tick()
     #expect(trigger.isSatisfied() == false)
@@ -734,9 +619,6 @@ private let bionicHostCommand =
 }
 
 @Test func detailRowsPutWorkingSessionsFirst() {
-    // Monitor order is idle, idle, working: the menu truncates to a few rows,
-    // so working must surface ahead of idle rather than stay buried under
-    // "+N more".
     let monitor = FakeAgentActivity([
         session(pid: 1, agent: "claude", tty: "s001", cpu: 0),
         session(pid: 2, agent: "codex", tty: "s002", cpu: 0),
@@ -756,7 +638,6 @@ private let bionicHostCommand =
     ])
 }
 
-// MARK: - Rule, factory, and gate plumbing
 
 @Test func agentRuleLabelIncludesGraceSuffix() {
     #expect(TriggerRule.agentActivity(AgentRule(grace: 0)).label == "AI agent working")
@@ -801,21 +682,18 @@ private let bionicHostCommand =
     #expect(state?.details.map(\.label) == ["claude (s003)", "codex (s007)"])
     #expect(state?.details.map(\.active) == [true, false])
 
-    // All sessions go idle: the rule lingers in grace while the sub-rows
-    // already read idle.
     monitor.current = AgentSnapshot(sessions: [
         session(pid: 1, cpu: 0),
         session(pid: 2, agent: "codex", tty: "s007", cpu: 0),
     ])
     for _ in 0..<30 { gate.engine?.tick() }
-    now = now.addingTimeInterval(30) // past the state cache, inside the grace
+    now = now.addingTimeInterval(30)
     let lingering = gate.ruleStates()?.first
     #expect(lingering?.satisfied == true)
     #expect(lingering?.inGrace == true)
     #expect(lingering?.details.map(\.active) == [false, false])
 }
 
-// MARK: - Monitor cache
 
 @Test func monitorServesStaleSnapshotAndRefreshesInBackground() async throws {
     var now = Date(timeIntervalSince1970: 0)
@@ -823,18 +701,14 @@ private let bionicHostCommand =
         "  100     1  50.0 ttys003  claude"
     }, hookRecords: { _ in [] })
 
-    // First read: nothing cached yet, kicks off a refresh and returns empty.
     #expect(monitor.current.sessions.isEmpty)
     try await Task.sleep(for: .milliseconds(200))
     #expect(monitor.current.sessions.count == 1)
 
-    // Within the TTL the cached snapshot is served without another fetch.
     now = now.addingTimeInterval(1)
     #expect(monitor.current.sessions.count == 1)
 }
 
-/// Lock-guarded scripted ps output: the monitor calls `fetch` from a detached
-/// task (same pattern as ProcessListerTests' FetchStub).
 private final class PSOutputStub: @unchecked Sendable {
     private let lock = NSLock()
     private var _output: String?
@@ -850,10 +724,6 @@ private final class PSOutputStub: @unchecked Sendable {
 }
 
 @Test func monitorKeepsThePreviousSnapshotOnAFailedFetch() async throws {
-    // A transient ps failure must not commit an empty snapshot: the trigger
-    // would prune every session's smoothing state, and a mid-task session
-    // would rejoin with a baseline learned at its working level. The refresh
-    // latch still resets, so the next tick past the TTL retries.
     var now = Date(timeIntervalSince1970: 0)
     let ps = PSOutputStub("  100     1  50.0 ttys003  claude")
     let monitor = PSAgentActivityMonitor(
@@ -867,13 +737,13 @@ private final class PSOutputStub: @unchecked Sendable {
     now = now.addingTimeInterval(4)
     _ = monitor.current
     try await Task.sleep(for: .milliseconds(200))
-    #expect(monitor.current.sessions.count == 1) // stale beats empty
+    #expect(monitor.current.sessions.count == 1)
 
     ps.output = "  100     1  50.0 ttys003  claude\n  200     1  0.1 ttys004  codex"
     now = now.addingTimeInterval(4)
     _ = monitor.current
     try await Task.sleep(for: .milliseconds(200))
-    #expect(monitor.current.sessions.count == 2) // and it recovered
+    #expect(monitor.current.sessions.count == 2)
 }
 
 @Test func monitorSkipsEvidenceWorkWhenDisabled() async throws {
@@ -903,7 +773,6 @@ private final class PSOutputStub: @unchecked Sendable {
     #expect(evidenceCalls.value == 0)
     #expect(hookCalls.value == 0)
 
-    // Re-enable and refresh: evidence path runs again.
     monitor.evidenceEnabled = true
     now = now.addingTimeInterval(4)
     _ = monitor.current
@@ -912,7 +781,6 @@ private final class PSOutputStub: @unchecked Sendable {
     #expect(hookCalls.value >= 1)
 }
 
-/// Tiny lock-backed counter for detached-task call tallies.
 private final class LockCounter: @unchecked Sendable {
     private let lock = NSLock()
     private var _value = 0
@@ -928,9 +796,6 @@ private final class LockedPids: @unchecked Sendable {
 }
 
 @Test func claudeTranscriptWriteSeesSubagentStreams() throws {
-    // Layout: <project>/<session>.jsonl (old) and
-    // <project>/<session>/subagents/agent-x.jsonl (fresh). Appends inside
-    // subagents never touch the parent mtimes, so the probe must descend.
     let manager = FileManager.default
     let project = manager.temporaryDirectory
         .appendingPathComponent("keepresso-test-\(UUID().uuidString)")
@@ -946,8 +811,6 @@ private final class LockedPids: @unchecked Sendable {
     let agent = subagents.appendingPathComponent("agent-abc.jsonl")
     try Data("y".utf8).write(to: agent)
     try manager.setAttributes([.modificationDate: fresh], ofItemAtPath: agent.path)
-    // The session directory itself is listed too; age it so only the real
-    // transcript writes decide the result.
     try manager.setAttributes([.modificationDate: old], ofItemAtPath: project.appendingPathComponent("session-1").path)
 
     let written = try #require(PSAgentActivityMonitor.claudeTranscriptWrite(inProjectDir: project.path))
@@ -1018,13 +881,6 @@ private final class LockedPids: @unchecked Sendable {
 }
 
 @Test func freshTranscriptOutranksAnOlderNotWorkingVerdict() async throws {
-    // The main turn's Stop hook writes idle while a background subagent works
-    // on: its transcript keeps streaming but it emits no hook event until its
-    // next tool call. A minute later the idle nudge writes a plain `waiting`
-    // record for the same still-working session. Evidence newer than the
-    // record drops both verdicts; a record newer than the last write keeps
-    // deciding, and a pending approval is never overridden (it already reads
-    // as working, and the edge is exact).
     let base = Date(timeIntervalSince1970: 100_000)
     func monitor(
         state: AgentHooks.HookSessionState, detail: String? = nil,
@@ -1068,9 +924,6 @@ private final class LockedPids: @unchecked Sendable {
 }
 
 @Test func monitorClassifiesSessionsByAncestry() async throws {
-    // Every session is named by the ancestor walk even before any hook
-    // record exists, pty or not: an app can hold a pty for its embedded
-    // CLI. A terminal-classified session still shows its tty.
     let monitor = PSAgentActivityMonitor(
         ttl: 3,
         now: { Date(timeIntervalSince1970: 0) },
@@ -1085,25 +938,21 @@ private final class LockedPids: @unchecked Sendable {
     #expect(sessions.map(\.label) == ["claude (Claude app)", "claude (s003)"])
 }
 
-// MARK: - Idle-edge latch
 
 @Test func idleEdgeIsConsumedOnce() {
-    // A hookState of .working / .idle decides outright, so the edge is exact.
     let monitor = FakeAgentActivity([
         AgentSession(pid: 1, agent: "claude", tty: "s001", cpuPercent: 0, hookState: .working),
     ])
     let trigger = AgentActivityTrigger(monitor: monitor)
     trigger.tick()
     #expect(trigger.isSatisfied())
-    #expect(!trigger.consumeJustWentIdle()) // no edge yet
+    #expect(!trigger.consumeJustWentIdle())
 
     monitor.current = AgentSnapshot(sessions: [
         AgentSession(pid: 1, agent: "claude", tty: "s001", cpuPercent: 0, hookState: .idle),
     ])
     trigger.tick()
     #expect(!trigger.isSatisfied())
-    // The edge reports exactly once, even when ticking stops afterwards
-    // (triggers paused): repeated reads must not re-fire the hook.
     #expect(trigger.consumeJustWentIdle())
     #expect(!trigger.consumeJustWentIdle())
     #expect(!trigger.justWentIdle)

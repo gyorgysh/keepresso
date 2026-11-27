@@ -17,11 +17,10 @@ from pathlib import Path
 OUT = Path(__file__).resolve().parents[2] / "docs" / "assets"
 
 W, H = 360, 480
-P = 118  # popover top
+P = 118
 FONT = "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
 MONO = "ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace"
 
-# Dark popover tokens (home.jsx .kd-menu, dark theme)
 BG = "#1f1e20"
 BORDER = "rgba(255,255,255,.14)"
 HEAD = "rgba(255,255,255,.07)"
@@ -108,7 +107,6 @@ class Scene:
         return self.scale(pts)
 
 
-# ---------------------------------------------------------------- primitives
 
 def esc(s):
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -201,7 +199,6 @@ def segmented(y, manual):
     return out
 
 
-# Drawn agent marks, ported from the site (SparkFrames.swift geometry).
 def _ray(r):
     o = 6 * r
     w = o * 0.21
@@ -284,7 +281,6 @@ def invert(windows, L):
     return out
 
 
-# ---------------------------------------------------------------- card chrome
 
 def defs():
     return f"""<defs>
@@ -307,10 +303,8 @@ def chrome_top(kicker, headline, clock):
                extra=f' font-family="{MONO}" letter-spacing="2.6"')
         + text(W / 2, 60, headline, size=19, fill=HEADLINE, weight=800, anchor="middle", extra=' letter-spacing="-.3"')
         + f'<rect x="{pill_x}" y="76" width="{pill_w}" height="28" rx="11" fill="rgba(255,255,255,.055)" stroke="rgba(255,255,255,.1)"/>'
-        # wifi
         + f'<g transform="translate(103 81) scale(.75)" fill="none" stroke="#bdb6ac" stroke-width="2" stroke-linecap="round">'
           f'<path d="M5 12.55a11 11 0 0 1 14.08 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></g>'
-        # battery
         + f'<g transform="translate(130 83.5) scale(.8)" fill="none" stroke="#bdb6ac" stroke-width="1.5">'
           f'<rect x="1" y="3" width="22" height="10" rx="3"/><path d="M26 6.5v3" stroke-linecap="round"/>'
           f'<rect x="3" y="5" width="14" height="6" rx="1.5" fill="#bdb6ac" stroke="none"/></g>'
@@ -380,7 +374,6 @@ def wrap(sc, body, label):
             f'<rect x=".5" y=".5" width="{W - 1}" height="{H - 1}" rx="17.5" fill="none" stroke="rgba(255,255,255,.07)"/>\n</svg>\n')
 
 
-# ---------------------------------------------------------------- scenes
 
 def scene_manual():
     """Toggle on, count up, pick 1 h, count down, toggle off."""
@@ -407,18 +400,14 @@ def scene_manual():
 
     rows = ""
     y = P + 96
-    # Mode switch: triggers set up, Manual chosen
     rows += segmented(y + 4, manual=True)
     y += 34
-    # Keep awake
     rows += text(42, y + 22, "Keep awake") + switch(sc, y + 18, on_w)
-    # For [menu]: a Stop in shortcut ends the session early, the mode label stays
     rows += text(42, y + 54, "For")
     rows += f'<rect x="216" y="{y + 39}" width="104" height="22" rx="7" fill="{CTL}"/>'
     rows += text(298, y + 54.5, "Indefinitely", size=12.2, anchor="end")
     rows += (f'<g transform="translate(303 {y + 46})" fill="none" stroke="{DIM}" stroke-width="2" '
              f'stroke-linecap="round"><path d="m1.5 3 3 2.6 3-2.6"/></g>')
-    # Stop in chips (only while brewing)
     chips = text(42, y + 86, "Stop in")
     cx = 186
     chip_xy = {}
@@ -432,7 +421,6 @@ def scene_manual():
                + text(hx + hw / 2, y + 86.5, "1 h", size=11.7, fill=BTNTX, weight=700, anchor="middle"),
                sc.vis([(CHIP, CHIP + 0.45)], 0.1))
     rows += g(chips, sc.vis([(ON + 0.3, OFF - 0.1)], 0.3))
-    # Lower menu slides up while Stop in is collapsed (the real menu's height fade)
     lower = f'<path d="M40 {y + 104.5}H320" stroke="{HAIR}"/>'
     lower += text(42, y + 128, "Keep awake with lid closed") + info(213, y + 124) + switch(sc, y + 124, [])
     lower += text(42, y + 160, "Pause on low battery") + info(178, y + 156) + switch(sc, y + 156, [])
@@ -440,7 +428,6 @@ def scene_manual():
                      lambda v: f"transform:translateY({v}px)")
     rows += g(lower, shift)
 
-    # Cursor: appear, click toggle, glide to 1 h, rest, back to toggle, click off.
     tog = (306, y + 21)
     chip = (hx + hw * 0.6, y + 86)
     rest = (250, P + 270)
@@ -479,18 +466,15 @@ def scene_triggers():
 
     y = P + 96
     rows = ""
-    # AI agent working
     rows += check(50, y + 14, sc.vis(brew_w, 0.2)) + ring(50, y + 14, sc.vis(idle_w, 0.2))
     rows += text(66, y + 18.5, "AI agent working (+300s)")
     rows += agent_row(sc, y + 40, "claude", "Claude app", "claude", [(0, CLAUDE_OFF), (BACK, sc.L)])
     rows += agent_row(sc, y + 61, "codex", "s001", "rest", [])
     rows += agent_row(sc, y + 82, "cursor-agent", "s002", "cursor", [(CUR_ON, CUR_OFF)])
-    # Conditions
     rows += ring(50, y + 104) + text(66, y + 108.5, "Playing a game")
     rows += check(50, y + 130, sc.vis([(NET_ON, NET_OFF)], 0.2)) + ring(50, y + 130, sc.vis(invert([(NET_ON, NET_OFF)], sc.L), 0.2))
     rows += text(66, y + 134.5, "Network above 1 MB/s")
     rows += ring(50, y + 156) + text(66, y + 160.5, "Downloading in “Downloads”")
-    # Mode switch on Automatic, below the conditions it hands control to
     rows += f'<path d="M40 {y + 168.5}H320" stroke="{HAIR}"/>'
     rows += segmented(y + 175, manual=False)
 
@@ -519,19 +503,16 @@ def scene_lid():
     y += 36
     rows += f'<path d="M40 {y + 58.5}H320" stroke="{HAIR}"/>'
     rows += text(42, y + 80, "Keep awake with lid closed") + info(213, y + 76) + switch(sc, y + 76, lid_w)
-    # The caption only shows while the mode is on, the row below makes room.
     rows += g(text(42, y + 102, "Stays awake on battery too. The display turns", size=11.7, fill=SUB)
               + text(42, y + 117, "off when the lid closes. Turn it off before", size=11.7, fill=SUB)
               + text(42, y + 132, "putting it in a bag.", size=11.7, fill=SUB),
               sc.vis([(LID_ON + 0.2, LID_OFF - 0.1)], 0.3))
-    # "Only while brewing" stays off: when on, it drives the lid switch itself.
     below = text(42, y + 160, "Only while brewing") + info(164, y + 156) + switch(sc, y + 156, [])
     shift = sc.track([(0, -48), (LID_ON, -48, "ease-in-out"), (LID_ON + 0.35, 0),
                       (LID_OFF, 0, "ease-in-out"), (LID_OFF + 0.35, -48)],
                      lambda v: f"transform:translateY({v}px)")
     rows += g(below, shift)
 
-    # Display off: the whole card dims, the work keeps going in the dark.
     dark_w = [(DARK, LIGHT)]
     dark = (f'<rect width="{W}" height="{H}" fill="#050403" class="{sc.vis(dark_w, 0.6)}"/>'
             + g(cup(156, 168, 48, None, None, None)
@@ -543,7 +524,6 @@ def scene_lid():
                 + text(242, 314.5, "working", size=11.8, fill=CLAUDE, weight=600, anchor="end"),
                 sc.vis([(DARK + 0.5, LIGHT - 0.3)], 0.5)))
 
-    # Clock jumps forward while the lid was shut, settles back for the loop.
     clock = (clock_text("Thu 09:41", sc.vis([(0, LIGHT - 0.4), (11.7, sc.L)], 0.3))
              + clock_text("Thu 11:56", sc.vis([(LIGHT - 0.4, 11.7)], 0.3)))
 

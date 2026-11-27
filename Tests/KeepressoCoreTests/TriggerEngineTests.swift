@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-/// A trigger whose state the test flips directly, counting how often it's ticked.
 private final class StubTrigger: Trigger {
     var satisfied: Bool
     let label: String
@@ -25,7 +24,6 @@ private final class FakeNetwork: NetworkMonitoring {
     init(_ s: NetworkSnapshot) { current = s }
 }
 
-// MARK: - Combine logic
 
 @Test func emptyEngineNeverFires() {
     #expect(TriggerEngine().isSatisfied() == false)
@@ -44,46 +42,38 @@ private final class FakeNetwork: NetworkMonitoring {
     #expect(TriggerEngine(combine: .all, triggers: [on, StubTrigger(true)]).isSatisfied())
 }
 
-// MARK: - tick() decoupled from the combine
 
 @Test func tickAdvancesEveryTriggerEvenWhenCombineShortCircuits() {
-    // .any short-circuits on the first satisfied trigger, .all on the first
-    // unsatisfied one. tick() must still step every trigger so stateful ones
-    // (grace, CPU EMA) advance at a fixed cadence regardless of the decision.
     let a = StubTrigger(true), b = StubTrigger(false)
     let engine = TriggerEngine(combine: .any, triggers: [a, b])
     engine.tick()
     _ = engine.isSatisfied()
     #expect(a.tickCount == 1)
-    #expect(b.tickCount == 1) // not starved by the OR short-circuit on `a`
+    #expect(b.tickCount == 1)
 }
 
 @MainActor
 @Test func gracePeriodSurvivesAnORShortCircuit() {
-    // The C1 regression: OR[audio(decides), gaming(grace 300s)]. The grace's
-    // window is advanced in tick(), so an earlier OR-sibling firing first no
-    // longer starves it and silently voids the grace.
     var now = Date(timeIntervalSinceReferenceDate: 0)
     let game = StubTrigger(true, label: "gaming")
     let grace = GracePeriodTrigger(wrapping: game, grace: 300, now: { now })
-    let audio = StubTrigger(true, label: "audio") // masks `grace` in the combine
+    let audio = StubTrigger(true, label: "audio")
     let engine = TriggerEngine(combine: .any, triggers: [audio, grace])
 
-    engine.tick() // both true at t=0: records lastSatisfiedAt even though
-    _ = engine.isSatisfied() // isSatisfied() short-circuits on `audio`
+    engine.tick()
+    _ = engine.isSatisfied()
     #expect(grace.isSatisfied())
 
-    game.satisfied = false // the game quits
+    game.satisfied = false
     now = now.addingTimeInterval(200)
     engine.tick()
-    #expect(grace.isSatisfied()) // 200s < 300s: still lingering, grace intact
+    #expect(grace.isSatisfied())
 
-    now = now.addingTimeInterval(150) // 350s since last true
+    now = now.addingTimeInterval(150)
     engine.tick()
-    #expect(!grace.isSatisfied()) // grace finally expires
+    #expect(!grace.isSatisfied())
 }
 
-// MARK: - Display & network triggers
 
 @Test func externalDisplayTriggerReflectsMonitor() {
     let monitor = FakeDisplays(DisplaySnapshot(externalDisplayCount: 0, totalDisplayCount: 1))
@@ -98,9 +88,9 @@ private final class FakeNetwork: NetworkMonitoring {
     let trigger = WiFiSSIDTrigger(ssid: "Cafe", monitor: monitor)
     #expect(trigger.isSatisfied())
 
-    monitor.current = NetworkSnapshot(ssid: "cafe") // case-sensitive
+    monitor.current = NetworkSnapshot(ssid: "cafe")
     #expect(trigger.isSatisfied() == false)
 
-    monitor.current = NetworkSnapshot(ssid: nil) // not associated
+    monitor.current = NetworkSnapshot(ssid: nil)
     #expect(trigger.isSatisfied() == false)
 }

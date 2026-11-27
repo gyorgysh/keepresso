@@ -60,7 +60,6 @@ private func grokRecord(
         promptId: promptId, updatedAt: now)
 }
 
-// MARK: - Install file
 
 @Test func grokInstallWritesOurFileIdempotentlyWithTimeoutAndNoMatcher() throws {
     let once = try GrokHooks.installHooks(into: nil, cliPath: cli)
@@ -155,7 +154,6 @@ private func grokRecord(
             == "/tmp/gh/hooks/keepresso.json")
 }
 
-// MARK: - Handle
 
 @Test func grokCamelCasePayloadRecords() throws {
     let dir = tempHooksDir()

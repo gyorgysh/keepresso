@@ -35,12 +35,9 @@ private final class GateFakeDisplays: DisplayMonitoring {
     gate.rebuild(rules: [.wifiSSID("Cafe")], combine: .any, enabled: true)
     #expect(gate.ruleStates()?.first?.satisfied == true)
 
-    // Within the cache TTL the earlier verdict is served even after the network
-    // changes, so a flurry of menu reads don't each re-evaluate.
     network.current = NetworkSnapshot(ssid: nil)
     #expect(gate.ruleStates()?.first?.satisfied == true)
 
-    // Past the TTL it re-evaluates against the live monitor.
     now = now.addingTimeInterval(1)
     #expect(gate.ruleStates()?.first?.satisfied == false)
 }
@@ -60,18 +57,16 @@ private final class GateFakeDisplays: DisplayMonitoring {
     let appRule = TriggerRule.app(AppRule(bundleID: "com.test", match: .frontmost, grace: 60))
 
     gate.rebuild(rules: [appRule], combine: .any, enabled: true)
-    gate.engine?.tick() // the app is frontmost: arms the grace window
+    gate.engine?.tick()
     #expect(gate.ruleStates()?.first?.satisfied == true)
 
-    // The app leaves the foreground, then an UNRELATED rule is added. The app's
-    // live trigger (and its in-flight grace) must carry over the rebuild.
     workspace.current = WorkspaceSnapshot(runningBundleIDs: [], frontmostBundleID: nil)
     now = now.addingTimeInterval(30)
     gate.rebuild(rules: [appRule, .externalDisplay], combine: .any, enabled: true)
     gate.engine?.tick()
-    #expect(gate.ruleStates()?.first?.satisfied == true) // 30s < 60s grace, still held
+    #expect(gate.ruleStates()?.first?.satisfied == true)
 
-    now = now.addingTimeInterval(40) // 70s since last frontmost: grace expired
+    now = now.addingTimeInterval(40)
     gate.engine?.tick()
     #expect(gate.ruleStates()?.first?.satisfied == false)
 }
@@ -95,16 +90,16 @@ private final class GateFakeDisplays: DisplayMonitoring {
 
     gate.engine?.tick()
     #expect(gate.ruleStates()?.first?.satisfied == true)
-    #expect(gate.ruleStates()?.first?.inGrace == false) // app in front: green, not amber
+    #expect(gate.ruleStates()?.first?.inGrace == false)
 
     workspace.current = WorkspaceSnapshot(runningBundleIDs: [], frontmostBundleID: nil)
     now = now.addingTimeInterval(20)
     gate.engine?.tick()
     #expect(gate.ruleStates()?.first?.satisfied == true)
-    #expect(gate.ruleStates()?.first?.inGrace == true)  // lingering in grace: amber
-    #expect(gate.ruleStates()?.first?.graceRemaining == 40) // 60 - 20 left, for the countdown
+    #expect(gate.ruleStates()?.first?.inGrace == true)
+    #expect(gate.ruleStates()?.first?.graceRemaining == 40)
 
-    now = now.addingTimeInterval(50) // past the 60s grace
+    now = now.addingTimeInterval(50)
     gate.engine?.tick()
     #expect(gate.ruleStates()?.first?.satisfied == false)
     #expect(gate.ruleStates()?.first?.inGrace == false)

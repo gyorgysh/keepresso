@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-// MARK: - Codec
 
 @Test func decisionLogCodecRoundTripsALine() throws {
     let event = PersistedSessionEvent(
@@ -50,11 +49,9 @@ import Foundation
     #expect(rotated.count <= 4_000)
     let decoded = DecisionLogCodec.decode(rotated)
     #expect(!decoded.isEmpty)
-    // Newest event survives.
     #expect(decoded.last?.reason.hasSuffix(" 199") == true)
 }
 
-// MARK: - File store + persister
 
 @Test func fileLogStoreAppendAndLoad() throws {
     let url = FileManager.default.temporaryDirectory
@@ -86,7 +83,6 @@ import Foundation
     #expect(recent.map(\.reason) == ["e0", "e1", "e2", "e3", "e4"])
 }
 
-// MARK: - Stats
 
 @Test func awakeStatsPairsSessionsAndSplitsMidnight() {
     let cal = Calendar(identifier: .gregorian)
@@ -103,8 +99,8 @@ import Foundation
         events: events, now: end, dayCount: 2, calendar: cal)
     #expect(stats.totalHeldSeconds == 2 * 3600)
     #expect(stats.days.count == 2)
-    #expect(stats.days[0].heldSeconds == 3600) // 23:00-00:00
-    #expect(stats.days[1].heldSeconds == 3600) // 00:00-01:00
+    #expect(stats.days[0].heldSeconds == 3600)
+    #expect(stats.days[1].heldSeconds == 3600)
     #expect(stats.days[0].batteryConsumed == 5)
 }
 

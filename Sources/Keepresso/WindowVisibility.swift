@@ -45,8 +45,6 @@ struct WindowVisibilityReader: NSViewRepresentable {
         nsView.probe()
     }
 
-    /// A zero-size probe that watches its window and reports only on an actual
-    /// change, so an unchanged state never churns SwiftUI.
     final class ReporterView: NSView {
         var onChange: ((Bool) -> Void)?
         var ignoreOcclusion = false
@@ -88,8 +86,6 @@ struct WindowVisibilityReader: NSViewRepresentable {
             }
         }
 
-        /// Recompute from the live window. Safe to call often: ``report``
-        /// drops duplicates.
         func probe() {
             // An unattached new probe has no window state to publish. During
             // a detach, the previous window still owns the visibility state.

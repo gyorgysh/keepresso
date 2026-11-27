@@ -42,10 +42,7 @@ public struct SettingsTransfer: Codable, Equatable, Sendable {
 
 /// Why an import file was rejected, so the app can explain it to the user.
 public enum SettingsTransferError: Error, Equatable, Sendable {
-    /// The data isn't a Keepresso settings export (not JSON, or missing/wrong
-    /// format marker).
     case unrecognizedFile
-    /// A valid Keepresso export, but in a newer format this build can't read.
     case unsupportedVersion(Int)
 }
 

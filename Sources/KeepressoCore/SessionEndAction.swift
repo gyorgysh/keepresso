@@ -6,16 +6,10 @@ import IOKit.pwr_mgt
 /// manual stop, and never on the battery or thermal safety pauses: those
 /// already manage sleep themselves. Default is do nothing.
 public enum SessionEndAction: String, Codable, CaseIterable, Sendable {
-    /// Do nothing (the default).
     case none
-    /// Put the display to sleep (`pmset displaysleepnow`).
     case sleepDisplay
-    /// Lock the screen (System Events `lock screen`).
     case lockScreen
-    /// Start the screen saver.
     case startScreensaver
-    /// Put the whole Mac to sleep (`pmset sleepnow` via the helper when
-    /// available, otherwise IOKit / System Events).
     case sleepMac
 
     /// A menu label for the Preferences picker.
@@ -41,8 +35,6 @@ public protocol SessionEndActing: AnyObject {
 /// installed; fall back to IOKit, then System Events. Separated so the app can
 /// inject a helper-aware backend without Core depending on XPC.
 public protocol SystemSleepCommanding: Sendable {
-    /// Request system sleep. Returns whether a path accepted the request
-    /// (the machine may sleep before the caller sees the return).
     @discardableResult
     func sleepNow() -> Bool
 }
@@ -84,9 +76,6 @@ public final class SystemEndActionPerformer: SessionEndActing {
             process.arguments = ["-a", "ScreenSaverEngine"]
             try? process.run()
         case .sleepMac:
-            // Helper XPC and osascript can block for seconds. The session is
-            // already over, so hop off the main actor rather than stall the
-            // menu bar for the timeout.
             let sleeper = systemSleeper
             Task.detached { _ = sleeper.sleepNow() }
         }
@@ -96,7 +85,6 @@ public final class SystemEndActionPerformer: SessionEndActing {
 /// Tries IOKit ``IOPMSleepSystem``, then System Events AppleScript. The app
 /// wraps this with a helper-first attempt when the daemon is installed.
 public final class CompositeSystemSleeper: SystemSleepCommanding {
-    /// Optional first try (e.g. the privileged helper's `pmset sleepnow`).
     private let preferred: (@Sendable () -> Bool)?
 
     public init(preferred: (@Sendable () -> Bool)? = nil) {
@@ -110,8 +98,6 @@ public final class CompositeSystemSleeper: SystemSleepCommanding {
         return Self.sleepViaSystemEvents()
     }
 
-    /// Ask powerd to sleep the system. Needs a privileged session on many
-    /// machines, so this is a best-effort path before AppleScript.
     private static func sleepViaIOKit() -> Bool {
         let port = IOPMFindPowerManagement(mach_task_self_)
         guard port != 0 else { return false }
@@ -119,8 +105,6 @@ public final class CompositeSystemSleeper: SystemSleepCommanding {
         return IOPMSleepSystem(port) == kIOReturnSuccess
     }
 
-    /// System Events `sleep`. May prompt once for Automation access. The
-    /// Preferences copy explains that before the user picks this action.
     private static func sleepViaSystemEvents() -> Bool {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")

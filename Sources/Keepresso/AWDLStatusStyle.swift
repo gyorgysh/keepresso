@@ -1,9 +1,6 @@
 import SwiftUI
 import KeepressoCore
 
-/// Presentation for ``AppModel/AWDLStatus``, shared by the menu dropdown and the
-/// Gaming & Streaming window so the readout matches wherever the user looks.
-/// `nil` when the watchdog isn't running (nothing to show).
 struct AWDLStatusStyle {
     let icon: String
     let color: Color

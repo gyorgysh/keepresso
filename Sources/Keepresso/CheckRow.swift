@@ -2,9 +2,6 @@ import SwiftUI
 import AppKit
 import KeepressoCore
 
-/// One readiness check: topic icon (tinted by status, with a small status
-/// badge), title, current-state detail, and (when not OK) its remediation
-/// affordances.
 struct CheckRow: View {
     let check: ReadinessCheck
     @State private var copied = false
@@ -54,10 +51,6 @@ struct CheckRow: View {
         }
     }
 
-    /// The leading icon: the row's subject (Wi-Fi, Ethernet, a game
-    /// controller) tinted by status, with a small status badge in the corner
-    /// so ok/tip/warning still reads by shape, not color alone. Rows without
-    /// a topic mapping fall back to the bare status glyph.
     private var icon: some View {
         Group {
             if isBluetoothRow {
@@ -93,7 +86,6 @@ struct CheckRow: View {
     /// missing on purpose: SF Symbols has no Bluetooth glyph (the mark is
     /// licensed), so those rows draw ``BluetoothRune`` instead.
     private static let topicSymbols: [String: String] = [
-        // Setup screen
         "wake-for-network": "network",
         "auto-restart": "powerplug.fill",
         "system-sleep": "moon.zzz.fill",
@@ -106,14 +98,12 @@ struct CheckRow: View {
         "perm-location": "location.fill",
         "perm-calendar": "calendar",
         "perm-notifications": "bell.badge.fill",
-        // Gaming & Streaming screen
         "stream-ethernet": "cable.connector.horizontal",
         "stream-wifi-channel": "wifi",
         "stream-game-mode": "gamecontroller.fill",
         "stream-browser-gaming": "globe",
         "stream-location-note": "location.fill",
         "stream-read-more": "book.fill",
-        // Public Wi-Fi assistant
         "wifi-radio": "wifi",
         "wifi-associated": "wifi",
         "wifi-address": "network",
@@ -134,8 +124,6 @@ struct CheckRow: View {
         isBluetoothRow || Self.topicSymbols[check.id] != nil
     }
 
-    /// The corner badge: filled shapes that stay legible at 9 pt (the row's
-    /// lightbulb tip glyph would turn to mush that small).
     private var badgeGlyph: String {
         switch check.status {
         case .ok: "checkmark.circle.fill"
@@ -163,8 +151,6 @@ struct CheckRow: View {
         }
     }
 
-    /// Spoken status for VoiceOver, since the glyph's meaning is otherwise
-    /// carried only by shape and color.
     private var statusLabel: String {
         switch check.status {
         case .ok: L("OK")
@@ -174,8 +160,6 @@ struct CheckRow: View {
         }
     }
 
-    /// "Open Settings" for a System Settings deep link, otherwise a neutral
-    /// "Learn more" (e.g. the tokenstat.ai tip points at a web page).
     private func linkLabel(for url: URL) -> String {
         url.scheme?.hasPrefix("x-apple") == true ? L("Open Settings") : L("Learn more")
     }
@@ -185,8 +169,6 @@ struct CheckRow: View {
         pasteboard.clearContents()
         pasteboard.setString(command, forType: .string)
         copied = true
-        // Settle back to the offer after a moment, so the row doesn't read
-        // "Copied!" forever.
         Task {
             try? await Task.sleep(for: .seconds(1.5))
             copied = false
@@ -194,10 +176,6 @@ struct CheckRow: View {
     }
 }
 
-/// The Bluetooth rune as a single stroked polyline, hand-drawn because SF
-/// Symbols doesn't include the (licensed) Bluetooth mark. The classic figure:
-/// a vertical stem, arrowhead vertices on the right at quarter heights, and
-/// two diagonals crossing the stem's center to the left edge.
 struct BluetoothRune: Shape {
     func path(in rect: CGRect) -> Path {
         func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {

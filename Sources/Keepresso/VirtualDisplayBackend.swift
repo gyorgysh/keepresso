@@ -10,7 +10,7 @@ final class CGVirtualDisplayBackend: @preconcurrency VirtualDisplaying {
     var isActive: Bool { display.isActive }
 
     func start(_ config: VirtualDisplayConfig) -> Bool {
-        display.stop() // replace any existing display
+        display.stop()
         let id = display.start(
             withWidth: UInt32(min(max(0, config.width), Int(UInt32.max))),
             height: UInt32(min(max(0, config.height), Int(UInt32.max))),

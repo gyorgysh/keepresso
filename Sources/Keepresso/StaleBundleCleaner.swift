@@ -25,15 +25,8 @@ enum StaleBundleCleaner {
     private static let stateLock = NSLock()
     private static var unremovableTrashPathStorage: String?
 
-    /// Stable notification identifier: repeat launches update one notice
-    /// instead of stacking them, and the notification delegate recognizes a
-    /// click on it (``UserNotificationReminder``) to open the Trash.
     static let notificationIdentifier = "sh.gyorgy.keepresso.stale-trash"
 
-    /// Tell the user about a copy the app may not remove. Called after the app
-    /// model exists: the notification-center delegate must already be in
-    /// place, or a banner posted while the app is frontmost (which it is,
-    /// during launch) gets silently dropped.
     static func notifyIfSweepNeedsUser() {
         if let path = unremovableTrashPath,
            !FileManager.default.fileExists(atPath: path) {
@@ -91,10 +84,6 @@ enum StaleBundleCleaner {
         }
     }
 
-    /// The bookmark pass plus the direct probe under our own name, for the
-    /// helper repair paths (verify, reinstall): a repair can't stick while a
-    /// trashed copy remains, however it got missed at launch. Blocking file
-    /// work; call it off the main actor.
     static func sweepNow() {
         guard AppRelocator.runsFromApplications else { return }
         _ = sweepAndRemember()
@@ -111,10 +100,6 @@ enum StaleBundleCleaner {
         removeTrashedCopies(at: [candidate.path])
     }
 
-    /// Delete the trashed previous copy if there is one, then remember the
-    /// current bundle for the run after the next update. Blocking file work;
-    /// call it off the main actor (or from `sweepAtStartup`, before the UI
-    /// exists).
     @discardableResult
     static func sweepAndRemember() -> StaleBundleSweepResult {
         guard AppRelocator.runsFromApplications else { return .nothingToSweep }
@@ -223,9 +208,6 @@ enum StaleBundleCleaner {
 enum UpdateArrival {
     private static let key = "LastRunBuild"
 
-    /// Whether the build changed since the last run, recording the current
-    /// one either way. A genuinely first launch reports false: there is no
-    /// previous version to clean up after.
     static func checkAndRecord() -> Bool {
         guard AppRelocator.runsFromApplications else { return false }
         let defaults = UserDefaults.standard
@@ -234,12 +216,6 @@ enum UpdateArrival {
         else { return false }
         defaults.set(current, forKey: key)
         if let previous { return current != previous }
-        // No build recorded: either a fresh install (nothing to clean up
-        // after) or the first run after updating from a build that predates
-        // this record. Saved settings tell the two apart, a fresh install
-        // has none yet, so an update from any pre-record build still gets
-        // its version-boundary chores (missing them is what got the helper
-        // disabled on the 1.12.0 update).
         return defaults.data(forKey: UserDefaultsSettingsStore.defaultKey) != nil
     }
 }

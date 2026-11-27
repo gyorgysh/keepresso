@@ -1,10 +1,4 @@
 #!/bin/bash
-# Fail unless every version literal in project.yml and the committed app,
-# widget, and helper Info.plist files agree: all
-# MARKETING_VERSION + CFBundleShortVersionString lines must carry one
-# distinct version, and all CURRENT_PROJECT_VERSION + CFBundleVersion lines
-# one distinct build number. The old awk read only the first
-# MARKETING_VERSION, so a drifted widget/helper literal shipped silently.
 set -euo pipefail
 
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
@@ -42,5 +36,4 @@ for target in ("Keepresso", "KeepressoWidget", "keepresso-helper"):
             sys.exit(f"error: {path} {key} is {info.get(key)!r}; project.yml requires {value!r}")
 PY
 
-# Print "version build" for callers (release.sh, CI).
 printf '%s %s\n' "$distinct_versions" "$distinct_builds"

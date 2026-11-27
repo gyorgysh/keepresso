@@ -71,10 +71,6 @@ public enum HelperService {
         anchoredPeerRequirement(identifier: identifier) ?? "identifier \"\(identifier)\""
     }
 
-    /// Requirement pinning the daemon to the helper inside this app's own
-    /// bundle, for ad-hoc builds with no Team ID to anchor to. Nil outside
-    /// an app bundle, where the caller must refuse to connect (fail closed)
-    /// rather than fall back to identifier-only.
     static func adHocDaemonRequirement() -> String? {
         guard let selfPath = HelperPeerPolicy.executablePath(ofPID: getpid()),
               let helperPath = HelperPeerPolicy.bundledHelperExecutablePath(for: selfPath)
@@ -134,8 +130,6 @@ public enum HelperPeerPolicy {
     /// Real path of `pid`'s executable, via `proc_pidpath`. Nil when the
     /// process is gone or the path is unreadable.
     public static func executablePath(ofPID pid: pid_t) -> String? {
-        // PROC_PIDPATHINFO_MAXSIZE (4 * MAXPATHLEN); the macro itself doesn't
-        // import into Swift.
         var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
         guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
         return String(cString: buffer)
@@ -227,60 +221,19 @@ public enum HelperPeerPolicy {
 /// The plain `setSleepDisabled` is the manual closed-display toggle, which is
 /// meant to outlive the app, so it is not connection-scoped.
 @objc public protocol HelperXPCProtocol {
-    /// Liveness and version handshake; replies with ``HelperService/protocolVersion``.
     func ping(reply: @escaping @Sendable (Int) -> Void)
-    /// Set the persistent `pmset disablesleep` flag (the manual toggle).
     func setSleepDisabled(_ disabled: Bool, reply: @escaping @Sendable (Bool) -> Void)
-    /// Take or release this connection's hold on `disablesleep` (the
-    /// "only while brewing" automation).
     func setSleepHold(_ holding: Bool, reply: @escaping @Sendable (Bool) -> Void)
-    /// Take or release this connection's hold on `awdl0 down` (the AWDL
-    /// watchdog). While any hold is live the daemon re-downs the interface
-    /// every few seconds, since macOS re-raises it on its own.
     func setAWDLHold(_ holding: Bool, reply: @escaping @Sendable (Bool) -> Void)
-    /// Take or release this connection's forced-fan hold at `percent` of the
-    /// fans' range (the thermal safety net's boost). Boost only, never below
-    /// what auto control had; while any hold is live the daemon re-writes the
-    /// target every few seconds, since the system re-takes fan control.
     func setFanHold(_ holding: Bool, percent: Int, reply: @escaping @Sendable (Bool) -> Void)
-    /// Whether the daemon surrendered a forced-fan hold on its own (repeated
-    /// firmware refusals), so the app can stop claiming a boost the hardware
-    /// no longer has and release its side of the hold.
     func fanHoldDropped(reply: @escaping @Sendable (Bool) -> Void)
-    /// Take or release this connection's CPU-priority hold on `pid` (the
-    /// game priority boost: renice needs root for negative values). Released
-    /// automatically when the connection dies; priority itself dies with the
-    /// target process, so there is no cross-reboot restore debt.
     func setPriorityHold(_ holding: Bool, pid: Int, reply: @escaping @Sendable (Bool) -> Void)
-    /// Put the Mac to sleep immediately (`pmset sleepnow`). Fire-and-forget
-    /// from the caller's perspective: the machine may sleep before the reply
-    /// lands, so a missing reply is not a failure.
     func sleepNow(reply: @escaping @Sendable (Bool) -> Void)
-    /// Apply the full desired wake schedule in one step: cancel previous
-    /// schedules, then install the one-shot (`pmset schedule wake`) and the
-    /// repeating pair (`pmset repeat wakeorpoweron`) as requested. Empty
-    /// strings mean "not wanted"; all empty clears everything. One composite
-    /// verb so the clear-then-install ordering runs inside the daemon and a
-    /// mid-sequence restart can't leave a cleared-but-not-reinstalled state.
     func applyWakeSchedule(oneShot: String, repeatDays: String, repeatTime: String, reply: @escaping @Sendable (Bool) -> Void)
-    /// Flush the system DNS cache (`dscacheutil -flushcache` plus
-    /// `killall -HUP mDNSResponder`). No arguments: a captive portal that
-    /// poisoned resolution is the only caller, and a generic shell verb is
-    /// out of bounds for this protocol.
     func flushDNS(reply: @escaping @Sendable (Bool) -> Void)
-    /// Take or release this connection's hold on the Keyboard Cleaner remap
-    /// (baked-in `UserKeyMapping`, never a caller-supplied script). The
-    /// daemon snapshots the live mapping, applies the disable table, and
-    /// restores the snapshot when the last holder drops or the connection
-    /// dies. No JSON in, so a compromised caller cannot remap arbitrary keys
-    /// beyond the lock itself.
     func setKeyboardLock(_ holding: Bool, reply: @escaping @Sendable (Bool) -> Void)
-    /// Temporarily select battery Low Power Mode, restoring the previous mode after release.
     func setLowPowerHold(_ holding: Bool, reply: @escaping @Sendable (Bool) -> Void)
     func setAdapterLowPowerHold(_ holding: Bool, reply: @escaping @Sendable (Bool) -> Void)
-    /// Ask the daemon to exit at its first fully idle moment, without the
-    /// ordinary exit's extra grace period (see ``HelperShutdownPolicy``), so
-    /// launchd relaunches the binary currently in the bundle on the next call.
     func terminateWhenIdle()
 }
 
@@ -288,43 +241,23 @@ public enum HelperPeerPolicy {
 /// runs on a detached task (the controllers hop off the main actor for all
 /// launcher work). Tests use a fake; ``XPCHelperClient`` is the real one.
 public protocol PrivilegedHelperCalling: AnyObject, Sendable {
-    /// Whether a matching daemon answered the version handshake.
     func ping() -> Bool
-    /// The protocol version the daemon answered with, or `nil` when no daemon
-    /// replied at all. An old version is not a failure: right after an app
-    /// update the pre-update daemon image can keep serving until it idles
-    /// out, and callers must treat that as "answering, needs retirement",
-    /// never as "broken" (repairing a live registration is what risks a
-    /// fresh approval prompt).
     func pingVersion() -> Int?
     func setSleepDisabled(_ disabled: Bool) -> Bool
     func setSleepHold(_ holding: Bool) -> Bool
     func setAWDLHold(_ holding: Bool) -> Bool
     func setFanHold(_ holding: Bool, percent: Int) -> Bool
-    /// Whether the daemon surrendered the forced-fan hold on its own, `nil`
-    /// when no daemon answered.
     func fanHoldDropped() -> Bool?
-    /// Take or release the CPU-priority hold on `pid` (see
-    /// ``HelperXPCProtocol/setPriorityHold(_:pid:reply:)``).
     func setPriorityHold(_ holding: Bool, pid: Int) -> Bool
-    /// Ask the daemon to put the Mac to sleep (`pmset sleepnow`).
     func sleepNow() -> Bool
-    /// Apply the full desired wake schedule (see
-    /// ``HelperXPCProtocol/applyWakeSchedule(oneShot:repeatDays:repeatTime:reply:)``).
-    /// `nil` parts are not wanted; all `nil` clears everything.
     func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool
-    /// Flush the system DNS cache (see ``HelperXPCProtocol/flushDNS(reply:)``).
     func flushDNS() -> Bool
-    /// Take or release the Keyboard Cleaner remap hold (see
-    /// ``HelperXPCProtocol/setKeyboardLock(_:reply:)``).
     func setKeyboardLock(_ holding: Bool) -> Bool
-    /// Connection-scoped battery Low Power Mode (protocol 10 or newer).
     func setLowPowerHold(_ holding: Bool) -> Bool
     func setAdapterLowPowerHold(_ holding: Bool) -> Bool
 }
 
 public extension PrivilegedHelperCalling {
-    // Existing test doubles and clients without the new verb report unsupported.
     func setLowPowerHold(_ holding: Bool) -> Bool { false }
     func setAdapterLowPowerHold(_ holding: Bool) -> Bool { false }
 }
@@ -341,43 +274,25 @@ public extension PrivilegedHelperCalling {
 public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable {
     private let lock = NSLock()
     private var connection: NSXPCConnection?
-    // Health checks, wake-schedule writes, and feature calls can overlap.
-    // A completed ping must not invalidate another call's shared connection.
     private var callsInFlight = 0
-    /// What we currently want held, for re-assertion after an interruption.
     private var wantsSleepHold = false
     private var wantsAWDLHold = false
-    /// The wanted fan boost percent, or nil for no fan hold.
     private var wantsFanHold: Int?
-    /// The pid whose priority we want raised, or nil for no priority hold.
     private var wantsPriorityHold: Int?
-    /// Keyboard Cleaner remap hold. Kept for the life of a wipe so a daemon
-    /// restart re-applies the disable table, and an app death restores keys.
     private var wantsKeyboardLock = false
     private var wantsLowPowerHold = false
     private var wantsAdapterLowPowerHold = false
-    /// The seven holds this client can keep, each with its own generation.
     private enum HoldKind: Hashable { case sleep, awdl, fan, priority, keyboard, lowPower, adapterLowPower }
-    /// Bumped on every release and at the start of a reassert so an
-    /// in-flight `set*Hold(true)` from a previous interrupt cannot re-take
-    /// a hold the app already released. Counted **per kind**: releasing the
-    /// AWDL hold must not make an in-flight sleep reassert look stale and
-    /// send a compensating release for a hold the app still wants.
     private var holdGeneration: [HoldKind: Int] = [:]
 
-    /// Call with ``lock`` held.
     private func bumpGeneration(_ kind: HoldKind) {
         holdGeneration[kind, default: 0] += 1
     }
 
-    /// How long a call may wait on the daemon before counting as failed.
-    /// Generous enough for launchd to spawn it on first contact.
     private let timeout: TimeInterval
     private let connectionFactory: @Sendable () -> NSXPCConnection
     private let verifiesDaemonSignature: Bool
 
-    // An anonymous, in-process endpoint lets tests exercise overlapping calls
-    // without registering a privileged daemon or changing machine settings.
     convenience init(timeout: TimeInterval, connectionFactory: @escaping @Sendable () -> NSXPCConnection) {
         self.init(timeout: timeout, connectionFactory: connectionFactory, verifiesDaemonSignature: false)
     }
@@ -420,9 +335,6 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func setSleepHold(_ holding: Bool) -> Bool {
-        // `call` already releases, but the wanted-hold state below changes
-        // after it returns (clear on success), so release again once the
-        // state is final. The second pass is a no-op when already released.
         defer { releaseConnectionUnlessHeld() }
         if holding {
             lock.lock()
@@ -438,9 +350,6 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
             return ok
         }
         let ok = call { proxy, done in proxy.setSleepHold(false, reply: done) }
-        // Clear the want only once release is confirmed. On failure keep it
-        // so the connection stays open for a retry (and an interruption
-        // re-assert keeps the hold until that release lands).
         if ok {
             lock.lock()
             wantsSleepHold = false
@@ -451,7 +360,6 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func setAWDLHold(_ holding: Bool) -> Bool {
-        // See setSleepHold: the state change after `call` needs its own release.
         defer { releaseConnectionUnlessHeld() }
         if holding {
             lock.lock()
@@ -477,7 +385,6 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func setFanHold(_ holding: Bool, percent: Int) -> Bool {
-        // See setSleepHold: the state change after `call` needs its own release.
         defer { releaseConnectionUnlessHeld() }
         if holding {
             lock.lock()
@@ -503,7 +410,6 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func setPriorityHold(_ holding: Bool, pid: Int) -> Bool {
-        // See setSleepHold: the state change after `call` needs its own release.
         defer { releaseConnectionUnlessHeld() }
         if holding {
             lock.lock()
@@ -540,9 +446,6 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func sleepNow() -> Bool {
-        // Once sleep starts the reply may never arrive. The regular call
-        // timeout bounds the wait; a missing reply is treated as failure and
-        // the composite sleeper falls through to IOKit / System Events.
         call { proxy, done in proxy.sleepNow(reply: done) }
     }
 
@@ -575,8 +478,6 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         ) { proxy, holding, done in proxy.setAdapterLowPowerHold(holding, reply: done) }
     }
 
-    /// Shared body of the two Low Power holds: a protocol-gated verb whose
-    /// wanted state keeps the connection (and the daemon's claim) alive.
     private func setProfileHold(
         _ holding: Bool,
         kind: HoldKind,
@@ -585,7 +486,6 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         send: (HelperXPCProtocol, Bool, @escaping @Sendable (Bool) -> Void) -> Void
     ) -> Bool {
         guard let version = pingVersion() else { return false }
-        // See setSleepHold: the state change after `call` needs its own release.
         defer { releaseConnectionUnlessHeld() }
         func dropWant() {
             lock.lock()
@@ -594,9 +494,6 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
             lock.unlock()
         }
         guard version >= minProtocol else {
-            // This daemon cannot hold this feature. Drop a stale want so its
-            // connection can retire; restoration still needs a newer daemon,
-            // so do not claim a confirmed release.
             if !holding { dropWant() }
             return false
         }
@@ -614,7 +511,6 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     public func setKeyboardLock(_ holding: Bool) -> Bool {
-        // See setSleepHold: the state change after `call` needs its own release.
         defer { releaseConnectionUnlessHeld() }
         if holding {
             lock.lock()
@@ -649,8 +545,6 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     /// runs on a detached task; never call this on the main thread.
     /// Best-effort.
     public func retireStaleDaemon(appUpdated: Bool = false) {
-        // Keep the handshake counted as an in-flight call. Otherwise a
-        // concurrent health ping can invalidate it before retirement lands.
         _ = call { proxy, done in
             proxy.ping { version in
                 guard version != HelperService.protocolVersion || appUpdated else {
@@ -658,18 +552,12 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
                     return
                 }
                 proxy.terminateWhenIdle()
-                // The retirement message is one-way; allow it to be delivered
-                // before relinquishing this call's claim on the connection.
                 DispatchQueue.global().asyncAfter(deadline: .now() + 2) { done(true) }
             }
         }
     }
 
-    // MARK: - Connection plumbing
 
-    /// Run one remote call synchronously with a timeout. `done(false)` is also
-    /// invoked by the connection's error handler, so a missing daemon (not
-    /// installed, denied, or crashed) fails cleanly instead of hanging.
     private func call(_ body: (HelperXPCProtocol, @escaping @Sendable (Bool) -> Void) -> Void) -> Bool {
         lock.lock()
         callsInFlight += 1
@@ -695,10 +583,6 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         return outcome.value
     }
 
-    /// Drop the connection when no hold is wanted. With nothing held there is
-    /// no claim to keep alive, and holding on would pin the daemon: it can't
-    /// idle-exit (or retire after an update) while a client is connected, and
-    /// launchd only picks up a newly installed binary on a fresh connection.
     private func releaseConnectionUnlessHeld() {
         lock.lock()
         let held = callsInFlight > 0 || wantsSleepHold || wantsAWDLHold || wantsFanHold != nil
@@ -710,8 +594,6 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 
     private func proxy(errorHandler: @escaping @Sendable () -> Void) -> HelperXPCProtocol? {
-        // No log here: a missing daemon (not installed, denied) is the routine
-        // case at launch, and timeouts already log in `call`.
         currentConnection()?
             .remoteObjectProxyWithErrorHandler { _ in errorHandler() } as? HelperXPCProtocol
     }
@@ -725,16 +607,10 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         lock.lock()
         if let connection { lock.unlock(); return connection }
         lock.unlock()
-        // Build and resume outside the lock: resume can fail fast and dispatch
-        // the invalidation handler synchronously, which also takes the lock.
         let factory = connectionFactory
         let verifies = verifiesDaemonSignature
         let fresh = factory()
         fresh.remoteObjectInterface = NSXPCInterface(with: HelperXPCProtocol.self)
-        // Only talk to our own daemon: same team and the helper's identifier
-        // on signed builds; on ad-hoc dev builds, the exact helper binary
-        // inside our own bundle. Refuse to connect when neither pins: an
-        // identifier-only requirement would accept any local claimant.
         if verifies {
             if let anchored = HelperService.anchoredPeerRequirement(
                 identifier: HelperService.helperCodeSignIdentifier
@@ -757,9 +633,6 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         fresh.invalidationHandler = { [weak self, weak fresh] in
             guard let self, let fresh else { return }
             self.lock.lock()
-            // Only drop this connection. Invalidation of an interrupted
-            // predecessor must not nil a replacement already created for
-            // reassert.
             if self.connection === fresh { self.connection = nil }
             self.lock.unlock()
         }
@@ -771,16 +644,9 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         return fresh
     }
 
-    /// The daemon went away (killed, updated, crashed) and dropped our
-    /// connection-scoped holds with it. Re-take whatever we still want, on the
-    /// relaunched daemon, without blocking whoever's runloop we're on.
     private func reassertHolds(from interrupted: NSXPCConnection) {
         lock.lock()
-        // A delayed callback from a predecessor must not tear down the
-        // replacement connection or disturb the replacement's live holds.
         guard connection === interrupted else { lock.unlock(); return }
-        // One generation per kind: a release of one hold must not make the
-        // in-flight reassert of another look stale.
         var generations: [HoldKind: Int] = [:]
         for kind in [HoldKind.sleep, .awdl, .fan, .priority, .keyboard, .lowPower, .adapterLowPower] {
             bumpGeneration(kind)
@@ -797,9 +663,6 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         let stale = connection
         connection = nil
         lock.unlock()
-        // The interrupted connection cannot carry the reassert. Drop it
-        // (without holding the lock: invalidationHandler also takes it)
-        // so the next proxy opens a fresh one to the relaunched daemon.
         stale?.invalidate()
         guard sleep || awdl || fan != nil || priority != nil || keyboard || lowPower || adapterLowPower,
               let proxy = proxyForAsyncUse() else { return }
@@ -867,10 +730,6 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
         }
     }
 
-    /// True when this reassert generation for `kind` is still current and
-    /// `check` agrees we want the hold. A concurrent release of that same
-    /// hold bumps its generation, so an in-flight re-take is skipped or
-    /// undone instead of sticking.
     private func holdStillWanted(
         kind: HoldKind, generation: [HoldKind: Int], _ check: () -> Bool
     ) -> Bool {
@@ -880,7 +739,6 @@ public final class XPCHelperClient: PrivilegedHelperCalling, @unchecked Sendable
     }
 }
 
-/// A lock-guarded value a reply block can write from its XPC queue.
 private final class LockedBox<Value: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var stored: Value
@@ -895,14 +753,11 @@ private final class LockedBox<Value: Sendable>: @unchecked Sendable {
     }
 }
 
-/// A once-settable boolean shared between a reply block and its waiter, so a
-/// late reply after a timeout can't signal a semaphore nobody holds anymore.
 private final class LockedOutcome: @unchecked Sendable {
     private let lock = NSLock()
     private var settled = false
     private(set) var value = false
 
-    /// Record the first outcome; returns whether this call was the first.
     func settle(_ ok: Bool) -> Bool {
         lock.lock()
         defer { lock.unlock() }

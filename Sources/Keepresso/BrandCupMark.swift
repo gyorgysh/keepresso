@@ -1,36 +1,16 @@
 import CoreGraphics
 
-/// The brand mark's cup geometry (espresso cup, crema stripe, handle, saucer,
-/// steam wisps) redrawn on a compact 18-point grid sized for the menu bar.
-/// This is the same mark `scripts/make-icon.swift` renders for the app icon,
-/// with the steam shortened so the cup stays legible at menu bar size.
-///
-/// Geometry only (CoreGraphics, no UI imports) because every rendering shares
-/// it: ``MenuBarIcon`` rasterizes a template `NSImage` for the menu bar,
-/// ``BrandCupGlyph`` draws SwiftUI `Path`s in the dropdown header, the widget
-/// extension draws the desktop-widget glyph, and `scripts/make-symbol.swift`
-/// exports the custom SF Symbol for the Control Center toggle. The file is
-/// compiled into both the app and widget targets (see `project.yml`).
 enum BrandCupMark {
-    /// The layout grid the paths below are defined in (y pointing down).
     static let grid: CGFloat = 18
 
-    /// Stroke widths in grid units.
     static let outlineWidth: CGFloat = 1.2
     static let saucerWidth: CGFloat = 1.4
     static let steamWidth: CGFloat = 1.1
 
-    /// The ink bounds of the cup, handle, and saucer (steam excluded), stroke
-    /// extents included. ``BrandCupGlyph`` fits this rect to its frame, and
-    /// the idle menu bar icon recenters it in the canvas (see ``MenuBarIcon``).
     static let cupInk = CGRect(x: 1.6, y: 5.0, width: 14.6, height: 11.0)
 
-    /// The ink bounds of the whole mark including steam, for renderings that
-    /// show the full logo (widgets, the exported symbol).
     static let fullInk = CGRect(x: 1.6, y: 0.3, width: 14.6, height: 15.7)
 
-    /// Cup body: straight rim, rounded bottom. Filled while brewing, stroked
-    /// as an outline while idle.
     static func cup() -> CGPath {
         let p = CGMutablePath()
         p.move(to: CGPoint(x: 2.8, y: 5.6))
@@ -52,7 +32,6 @@ enum BrandCupMark {
                cornerWidth: 0.625, cornerHeight: 0.625, transform: nil)
     }
 
-    /// Handle on the right side (stroked).
     static func handle() -> CGPath {
         let p = CGMutablePath()
         p.move(to: CGPoint(x: 13.0, y: 6.9))
@@ -63,9 +42,6 @@ enum BrandCupMark {
         return p
     }
 
-    /// Cup body and handle as one path, for stroking the idle outline in a
-    /// single operation: separate strokes in a translucent color would
-    /// double-darken where they overlap.
     static func cupAndHandle() -> CGPath {
         let p = CGMutablePath()
         p.addPath(cup())
@@ -73,7 +49,6 @@ enum BrandCupMark {
         return p
     }
 
-    /// Saucer line under the cup (stroked).
     static func saucer() -> CGPath {
         let p = CGMutablePath()
         p.move(to: CGPoint(x: 2.3, y: 15.3))
@@ -81,8 +56,6 @@ enum BrandCupMark {
         return p
     }
 
-    /// Three staggered S-curve wisps above the cup, shown only while brewing.
-    /// Kept short so the cup stays the dominant form at menu bar size.
     static func steamWisps() -> [CGPath] {
         let wisps: [(x: CGFloat, top: CGFloat, length: CGFloat)] = [
             (4.9, 1.7, 3.2), (7.9, 0.9, 3.9), (10.9, 1.7, 3.2),

@@ -14,8 +14,6 @@ func L(_ key: String) -> String {
     NSLocalizedString(key, comment: "")
 }
 
-/// Formatted variant: look the key up, then substitute the arguments through the
-/// localized format string.
 func L(_ key: String, _ args: CVarArg...) -> String {
     String(format: L(key), arguments: args)
 }

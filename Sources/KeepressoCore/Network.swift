@@ -3,8 +3,6 @@ import CoreWLAN
 
 /// A point-in-time reading of the Wi-Fi association.
 public struct NetworkSnapshot: Equatable, Sendable {
-    /// The SSID currently joined, or `nil` when not associated to Wi-Fi.
-    ///
     /// On recent macOS, reading the SSID requires Location Services permission;
     /// without it the system returns `nil` even while connected.
     public var ssid: String?

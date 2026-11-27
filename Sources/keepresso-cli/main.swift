@@ -1,13 +1,6 @@
 import Foundation
 import KeepressoCore
 
-// The `keepresso` command-line tool. Ships inside the app bundle
-// (Contents/Helpers/keepresso) and is symlinked onto PATH by the Homebrew cask.
-// Deliberately AppKit-free so `swift build` works with Command Line Tools only.
-//
-// Exit codes: 0 success (for `status`: keeping awake), 1 failure (for
-// `status`: not keeping awake), 2 app not running / no status, 64 usage.
-
 let helpText = """
 keepresso: keep the Mac awake from the command line.
 
@@ -69,8 +62,8 @@ func appVersion() -> String? {
     let executable = URL(fileURLWithPath: CommandLine.arguments[0])
         .resolvingSymlinksInPath()
     let plistURL = executable
-        .deletingLastPathComponent()               // Helpers
-        .deletingLastPathComponent()               // Contents
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
         .appendingPathComponent("Info.plist")
     guard let data = try? Data(contentsOf: plistURL),
           let plist = try? PropertyListSerialization.propertyList(from: data, format: nil),
@@ -78,8 +71,6 @@ func appVersion() -> String? {
     else { return nil }
     return info["CFBundleShortVersionString"] as? String
 }
-
-// MARK: - App commands over the URL scheme
 
 func runRemote(_ command: CLIRequest.RemoteCommand) -> Never {
     let open = Process()
@@ -98,10 +89,6 @@ func runRemote(_ command: CLIRequest.RemoteCommand) -> Never {
     exit(0)
 }
 
-// MARK: - Status
-
-/// What `status --json` prints: the app's snapshot plus whether that app
-/// process is still alive (a crash leaves a stale but well-formed file).
 struct StatusReport: Codable {
     var appRunning: Bool
     var status: StatusSnapshot
@@ -146,9 +133,6 @@ func runStatus(json: Bool) -> Never {
     exit(snapshot.isActive ? 0 : 1)
 }
 
-// MARK: - Standalone holds
-
-/// Keeps the dispatch sources alive for the lifetime of `dispatchMain()`.
 var retainedSources: [DispatchSourceProtocol] = []
 
 func runHold(_ hold: CLIRequest.Hold) -> Never {
@@ -199,10 +183,6 @@ func runHold(_ hold: CLIRequest.Hold) -> Never {
     dispatchMain()
 }
 
-// MARK: - Automation leases
-
-/// `keepresso lease <verb> ...`: run the shared client and render its
-/// outcome. The parent pid is recorded on acquired leases for `lease list`.
 func runLease(_ command: CLIRequest.LeaseCommand) -> Never {
     let outcome = LeaseClient.real(ownerPid: getppid()).run(command)
     let json: Bool = {
@@ -223,8 +203,6 @@ func runLease(_ command: CLIRequest.LeaseCommand) -> Never {
     }
     exit(outcome.exitCode)
 }
-
-// MARK: - Wake schedule
 
 func runWake(_ command: CLIRequest.WakeCommand) -> Never {
     let client = WakeClient.real()
@@ -251,11 +229,6 @@ func runWake(_ command: CLIRequest.WakeCommand) -> Never {
     exit(outcome.exitCode)
 }
 
-// MARK: - Agent hooks
-
-/// `keepresso agent-hook <event>`: reduce the JSON payload on stdin to a
-/// per-session state file. Exits 0 no matter what and prints nothing: a
-/// broken hook must never disturb or slow an agent session.
 func runAgentHook(event: String) -> Never {
     let payload = FileHandle.standardInput.readDataToEndOfFile()
     AgentHooks.handle(event: event, payloadData: payload, parentPid: getppid())
@@ -270,9 +243,6 @@ func runCodexHook(event: String) -> Never {
     exit(0)
 }
 
-/// The Cursor variant. The installed hook command already printed `{}` before
-/// invoking us and sends our output to /dev/null, so this writes nothing: the
-/// response must be on stdout even when this binary is missing entirely.
 func runCursorHook(event: String) -> Never {
     let payload = FileHandle.standardInput.readDataToEndOfFile()
     CursorHooks.handle(event: event, payloadData: payload, parentPid: getppid())
@@ -291,16 +261,12 @@ func runGrokHook(event: String) -> Never {
     exit(0)
 }
 
-/// The Hermes variant. Its caller is Keepresso's own plugin, which discards
-/// our output and never waits on more than a short timeout.
 func runHermesHook(event: String) -> Never {
     let payload = FileHandle.standardInput.readDataToEndOfFile()
     HermesHooks.handle(event: event, payloadData: payload, parentPid: getppid())
     exit(0)
 }
 
-/// The OMP extension passes the current session identity directly, avoiding
-/// a JSON/stdin round trip. The command stays silent and fail-open.
 func runOMPHook(
     event: String,
     sessionId: String,
@@ -326,8 +292,6 @@ func runCompatHook(tool: CompatHooks.Tool, event: String) -> Never {
     CompatHooks.handle(tool: tool, event: event, payloadData: payload, parentPid: getppid())
     exit(0)
 }
-
-// MARK: - Entry
 
 let request: CLIRequest
 do {

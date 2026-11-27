@@ -1,10 +1,5 @@
 import SwiftUI
 
-/// The stand-in for a helper-only control while the administrator helper is
-/// missing, awaiting approval, or updating: a lock (or progress) row that
-/// says why the control is absent and offers the one action that unlocks it.
-/// Shown INSTEAD of the control, never next to a dead toggle: a switch that
-/// silently refuses reads as broken, a lock reads as locked.
 struct HelperLockedRow: View {
     @Bindable var model: AppModel
 

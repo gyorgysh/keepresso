@@ -48,8 +48,6 @@ private final class FakeVPNMonitor: VPNMonitoring {
     #expect(!SCUtilVPNMonitor.hasConnectedService(in: disconnected))
     #expect(!SCUtilVPNMonitor.hasConnectedService(in: ""))
     #expect(!SCUtilVPNMonitor.hasConnectedService(in: "no services"))
-    // A service merely named "Connected" must not count; the state is the
-    // parenthesized word.
     #expect(!SCUtilVPNMonitor.hasConnectedService(in: #"* (Disconnected) 1234 VPN "Connected" [VPN]"#))
 }
 
@@ -58,17 +56,13 @@ private final class FakeVPNMonitor: VPNMonitoring {
     let clock = VPNTestClock()
     let monitor = SCUtilVPNMonitor(ttl: 3, now: { clock.now }, fetch: stub.fetch)
 
-    // First read: nothing cached yet, kicks off the background fetch.
     #expect(!monitor.isConnected)
     #expect(await vpnEventually { monitor.isConnected })
 
-    // Within the TTL, reads reuse the verdict without re-spawning scutil.
     clock.advance(2)
     for _ in 0 ..< 5 { #expect(monitor.isConnected) }
     #expect(stub.callCount == 1)
 
-    // Past the TTL, the stale verdict returns instantly and the refresh
-    // lands in the background.
     stub.output = "* (Disconnected) 1234 VPN \"Work\" [VPN]"
     clock.advance(4)
     #expect(monitor.isConnected)
@@ -76,7 +70,6 @@ private final class FakeVPNMonitor: VPNMonitoring {
     #expect(stub.callCount == 2)
 }
 
-// MARK: - Test doubles (mirroring ProcessListerTests' thread-safe stubs)
 
 private final class VPNFetchStub: @unchecked Sendable {
     private let lock = NSLock()

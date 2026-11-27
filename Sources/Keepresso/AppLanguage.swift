@@ -27,9 +27,6 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    /// Menu label. "Follow System" localizes; each concrete language is named
-    /// in its own tongue, so a user stranded in the wrong language can still
-    /// find their own.
     var label: String {
         switch self {
         case .system: L("Follow System")

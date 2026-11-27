@@ -37,8 +37,6 @@ public struct LeaseClient {
     /// launch), and how often it looks.
     public static let ackTimeout: TimeInterval = 10
     public static let ackInterval: TimeInterval = 0.2
-    /// The ack loop's iteration bound: the wall-clock deadline alone would
-    /// stretch by the size of a backwards clock jump landing mid-acquire.
     static let maxAckPolls = Int(ackTimeout / ackInterval)
 
     public init(
@@ -61,7 +59,6 @@ public struct LeaseClient {
         self.defaultOwner = defaultOwner
     }
 
-    // MARK: - Operations
 
     public func run(_ command: CLIRequest.LeaseCommand) -> LeaseOutcome {
         switch command {
@@ -91,9 +88,6 @@ public struct LeaseClient {
         let ttl = AutomationLease.clampedTTL(ttlSeconds)
         let lifetime = AutomationLease.clampedMaxLifetime(maxLifetimeSeconds, ttl: ttl)
 
-        // Idempotent re-acquire: the same id refreshing a still-live lease
-        // keeps its createdAt so the lifetime ceiling stays anchored to the
-        // original acquisition. Anything ended (or never seen) starts fresh.
         let existing = store.loadAll().first { $0.id == id }
         let renewed = existing.map { AutomationLease.adjudicate($0, now: instant) == .live } ?? false
         let record = AutomationLeaseRecord(
@@ -115,9 +109,6 @@ public struct LeaseClient {
             return failure(2, "could not reach the Keepresso app. Is it installed?")
         }
 
-        // Poll for the acknowledgment. Failing closed matters here: a record
-        // the app never confirmed must not linger and silently hold the Mac
-        // awake once the app next launches.
         let deadline = instant.addingTimeInterval(Self.ackTimeout)
         var polls = 0
         while true {
@@ -153,10 +144,6 @@ public struct LeaseClient {
         return failure(2, "the Keepresso app did not acknowledge the lease. Update the app if it predates automation leases.")
     }
 
-    /// Undo a failed acquire without collateral damage: a fresh record is
-    /// deleted, but a renewal restores the previously acknowledged record, so
-    /// a lost doorbell or a slow ack on a retry cannot end a lease that was
-    /// live before it.
     private func rollBack(id: String, renewed: Bool, previous: AutomationLeaseRecord?) {
         if renewed, let previous {
             store.write(previous)
@@ -186,16 +173,9 @@ public struct LeaseClient {
         var fresh = record
         fresh.updatedAt = instant
         if let ttlSeconds {
-            // The horizon may move, the ceiling may not: the skill, the MCP
-            // tool description, and the UI all promise heartbeats can never
-            // extend the maximum lifetime, so the new ttl is capped at the
-            // recorded ceiling instead of raising it (the read-side clamp
-            // floors the lifetime at the ttl).
             fresh.ttlSeconds = min(
                 AutomationLease.clampedTTL(ttlSeconds), fresh.maxLifetimeSeconds)
         }
-        // Compare-and-swap: refuse to write if a concurrent revoke, release,
-        // or expiry replaced the live record underneath this heartbeat.
         guard store.compareAndSwap(expected: record, new: fresh) else {
             return failure(3, "lease is no longer live")
         }
@@ -215,17 +195,12 @@ public struct LeaseClient {
             return LeaseOutcome(exitCode: 0, json: encode(payload), human: "Lease \(id) extended.")
         }
         if appRunning {
-            // The lease is extended and will resume, but a safety pause
-            // (battery, thermal) means nothing holds the Mac awake right
-            // now; the caller must not assume it stayed up.
             return LeaseOutcome(
                 exitCode: 0,
                 json: encode(payload),
                 human: "Lease \(id) extended, but Keepresso is safety-paused. The Mac is not being held awake right now."
             )
         }
-        // The record is written (leases survive an app relaunch), but nothing
-        // is holding the Mac awake right now; the caller should know.
         return LeaseOutcome(
             exitCode: 2,
             json: encode(payload),
@@ -242,7 +217,6 @@ public struct LeaseClient {
             record.endReason = "released"
             store.write(record)
         }
-        // Idempotent: releasing a missing or already ended lease is success.
         return LeaseOutcome(
             exitCode: 0,
             json: encode(Payload(id: id, released: true)),
@@ -282,7 +256,6 @@ public struct LeaseClient {
         return LeaseOutcome(exitCode: 0, json: encode(Payload(leases: listed)), human: human)
     }
 
-    // MARK: - Rendering
 
     private func failure(_ code: Int32, _ message: String) -> LeaseOutcome {
         struct Payload: Codable { var error: String }
@@ -295,10 +268,6 @@ public struct LeaseClient {
 }
 
 public extension LeaseClient {
-    /// The production client: real clock, real files, `open -g` doorbell.
-    /// Used identically by the CLI and the MCP server. `ownerPid` should be
-    /// the invoking process (`getppid()` from the CLI, the client pid over
-    /// MCP is not knowable, so the server passes its own parent too).
     static func real(ownerPid: Int32? = nil) -> LeaseClient {
         LeaseClient(
             store: FileLeaseStore(),

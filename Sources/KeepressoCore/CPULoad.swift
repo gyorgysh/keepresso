@@ -3,8 +3,6 @@ import Foundation
 /// Abstraction over the machine's overall CPU usage so a load trigger can be
 /// tested with scripted readings. Mirrors the other monitor seams.
 public protocol CPULoadReading: AnyObject {
-    /// Overall CPU usage since the previous call, as a fraction (0...1), or
-    /// `nil` when no reading is available yet (first call, or a failed read).
     func currentLoad() -> Double?
 }
 
@@ -16,7 +14,6 @@ public protocol CPULoadReading: AnyObject {
 /// list each evaluate within the same tick, and back-to-back delta reads
 /// would give the second caller a meaninglessly tiny interval.
 public final class HostCPULoadReader: CPULoadReading {
-    /// One cumulative sample of the host's CPU tick counters.
     struct Ticks: Equatable {
         var busy: UInt64
         var total: UInt64
@@ -26,9 +23,6 @@ public final class HostCPULoadReader: CPULoadReading {
     private let ttl: TimeInterval
     private let now: () -> Date
     private let readTicks: () -> Ticks?
-    /// The probe reads `self` (the delta advances ``previous``), so the cache is
-    /// built lazily on first read, once `self` is fully initialized, and holds
-    /// `self` unowned: the cache and this reader share a lifetime.
     private lazy var cache = TTLCache<Double?>(ttl: ttl, now: now) { [unowned self] in
         self.readLoadDelta()
     }
@@ -37,8 +31,6 @@ public final class HostCPULoadReader: CPULoadReading {
         self.init(readTicks: Self.machTicks)
     }
 
-    /// The tick source and clock are injectable so the delta and TTL logic can
-    /// be unit-tested without real hardware counters.
     init(
         ttl: TimeInterval = 0.5,
         now: @escaping () -> Date = Date.init,
@@ -58,7 +50,6 @@ public final class HostCPULoadReader: CPULoadReading {
         return Double(ticks.busy - previous.busy) / Double(ticks.total - previous.total)
     }
 
-    /// The real sample: Mach's cumulative per-state CPU tick counters.
     private static func machTicks() -> Ticks? {
         var size = mach_msg_type_number_t(
             MemoryLayout<host_cpu_load_info_data_t>.stride / MemoryLayout<integer_t>.stride
@@ -70,7 +61,6 @@ public final class HostCPULoadReader: CPULoadReading {
             }
         }
         guard result == KERN_SUCCESS else { return nil }
-        // cpu_ticks lanes: 0 = user, 1 = system, 2 = idle, 3 = nice.
         let busy = UInt64(info.cpu_ticks.0) + UInt64(info.cpu_ticks.1) + UInt64(info.cpu_ticks.3)
         return Ticks(busy: busy, total: busy + UInt64(info.cpu_ticks.2))
     }
@@ -88,11 +78,7 @@ public final class CPULoadTrigger: Trigger {
     /// Percentage (1...100) the smoothed usage must reach.
     public var thresholdPercent: Int
 
-    /// Smoothing weight of each new sample; ~0.25 at one sample per second
-    /// means a sustained change settles in a few seconds.
     static let alpha = 0.25
-    /// How far (as a fraction) the average must fall below the threshold to
-    /// turn off again.
     static let hysteresis = 0.05
 
     public struct SmoothingState: Equatable, Sendable {
@@ -121,15 +107,8 @@ public final class CPULoadTrigger: Trigger {
 
     public func isSatisfied() -> Bool { state.isSatisfied }
 
-    /// Pure decision step, exposed for direct unit testing. A `nil` sample
-    /// (failed read) keeps the previous average and verdict rather than
-    /// dropping an active session on a transient hiccup.
     static func step(_ state: SmoothingState, sample: Double?, thresholdPercent: Int) -> SmoothingState {
         var next = state
-        // A non-positive threshold is malformed (the picker never makes one).
-        // Treat it as "never satisfied" instead of the always-true it would
-        // otherwise compute (average >= 0), so a corrupt or imported rule can't
-        // pin the Mac awake with nothing able to release it.
         guard thresholdPercent > 0 else {
             next.average = nil
             next.isSatisfied = false
@@ -144,10 +123,6 @@ public final class CPULoadTrigger: Trigger {
             return next
         }
         let on = Double(thresholdPercent) / 100
-        // Keep the release band strictly below `on` but always positive: a flat
-        // `on - hysteresis` goes <= 0 for thresholds <= 5%, which (with the
-        // average clamped to 0...1) would make the release test always true and
-        // latch the trigger on forever.
         let off = max(on - hysteresis, on * 0.5)
         next.isSatisfied = state.isSatisfied ? average >= off : average >= on
         return next

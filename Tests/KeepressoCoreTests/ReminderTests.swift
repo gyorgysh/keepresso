@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-/// In-memory reminder backend that records what was delivered and cancelled.
 private final class FakeReminder: ReminderNotifying {
     private(set) var notices: [(title: String, body: String, sound: Bool)] = []
     private(set) var cancelCount = 0
@@ -36,7 +35,7 @@ private func makeController() -> (SessionController, FakeReminder, Clock) {
 @MainActor
 @Test func noReminderWhenIntervalUnset() {
     let (controller, reminder, clock) = makeController()
-    controller.start() // reminderAfter stays nil
+    controller.start()
     clock.advance(10 * 60)
     controller.reconcile()
     #expect(reminder.notices.isEmpty)
@@ -50,32 +49,32 @@ private func makeController() -> (SessionController, FakeReminder, Clock) {
 
     clock.advance(29 * 60)
     controller.reconcile()
-    #expect(reminder.notices.isEmpty) // before the interval
+    #expect(reminder.notices.isEmpty)
 
-    clock.advance(2 * 60) // 31 min elapsed
+    clock.advance(2 * 60)
     controller.reconcile()
-    #expect(reminder.notices.count == 1) // fired
+    #expect(reminder.notices.count == 1)
     #expect(reminder.notices.first?.body.contains(SessionController.humanDuration(30 * 60)) == true)
 
     clock.advance(60)
     controller.reconcile()
-    #expect(reminder.notices.count == 1) // not again this session (one-shot)
+    #expect(reminder.notices.count == 1)
 }
 
 @MainActor
 @Test func recurringReminderFiresEachInterval() {
     let (controller, reminder, clock) = makeController()
-    controller.reminderAfter = 60 * 60 // 1 hour
+    controller.reminderAfter = 60 * 60
     controller.reminderRepeats = true
     controller.start()
 
     clock.advance(60 * 60)
     controller.reconcile()
-    #expect(reminder.notices.count == 1) // first hour
+    #expect(reminder.notices.count == 1)
 
     clock.advance(60 * 60)
     controller.reconcile()
-    #expect(reminder.notices.count == 2) // second hour, fires again
+    #expect(reminder.notices.count == 2)
     #expect(reminder.notices.last?.body.contains(SessionController.humanDuration(2 * 60 * 60)) == true)
 }
 
@@ -86,9 +85,9 @@ private func makeController() -> (SessionController, FakeReminder, Clock) {
     controller.reminderRepeats = true
     controller.start()
 
-    clock.advance(5 * 60 * 60) // 5 intervals at once (e.g. across a sleep)
+    clock.advance(5 * 60 * 60)
     controller.reconcile()
-    #expect(reminder.notices.count == 1) // one nudge, not five
+    #expect(reminder.notices.count == 1)
 }
 
 @MainActor
@@ -111,10 +110,10 @@ private func makeController() -> (SessionController, FakeReminder, Clock) {
     controller.reconcile()
     #expect(reminder.notices.count == 1)
 
-    controller.start() // new session
+    controller.start()
     clock.advance(120)
     controller.reconcile()
-    #expect(reminder.notices.count == 2) // fires again for the fresh session
+    #expect(reminder.notices.count == 2)
 }
 
 @MainActor
@@ -133,32 +132,29 @@ private func makeController() -> (SessionController, FakeReminder, Clock) {
     let gate = StubReminderGate(true)
     controller.triggerGate = gate
 
-    controller.reconcile() // gate activates
+    controller.reconcile()
     clock.advance(120)
     controller.reconcile()
     #expect(reminder.notices.count == 1)
 
     gate.satisfied = false
-    controller.reconcile() // gate deactivates → cancel + reset
+    controller.reconcile()
     #expect(reminder.cancelCount == 1)
 
     gate.satisfied = true
-    controller.reconcile() // reactivates with a fresh clock baseline
+    controller.reconcile()
     clock.advance(120)
     controller.reconcile()
     #expect(reminder.notices.count == 2)
 }
 
-/// A gate whose decision the test flips directly.
 private final class StubReminderGate: TriggerEvaluating {
     var satisfied: Bool
     init(_ satisfied: Bool) { self.satisfied = satisfied }
     func isSatisfied() -> Bool { satisfied }
 }
 
-// MARK: - Session-end notification and action
 
-/// Records the actions performed when a session ends.
 private final class FakeEndActor: SessionEndActing {
     private(set) var performed: [SessionEndAction] = []
     func perform(_ action: SessionEndAction) { performed.append(action) }
@@ -189,7 +185,6 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
     controller.reconcile()
     #expect(controller.isActive == false)
     #expect(reminder.notices.contains { $0.title == "Keepresso stopped" })
-    // Debounced: notification is immediate, action waits out the window.
     #expect(endActor.performed.isEmpty)
 
     clock.advance(SessionController.endActionDebounce)
@@ -203,7 +198,7 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
     controller.notifyOnEnd = true
     controller.endAction = .sleepDisplay
     controller.start()
-    controller.stop() // user-initiated: no surprise notification or action
+    controller.stop()
     #expect(reminder.notices.isEmpty)
     #expect(endActor.performed.isEmpty)
 }
@@ -216,10 +211,10 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
     let gate = StubReminderGate(true)
     controller.triggerGate = gate
 
-    controller.reconcile() // conditions met: activates
+    controller.reconcile()
     #expect(controller.isActive)
     gate.satisfied = false
-    controller.reconcile() // conditions drop: ends on its own
+    controller.reconcile()
     #expect(controller.isActive == false)
     #expect(reminder.notices.contains { $0.title == "Keepresso stopped" })
     #expect(endActor.performed.isEmpty)
@@ -241,7 +236,6 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
     controller.reconcile()
     #expect(controller.isActive == false)
 
-    // Re-satisfy inside the debounce window: the sleep must not fire.
     gate.satisfied = true
     clock.advance(1)
     controller.reconcile()
@@ -262,10 +256,6 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
     controller.reconcile()
     #expect(reminder.notices.count == 1)
 
-    // A pause and resume around the fired reminder must not deliver it
-    // again: the nudge counter survives the pause with the session. (The
-    // pause posts its own "low battery" notice through the same backend, so
-    // count only the still-brewing nudge.)
     controller.reconcile(battery: .discharging(15))
     #expect(controller.isActive == false)
     controller.reconcile(battery: .onAC)
@@ -293,7 +283,6 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
     controller.endAction = .lockScreen
     controller.start(mode: .timed(duration: 60))
 
-    // Notice the deadline long after it passed (Mac slept across it).
     clock.advance(60 + SessionController.endActionStaleGrace + 1)
     controller.reconcile()
     #expect(controller.isActive == false)
@@ -312,11 +301,9 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
 
     controller.reconcile()
     gate.satisfied = false
-    controller.reconcile() // ends naturally, action pending in the debounce
+    controller.reconcile()
     #expect(endActor.performed.isEmpty)
 
-    // The Mac sleeps across the debounce window; the first reconcile after
-    // wake, hours later, must not put the just-woken Mac back to sleep.
     clock.advance(3 * 3600)
     controller.reconcile()
     #expect(endActor.performed.isEmpty)
@@ -332,9 +319,7 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
 
     controller.reconcile(battery: .discharging(50))
     gate.satisfied = false
-    controller.reconcile(battery: .discharging(50)) // action pending
-    // The battery pause latches inside the debounce window and starves the
-    // flush; lifting it later must not fire the stale action.
+    controller.reconcile(battery: .discharging(50))
     clock.advance(1)
     controller.reconcile(battery: .discharging(10))
     clock.advance(2 * 3600)
@@ -346,7 +331,6 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
 @MainActor
 @Test func endEffectsStayQuietWhenTheOptionsAreOff() {
     let (controller, reminder, endActor, clock) = makeEndController()
-    // notifyOnEnd false, endAction .none (defaults)
     controller.start(mode: .timed(duration: 30))
     clock.advance(31)
     controller.reconcile()
@@ -355,7 +339,6 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
     #expect(endActor.performed.isEmpty)
 }
 
-// MARK: - Ending soon
 
 @MainActor
 @Test func endingSoonFiresOnceInsideTheNoticeWindow() {
@@ -366,30 +349,30 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
 
     clock.advance(9 * 60)
     controller.reconcile()
-    #expect(reminder.notices.isEmpty) // 6 min left: outside the window
+    #expect(reminder.notices.isEmpty)
 
     clock.advance(90)
     controller.reconcile()
-    #expect(reminder.notices.count == 1) // 4.5 min left: fired
+    #expect(reminder.notices.count == 1)
     #expect(reminder.notices.first?.title == "Keepresso stops soon")
 
     clock.advance(60)
     controller.reconcile()
-    #expect(reminder.notices.count == 1) // one-shot per arming
+    #expect(reminder.notices.count == 1)
 }
 
 @MainActor
 @Test func endingSoonSuppressedWhenTheCountdownStartsInsideTheWindow() {
     let (controller, reminder, clock) = makeController()
     controller.endingSoonNotice = 5 * 60
-    controller.start(mode: .timed(duration: 3 * 60)) // already inside
+    controller.start(mode: .timed(duration: 3 * 60))
     clock.advance(60)
     controller.reconcile()
     #expect(reminder.notices.isEmpty)
 
     controller.stop()
     controller.start()
-    controller.stopIn(2 * 60) // quick stop shorter than the notice
+    controller.stopIn(2 * 60)
     clock.advance(60)
     controller.reconcile()
     #expect(reminder.notices.isEmpty)
@@ -403,24 +386,22 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
     controller.stopIn(6 * 60)
     clock.advance(2 * 60)
     controller.reconcile()
-    #expect(reminder.notices.count == 1) // 4 min left: fired
+    #expect(reminder.notices.count == 1)
 
-    controller.stopIn(20 * 60) // extend: re-arms
+    controller.stopIn(20 * 60)
     clock.advance(16 * 60)
     controller.reconcile()
-    #expect(reminder.notices.count == 2) // fired again at the new crossing
+    #expect(reminder.notices.count == 2)
 }
 
 @MainActor
 @Test func endingSoonBodyRoundsUpToTheNoticeMinute() {
-    // The first tick inside the window sees remaining just under the lead
-    // time; the body must read "5 minutes", not the truncated "4 minutes".
     let (controller, reminder, clock) = makeController()
     controller.endingSoonNotice = 5 * 60
     controller.start()
     controller.stopIn(15 * 60)
 
-    clock.advance(10 * 60 + 1) // 4:59 left, one second into the window
+    clock.advance(10 * 60 + 1)
     controller.reconcile()
     #expect(reminder.notices.count == 1)
     #expect(reminder.notices.first?.body.contains(SessionController.humanDuration(5 * 60)) == true)
@@ -438,9 +419,6 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
 
 @MainActor
 @Test func denormalReminderAfterDoesNotTrap() {
-    // A directly assigned (unsanitized) denormal must not trap `Int(_:)` on
-    // the reconcile path: the ratio clamps, the reminder fires once, and a
-    // later reconcile does not duplicate it.
     let (controller, reminder, clock) = makeController()
     controller.reminderAfter = 1e-300
     controller.start()
@@ -459,10 +437,10 @@ private func makeEndController() -> (SessionController, FakeReminder, FakeEndAct
     controller.start()
     clock.advance(31 * 60)
     controller.reconcile()
-    #expect(reminder.notices.count == 1) // mid-session reminder fired
+    #expect(reminder.notices.count == 1)
 
-    controller.stopIn(60 * 60) // continue, don't restart
+    controller.stopIn(60 * 60)
     clock.advance(10 * 60)
     controller.reconcile()
-    #expect(reminder.notices.count == 1) // same interval, no duplicate
+    #expect(reminder.notices.count == 1)
 }

@@ -6,8 +6,6 @@ import Observation
 /// Wi-Fi radio off-channel, which is the once-a-second latency spike the
 /// jitter test looks for. Mirrors the other read-only seams.
 public protocol AWDLStateReading: AnyObject, Sendable {
-    /// Whether `awdl0` is up. `nil` when it couldn't be read (no such
-    /// interface, `ifconfig` failed).
     func isUp() -> Bool?
 }
 
@@ -56,7 +54,6 @@ public final class IfconfigAWDLReader: AWDLStateReading {
 /// Outcome of trying to start the watchdog (mirrors ``SleepSettingResult``).
 public enum AWDLWatchdogStartResult: Equatable, Sendable {
     case started
-    /// The user dismissed the administrator-password prompt.
     case cancelled
     case failed(String)
 }
@@ -72,19 +69,10 @@ public enum AWDLWatchdogStartResult: Equatable, Sendable {
 /// watches the app's pid, so an app crash or quit tears it down and restores
 /// `awdl0` on its own.
 public protocol AWDLWatchdogLaunching: AnyObject, Sendable {
-    /// Whether the flag file that keeps `awdl0` down is present.
     func isFlagPresent() -> Bool
-    /// Create the flag (telling a running helper to hold `awdl0` down).
-    /// Returns false when it couldn't be written.
     func createFlag() -> Bool
-    /// Delete the flag; the helper notices within a cycle, restores
-    /// `awdl0 up`, and goes back to idling.
     func removeFlag()
-    /// Spawn the root helper loop. Blocking: it waits for the user to answer
-    /// the administrator prompt. Called once per app run, on first activation.
     func startHelper(appPID: Int32) -> AWDLWatchdogStartResult
-    /// Message to surface when ``createFlag()`` fails, naming what actually
-    /// failed in this backend (a file write here, an XPC call in the daemon).
     var engageFailureMessage: String { get }
 }
 
@@ -144,15 +132,6 @@ public final class OsascriptAWDLWatchdog: AWDLWatchdogLaunching {
         return .failed(message.isEmpty ? L("The watchdog couldn't be started.") : message)
     }
 
-    /// The root helper, backgrounded so `do shell script` returns immediately.
-    /// It lives as long as the app's pid does and follows the flag: while the
-    /// flag exists it forces `awdl0` down every cycle (macOS re-raises the
-    /// interface after sleep/wake, Wi-Fi toggles, or any app requesting AWDL),
-    /// and on the flag disappearing it restores `awdl0 up` once and idles, so
-    /// re-enabling needs no new prompt. On app death it restores the interface
-    /// (only if it was the one holding it down) and removes its own leftover
-    /// flag, so a crash fails safe. A flag stamped by a newer app run is left
-    /// alone (see ``removeOwnedFlagClause(flag:appPID:)``).
     static func watchdogCommand(flagPath: String, appPID: Int32) -> String {
         let flag = shellSingleQuoted(flagPath)
         return "( DOWNED=; while kill -0 \(appPID) 2>/dev/null; do "
@@ -163,36 +142,20 @@ public final class OsascriptAWDLWatchdog: AWDLWatchdogLaunching {
             + "if [ -n \"$DOWNED\" ]; then /sbin/ifconfig awdl0 up; fi ) </dev/null >/dev/null 2>&1 &"
     }
 
-    /// The loop's exit cleanup: remove the flag only when this app run
-    /// stamped it. The loop notices its app died up to a cycle late, and by
-    /// then a relaunched app may have created a flag of its own at the same
-    /// path. Deleting that one would leave the new run believing it holds
-    /// while its own loop sees no flag and does nothing. An unstamped or
-    /// foreign leftover is cleared by the next launch's cleanup instead.
     static func removeOwnedFlagClause(flag: String, appPID: Int32) -> String {
         "if [ \"$(cat \(flag) 2>/dev/null)\" = \"\(appPID)\" ]; then rm -f \(flag); fi; "
     }
 
-    /// POSIX single-quote a value so `/bin/sh` treats it as one literal word.
-    /// Everything inside single quotes is literal; an embedded single quote is
-    /// closed, escaped, and reopened (`'\''`). The flag path is a fixed app
-    /// path today, but quoting it (rather than wrapping it in double quotes,
-    /// where `$(…)`, backticks, and `"` stay live) keeps this admin-run command
-    /// safe if that path ever changes. For a path with no metacharacters the
-    /// result is byte-equivalent to the old double-quoted form to the shell.
     static func shellSingleQuoted(_ value: String) -> String {
         "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
-    /// Escape a shell command for embedding in an AppleScript string literal.
     static func appleScriptEscaped(_ command: String) -> String {
         command
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
     }
 
-    /// Run a command and return its exit status plus stderr, or `nil` if it
-    /// couldn't be launched. Mirrors ``PMSetSleepControl``'s helper.
     private func runForResult(_ path: String, _ arguments: [String]) -> (status: Int32, stderr: String)? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
@@ -238,25 +201,15 @@ public final class AWDLWatchdogController {
     /// stops when it lets go. The host persists this and mirrors it in.
     public var autoWithGaming = false
 
-    /// Whether the current run was started by auto mode (so auto mode only
-    /// stops what it started, never a manual run).
     private var autoStarted = false
 
-    /// Why auto mode is standing down, so the once-per-session prompt doesn't
-    /// re-appear every tick. Cleared when the gaming bout ends.
     private enum AutoHoldOff {
         case none
-        /// A start that failed on its own (a helper that was not answering).
-        /// Worth trying again once the helper is healthy, see ``retryEngage()``.
         case failure
-        /// The user cancelled the prompt or turned the watchdog off mid-bout.
-        /// Their answer stands for the rest of the bout.
         case user
     }
     private var autoHoldOff: AutoHoldOff = .none
 
-    /// Whether the root helper was already spawned this app run. Once it's up,
-    /// activating and deactivating is flag-file-only: no more prompts.
     private var helperStarted = false
 
     private let launcher: AWDLWatchdogLaunching
@@ -292,10 +245,6 @@ public final class AWDLWatchdogController {
         await Task.detached { launcher.removeFlag() }.value
     }
 
-    /// Activate the watchdog. The first activation of this app run spawns the
-    /// root helper (one administrator prompt); later ones just recreate the
-    /// flag, instantly and prompt-free. Ignores a second call while the
-    /// prompt is already up.
     @discardableResult
     public func start() async -> AWDLWatchdogStartResult {
         guard !isBusy else { return .cancelled }
@@ -334,11 +283,6 @@ public final class AWDLWatchdogController {
     /// so activating (manual or automatic) needs no further password prompt.
     public var isAuthorized: Bool { helperStarted }
 
-    /// Pre-authorize the helper without pausing AWDL: spawn it (one prompt now,
-    /// in whatever context the caller chose) then immediately drop the flag so
-    /// `awdl0` stays up. After this, an automatic activation when a game comes
-    /// to the front is a prompt-free flag write and never pops a password dialog
-    /// over a running game. No-op (and no prompt) once already authorized.
     @discardableResult
     public func prime() async -> AWDLWatchdogStartResult {
         guard !helperStarted, !isBusy else { return .started }

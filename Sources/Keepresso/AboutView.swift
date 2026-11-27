@@ -1,10 +1,7 @@
 import SwiftUI
 import AppKit
 
-/// The About window: app identity, version, who made it, and where to reach
-/// them, over the license line.
 struct AboutView: View {
-    /// The author photo ships as a loose PNG resource next to the sources.
     private static let avatar = Bundle.main.image(forResource: "AuthorAvatar")
 
     var body: some View {
@@ -46,7 +43,6 @@ struct AboutView: View {
         .centersAndFrontsWindow()
     }
 
-    /// Photo, credit line, name, and what the author does.
     private var author: some View {
         HStack(spacing: 12) {
             if let avatar = Self.avatar {
@@ -70,7 +66,6 @@ struct AboutView: View {
         }
     }
 
-    /// Mail, personal site, and the author's GitHub, separated by hairlines.
     private var links: some View {
         HStack(spacing: 10) {
             linkItem(L("Contact"), symbol: "envelope", destination: AppInfo.Author.email)

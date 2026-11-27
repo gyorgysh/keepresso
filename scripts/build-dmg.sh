@@ -42,7 +42,6 @@ die()  { printf '\033[1;31mError:\033[0m %s\n' "$1" >&2; exit 1; }
 : "${TEAM_ID:?Set TEAM_ID to your Apple Developer Team ID}"
 command -v xcodegen >/dev/null 2>&1 || die "xcodegen not found (brew install xcodegen)"
 
-# Read the marketing version straight from project.yml so the DMG is named after it.
 VERSION="$(awk -F'"' '/MARKETING_VERSION:/ {print $2; exit}' project.yml)"
 [ -n "$VERSION" ] || die "Couldn't read MARKETING_VERSION from project.yml"
 DMG_PATH="$DIST_DIR/$APP_NAME-$VERSION.dmg"

@@ -45,17 +45,11 @@ public enum FanWriteResult: Equatable, Sendable {
 /// Fan override seam for the daemon (fan writes are root-only, enforced by the
 /// SMC itself). ``SMCFanController`` is the real backend; tests use a fake.
 public protocol FanControlling: AnyObject, Sendable {
-    /// Number of fans, nil when the SMC is unreachable. 0 = fanless.
     func fanCount() -> Int?
-    /// Force every fan to `percent` of its min...max RPM range. Boost only:
-    /// the backend clamps each fan's target to at least its RPM when the
-    /// boost first engaged, so this can never slow a fan below what the
-    /// system's own control had chosen.
     func setForced(percent: Int) -> FanWriteResult
     /// Write the firmware test-mode unlock (`Ftst` = 1) that newer machines
     /// require before manual fan mode. Returns whether the write landed.
     func unlock() -> Bool
-    /// Hand fan control back to the system (mode 0, unlock cleared).
     func restoreAuto() -> Bool
 }
 
@@ -73,24 +67,12 @@ public final class NullFanControl: FanControlling {
 /// on disk (root-owned, under `/var/db`) and are settled on the next daemon
 /// launch, including the launchd `RunAtLoad` start after a reboot or crash.
 public enum HelperRestoreMarker: String, CaseIterable, Sendable {
-    /// We set `pmset disablesleep 1` for a hold and haven't set it back.
     case sleepDisabled = "sleep-disabled"
-    /// We took `awdl0` down for a hold and haven't raised it.
     case awdlDown = "awdl-down"
-    /// We forced the fans for a hold and haven't restored auto control.
     case fanForced = "fan-forced"
-    /// A clear of wake schedules was requested but did not finish. Next
-    /// daemon launch retries the cancel so a disable cannot leave system
-    /// schedules behind after a crash. Successful schedules do not set this
-    /// (they are meant to survive reboots).
     case wakeClearPending = "wake-clear-pending"
-    /// We remapped the keyboard for Keyboard Cleaner and haven't restored
-    /// the snapshotted `UserKeyMapping`. The file contents are the JSON of
-    /// that snapshot (empty-entries JSON is "no remaps", not a missing marker).
     case keyboardLock = "keyboard-lock"
-    /// Prior battery Low Power Mode, restored after the last connection releases.
     case batteryLowPower = "battery-low-power"
-    /// Adapter profile restore debt, kept independent from battery settings.
     case adapterLowPower = "adapter-low-power"
 }
 
@@ -99,15 +81,11 @@ public enum HelperRestoreMarker: String, CaseIterable, Sendable {
 /// setting); markers that only signal presence store an empty value.
 public protocol HelperRestoreStatePersisting: AnyObject, Sendable {
     func markers() -> Set<HelperRestoreMarker>
-    /// The marker's stored value, or nil when the marker is absent.
     func value(for marker: HelperRestoreMarker) -> String?
-    /// Store `value` for the marker (empty string is a plain presence
-    /// marker); nil removes it.
     func set(_ marker: HelperRestoreMarker, value: String?)
 }
 
 public extension HelperRestoreStatePersisting {
-    /// Presence-only convenience for the markers that carry no payload.
     func set(_ marker: HelperRestoreMarker, present: Bool) {
         set(marker, value: present ? "" : nil)
     }
@@ -136,9 +114,6 @@ public final class FileRestoreState: HelperRestoreStatePersisting {
     public func set(_ marker: HelperRestoreMarker, value: String?) {
         if let value {
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            // Atomic like every other store: a daemon crash mid-write must
-            // not leave a torn value (a lost sleep-disabled payload would
-            // restore 0 over the user's own setting).
             try? Data(value.utf8).write(to: url(for: marker), options: .atomic)
         } else {
             try? FileManager.default.removeItem(at: url(for: marker))
@@ -192,35 +167,17 @@ public final class HelperEngine: @unchecked Sendable {
 
     private var sleepHolders: Set<Int> = []
     private var awdlHolders: Set<Int> = []
-    /// A restore was attempted in this daemon life and failed, so the debt
-    /// marker is known-fresh (not a stale leftover): the next no-op release
-    /// retries it instead of reporting a success that never happened.
-    /// Persisted markers alone never trigger an in-life write; those settle
-    /// at launch (`restoreAtLaunch`). Without this gate, every XPC teardown
-    /// would re-issue a privileged write, and a stale marker could clobber
-    /// an explicit `setSleepDisabled` that already settled the debt.
     private var sleepRestoreOwed = false
     private var awdlRestoreOwed = false
     private var fanRestoreOwed = false
-    /// Client → wanted fan boost percent; the effective target is the max.
     private var fanHolders: [Int: Int] = [:]
-    /// Client → pid whose CPU priority is raised while a game plays. The
-    /// effective set is the union of held pids.
     private var priorityHolders: [Int: Int] = [:]
-    /// Clients holding the Keyboard Cleaner remap.
     private var keyboardHolders: Set<Int> = []
     private var lowPowerHolders: [LowPowerProfile: Set<Int>] = [:]
-    /// Low Power profiles whose restore failed in this daemon life. Same rule
-    /// as ``sleepRestoreOwed``: only these retry on a release by a client that
-    /// held nothing, so an unrelated connection teardown never rewrites the
-    /// user's power mode from a stale marker.
     private var lowPowerRestoreOwed: Set<LowPowerProfile> = []
     private let lowPower: BatteryLowPowerControlling
-    /// Consecutive failed fan writes; past the cap the engine surrenders the
-    /// hold instead of fighting the firmware forever.
     private var fanFailureStreak = 0
     private var droppedFanClients: Set<Int> = []
-    /// How many consecutive failed writes drop the fan hold.
     static let maxFanFailures = 5
     /// Set once ``fanTick()`` gave up on a hold, so the state is inspectable
     /// (and the app can tell "boost silently ended" from "still boosting").
@@ -237,9 +194,6 @@ public final class HelperEngine: @unchecked Sendable {
         return client.map { droppedFanClients.contains($0) } ?? fanHoldDropped
     }
 
-    /// Reads the current global `disablesleep` value. A separate seam because
-    /// ``HelperCommandRunning`` only reports exit status; the sleep hold needs
-    /// the prior value so releasing restores it instead of assuming 0.
     private let sleepDisabledReader: () -> Bool?
 
     public init(
@@ -303,9 +257,6 @@ public final class HelperEngine: @unchecked Sendable {
             _ = clearWakeSchedules()
         }
         if leftovers.contains(.keyboardLock) {
-            // Corrupt or unreadable snapshot: leave the hardware mapping
-            // alone and keep the marker so the next launch retries. Applying
-            // `.empty` would wipe the user's own remaps.
             if let original = Self.decodeKeyboardMapping(state.value(for: .keyboardLock)),
                keyboard.apply(original) {
                 state.set(.keyboardLock, value: nil)
@@ -325,9 +276,6 @@ public final class HelperEngine: @unchecked Sendable {
         defer { lock.unlock() }
         let ok = runner.run("/usr/bin/pmset", ["-a", "disablesleep", disabled ? "1" : "0"])
         if ok {
-            // Re-base a live debt to the chosen value rather than leaving a
-            // stale prior for a later release to restore over it; with no
-            // hold and no debt, leave no marker behind.
             if !sleepHolders.isEmpty || state.value(for: .sleepDisabled) != nil {
                 state.set(.sleepDisabled, value: disabled ? "1" : "0")
             } else {
@@ -378,10 +326,6 @@ public final class HelperEngine: @unchecked Sendable {
     /// failure (say, the repeating pair surviving a failed `repeat cancel`)
     /// is retried at the next daemon launch instead of reported as done.
     public func clearWakeSchedules() -> Bool {
-        // cancelall drops every one-shot (including non-Keepresso owners on
-        // some OS versions); repeat cancel drops the single system pair.
-        // Acceptable: wake schedules are a power-user feature and the UI
-        // re-applies the desired config on every save.
         state.set(.wakeClearPending, present: true)
         let a = runner.run("/usr/bin/pmset", ["schedule", "cancelall"])
         let b = runner.run("/usr/bin/pmset", ["repeat", "cancel"])
@@ -397,9 +341,6 @@ public final class HelperEngine: @unchecked Sendable {
     /// app calls it through a single XPC verb rather than sequencing the
     /// primitives itself.
     public func applyWakeSchedule(oneShot: String?, repeatDays: String?, repeatTime: String?) -> Bool {
-        // Untrusted XPC strings: refuse before any pmset write so a truncated
-        // payload cannot cancelall the user's (and everyone else's) schedules,
-        // and so junk never reaches argv.
         if let oneShot, !Self.isValidOneShotStamp(oneShot) { return false }
         let hasDays = repeatDays != nil
         let hasTime = repeatTime != nil
@@ -410,9 +351,6 @@ public final class HelperEngine: @unchecked Sendable {
         guard oneShot != nil || wantsRepeat else {
             return clearWakeSchedules()
         }
-        // Clear previous Keepresso installs so we don't stack one-shots. The
-        // install proceeds even when the clear failed; the marker handling
-        // below settles the debt either way.
         _ = clearWakeSchedules()
         var ok = true
         if let oneShot {
@@ -421,10 +359,6 @@ public final class HelperEngine: @unchecked Sendable {
         if let repeatDays, let repeatTime {
             ok = scheduleRepeatingWake(days: repeatDays, time: repeatTime) && ok
         }
-        // Once the install landed, the desired state is "schedules present":
-        // a leftover clear debt from the step above would make the next
-        // daemon launch wipe what was just installed. On failure any existing
-        // debt stays, and the app re-applies the config at its next launch.
         if ok { state.set(.wakeClearPending, present: false) }
         return ok
     }
@@ -439,9 +373,6 @@ public final class HelperEngine: @unchecked Sendable {
         )
     }
 
-    /// `MM/dd/yy HH:mm:ss`, the stamp ``WakeScheduleConfig/oneShotString(for:)``
-    /// produces. Anything else is refused so `pmset schedule wake` never sees
-    /// a caller-supplied extra token.
     static func isValidOneShotStamp(_ raw: String) -> Bool {
         let parts = raw.split(separator: " ", omittingEmptySubsequences: false)
         guard parts.count == 2 else { return false }
@@ -460,15 +391,11 @@ public final class HelperEngine: @unchecked Sendable {
         return true
     }
 
-    /// Non-empty `MTWRFSU` letters only. Deliberately stricter than
-    /// ``WakeScheduleConfig/normalizedWeekdays(_:)``, which forgives junk by
-    /// defaulting to every day.
     static func isValidRepeatDays(_ raw: String) -> Bool {
         let upper = raw.uppercased()
         return !upper.isEmpty && upper.allSatisfy { "MTWRFSU".contains($0) }
     }
 
-    /// `HH:mm:ss`, the stamp ``WakeScheduleConfig/repeatTimeString`` produces.
     static func isValidRepeatTime(_ raw: String) -> Bool {
         let parts = raw.split(separator: ":", omittingEmptySubsequences: false)
         guard parts.count == 3,
@@ -506,12 +433,9 @@ public final class HelperEngine: @unchecked Sendable {
             if lowPowerHolders[profile, default: []].contains(client) { return true }
             if lowPowerHolders[profile, default: []].isEmpty {
                 guard let current = lowPower.mode(for: profile), (0...2).contains(current) else { return false }
-                // A restored or user-changed profile starts a new snapshot.
-                // Do not reuse stale debt if its marker could not be removed.
                 if state.markers().contains(marker), current != 1 {
                     guard restoreLowPower(profile: profile) else { return false }
                 }
-                // Preserve outstanding restore debt instead of snapshotting our override.
                 if state.value(for: marker) == nil {
                     guard !state.markers().contains(marker) else { return false }
                     state.set(marker, value: String(current))
@@ -536,7 +460,6 @@ public final class HelperEngine: @unchecked Sendable {
         let marker: HelperRestoreMarker = profile == .battery ? .batteryLowPower : .adapterLowPower
         guard let value = state.value(for: marker) else { return !state.markers().contains(marker) }
         guard let prior = Int(value), (0...2).contains(prior) else { return false }
-        // Respect a setting changed by the user while the profile was held.
         guard let current = lowPower.mode(for: profile) else { return false }
         guard current != 1 || lowPower.setMode(prior, for: profile) else { return false }
         state.set(marker, value: nil)
@@ -573,9 +496,6 @@ public final class HelperEngine: @unchecked Sendable {
     /// process, and after a crash or reboot the recorded pid could belong to
     /// an innocent newcomer, so restoring it would be worse than the leak.
     public func setPriorityHold(client: Int, holding: Bool, pid: Int) -> Bool {
-        // Pid 1 is launchd; pid 0 and negatives are not processes. A release
-        // still has to work if a bad pid was ever recorded, so the guard
-        // applies only when taking a hold.
         if holding, pid <= 1 { return false }
         lock.lock()
         defer { lock.unlock() }
@@ -612,9 +532,6 @@ public final class HelperEngine: @unchecked Sendable {
     public func awdlTick() {
         lock.lock()
         defer { lock.unlock() }
-        // Hold the lock across the write. Releasing it first let a concurrent
-        // `clientDisconnected` bring `awdl0` back up and clear the marker in
-        // between, after which this tick re-downed it with no holder left.
         if !awdlHolders.isEmpty {
             runner.run("/sbin/ifconfig", ["awdl0", "down"])
         }
@@ -628,14 +545,6 @@ public final class HelperEngine: @unchecked Sendable {
     public func fanTick() {
         lock.lock()
         defer { lock.unlock() }
-        // Hold the lock across the whole tick, including the SMC write. The old
-        // read-then-unlock-then-write let a concurrent `clientDisconnected`
-        // release the last holder and restore auto in between, after which this
-        // re-forced the fans with the `.fanForced` marker already cleared, so
-        // nothing (not even the next launch's recovery, which keys off the
-        // marker) would put them back. `writeFanTarget`/`restoreAuto`/`state.set`
-        // all run under this same lock on the union edges, so there's no
-        // reentrancy.
         guard let target = fanHolders.values.max() else { return }
         if writeFanTarget(target) {
             fanFailureStreak = 0
@@ -647,10 +556,6 @@ public final class HelperEngine: @unchecked Sendable {
         fanHolders.removeAll()
         fanFailureStreak = 0
         fanHoldDropped = true
-        // The marker clears only when the restore actually landed, so a crash
-        // after a failed restore still settles the debt at the next launch.
-        // A failed surrender also arms the in-life retry for the next
-        // no-op release.
         let ok = fans.restoreAuto()
         state.set(.fanForced, present: !ok)
         fanRestoreOwed = !ok
@@ -666,7 +571,6 @@ public final class HelperEngine: @unchecked Sendable {
             && keyboardHolders.isEmpty && lowPowerHolders.values.allSatisfy(\.isEmpty)
     }
 
-    // MARK: - CLI symlink
 
     /// Put the bundled `keepresso` CLI on PATH for DMG installs: the Homebrew
     /// cask links it via its `binary` stanza, but a drag-installed copy has no
@@ -686,7 +590,7 @@ public final class HelperEngine: @unchecked Sendable {
             guard destination != cliPath, destination.contains("Keepresso.app") else { return }
             try? fm.removeItem(atPath: linkPath)
         } else if fm.fileExists(atPath: linkPath) {
-            return // a real file someone else put there; leave it alone
+            return
         }
         try? fm.createDirectory(
             atPath: (linkPath as NSString).deletingLastPathComponent,
@@ -695,33 +599,16 @@ public final class HelperEngine: @unchecked Sendable {
         try? fm.createSymbolicLink(atPath: linkPath, withDestinationPath: cliPath)
     }
 
-    // MARK: - Union edges (call with the lock held)
-
     private func applySleepUnion(client: Int, holding: Bool) -> Bool {
         let before = !sleepHolders.isEmpty
         if holding { sleepHolders.insert(client) } else { sleepHolders.remove(client) }
         let after = !sleepHolders.isEmpty
-        // A covered release with no holders left must still fall through when
-        // a restore was attempted and failed earlier in this life: a bare
-        // `return true` here would report success without ever retrying the
-        // restore, leaving `disablesleep` stuck until the next daemon life.
-        // Gated on the in-life flag, not the persisted marker, so a stale
-        // leftover (or an explicit `setSleepDisabled` that already settled
-        // the debt) never turns an unrelated teardown into a write.
         guard before != after || (!after && sleepRestoreOwed) else {
             return true
         }
         if after {
-            // Preserve an existing restore debt's recorded prior: after a
-            // failed release the live `disablesleep` is still 1, and
-            // snapshotting that as the new prior would make the next restore
-            // leave it sticky. Only read the system when no debt is on file.
             let existingDebt = state.value(for: .sleepDisabled)
             let prior = existingDebt ?? ((sleepDisabledReader() ?? false) ? "1" : "0")
-            // Debt-by-attempt like fans: record before the write so a crash
-            // between the write and a later marker update still settles.
-            // Refuse to engage if the marker cannot be persisted, so we never
-            // change the system without a recoverable debt.
             state.set(.sleepDisabled, value: prior)
             guard state.value(for: .sleepDisabled) != nil else {
                 sleepHolders.remove(client)
@@ -729,26 +616,17 @@ public final class HelperEngine: @unchecked Sendable {
             }
             let ok = runner.run("/usr/bin/pmset", ["-a", "disablesleep", "1"])
             if !ok {
-                // Roll the holder back so a later re-assert is not a no-op
-                // success (`before == after`). Drop a debt we just created;
-                // keep one that already existed from a failed prior release.
                 sleepHolders.remove(client)
                 if existingDebt == nil { state.set(.sleepDisabled, value: nil) }
             }
             return ok
         }
         let ok = runner.run("/usr/bin/pmset", ["-a", "disablesleep", recordedSleepRestoreValue()])
-        // Debt-by-success: a failed restore keeps the marker (and its value)
-        // for the next daemon launch to settle, and arms the in-life retry
-        // for the next no-op release.
         if ok { state.set(.sleepDisabled, value: nil) }
         sleepRestoreOwed = !ok
         return ok
     }
 
-    /// The value the sleep-disabled debt should restore. Only a recorded "1"
-    /// restores 1; an empty marker written by a pre-1.17 daemon, or anything
-    /// unreadable, restores 0 exactly as those daemons would have.
     private func recordedSleepRestoreValue() -> String {
         state.value(for: .sleepDisabled) == "1" ? "1" : "0"
     }
@@ -757,54 +635,28 @@ public final class HelperEngine: @unchecked Sendable {
         let before = !awdlHolders.isEmpty
         if holding { awdlHolders.insert(client) } else { awdlHolders.remove(client) }
         let after = !awdlHolders.isEmpty
-        // Same retry rule as sleep: a restore that failed earlier in this
-        // life retries on the next no-op release instead of reporting a
-        // success that never happened. Stale markers settle at launch.
         guard before != after || (!after && awdlRestoreOwed) else {
             return true
         }
         if after {
-            // Debt-by-attempt: mark before the write. `awdlTick` retries a
-            // failed down while the holder stays; still verify the marker
-            // landed so a crash mid-hold is recoverable.
             state.set(.awdlDown, present: true)
             guard state.markers().contains(.awdlDown) else {
                 awdlHolders.remove(client)
                 return false
             }
             let ok = runner.run("/sbin/ifconfig", ["awdl0", "down"])
-            // Keep the holder on failure so the tick can re-assert; the
-            // marker already records the debt.
             return ok
         }
         let ok = runner.run("/sbin/ifconfig", ["awdl0", "up"])
-        // Debt-by-success on release: a failed up keeps the marker and arms
-        // the in-life retry.
         if ok { state.set(.awdlDown, present: false) }
         awdlRestoreOwed = !ok
         return ok
     }
 
-    /// Fan version of the union edge: the effective target is the max percent
-    /// across holders, and a change in that target (including to or from
-    /// nothing) is what writes hardware. Engaging resets the failure streak
-    /// and the dropped flag: a fresh hold gets a fresh chance.
-    ///
-    /// The restore marker is debt-by-attempt, not debt-by-success: a forced
-    /// write can partially land (mode set on one fan, refused on the next)
-    /// and `fanTick` retries a failed engage into success later, so the
-    /// marker goes down on the first attempt and comes off only after a
-    /// restore that actually succeeded. A spurious restore of already-auto
-    /// fans is harmless, forced fans with no marker are not.
     private func applyFanUnion(_ mutate: () -> Void) -> Bool {
         let before = fanHolders.values.max()
         mutate()
         let after = fanHolders.values.max()
-        // A restore that failed earlier in this life retries on the next
-        // no-op release rather than reporting a release that never landed.
-        // With holders present (`after != nil`) the marker is the active
-        // hold's debt, and no restore is wanted. Stale markers settle at
-        // launch.
         guard before != after || (after == nil && fanRestoreOwed) else {
             return true
         }
@@ -820,14 +672,8 @@ public final class HelperEngine: @unchecked Sendable {
         return ok
     }
 
-    /// The boost every held pid gets. Modest on purpose: enough to win
-    /// scheduling against background work, not enough to starve the system.
     static let priorityNice = -10
 
-    /// Priority version of the union edge: renice newly held pids down (a
-    /// negative nice needs root) and restore departures to 0. Restores are
-    /// best-effort, the game may have quit already, which is also why there
-    /// is no re-assert tick: nice sticks for the life of the process.
     private func applyPriorityUnion(_ mutate: () -> Void) -> Bool {
         let before = Set(priorityHolders.values)
         mutate()
@@ -843,10 +689,6 @@ public final class HelperEngine: @unchecked Sendable {
         return ok
     }
 
-    /// Keyboard Cleaner union: snapshot the live mapping on first holder,
-    /// apply the baked-in disable table, restore the snapshot on last
-    /// release. Debt-by-attempt: the marker is the JSON snapshot, written
-    /// before hidutil so a crash mid-apply still restores.
     private func applyKeyboardUnion(client: Int, holding: Bool) -> Bool {
         let before = !keyboardHolders.isEmpty
         if holding { keyboardHolders.insert(client) } else { keyboardHolders.remove(client) }
@@ -871,8 +713,6 @@ public final class HelperEngine: @unchecked Sendable {
             return ok
         }
         guard let original = Self.decodeKeyboardMapping(state.value(for: .keyboardLock)) else {
-            // Don't restore an empty mapping over a corrupt snapshot. Put the
-            // holder back so a later release (or launch restore) can retry.
             keyboardHolders.insert(client)
             return false
         }
@@ -880,10 +720,6 @@ public final class HelperEngine: @unchecked Sendable {
         if ok {
             state.set(.keyboardLock, value: nil)
         } else {
-            // Keep the final holder until restoration lands. Otherwise a
-            // failed explicit Unlock makes the later XPC-disconnect cleanup a
-            // no-op, leaving Return/Space remapped until another daemon
-            // launch happens to retry the marker.
             keyboardHolders.insert(client)
         }
         return ok

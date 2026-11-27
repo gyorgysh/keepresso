@@ -1,12 +1,6 @@
 import SwiftUI
 import KeepressoCore
 
-/// The one-row stand-in for the thermal section's helper-only group (fan
-/// boost, fan test, closed-display lift) while the helper isn't installed:
-/// says what's locked and why, and carries the unlock action itself, so
-/// nobody has to scroll up hunting for the helper section. Flips to the
-/// approval step once an install is under way, and surfaces an install
-/// error inline instead of failing into silence.
 struct ThermalHelperLockedRow: View {
     @Bindable var model: AppModel
 
@@ -46,12 +40,6 @@ struct ThermalHelperLockedRow: View {
     }
 }
 
-/// The "Test Fans" rows in Preferences ▸ General ▸ Thermal: a short
-/// supervised run through three boost levels (50, 70, 90 percent) with
-/// readings at each, then a plain verdict. The point is peace of mind:
-/// prove the whole fan path (helper, firmware, readings) once, so "Boost
-/// fans first" can be left on trusted. Only shown with the helper installed;
-/// ``ThermalHelperLockedRow`` covers the section otherwise.
 struct FanTestRows: View {
     @Bindable var model: AppModel
 
@@ -65,9 +53,6 @@ struct FanTestRows: View {
                 Spacer(minLength: 8)
                 Button("Stop") { model.fanDryRun.cancel() }
             default:
-                // The one text slot either invites the test or names the
-                // exact reason it can't run right now; a silently disabled
-                // control explains nothing.
                 Text(verbatim: gateText)
                     .foregroundStyle(model.fanTestGate == .ready ? .primary : .secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -89,9 +74,6 @@ struct FanTestRows: View {
         }
     }
 
-    /// What the idle row says, per gate state. The helper-missing states are
-    /// covered by ``ThermalHelperLockedRow`` before this view ever shows, so
-    /// their texts here are just safe fallbacks.
     private var gateText: String {
         switch model.fanTestGate {
         case .ready:
@@ -151,8 +133,6 @@ struct FanTestRows: View {
         }
     }
 
-    /// "Fan 1: 1204 → 5510 rpm (max 5927). Fan 2: …" for however many fans
-    /// produced readings.
     private func fanSummary(_ report: FanDryRunReport) -> String? {
         guard let last = report.steps.last else { return nil }
         let parts = (0..<report.fanCount).compactMap { fan -> String? in

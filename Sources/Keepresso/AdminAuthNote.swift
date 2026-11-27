@@ -9,12 +9,6 @@ import SwiftUI
 struct AdminAuthNote: View {
     let purpose: String
 
-    /// The callers insert this view the moment their controller goes busy, but
-    /// busy also covers sub-second work that never shows a dialog (a helper
-    /// XPC call, a command failing fast). Rendering only after a short hold
-    /// keeps those from flashing a password explanation under the toggle: a
-    /// real authorization dialog waits on the user, so it comfortably outlives
-    /// the delay.
     @State private var dialogStillUp = false
 
     var body: some View {

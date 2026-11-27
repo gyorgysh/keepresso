@@ -17,8 +17,6 @@ private struct Tree {
     var argumentsOf: (Int32) -> String? { { rows[$0]?.args } }
 }
 
-/// keepresso (90) <- sh (80) <- devin (70) <- devin (60) <- zsh (50), as
-/// observed: Devin re-execs itself, and the `ps` scan keeps the outer one.
 private let devinTree = Tree(rows: [
     90: (80, "keepresso", nil, nil),
     80: (70, "sh", nil, nil),
@@ -27,7 +25,6 @@ private let devinTree = Tree(rows: [
     50: (1, "zsh", nil, nil),
 ])
 
-/// Qwen runs as `node`, inside a Claude Code terminal.
 private let qwenTree = Tree(rows: [
     90: (80, "keepresso", nil, nil),
     80: (70, "sh", nil, nil),
@@ -56,7 +53,6 @@ private func handle(
 
 @Suite struct CompatHooksTests {
 
-    // MARK: - Reduction
 
     @Test func lifecycleMapsLikeClaude() {
         func r(_ event: String, tool: String? = nil, type: String? = nil, sub: Bool = false)
@@ -84,8 +80,6 @@ private func handle(
             isSubagent: true) == .set(.working, detail: "reading"))
     }
 
-    /// Qwen sends `auth_success` at startup. Recorded as plain waiting, it
-    /// would hold the Mac under "count waiting as working".
     @Test func onlyUserFacingNotificationsCount() {
         func n(_ type: String?) -> AgentHooks.HookEventEffect? {
             CompatHooks.reduce(event: "Notification", toolName: nil, notificationType: type, message: nil, isSubagent: false)
@@ -96,7 +90,6 @@ private func handle(
         #expect(n(nil) == .set(.waiting, detail: nil))
     }
 
-    // MARK: - Handling
 
     @Test func devinJoinsTheOuterProcessAndFallsBackToItsCwd() {
         let dir = tempHooksDir()
@@ -150,10 +143,8 @@ private func handle(
         #expect(AgentHooks.shouldPurgeOnClaudeUninstall(claude))
     }
 
-    // MARK: - Ancestor walk
 
     @Test func onlyADirectSameAgentParentFolds() {
-        // claude -> zsh -> claude: a subagent in a shell, not a wrapper.
         let tree = Tree(rows: [
             90: (80, "keepresso", nil, nil),
             80: (70, "claude", nil, nil),
@@ -165,7 +156,6 @@ private func handle(
         #expect(match?.agentPid == 80)
     }
 
-    // MARK: - JSON settings (Qwen, Devin)
 
     @Test func qwenInstallUsesMillisecondsAndNoMatcher() throws {
         let format = CompatHooks.Tool.qwen.settingsFormat
@@ -181,7 +171,6 @@ private func handle(
         let entry = try #require((pre["hooks"] as? [[String: Any]])?.first)
         #expect(entry["timeout"] as? Int == 5000)
         #expect((entry["command"] as? String)?.contains("qwen-hook PreToolUse") == true)
-        // The user's own Stop hook survives next to ours.
         #expect((hooks["Stop"] as? [Any])?.count == 2)
         #expect(AgentHooks.hookInstallState(of: data, cliPath: cli, format: format) == .installed)
     }
@@ -209,7 +198,6 @@ private func handle(
         #expect(hooks["PostToolUseFailure"] == nil)
     }
 
-    // MARK: - Kimi config.toml
 
     private let userToml = """
         default_model = "moonshot-ai/kimi-k3"
@@ -232,7 +220,6 @@ private func handle(
         #expect(text.hasPrefix(userToml.trimmingCharacters(in: .newlines)))
         #expect(text.contains("command = \"say done\""))
         #expect(KimiHooksFile.hookInstallState(of: data, cliPath: cli) == .installed)
-        // Round trip: removing ours brings back the user's file.
         let removed = try KimiHooksFile.removeHooks(from: data)
         #expect(String(decoding: removed, as: UTF8.self) == userToml)
     }
@@ -265,12 +252,10 @@ private func handle(
         #expect(throws: AgentHooks.SettingsUnreadableError.self) {
             try KimiHooksFile.installHooks(into: inline, cliPath: cli)
         }
-        // A `hooks` key inside some other table is not the top-level array.
         let nested = Data("[thinking]\nhooks = 1\n".utf8)
         #expect(KimiHooksFile.hookInstallState(of: nested, cliPath: cli) == .notInstalled)
     }
 
-    // MARK: - Locations
 
     @Test func configLocationsHonorOverrides() {
         let home = "/Users/me"
@@ -290,7 +275,6 @@ private func handle(
 
 @Suite struct ReviewFixTests {
     @Test func wrapperFoldIsOptIn() {
-        // codex under `codex app-server`: two processes, not one session.
         let parents: [Int32: Int32] = [90: 80, 80: 70, 70: 60, 60: 1]
         let comms: [Int32: String] = [90: "keepresso", 80: "sh", 70: "codex", 60: "codex"]
         let plain = AgentHooks.findAgentAncestor(

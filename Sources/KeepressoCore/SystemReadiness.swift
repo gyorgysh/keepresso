@@ -3,14 +3,9 @@ import Observation
 
 /// How a single headless-readiness check came out.
 public enum ReadinessStatus: String, Codable, Sendable {
-    /// Configured the headless-friendly way (✅).
     case ok
-    /// Set in a way that will bite an always-on, headless Mac (⚠️).
     case warning
-    /// An optional suggestion, not a problem (💡): a nice-to-have for a headless
-    /// Mac that the user can take or leave.
     case tip
-    /// We couldn't read the underlying state (e.g. a command failed).
     case unknown
 }
 
@@ -122,9 +117,6 @@ public protocol SystemProbing: AnyObject, Sendable {
 }
 
 public extension ReadinessCheck {
-    /// Interpret a raw ``SystemSnapshot`` into the ordered list of checks shown
-    /// on the Setup screen. Pure: this is the heart of the feature and the unit
-    /// under test.
     static func evaluate(_ snapshot: SystemSnapshot) -> [ReadinessCheck] {
         [
             wakeForNetwork(snapshot),
@@ -137,7 +129,6 @@ public extension ReadinessCheck {
         ]
     }
 
-    // MARK: - Remote access (best-effort)
 
     private static let sharingDeepLink = URL(
         string: "x-apple.systempreferences:com.apple.Sharing-Settings.extension"
@@ -165,10 +156,6 @@ public extension ReadinessCheck {
         )
     }
 
-    /// Shared shape for the two remote-access checks. These are conveniences, not
-    /// requirements: an always-on Mac runs fine without them. So when they're on
-    /// it's ✅, and otherwise it's a 💡 tip (pointing at System Settings ▸ Sharing),
-    /// never a ⚠️ warning.
     private static func remoteAccess(
         id: String,
         title: String,
@@ -190,12 +177,7 @@ public extension ReadinessCheck {
         )
     }
 
-    // MARK: - Standing suggestions
 
-    /// A standing tip (not derived from the system): use tokenstat.ai to let
-    /// AI agents operate this Mac. Especially relevant for an always-on
-    /// machine reached remotely. Surfaced by ``SystemReadinessController``
-    /// after the real checks.
     static func tokenstatSuggestion() -> ReadinessCheck {
         ReadinessCheck(
             id: "tip-tokenstat",
@@ -211,7 +193,6 @@ public extension ReadinessCheck {
         )
     }
 
-    // MARK: - Power management (`pmset -g`)
 
     private static let energyDeepLink = URL(
         string: "x-apple.systempreferences:com.apple.preference.battery"
@@ -259,7 +240,6 @@ public extension ReadinessCheck {
 
     static func systemSleep(_ snapshot: SystemSnapshot) -> ReadinessCheck {
         let value = PMSet.value(forKey: "sleep", in: snapshot.pmset)
-        // `sleep 0` disables idle system sleep, the headless-friendly setting.
         return ReadinessCheck(
             id: "system-sleep",
             title: L("System sleep disabled"),
@@ -279,7 +259,6 @@ public extension ReadinessCheck {
         )
     }
 
-    // MARK: - FileVault (`fdesetup status`)
 
     static func fileVault(_ snapshot: SystemSnapshot) -> ReadinessCheck {
         let status: ReadinessStatus
@@ -311,7 +290,6 @@ public extension ReadinessCheck {
         )
     }
 
-    // MARK: - Auto-login
 
     static func autoLogin(_ snapshot: SystemSnapshot) -> ReadinessCheck {
         let user = snapshot.autoLoginUser?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -330,7 +308,6 @@ public extension ReadinessCheck {
         )
     }
 
-    // MARK: - Helpers
 
     private static func detail(
         _ value: Int?,
@@ -344,8 +321,6 @@ public extension ReadinessCheck {
     }
 }
 
-/// Tiny parser for `pmset -g` output. Lines look like `  womp   1`; we pull the
-/// integer that follows a given key.
 enum PMSet {
     static func value(forKey key: String, in output: String?) -> Int? {
         guard let output else { return nil }
@@ -378,9 +353,6 @@ public final class SystemReadinessController {
     /// permission checks.
     public private(set) var checks: [ReadinessCheck] = []
 
-    /// Standing suggestions, not probed from the system. Placed right after the
-    /// system checks so the tokenstat.ai tip follows the remote-access tips.
-    /// Not shown until the first ``refresh()`` so the screen starts blank.
     private let suggestions: [ReadinessCheck] = [.tokenstatSuggestion()]
 
     private let probe: SystemProbing
@@ -389,9 +361,6 @@ public final class SystemReadinessController {
         self.probe = probe
     }
 
-    /// Re-probe the system and recompute every check. Leaves ``permissionChecks``
-    /// untouched (the host refreshes those separately).
-    ///
     /// The probe shells out via `Process`, which must not block the main thread
     /// (a synchronous `waitUntilExit` spins the run loop and can crash re-entrantly
     /// when a virtual display is active), so it runs on a detached task and the
@@ -427,16 +396,11 @@ public final class ShellSystemProbe: SystemProbing {
         )
     }
 
-    /// Best-effort check of whether a launchd service is loaded in the system
-    /// domain. `launchctl print` exits 0 when the label exists, non-zero when it
-    /// doesn't; `nil` if `launchctl` itself couldn't be run.
     private func serviceLoaded(_ label: String) -> Bool? {
         guard let status = exitStatus("/bin/launchctl", ["print", "system/\(label)"]) else { return nil }
         return status == 0
     }
 
-    /// Run a command and return trimmed stdout, or `nil` on any failure (a
-    /// missing key, a non-zero exit, a launch error).
     private func run(_ path: String, _ arguments: [String]) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
@@ -456,8 +420,6 @@ public final class ShellSystemProbe: SystemProbing {
         }
     }
 
-    /// Run a command for its exit status only (stdout/stderr discarded), or `nil`
-    /// if it couldn't be launched.
     private func exitStatus(_ path: String, _ arguments: [String]) -> Int32? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)

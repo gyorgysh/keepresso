@@ -2,11 +2,6 @@ import SwiftUI
 import AppKit
 import KeepressoCore
 
-/// The Gaming & Streaming Setup screen (v1.6): answers "why does my stream or
-/// cloud game stutter every second". A built-in jitter test reproduces the
-/// AWDL diagnosis from the blog post, a session-scoped watchdog is the fix,
-/// and readiness rows cover the radio hygiene around it (wired network, Wi-Fi
-/// channel alignment, Bluetooth).
 struct StreamingSetupView: View {
     @Bindable var model: AppModel
 
@@ -39,7 +34,6 @@ struct StreamingSetupView: View {
                     .scrollContentBackground(.hidden)
                 }
                 .onAppear { model.refreshStreaming() }
-                // Subscribe only while mounted so the timers die with the body.
                 .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
                     model.refreshAWDLState()
                 }
@@ -82,7 +76,6 @@ struct StreamingSetupView: View {
         .padding(16)
     }
 
-    // MARK: - Jitter test
 
     private var jitterCard: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -175,10 +168,7 @@ struct StreamingSetupView: View {
         }
     }
 
-    // MARK: - AWDL watchdog
 
-    /// Frame-comfort features while a game (or a streaming client like
-    /// Parsec) is the active window.
     private var gameComfortCard: some View {
         VStack(alignment: .leading, spacing: 6) {
             Label("While you play", systemImage: "gamecontroller")
@@ -199,8 +189,6 @@ struct StreamingSetupView: View {
                         .foregroundStyle(.green)
                 }
             } else {
-                // No dead toggle: the control is replaced by a lock row that
-                // says why and offers the unlocking action.
                 HStack {
                     Text("Give the game high CPU priority")
                     Spacer()
@@ -319,11 +307,9 @@ struct StreamingSetupView: View {
         .glassCard()
     }
 
-    /// A status pill showing why AWDL is paused (or its grace countdown after a
-    /// game closes). Hidden when the watchdog isn't running.
     @ViewBuilder
     private var awdlStatusRow: some View {
-        let _ = statusPulse // re-read the live status (and grace countdown) each second
+        let _ = statusPulse
         if let style = AWDLStatusStyle(model.awdlStatus) {
             HStack(spacing: 6) {
                 Image(systemName: style.icon)

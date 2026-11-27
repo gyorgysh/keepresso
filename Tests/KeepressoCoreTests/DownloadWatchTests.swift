@@ -28,15 +28,13 @@ private final class FakeDownloadScanner: DownloadFolderScanning {
     let trigger = DownloadInFolderTrigger(
         folder: URL(fileURLWithPath: "/tmp/Downloads"), scanner: scanner, now: { clock })
 
-    #expect(!trigger.isSatisfied()) // nothing scanned yet
+    #expect(!trigger.isSatisfied())
     trigger.tick()
     #expect(trigger.isSatisfied())
     scanner.newestWrite = nil
     trigger.tick()
     #expect(!trigger.isSatisfied())
 
-    // isSatisfied() is a pure read: it must never scan the disk itself (the menu
-    // calls it every render).
     let before = scanner.scanCount
     for _ in 0 ..< 50 { _ = trigger.isSatisfied() }
     #expect(scanner.scanCount == before)
@@ -50,21 +48,16 @@ private final class FakeDownloadScanner: DownloadFolderScanning {
         folder: URL(fileURLWithPath: "/tmp/Downloads"), scanner: scanner, now: { clock })
 
     trigger.tick()
-    #expect(trigger.isSatisfied()) // freshly written marker counts
+    #expect(trigger.isSatisfied())
 
-    // A cancelled download leaves its partial behind: unwritten past the
-    // abandonment window it must no longer hold the Mac awake.
     clock = clock.addingTimeInterval(DownloadInFolderTrigger.abandonedAfter + 1)
     trigger.tick()
     #expect(!trigger.isSatisfied())
 
-    // A stalled transfer that resumes re-arms on the next tick.
     scanner.newestWrite = clock
     trigger.tick()
     #expect(trigger.isSatisfied())
 
-    // A timestamp in the future (clock change, copied-off file) reads as
-    // fresh rather than abandoned.
     scanner.newestWrite = clock.addingTimeInterval(3600)
     trigger.tick()
     #expect(trigger.isSatisfied())
@@ -72,24 +65,21 @@ private final class FakeDownloadScanner: DownloadFolderScanning {
 
 @MainActor
 @Test func downloadRuleLingersForItsGraceBetweenFiles() {
-    // Through the factory, a download rule is grace-wrapped so a gap between
-    // files in a batch (one partial renamed away before the next appears)
-    // doesn't drop the session.
     var clock = Date(timeIntervalSinceReferenceDate: 0)
     let scanner = FakeDownloadScanner(newestWrite: clock)
     let factory = TriggerFactory(downloads: scanner, now: { clock })
     let trigger = factory.makeTrigger(for: .downloadInFolder(URL(fileURLWithPath: "/tmp/Downloads")))
 
     trigger.tick()
-    #expect(trigger.isSatisfied()) // a partial is present
+    #expect(trigger.isSatisfied())
 
-    scanner.newestWrite = nil        // the file finished; none present now
+    scanner.newestWrite = nil
     trigger.tick()
-    #expect(trigger.isSatisfied()) // still held, inside the 30s grace
+    #expect(trigger.isSatisfied())
 
     clock = clock.addingTimeInterval(DownloadInFolderTrigger.releaseGrace + 1)
     trigger.tick()
-    #expect(!trigger.isSatisfied()) // grace lapsed, free to sleep
+    #expect(!trigger.isSatisfied())
 }
 
 @Test func downloadRuleLabelAndCodableRoundTrip() throws {

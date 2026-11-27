@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# Traditional Chinese (Taiwan) overlay for catalog_core.py: English source -> zh-Hant.
 CORE = {
     'On AC power': '使用電源時',
     'On battery': '使用電池時',
@@ -177,7 +176,6 @@ WIDGET = {
 }
 
 
-# --- Agent hooks (Claude Code connection) ---
 CORE.update({
     "run": "執行",
     "write": "寫入",
@@ -194,7 +192,6 @@ CORE.update({
 })
 
 
-# v1.15 thermal safety net: pressure levels and heat-pause lines.
 CORE.update({
     "Critical": "危急",
     "Fair": "普通",
@@ -204,7 +201,6 @@ CORE.update({
     "Paused on high temperature": "因溫度過高而暫停",
     "Paused, the Mac is running hot": "已暫停，Mac 過熱",
     "Serious": "嚴重",
-    # 1.16.0 fill (16)
     'Lock the screen': '鎖定螢幕',
     'Sleep the Mac': '讓 Mac 進入睡眠',
     'Session started': '工作階段已開始',
@@ -225,7 +221,6 @@ CORE.update({
 })
 
 
-# v1.17 automation leases (keepresso CLI / MCP server)
 CORE.update({
     'Automation lease: %@': '自動化租約：%@',
     'Automation lease acquired': '已取得自動化租約',
@@ -233,19 +228,16 @@ CORE.update({
 })
 
 
-# v1.18: controller-poke and Steam download triggers
 CORE.update({
     'Game controller connected': '已連接遊戲控制器',
     'Steam is downloading': 'Steam 正在下載',
 })
 
-# 1.18 strings
 CORE.update({
     "Microphone in use by %@": "%@ 正在使用麥克風",
     "Microphone in use by app": "App 正在使用麥克風",
 })
 
-# 1.23 strings
 CORE.update({
     "Brightness control is unavailable, turning the display off instead.": "無法控制亮度，因此改為關閉螢幕。",
     "Keepresso never touches the display.": "Keepresso 不會碰觸螢幕。",

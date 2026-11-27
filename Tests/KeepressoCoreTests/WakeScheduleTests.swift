@@ -36,9 +36,8 @@ import Foundation
 
 @Test func wakeAndBrewMatchesRepeatingSlot() {
     let cal = Calendar(identifier: .gregorian)
-    // A Monday at 03:00 local.
     let monday = cal.date(from: DateComponents(
-        year: 2026, month: 7, day: 20, hour: 3, minute: 0 // 2026-07-20 is Monday
+        year: 2026, month: 7, day: 20, hour: 3, minute: 0
     ))!
     #expect(WakeAndBrewPolicy.weekdayLetter(for: monday, calendar: cal) == "M")
     let config = WakeScheduleConfig(
@@ -49,7 +48,6 @@ import Foundation
     )
     #expect(WakeAndBrewPolicy.shouldStartSession(
         config: config, wakeDate: monday.addingTimeInterval(30), calendar: cal))
-    // Sunday is outside the weekday set.
     let sunday = cal.date(from: DateComponents(
         year: 2026, month: 7, day: 19, hour: 3, minute: 0
     ))!
@@ -66,7 +64,6 @@ import Foundation
 
 @Test func wakeAndBrewMatchesPreviousDaySlotAcrossMidnight() {
     let cal = Calendar(identifier: .gregorian)
-    // Friday-only 23:58 slot; the firmware wake lands Saturday 00:01.
     let config = WakeScheduleConfig(
         repeatingEnabled: true,
         repeatSecondsFromMidnight: 23 * 3600 + 58 * 60,
@@ -74,12 +71,11 @@ import Foundation
         startSessionOnWake: true
     )
     let saturdayJustPastMidnight = cal.date(from: DateComponents(
-        year: 2026, month: 7, day: 25, hour: 0, minute: 1 // 2026-07-25 is Saturday
+        year: 2026, month: 7, day: 25, hour: 0, minute: 1
     ))!
     #expect(WakeAndBrewPolicy.weekdayLetter(for: saturdayJustPastMidnight, calendar: cal) == "S")
     #expect(WakeAndBrewPolicy.shouldStartSession(
         config: config, wakeDate: saturdayJustPastMidnight, calendar: cal))
-    // Sunday just past midnight is a day too late for Friday's slot.
     let sundayJustPastMidnight = cal.date(from: DateComponents(
         year: 2026, month: 7, day: 26, hour: 0, minute: 1
     ))!
@@ -98,8 +94,6 @@ import Foundation
 }
 
 @Test func schedParserReadsRepeatingEventFromItsOwnLine() {
-    // Real pmset prints the repeating event on the indented line after the
-    // bare section header, not after the colon.
     let text = """
     Repeating power events:
       wakeorpoweron at 3:00:00AM every day
@@ -159,8 +153,6 @@ import Foundation
 }
 
 @Test func partiallyFailedClearKeepsThePendingMarker() {
-    // One of the two cancels failing must not read as success: the surviving
-    // schedule would keep waking the Mac with no retry debt.
     let runner = RecordingRunner()
     runner.failMatching = "repeat cancel"
     let state = FakeMarkerState()
@@ -170,8 +162,6 @@ import Foundation
 }
 
 @Test func successfulInstallSettlesAFailedClearDebt() {
-    // A failed clear inside an apply must not leave the marker set: the next
-    // daemon launch would wipe the schedules that were just installed.
     let runner = RecordingRunner()
     runner.failMatching = "cancelall"
     let state = FakeMarkerState()
@@ -183,8 +173,6 @@ import Foundation
 }
 
 @Test func totallyFailedApplyKeepsTheClearDebt() {
-    // When neither the clear nor the install lands, the debt must survive so
-    // the next daemon launch still settles whatever pmset is left holding.
     let runner = RecordingRunner()
     runner.failAll = true
     let state = FakeMarkerState()
@@ -229,12 +217,10 @@ import Foundation
     #expect(runner.commands.contains { $0.contains("repeat wakeorpoweron") })
 }
 
-// MARK: - Fakes
 
 private final class RecordingRunner: HelperCommandRunning, @unchecked Sendable {
     private(set) var commands: [String] = []
     var failAll = false
-    /// When set, only commands containing this substring fail.
     var failMatching: String?
     func run(_ path: String, _ arguments: [String]) -> Bool {
         let command = ([path] + arguments).joined(separator: " ")

@@ -13,19 +13,10 @@ import Observation
 /// ``SleepSettingControlling`` path deliberately has no such teardown (the
 /// global toggle is meant to outlive the app).
 public protocol SleepWatchdogLaunching: AnyObject, Sendable {
-    /// Whether the flag file that keeps `disablesleep` on is present.
     func isFlagPresent() -> Bool
-    /// Create the flag (telling a running helper to disable sleep).
-    /// Returns false when it couldn't be written.
     func createFlag() -> Bool
-    /// Delete the flag; the helper notices within a cycle and re-enables
-    /// normal sleep (only if it was the one that disabled it).
     func removeFlag()
-    /// Spawn the root helper loop. Blocking: it waits for the user to answer
-    /// the administrator prompt. Called once per app run, on first activation.
     func startHelper(appPID: Int32) -> SleepSettingResult
-    /// Message to surface when ``createFlag()`` fails, naming what actually
-    /// failed in this backend (a file write here, an XPC call in the daemon).
     var engageFailureMessage: String { get }
 }
 
@@ -78,21 +69,7 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
         return .failed(message.isEmpty ? L("The sleep watchdog couldn't be started.") : message)
     }
 
-    /// The root helper, backgrounded so `do shell script` returns immediately.
-    /// It lives as long as the app's pid does and follows the flag,
-    /// **edge-triggered** unlike the AWDL loop: nothing else re-flips
-    /// `disablesleep` behind our back, and re-asserting every cycle would fight
-    /// the user's own manual toggle (``PMSetSleepControl`` writes the same
-    /// setting directly). So it writes only on a flag transition, and on app
-    /// death restores normal sleep only if it was the one that disabled it, so
-    /// a crash or quit mid-session fails safe while a manually enabled global
-    /// setting survives untouched. Its exit cleanup removes only a flag this
-    /// app run stamped, never one a relaunched app has since created (see
-    /// ``OsascriptAWDLWatchdog/removeOwnedFlagClause(flag:appPID:)``).
     static func watchdogCommand(flagPath: String, appPID: Int32) -> String {
-        // Single-quote the path so it stays one literal word to /bin/sh (the
-        // command runs as root via `do shell script`). See
-        // ``OsascriptAWDLWatchdog/shellSingleQuoted(_:)``.
         let flag = OsascriptAWDLWatchdog.shellSingleQuoted(flagPath)
         return "( SET=; while kill -0 \(appPID) 2>/dev/null; do "
             + "if [ -f \(flag) ]; then "
@@ -103,8 +80,6 @@ public final class OsascriptSleepWatchdog: SleepWatchdogLaunching {
             + "if [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0; fi ) </dev/null >/dev/null 2>&1 &"
     }
 
-    /// Run a command and return its exit status plus stderr, or `nil` if it
-    /// couldn't be launched. Mirrors ``PMSetSleepControl``'s helper.
     private func runForResult(_ path: String, _ arguments: [String]) -> (status: Int32, stderr: String)? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
@@ -161,14 +136,9 @@ public enum ClosedDisplayAuthority {
 /// thermal emergency's closed-display lift in the app host.
 public enum BatteryPauseClosedDisplay {
     public enum Decision: Equatable, Sendable {
-        /// Nothing to do this tick.
         case idle
-        /// Turn closed-display off and remember to restore when the pause lifts.
         case lift
-        /// Closed-display is on but there is no silent way to write it; the host
-        /// should say so (once) rather than prompt for a password unattended.
         case skipLiftNeedsHelper
-        /// The pause lifted: put closed-display back if the host still can.
         case restore
     }
 
@@ -179,17 +149,10 @@ public enum BatteryPauseClosedDisplay {
         alreadyLifted: Bool,
         helperInstalled: Bool
     ) -> Decision {
-        // Session-tied closed-display already drops with the pause; restoring
-        // a sticky hold afterward would fight that automation.
         guard !onlyWhileBrewing else { return .idle }
         if paused {
-            // Keep asserting off for the whole pause: a failed helper write, or
-            // something else turning the setting back on (a thermal restore),
-            // must not leave disablesleep stuck on while battery is low.
             guard settingIsOn else { return .idle }
             if helperInstalled { return .lift }
-            // Without a silent write path, explain once; `alreadyLifted` here
-            // means the host already said so this pause.
             return alreadyLifted ? .idle : .skipLiftNeedsHelper
         }
         return alreadyLifted ? .restore : .idle
@@ -208,13 +171,9 @@ public enum BatteryPauseClosedDisplay {
 /// switch: a setting left on days ago is precisely what gets forgotten.
 public enum QuitSleepCheck {
     public enum Coverage: Equatable, Sendable {
-        /// Nothing live that quitting orphans: quit silently.
         case none
-        /// A session is brewing but nothing persists past quit.
         case session
-        /// A persistent override is live and would survive quit unmanaged.
         case overrideLive
-        /// Both: the session ends and the override would survive it.
         case sessionAndOverride
     }
 
@@ -257,21 +216,13 @@ public final class ClosedDisplayAutoController {
     /// and mirrors it in.
     public var onlyWhileBrewing = false
 
-    /// Why auto mode is standing down, so the prompt doesn't re-appear every
-    /// tick. Cleared when the current session ends.
     private enum HoldOff {
         case none
-        /// An engage that failed on its own (a helper that was not answering).
-        /// Worth trying again once the helper is healthy, see ``retryEngage()``.
         case failure
-        /// The user cancelled the password prompt. Their answer stands for the
-        /// rest of the session.
         case user
     }
     private var holdOff: HoldOff = .none
 
-    /// Whether the root helper was already spawned this app run. Once it's up,
-    /// engaging and releasing is flag-file-only: no more prompts.
     private var helperStarted = false
 
     private let launcher: SleepWatchdogLaunching
@@ -298,11 +249,6 @@ public final class ClosedDisplayAutoController {
         await Task.detached { launcher.removeFlag() }.value
     }
 
-    /// Pre-authorize the helper without touching the sleep setting: spawn it
-    /// (one prompt now, in whatever context the caller chose, typically the
-    /// Preferences toggle) then immediately drop the flag. After this, the
-    /// engage at the next session start is a prompt-free flag write. No-op
-    /// (and no prompt) once already authorized.
     @discardableResult
     public func prime() async -> SleepSettingResult {
         guard !helperStarted, !isBusy else { return .applied }
@@ -331,10 +277,6 @@ public final class ClosedDisplayAutoController {
     public func autoTick(brewing: Bool) async {
         guard onlyWhileBrewing else { return }
         if brewing {
-            // The hold is only as good as the flag behind it. If the flag went
-            // missing underneath a live hold (deleted by hand, or by anything
-            // else touching the folder), the helper has already let sleep back
-            // on: drop the latch so this tick takes the hold again.
             if isHolding, !isBusy, !launcher.isFlagPresent() { isHolding = false }
             guard !isHolding, !isBusy, holdOff == .none else { return }
             switch await engage() {
@@ -353,9 +295,6 @@ public final class ClosedDisplayAutoController {
         }
     }
 
-    /// Disable sleep via the helper. The first call of this app run spawns the
-    /// root helper (one administrator prompt); later ones just recreate the
-    /// flag, instantly and prompt-free.
     @discardableResult
     private func engage() async -> SleepSettingResult {
         guard !isBusy else { return .cancelled }
@@ -383,9 +322,6 @@ public final class ClosedDisplayAutoController {
         case .cancelled:
             lastError = nil
             await Task.detached { launcher.removeFlag() }.value
-            // Same reason as `release()`: if the backend could not let go,
-            // stay latched so a later tick retries instead of leaving
-            // `disablesleep` on with nothing tracking it.
             isHolding = launcher.isFlagPresent()
         case .failed(let message):
             lastError = message
@@ -395,14 +331,9 @@ public final class ClosedDisplayAutoController {
         return result
     }
 
-    /// Re-enable normal sleep: just delete the flag (no prompt); the helper
-    /// notices within a cycle and flips `disablesleep` back off.
     private func release() async {
         let launcher = self.launcher
         await Task.detached { launcher.removeFlag() }.value
-        // Only drop the local latch when the backend agrees the hold is gone.
-        // A failed XPC release leaves the daemon holding `disablesleep`;
-        // clearing `isHolding` here would skip retries.
         isHolding = launcher.isFlagPresent()
     }
 }

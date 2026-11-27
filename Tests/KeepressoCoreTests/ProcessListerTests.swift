@@ -2,9 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-/// Thread-safe fetch stub: the lister invokes it from a detached task, so the
-/// call count and scripted output live behind a lock (same pattern as
-/// `FakeSleepControl`).
 private final class FetchStub: @unchecked Sendable {
     private let lock = NSLock()
     private var _output: String?
@@ -26,8 +23,6 @@ private final class FetchStub: @unchecked Sendable {
     }
 }
 
-/// Movable test clock, lock-guarded because the lister reads it both on the
-/// caller's thread and from its refresh task.
 private final class TestClock: @unchecked Sendable {
     private let lock = NSLock()
     private var _now = Date(timeIntervalSinceReferenceDate: 0)
@@ -40,7 +35,6 @@ private final class TestClock: @unchecked Sendable {
     func advance(_ seconds: TimeInterval) { now = now.addingTimeInterval(seconds) }
 }
 
-/// Wait (bounded) for the lister's detached refresh task to land.
 private func eventually(_ condition: @escaping () -> Bool) async -> Bool {
     for _ in 0 ..< 400 {
         if condition() { return true }
@@ -54,8 +48,6 @@ private func eventually(_ condition: @escaping () -> Bool) async -> Bool {
     let clock = TestClock()
     let lister = PSProcessLister(ttl: 3, now: { clock.now }, fetch: stub.fetch)
 
-    // The very first read has nothing cached; it returns empty and kicks off
-    // the background fetch.
     #expect(lister.current.isEmpty)
     #expect(await eventually { lister.current == ["node server.js", "ffmpeg -i in.mov"] })
 }
@@ -68,7 +60,6 @@ private func eventually(_ condition: @escaping () -> Bool) async -> Bool {
     _ = lister.current
     #expect(await eventually { stub.callCount == 1 })
 
-    // Within the TTL, repeated reads serve the snapshot without forking again.
     clock.advance(2)
     for _ in 0 ..< 5 { #expect(lister.current == ["node server.js"]) }
     #expect(stub.callCount == 1)
@@ -82,12 +73,9 @@ private func eventually(_ condition: @escaping () -> Bool) async -> Bool {
     _ = lister.current
     #expect(await eventually { stub.callCount == 1 })
 
-    // Past the TTL the stale snapshot still comes back instantly (the menu
-    // reads this synchronously; it must never block on the refetch)...
     stub.output = "new"
     clock.advance(4)
     #expect(lister.current == ["old"])
-    // ...while the refresh lands in the background.
     #expect(await eventually { lister.current == ["new"] })
     #expect(stub.callCount == 2)
 }
@@ -97,11 +85,9 @@ private func eventually(_ condition: @escaping () -> Bool) async -> Bool {
     let clock = TestClock()
     let lister = PSProcessLister(ttl: 3, now: { clock.now }, fetch: stub.fetch)
 
-    // Several stale reads in a burst must latch a single refresh, not stack
-    // one detached `ps` per read.
     for _ in 0 ..< 5 { _ = lister.current }
     #expect(await eventually { stub.callCount >= 1 })
-    _ = await eventually { false } // settle: give any extra (buggy) refreshes time to land
+    _ = await eventually { false }
     #expect(stub.callCount == 1)
 }
 
@@ -113,8 +99,6 @@ private func eventually(_ condition: @escaping () -> Bool) async -> Bool {
     _ = lister.current
     #expect(await eventually { lister.current == ["node server.js"] })
 
-    // A failed `ps` must not empty a good snapshot (that would drop a
-    // process trigger mid-build) and must not leave `isRefreshing` stuck.
     stub.output = nil
     clock.advance(4)
     #expect(lister.current == ["node server.js"])

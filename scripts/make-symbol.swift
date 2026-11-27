@@ -1,14 +1,6 @@
 // Exports BrandCupMark as a custom SF Symbol SVG for the widget extension's
 // asset catalog (Control Center controls only render symbol images, so the
 // brand cup must be a real symbol there).
-//
-// Regenerate after changing the mark's geometry:
-//   swiftc scripts/make-symbol.swift Sources/Keepresso/BrandCupMark.swift -o /tmp/make-symbol
-//   /tmp/make-symbol > "Sources/KeepressoWidget/Assets.xcassets/keepresso.cup.symbolset/keepresso.cup.svg"
-//
-// The strokes (handle, saucer, steam) are flattened to filled outlines and the
-// crema stripe is punched with the even-odd rule, so the symbol needs no
-// stroke support from the renderer.
 
 import CoreGraphics
 import Foundation
@@ -36,14 +28,10 @@ struct MakeSymbol {
 
         func fills(baseline: CGFloat) -> [(d: String, rule: String)] {
             let tx = canvas / 2 - ink.midX * glyphScale
-            // Centered on the band's midline (not sitting on the baseline),
-            // so the overshoot spreads evenly above and below.
             let ty = (baseline - bandHeight / 2) - ink.midY * glyphScale
             var transform = CGAffineTransform(translationX: tx, y: ty)
                 .scaledBy(x: glyphScale, y: glyphScale)
 
-            // Cup with the crema stripe punched out (even-odd: the stripe
-            // sits fully inside the cup, so it reads as a hole).
             let cupAndCrema = CGMutablePath()
             cupAndCrema.addPath(BrandCupMark.cup())
             cupAndCrema.addPath(BrandCupMark.crema())

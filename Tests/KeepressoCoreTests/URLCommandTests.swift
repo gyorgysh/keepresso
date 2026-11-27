@@ -42,9 +42,7 @@ import Foundation
     #expect(URLCommand.parse(url) == nil)
 }
 
-// MARK: - until=HH:MM
 
-/// Fixed clock for `until` tests: 2026-07-03 12:00 UTC.
 private let utc: Calendar = {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(identifier: "UTC")!

@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# Korean overlay for catalog_app.py: English source -> Korean.
 APP = {
     "Add": "추가",
     "Add:": "추가:",
@@ -450,7 +449,6 @@ APP = {
 }
 
 
-# --- Agent hooks (Claude Code connection) ---
 APP.update({
     "Claude Code connected: sessions report working and waiting exactly.": "Claude Code 연결됨: 세션이 작업과 대기를 정확하게 보고합니다.",
     "Connect Claude Code for exact session tracking (adds hooks to its settings).": "정확한 세션 추적을 위해 Claude Code를 연결하세요(설정에 후크를 추가합니다).",
@@ -459,7 +457,6 @@ APP.update({
     "Couldn't update Claude Code's settings file.": "Claude Code 설정 파일을 업데이트할 수 없습니다.",
 })
 
-# --- Agent hooks (Cursor connection) ---
 APP.update({
     "Cursor connected: the app's agent and the CLI both report exactly.": "Cursor 연결됨: 앱 에이전트와 CLI 모두 정확하게 보고합니다.",
     "Connect Cursor to track its app agent too (adds hooks to its config).": "앱 에이전트도 추적하려면 Cursor를 연결하세요(구성에 후크를 추가합니다).",
@@ -468,7 +465,6 @@ APP.update({
     "Couldn't update Cursor's hooks file.": "Cursor 후크 파일을 업데이트할 수 없습니다.",
 })
 
-# --- Agent hooks (Antigravity connection) ---
 APP.update({
     "Antigravity connected: the app's agent and the CLI both report exactly.": "Antigravity 연결됨: 앱 에이전트와 CLI 모두 정확하게 보고합니다.",
     "Connect Antigravity to track its editor agent too (adds hooks to its config).": "에디터 에이전트도 추적하려면 Antigravity를 연결하세요(구성에 후크를 추가합니다).",
@@ -477,7 +473,6 @@ APP.update({
     "Couldn't update Antigravity's hooks file.": "Antigravity 후크 파일을 업데이트할 수 없습니다.",
 })
 
-# --- Agent hooks (Codex connection) ---
 APP.update({
     "Codex connected: sessions report working and waiting exactly.": "Codex 연결됨: 세션이 작업과 대기를 정확하게 보고합니다.",
     "Codex asks you to review new hooks before it runs them, so approve them there once.": "Codex는 새 후크를 실행하기 전에 검토를 요청하므로, Codex에서 한 번 승인해 주세요.",
@@ -487,7 +482,6 @@ APP.update({
     "Couldn't update Codex's hooks file.": "Codex 후크 파일을 업데이트할 수 없습니다.",
 })
 
-# --- Agent hooks (Grok connection) ---
 APP.update({
     "Grok connected: sessions report working and waiting exactly.": "Grok 연결됨: 세션이 작업과 대기를 정확하게 보고합니다.",
     "Connect Grok for exact session tracking (adds hooks to its config).": "정확한 세션 추적을 위해 Grok을 연결하세요(구성에 후크를 추가합니다).",
@@ -509,7 +503,6 @@ APP.update({
     "A trigger is a condition Keepresso watches, checked once a second. With triggers on, they take over: Keepresso starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The menu then shows an Automatic and Manual switch: Manual sets the triggers aside without touching your rules, until you switch back or relaunch Keepresso.": "트리거는 Keepresso가 감시하는 조건으로, 1초에 한 번씩 확인됩니다. 트리거를 켜면 트리거가 제어권을 가져갑니다. 조건이 충족되는 순간 Keepresso가 작동을 시작하고 조건이 더 이상 충족되지 않으면 중지되므로, 실수로 Mac을 켜진 상태로 방치하는 일이 없습니다. 그러면 메뉴에 자동과 수동 스위치가 표시됩니다. 수동을 선택하면 규칙을 건드리지 않고 트리거를 한쪽으로 치워 두며, 다시 전환하거나 Keepresso를 다시 실행할 때까지 유지됩니다.",
 })
 
-# --- Agentic onboarding step (offers to connect the tools you have) ---
 APP.update({
     "Know exactly when an agent is working": "에이전트가 작업 중인지 정확히 파악",
     "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look.": "사용 중인 코딩 도구를 연결하면 세션이 스스로 상태를 보고하므로, Keepresso가 얼마나 바빠 보이는지로 판단하지 않습니다.",
@@ -517,7 +510,6 @@ APP.update({
     "Couldn't be read": "읽을 수 없음",
 })
 
-# --- Agent hooks (repair) ---
 APP.update({
     "Claude Code's hooks need repairing, so sessions may not report correctly.": "Claude Code 후크에 복구가 필요해 세션이 정확하게 보고되지 않을 수 있습니다.",
     "Cursor's hooks need repairing, so sessions may not report correctly.": "Cursor 후크에 복구가 필요해 세션이 정확하게 보고되지 않을 수 있습니다.",
@@ -527,7 +519,6 @@ APP.update({
 })
 
 
-# --- Desktop "disable sleep" naming ---
 APP.update({
     "Disable system sleep": "시스템 잠자기 비활성화",
     "Disable sleep": "잠자기 비활성화",
@@ -541,7 +532,6 @@ APP.update({
     "%@ before": "%@ 전",
 })
 
-# v1.15 thermal safety net, fan test, helper texts, glass slider.
 APP.update({
     "(max %@)": "(최대 %@)",
     "15 seconds": "15초",
@@ -603,7 +593,6 @@ APP.update({
     "If the Mac runs hot with the lid closed, the session pauses so it can sleep and cool down.": "덮개가 닫힌 채로 Mac 온도가 높아지면 세션이 일시 정지되어 Mac이 잠들어 식을 수 있습니다.",
     "Let the Mac sleep anyway if the charge runs low, or if it stays hot with the lid shut. Thresholds are in Preferences.": "충전량이 부족해지거나 덮개를 닫은 채로 Mac 온도가 높아지면 그래도 Mac이 잠들게 합니다. 임계값은 환경설정에 있습니다.",
     "The menu-bar dropdown's glass, from frosty to clear Liquid Glass.": "메뉴 막대 드롭다운의 유리를 서리 낀 상태부터 투명한 Liquid Glass까지 조절합니다.",
-    # 1.16.0
     'Cancel': '취소',
     'Off': '끔',
     'Time': '시간',
@@ -652,7 +641,6 @@ APP.update({
     'When something happens in Keepresso, run a Shortcut, POST a webhook, or run a shell command. Useful for a push to your phone when an overnight agent finishes (ntfy, or a Shortcut that sends a notification). Hooks are suspended while you edit them, so a half-written command never runs. No administrator helper needed. User-authored shell commands are intentional in this unsandboxed app: only add commands you trust.': 'Keepresso에서 일이 생기면 단축어, 웹훅 POST, 셸을 실행합니다. 야간 에이전트가 끝날 때 폰 푸시(ntfy·알림 단축어)에 유용합니다. 편집 중에는 훅이 일시 중지됩니다. 관리자 도우미 불필요. 샌드박스 없는 이 앱에서 사용자 셸은 의도적입니다. 신뢰하는 명령만 추가하세요.',
     'These cover the times a session ends without you: a timer expiring, or trigger conditions dropping. Stopping it yourself stays silent, since you already know. The warning is a heads-up a few minutes before a timed session runs out, so you can extend it before the Mac drops off. Actions that put the Mac to sleep live under Automation.': '타이머 만료·트리거 해제처럼 직접 멈추지 않은 종료를 다룹니다. 직접 중지하면 조용합니다. 경고는 시간 제한 몇 분 전입니다. Mac을 잠자기하는 동작은 자동화에 있습니다.',
 
-    # 1.16.0 fill (17)
     '/bin/sh -c …': '/bin/sh -c …',
     'Add Hook': '훅 추가',
     'Add Hook…': '훅 추가…',
@@ -673,7 +661,6 @@ APP.update({
 
 })
 
-# 1.17 fill: teach-your-agent actions, end-action wording, gaming comfort.
 APP.update({
     "Copy Agent Instructions": "에이전트 지침 복사",
     "Let AI agents and scripts keep the Mac awake while work is running. It cannot wake a sleeping Mac.": "AI 에이전트와 스크립트가 작업 중인 Mac을 깨어 있게 합니다. 잠든 Mac을 깨울 수는 없습니다.",
@@ -709,7 +696,6 @@ APP.update({
     "Counts while Steam is actively downloading or updating a game in any of its libraries, and lets the Mac sleep once the download finishes or is paused. Reads Steam's own bookkeeping, no permission needed.": "Steam이 라이브러리에서 게임을 다운로드하거나 업데이트하는 동안 계산되며, 다운로드가 끝나거나 일시 정지되면 Mac이 잠들 수 있게 합니다. Steam 자체의 기록을 읽으며 권한이 필요하지 않습니다.",
 })
 
-# 1.18 strings
 APP.update({
     "%@ · next %@": "%@ · 다음 %@",
     "%d automation leases are waiting (safety pause)": "%d개의 자동화 임대가 대기 중입니다 (안전 일시 정지)",
@@ -769,18 +755,15 @@ APP.update({
     "just now": "방금",
 })
 
-# 1.23 strings
 APP.update({
     "If the lid shuts": "덮개를 닫으면",
     "Normally a MacBook sleeps the moment you shut the lid unless a display is attached. This keeps it running with the lid shut and nothing plugged in, on power or battery. What the screen itself does when the lid closes is your choice below (“If the lid shuts”): turn it off, keep it powered at zero brightness so a remote session stays live, or leave it alone. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off: closed and on battery, the Mac can still drain over time, so don't leave it on in a bag. “Only while brewing” ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for “Only while brewing”.": "일반적으로 MacBook은 디스플레이가 연결되어 있지 않으면 덮개를 닫는 순간 잠듭니다. 이 기능은 덮개를 닫고 아무것도 연결하지 않은 상태에서도 전원이든 배터리든 계속 실행되도록 유지합니다. 덮개를 닫았을 때 디스플레이 자체를 어떻게 할지는 아래의 “덮개를 닫으면”에서 선택합니다. 끄기, 원격 세션을 유지하기 위해 밝기 0%로 전원을 유지하기, 그대로 두기 중 하나입니다. 시스템 설정(pmset disablesleep)을 전환하는 방식으로 작동하므로, 끌 때까지 계속 적용됩니다. 덮개를 닫고 배터리를 사용 중이면 시간이 지나면서 여전히 배터리가 소모될 수 있으니 가방 안에서는 켜 두지 마십시오. “깨어 있게 유지 세션 중에만”은 대신 이를 세션에 연결하여, 깨어 있게 유지 세션이 시작될 때 켜지고 세션이 끝나거나(충돌 후에도) Keepresso가 종료될 때 꺼집니다. 둘 다 관리자 권한이 필요합니다. 관리자 도우미가 설치되어 있으면 조용히 처리되고(이 탭 상단 참조), 그렇지 않으면 macOS가 암호를 요청하며, “깨어 있게 유지 세션 중에만”의 경우 앱 실행당 한 번입니다.",
 })
 
-# Presence: "Only while brewing" off footer
 APP.update({
     "Also runs between sessions, which can keep the Mac from sleeping.": "세션 사이에도 실행되므로 Mac이 잠들지 않을 수 있습니다.",
 })
 
-# Closed-lid speaker mute
 APP.update({
     "Mute built-in speakers while the lid is closed": "덮개를 닫으면 내장 스피커 음소거",
     "Mutes the built-in speakers with the lid closed and closed-display mode active. Headphones and other outputs keep playing. Unmutes when the lid opens or the mode ends, unless you had muted them yourself.": "덮개가 닫히고 디스플레이 닫힘 모드가 활성화되면 내장 스피커를 음소거합니다. 헤드폰과 다른 출력은 계속 재생됩니다. 덮개를 열거나 모드가 끝나면 음소거를 해제하며, 직접 음소거해 둔 경우에는 그대로 둡니다.",

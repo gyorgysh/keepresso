@@ -5,9 +5,6 @@ import Foundation
 private let appID = "sh.gyorgy.keepresso"
 private let helperLabel = "sh.gyorgy.keepresso.helper"
 
-/// Trimmed from a real `sfltool dumpbtm` on the machine that hit the bug:
-/// the installed app enabled, the daemon disabled, a stale Trash copy in
-/// another store, and unrelated third-party records.
 private let wedgedDump = """
  #3:
                  UUID: 4AC3BA7E-5573-4830-801E-AEF660150817
@@ -69,8 +66,6 @@ private let wedgedDump = """
 }
 
 @Test func findingsIgnoreOtherAppsRecords() {
-    // Logi's disabled app record must not count as a Keepresso stale copy,
-    // even if it were in the Trash.
     let findings = BTMInspection.findings(
         inDump: wedgedDump, bundleIdentifier: "com.example.other", helperLabel: "com.example.other.helper"
     )
@@ -110,15 +105,12 @@ private let wedgedDump = """
 
 @Test func embeddedItemListsDoNotStartNewRecords() {
     let records = BTMInspection.parseRecords(wedgedDump)
-    // 4 records: the `#1: 16.sh...` embedded line stays inside Keepresso's.
     #expect(records.count == 4)
     #expect(records[0].fields["Name"] == "Keepresso")
     #expect(records[0].identifier == "2.sh.gyorgy.keepresso")
 }
 
 @Test func dispositionTokensAreMatchedExactly() {
-    // "disabled" contains "enabled" as a substring; the parser must not fall
-    // for it.
     let records = BTMInspection.parseRecords(wedgedDump)
     let daemon = records.first { $0.identifier == "16.sh.gyorgy.keepresso.helper" }
     #expect(daemon?.isEnabled == false)

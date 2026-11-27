@@ -20,14 +20,6 @@ public enum AgentTool: CaseIterable, Sendable {
     case devin
     case kimi
 
-    /// Paths that each, on their own, prove the tool is here. Any one is
-    /// enough, because these tools arrive in several shapes: a config folder
-    /// once the tool has run, a CLI on disk, or an app bundle. Checked rather
-    /// than executed, so nothing is launched to find out.
-    ///
-    /// Deliberately not exhaustive. A tool installed somewhere unusual reads
-    /// as absent, which costs the user a hidden row and nothing else; the
-    /// alternative, guessing generously, costs a stray config file.
     func evidencePaths(home: String) -> [String] {
         switch self {
         case .claudeCode:
@@ -37,16 +29,11 @@ public enum AgentTool: CaseIterable, Sendable {
                 "\(home)/.local/bin/claude",
                 "/opt/homebrew/bin/claude",
                 "/usr/local/bin/claude",
-                // The desktop app runs Claude Code inside itself and reads the
-                // same settings file, so it counts.
                 "/Applications/Claude.app",
             ]
         case .cursor:
             return [
                 "\(home)/.cursor",
-                // The CLI installs under both this name and a bare `agent`;
-                // only the specific one is evidence, since a file called
-                // `agent` proves nothing about Cursor.
                 "\(home)/.local/bin/cursor-agent",
                 "/opt/homebrew/bin/cursor-agent",
                 "/usr/local/bin/cursor-agent",
@@ -54,9 +41,6 @@ public enum AgentTool: CaseIterable, Sendable {
             ]
         case .antigravity:
             return [
-                // The app's own store and the CLI's, never a bare `.gemini`:
-                // the Gemini CLI keeps its own config in there and proves
-                // nothing about Antigravity.
                 "\(home)/.gemini/antigravity",
                 "\(home)/.gemini/antigravity-cli",
                 "\(home)/.local/bin/agy",
@@ -107,8 +91,6 @@ public enum AgentTool: CaseIterable, Sendable {
                 "/usr/local/bin/devin",
             ]
         case .kimi:
-            // Kimi Code's own folder, never `~/.kimi`: that belongs to the
-            // older Python Kimi CLI, which has no hooks.
             return [
                 "\(home)/.kimi-code",
                 "\(home)/.kimi-code/bin/kimi",

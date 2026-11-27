@@ -1,12 +1,6 @@
 import SwiftUI
 import AppKit
 
-/// The helper attention window: opened automatically (see `MenuBarLabelView`)
-/// when the self-heal for the privileged helper gets stuck on something only
-/// the user can do, either the one-time approval again or a reinstall. It
-/// walks that single step, watches the live status, and flips to a success
-/// state on its own the moment the daemon answers, so the user always sees
-/// the loop close.
 struct HelperAttentionView: View {
     @Bindable var model: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -15,9 +9,6 @@ struct HelperAttentionView: View {
     /// retained ordered-out scene does not mount (or steam) until visible.
     @State private var windowVisible = false
 
-    /// What the window is showing right now, derived from the live helper
-    /// state so approval progress observed by the manager's poll moves the
-    /// window forward without any action here.
     private enum Stage {
         case checking
         case needsApproval
@@ -60,9 +51,6 @@ struct HelperAttentionView: View {
                 }
                 .padding(24)
                 .animation(.smooth(duration: 0.3), value: stageKey)
-                // The manager polls while the user is over in System Settings; the
-                // moment the approval lands, confirm the daemon really answers, which
-                // flips this window to All set by itself.
                 .onChange(of: model.helper.status) { _, status in
                     if status == .enabled { model.verifyHelper() }
                 }
@@ -74,16 +62,10 @@ struct HelperAttentionView: View {
         .frame(width: 380)
         .tint(.keepressoBrew)
         .glassWindowBackground()
-        // This window exists to be seen: Keepresso is a background agent, so
-        // an ordinary window would open behind whatever the user is doing.
-        // Floating is deliberate here, unlike the other windows: an attention
-        // dialog that landed behind something would defeat its purpose.
         .background(WindowPlacement(floating: true))
         .background(WindowVisibilityReader(isVisible: $windowVisible))
     }
 
-    /// `Stage` isn't Equatable-friendly for `animation(value:)` with derived
-    /// state; a plain key is.
     private var stageKey: Int {
         switch stage {
         case .checking: 0
@@ -136,8 +118,6 @@ struct HelperAttentionView: View {
         }
     }
 
-    /// The success line, with a single seal bounce when it lands. One shot on
-    /// appear, never a loop.
     private struct AllSetBadge: View {
         @State private var landed = false
 

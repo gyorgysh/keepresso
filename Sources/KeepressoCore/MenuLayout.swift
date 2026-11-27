@@ -212,8 +212,6 @@ public struct MenuLayout: Codable, Equatable, Sendable {
         copy.compactSectionCount = min(max(compactSectionCount, 1), MenuLayoutSection.allCases.count)
         copy.maxTriggerRows = min(max(maxTriggerRows, 1), 50)
         copy.maxAgentRows = min(max(maxAgentRows, 1), 20)
-        // Text-only labels need an idle fallback. Existing/hidden text cannot
-        // be the sole carrier, or the menu-bar entry disappears while idle.
         if !showMenuBarIcon && [.existing, .iconOnly].contains(menuBarTextStyle) {
             copy.showMenuBarIcon = true
         }
@@ -252,7 +250,6 @@ public struct MenuLayout: Codable, Equatable, Sendable {
         menuBarTextStyle = raw(.menuBarTextStyle, default: menuBarTextStyle)
         compactSectionCount = (try? c.decode(Int.self, forKey: .compactSectionCount)) ?? compactSectionCount
         panelWidth = (try? c.decode(Int.self, forKey: .panelWidth)) ?? panelWidth
-        // Existing granular layouts retain their independently visible controls.
         adaptiveSessionControls = (try? c.decode(Bool.self, forKey: .adaptiveSessionControls)) ?? false
         maxTriggerRows = (try? c.decode(Int.self, forKey: .maxTriggerRows)) ?? maxTriggerRows
         maxAgentRows = (try? c.decode(Int.self, forKey: .maxAgentRows)) ?? maxAgentRows

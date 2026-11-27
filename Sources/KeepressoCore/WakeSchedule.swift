@@ -135,8 +135,6 @@ public enum WakeScheduleParser {
     public static func parse(_ text: String, now: Date = Date(), calendar: Calendar = .current) -> SystemWakeState {
         var wakes: [Date] = []
         var repeating: String?
-        /// True between the "Repeating power events:" header and the next
-        /// section header, where the event line lives.
         var inRepeatingSection = false
         let oneShot = try? NSRegularExpression(
             pattern: #"\b(?:wake|wakeorpoweron|poweron)\s+at\s+(\d{1,2}/\d{1,2}/\d{2,4}\s+\d{1,2}:\d{2}:\d{2})"#,
@@ -152,14 +150,12 @@ public enum WakeScheduleParser {
                     repeating = rest
                     inRepeatingSection = false
                 } else {
-                    // Bare header: the event (if any) is on the next line.
                     inRepeatingSection = rest.isEmpty
                 }
                 continue
             }
             if inRepeatingSection {
                 if trimmed.isEmpty || trimmed.hasSuffix(":") {
-                    // Blank line or the next section header ends the section.
                     inRepeatingSection = false
                 } else if trimmed.lowercased() != "none" {
                     repeating = trimmed
@@ -244,13 +240,6 @@ public enum WakeAndBrewPolicy {
         date: Date,
         calendar: Calendar
     ) -> Bool {
-        // Each candidate slot counts on its own day's letter: the wake day's
-        // slot when that day is configured, and the previous day's slot when
-        // that day is (a 23:xx slot can wake the Mac just past midnight, on a
-        // day that may not be in the set at all). The slot is built from
-        // calendar components, not `startOfDay + seconds`: `pmset repeat`
-        // schedules by wall-clock time, so on a DST transition day the elapsed
-        // seconds and the local time disagree by an hour.
         let start = calendar.startOfDay(for: date)
         if config.repeatWeekdays.contains(Self.weekdayLetter(for: date, calendar: calendar)),
            let slot = slot(
@@ -270,9 +259,6 @@ public enum WakeAndBrewPolicy {
         return false
     }
 
-    /// The wall-clock slot `secondsFromMidnight` into `day`, resolved through
-    /// the calendar so DST-shifted days land on the time the user picked.
-    /// `nil` for an out-of-day value.
     private static func slot(
         onDayOf day: Date,
         secondsFromMidnight: Int,
@@ -289,7 +275,6 @@ public enum WakeAndBrewPolicy {
     /// Map Calendar weekday (1=Sunday…7=Saturday) to `pmset` letters (U/M/T/W/R/F/S).
     public static func weekdayLetter(for date: Date, calendar: Calendar = .current) -> Character {
         let wd = calendar.component(.weekday, from: date)
-        // 1 Sun … 7 Sat → U M T W R F S
         let map: [Character] = ["?", "U", "M", "T", "W", "R", "F", "S"]
         return map.indices.contains(wd) ? map[wd] : "M"
     }

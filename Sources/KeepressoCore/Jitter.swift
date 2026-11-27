@@ -15,15 +15,9 @@ public struct PingSample: Equatable, Sendable {
 
 /// What the jitter signature looks like.
 public enum JitterVerdict: Equatable, Sendable {
-    /// Latency is flat: no spikes worth mentioning.
     case clean
-    /// Spikes recur about once a second over a flat baseline, the AWDL
-    /// signature: the Wi-Fi radio hops off-channel for AirDrop/Handoff scans.
     case looksLikeAWDL
-    /// Latency spikes, but without the periodic AWDL cadence (congestion,
-    /// weak signal, a busy router).
     case jittery
-    /// Not enough replies to judge (offline, a firewall eating ICMP).
     case inconclusive
 }
 
@@ -83,12 +77,8 @@ public struct JitterReport: Equatable, Sendable {
 /// Pure parsing and analysis of a ping run, the heart of the jitter test and
 /// the unit under test. The impure spawn lives behind ``PingRunning``.
 public enum JitterAnalyzer {
-    /// How many successful echoes a run needs before the verdict means anything.
     static let minimumReplies = 10
 
-    /// A reply this far above the baseline counts as a spike. AWDL detours
-    /// add roughly 50-100 ms, so half that clears normal wander without
-    /// missing real hops; doubling a tiny baseline alone isn't a spike.
     static func spikeThreshold(baseline: Double) -> Double {
         max(baseline + 25, baseline * 2)
     }
@@ -125,9 +115,6 @@ public enum JitterAnalyzer {
             )
         }
 
-        // Lower quartile, not median: the baseline should estimate the floor,
-        // and a median gets dragged up once spikes near half the samples
-        // (which would then hide the spikes entirely).
         let sorted = replies.map(\.ms).sorted()
         let baseline = sorted[sorted.count / 4]
         let threshold = spikeThreshold(baseline: baseline)
@@ -152,9 +139,6 @@ public enum JitterAnalyzer {
         )
     }
 
-    /// The AWDL cadence: spikes lands roughly once a second. True when there
-    /// are at least three spikes and two thirds of the gaps between successive
-    /// ones fall in the 0.5-2.5 s band.
     static func isPeriodic(spikeSequences: [Int], interval: TimeInterval) -> Bool {
         guard spikeSequences.count >= 3, interval > 0 else { return false }
         let gaps = zip(spikeSequences.dropFirst(), spikeSequences)
@@ -163,7 +147,6 @@ public enum JitterAnalyzer {
         return periodic.count * 3 >= gaps.count * 2
     }
 
-    // MARK: - Field extraction
 
     private static func integer(after prefix: String, in line: Substring) -> Int? {
         field(after: prefix, in: line).flatMap { Int($0) }
@@ -173,7 +156,6 @@ public enum JitterAnalyzer {
         field(after: prefix, in: line).flatMap { Double($0) }
     }
 
-    /// The run of number characters right after `prefix`.
     private static func field(after prefix: String, in line: Substring) -> Substring? {
         guard let range = line.range(of: prefix) else { return nil }
         let rest = line[range.upperBound...]
@@ -225,7 +207,6 @@ public final class JitterTestController {
         case idle
         case running
         case finished(JitterReport)
-        /// The ping couldn't run at all (no network path, missing binary).
         case failed
     }
 

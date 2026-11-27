@@ -11,27 +11,15 @@ import Foundation
 public enum CLIRequest: Equatable, Sendable {
     case help
     case version
-    /// Print the app-written status snapshot; `json` selects machine output.
     case status(json: Bool)
-    /// Forward a command to the app through its `keepresso://` scheme.
     case remote(RemoteCommand)
-    /// Hold this process's own power assertion, caffeinate-style.
     case hold(Hold)
-    /// Record an agent-hook event delivered on stdin (Claude Code hooks).
-    /// Hidden from the help text: installed hook commands are its only
-    /// intended caller.
     case agentHook(event: String)
-    /// Record a Cursor hook event delivered on stdin. Hidden for the same
-    /// reason as ``agentHook(event:)``.
     case cursorHook(event: String)
     case antigravityHook(event: String)
-    /// Record a Codex hook event delivered on stdin. Hidden likewise.
     case codexHook(event: String)
-    /// Record a Grok hook event delivered on stdin. Hidden likewise.
     case grokHook(event: String)
-    /// Record a Hermes plugin event delivered on stdin. Hidden likewise.
     case hermesHook(event: String)
-    /// Record an Oh My Pi extension event. Hidden likewise.
     case ompHook(
         event: String,
         sessionId: String,
@@ -39,20 +27,13 @@ public enum CLIRequest: Equatable, Sendable {
         willContinue: Bool,
         awaitingAsyncWork: Bool
     )
-    /// Record a Qwen Code, Devin, or Kimi Code hook event delivered on
-    /// stdin. Hidden likewise.
     case compatHook(tool: CompatHooks.Tool, event: String)
-    /// Manage automation leases (bounded keep-awake grants for scripts and
-    /// agents), executed by ``LeaseClient``.
     case lease(LeaseCommand)
-    /// Read or change the system wake schedule, executed by ``WakeClient``.
-    /// Changes are honored only while the default-off preference is on.
     case wake(WakeCommand)
 
     /// One `keepresso wake` operation.
     public enum WakeCommand: Equatable, Sendable {
         case status(json: Bool)
-        /// Install a one-shot and/or repeating wake. At least one part set.
         case set(oneShot: Date?, repeatDays: String?, repeatTime: String?, json: Bool)
         case clear(json: Bool)
     }
@@ -80,8 +61,6 @@ public enum CLIRequest: Equatable, Sendable {
         case start(durationMinutes: Double?, untilTime: String?)
         case stop
         case toggle
-        /// The lease doorbell: rescan automation inputs, launching the app
-        /// if needed. Parameterless by design.
         case syncLeases
 
         /// The `keepresso://` URL that carries this command.
@@ -102,7 +81,6 @@ public enum CLIRequest: Equatable, Sendable {
             }
         }
 
-        /// "90.0" reads worse than "90" in a URL; drop a whole-number's tail.
         private static func trimmed(_ minutes: Double) -> String {
             minutes == minutes.rounded() && minutes.magnitude < 1e15
                 ? String(Int(minutes))
@@ -233,7 +211,6 @@ public enum CLIRequest: Equatable, Sendable {
         }
     }
 
-    // MARK: - start options
 
     private static func parseStart(_ options: [String]) throws -> RemoteCommand {
         var minutes: Double?
@@ -272,7 +249,6 @@ public enum CLIRequest: Equatable, Sendable {
         return .start(durationMinutes: minutes, untilTime: until)
     }
 
-    // MARK: - lease options
 
     private static func parseLease(_ arguments: [String]) throws -> LeaseCommand {
         guard let verb = arguments.first else {
@@ -336,8 +312,6 @@ public enum CLIRequest: Equatable, Sendable {
         return command
     }
 
-    /// Collects `--flag value` pairs (and the value-less `--json`), rejecting
-    /// anything that is not a recognised flag shape.
     private static func leaseFlags(_ arguments: [String]) throws -> [String: String] {
         var flags: [String: String] = [:]
         var index = 0
@@ -363,7 +337,6 @@ public enum CLIRequest: Equatable, Sendable {
         return flags
     }
 
-    // MARK: - wake options
 
     private static func parseWake(_ arguments: [String]) throws -> WakeCommand {
         guard let verb = arguments.first else {
@@ -413,7 +386,6 @@ public enum CLIRequest: Equatable, Sendable {
         return command
     }
 
-    /// "YYYY-MM-DD HH:MM", local time, the shape `wake set --at` accepts.
     static func parseWakeDate(_ raw: String, calendar: Calendar = .current) -> Date? {
         let parts = raw.split(separator: " ")
         guard parts.count == 2 else { return nil }
@@ -433,9 +405,6 @@ public enum CLIRequest: Equatable, Sendable {
         components.hour = hour
         components.minute = minute
         guard let date = calendar.date(from: components) else { return nil }
-        // `date(from:)` normalizes out-of-range components instead of failing,
-        // so "2026-02-31" would silently schedule a March wake. Require the
-        // calendar to read back exactly what was requested.
         let readBack = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
         guard readBack.year == year, readBack.month == month, readBack.day == day,
               readBack.hour == hour, readBack.minute == minute
@@ -443,7 +412,6 @@ public enum CLIRequest: Equatable, Sendable {
         return date
     }
 
-    /// HH:MM, 24-hour, the same shape ``URLCommand`` accepts in `until=`.
     static func isValidClockTime(_ raw: String) -> Bool {
         let parts = raw.split(separator: ":")
         guard parts.count == 2,
@@ -454,7 +422,6 @@ public enum CLIRequest: Equatable, Sendable {
         return true
     }
 
-    // MARK: - hold flags
 
     private static func parseHold(_ arguments: [String]) throws -> Hold {
         var hold = Hold()
@@ -482,7 +449,6 @@ public enum CLIRequest: Equatable, Sendable {
                 hold.waitForPID = pid
                 index += 2
             default:
-                // A cluster of value-less flags, caffeinate-style: -diu.
                 guard argument.hasPrefix("-"), argument.count > 1 else {
                     throw CLIUsageError("unknown option '\(argument)'")
                 }
@@ -500,8 +466,6 @@ public enum CLIRequest: Equatable, Sendable {
                 index += 1
             }
         }
-        // `-u` alone is a one-shot wake; anything else without a bound holds
-        // until a signal, like bare `caffeinate`.
         hold.oneShot = hold.declareUserActivity
             && hold.timeoutSeconds == nil && hold.waitForPID == nil
             && !sawBoundless && !hold.display

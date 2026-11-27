@@ -11,7 +11,6 @@
 #
 set -euo pipefail
 
-# Resolve the repo root regardless of where the script is called from.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
@@ -38,9 +37,7 @@ info()  { printf '\033[1;34m==>\033[0m %s\n' "$1"; }
 warn()  { printf '\033[1;33m==>\033[0m %s\n' "$1" >&2; }
 die()   { printf '\033[1;31mError:\033[0m %s\n' "$1" >&2; exit 1; }
 
-# --- Preconditions -----------------------------------------------------------
 
-# A full Xcode (not just Command Line Tools) is required to build/open the app.
 if ! xcodebuild -version >/dev/null 2>&1; then
   die "Full Xcode is required (Command Line Tools alone can't build the app).
        Install Xcode from the App Store, then:
@@ -48,7 +45,6 @@ if ! xcodebuild -version >/dev/null 2>&1; then
          sudo xcodebuild -license accept"
 fi
 
-# --- Ensure XcodeGen ---------------------------------------------------------
 
 if ! command -v xcodegen >/dev/null 2>&1; then
   warn "XcodeGen not found."
@@ -61,12 +57,10 @@ if ! command -v xcodegen >/dev/null 2>&1; then
   fi
 fi
 
-# --- Generate ----------------------------------------------------------------
 
 info "Generating $PROJECT from project.yml..."
 xcodegen generate
 
-# --- Optional CLI build ------------------------------------------------------
 
 if [ "$DO_BUILD" = true ]; then
   info "Building $SCHEME..."
@@ -77,7 +71,6 @@ if [ "$DO_BUILD" = true ]; then
     CODE_SIGNING_ALLOWED=NO
 fi
 
-# --- Open --------------------------------------------------------------------
 
 if [ "$DO_OPEN" = true ]; then
   info "Opening $PROJECT in Xcode (press ⌘R to run)..."

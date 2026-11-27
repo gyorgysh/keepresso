@@ -33,10 +33,6 @@ public struct TimeWindowRule: Codable, Equatable, Hashable, Sendable {
         case Set(2...6):           return L("Weekdays")
         case [1, 7]:               return L("Weekends")
         default:
-            // The system's short weekday symbols, so day names follow the app's
-            // language (index 0 = Sunday, matching Calendar's 1...7 numbering).
-            // Guard the index: a corrupt or imported weekday outside 1...7 would
-            // otherwise crash the app when the rules list renders this label.
             let names = Calendar.current.shortStandaloneWeekdaySymbols
             return weekdays.sorted()
                 .compactMap { (1...7).contains($0) ? names[$0 - 1] : nil }
@@ -70,10 +66,6 @@ public final class TimeWindowTrigger: Trigger {
         Self.evaluate(rule, at: now(), calendar: calendar)
     }
 
-    /// Pure decision function, exposed for direct unit testing. The start is
-    /// inclusive and the end exclusive, so back-to-back windows never overlap.
-    /// A wrapped window's early-morning part belongs to the window that
-    /// *started* the previous day, so "Fri 22:00-6:00" covers Saturday 3:00.
     static func evaluate(_ rule: TimeWindowRule, at date: Date, calendar: Calendar) -> Bool {
         let components = calendar.dateComponents([.weekday, .hour, .minute], from: date)
         guard let weekday = components.weekday,
@@ -88,7 +80,6 @@ public final class TimeWindowTrigger: Trigger {
         if rule.startMinutes < rule.endMinutes {
             return starts(on: weekday) && minutes >= rule.startMinutes && minutes < rule.endMinutes
         }
-        // Wrapped past midnight (an equal start and end reads as a full day).
         if minutes >= rule.startMinutes { return starts(on: weekday) }
         if minutes < rule.endMinutes {
             let yesterday = weekday == 1 ? 7 : weekday - 1

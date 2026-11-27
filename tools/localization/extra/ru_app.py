@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# Russian overlay for catalog_app.py: English source -> Russian.
 APP = {
     "Add": "Добавить",
     "Add:": "Добавить:",
@@ -444,7 +443,6 @@ APP = {
 }
 
 
-# --- Agent hooks (Claude Code connection) ---
 APP.update({
     "Claude Code connected: sessions report working and waiting exactly.": "Claude Code подключён: сеансы точно сообщают о работе и ожидании.",
     "Connect Claude Code for exact session tracking (adds hooks to its settings).": "Подключите Claude Code для точного отслеживания сеансов (добавляет хуки в его настройки).",
@@ -453,7 +451,6 @@ APP.update({
     "Couldn't update Claude Code's settings file.": "Не удалось обновить файл настроек Claude Code.",
 })
 
-# --- Agent hooks (Cursor connection) ---
 APP.update({
     "Cursor connected: the app's agent and the CLI both report exactly.":
         "Cursor подключён: и агент приложения, и CLI сообщают точно.",
@@ -465,7 +462,6 @@ APP.update({
     "Couldn't update Cursor's hooks file.": "Не удалось обновить файл хуков Cursor.",
 })
 
-# --- Agent hooks (Antigravity connection) ---
 APP.update({
     "Antigravity connected: the app's agent and the CLI both report exactly.":
         "Antigravity подключён: и агент редактора, и CLI сообщают точно.",
@@ -477,7 +473,6 @@ APP.update({
     "Couldn't update Antigravity's hooks file.": "Не удалось обновить файл хуков Antigravity.",
 })
 
-# --- Agent hooks (Codex connection) ---
 APP.update({
     "Codex connected: sessions report working and waiting exactly.":
         "Codex подключён: сеансы точно сообщают о работе и ожидании.",
@@ -491,7 +486,6 @@ APP.update({
     "Couldn't update Codex's hooks file.": "Не удалось обновить файл хуков Codex.",
 })
 
-# --- Agent hooks (Grok connection) ---
 APP.update({
     "Grok connected: sessions report working and waiting exactly.":
         "Grok подключён: сеансы точно сообщают о работе и ожидании.",
@@ -521,7 +515,6 @@ APP.update({
     "A trigger is a condition Keepresso watches, checked once a second. With triggers on, they take over: Keepresso starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The menu then shows an Automatic and Manual switch: Manual sets the triggers aside without touching your rules, until you switch back or relaunch Keepresso.": "Триггер представляет собой условие, за которым следит Keepresso, проверяя его раз в секунду. Когда триггеры включены, они берут управление на себя: Keepresso начинает работать в тот момент, когда выполняются ваши условия, и останавливается, когда они перестают выполняться, поэтому вы никогда случайно не оставите Mac включённым. Затем в меню появляется переключатель «Авто» и «Вручную»: режим «Вручную» откладывает триггеры в сторону, не затрагивая ваши правила, пока вы не переключитесь обратно или не перезапустите Keepresso.",
 })
 
-# --- Agentic onboarding step (offers to connect the tools you have) ---
 APP.update({
     "Know exactly when an agent is working": "Точно знайте, когда агент работает",
     "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look.":
@@ -530,7 +523,6 @@ APP.update({
     "Couldn't be read": "Не удалось прочитать",
 })
 
-# --- Agent hooks (repair) ---
 APP.update({
     "Claude Code's hooks need repairing, so sessions may not report correctly.":
         "Хуки Claude Code нуждаются в восстановлении, поэтому сеансы могут сообщаться неточно.",
@@ -543,7 +535,6 @@ APP.update({
     "Repair": "Восстановить",
 })
 
-# --- Desktop "disable sleep" naming ---
 _DESKTOP_SLEEP_APP = {
     'Disable system sleep': 'Отключить сон системы',
     'Disable sleep': 'Отключение сна',
@@ -559,7 +550,6 @@ _DESKTOP_SLEEP_APP = {
 APP.update(_DESKTOP_SLEEP_APP)
 
 
-# v1.15 thermal safety net, fan test, helper texts, glass slider.
 APP.update({
     "(max %@)": "(макс. %@)",
     "15 seconds": "15 секунд",
@@ -627,7 +617,6 @@ APP.update({
     "Appearance": "Оформление",
     "If the Mac runs hot with the lid closed, the session pauses so it can sleep and cool down.": "Если Mac разогрелся с закрытой крышкой, сеанс приостанавливается, чтобы он мог заснуть и остыть.",
     "The menu-bar dropdown's glass, from frosty to clear Liquid Glass.": "Стекло выпадающего меню в строке меню: от матового до прозрачного Liquid Glass.",
-    # 1.16.0
     'Cancel': 'Отмена',
     'Off': 'Выкл.',
     'Time': 'Время',
@@ -676,7 +665,6 @@ APP.update({
     'When something happens in Keepresso, run a Shortcut, POST a webhook, or run a shell command. Useful for a push to your phone when an overnight agent finishes (ntfy, or a Shortcut that sends a notification). Hooks are suspended while you edit them, so a half-written command never runs. No administrator helper needed. User-authored shell commands are intentional in this unsandboxed app: only add commands you trust.': 'Когда в Keepresso что-то происходит, запускайте команду, вебхук или shell. Удобно для пуша на телефон после ночного агента (ntfy или команда с уведомлением). Хуки приостановлены при правке. Помощник не нужен. Пользовательский shell намерен в непесочничном приложении: добавляйте только доверенные команды.',
     'These cover the times a session ends without you: a timer expiring, or trigger conditions dropping. Stopping it yourself stays silent, since you already know. The warning is a heads-up a few minutes before a timed session runs out, so you can extend it before the Mac drops off. Actions that put the Mac to sleep live under Automation.': 'Для конца сеанса без вас: таймер или триггеры. Ручная остановка молчит. Предупреждение за несколько минут до конца таймера. Действия сна Mac собраны в разделе Автоматизация.',
 
-    # 1.16.0 fill (17)
     '/bin/sh -c …': '/bin/sh -c …',
     'Add Hook': 'Добавить хук',
     'Add Hook…': 'Добавить хук…',
@@ -695,7 +683,6 @@ APP.update({
     'Webhook': 'Вебхук',
     'https://…': 'https://…',
 
-    # 1.17.0 automation leases
     'Held awake by an automation lease': 'Аренда автоматизации не даёт Mac заснуть',
     'Held awake by %d automation leases': '%d аренд автоматизации не дают Mac заснуть',
     'and %d more': 'и ещё %d',
@@ -706,7 +693,6 @@ APP.update({
 
 })
 
-# Teach-your-agent actions, end-action wording, and gaming comfort (1.17.0, second batch).
 APP.update({
     "Copy Agent Instructions": "Копировать инструкции для агента",
     "Let AI agents and scripts keep the Mac awake while work is running. It cannot wake a sleeping Mac.": "Позволяет ИИ-агентам и скриптам не давать Mac уснуть во время работы. Спящий Mac разбудить нельзя.",
@@ -752,7 +738,6 @@ APP.update({
         "Учитывается, пока Steam активно загружает или обновляет игру в любой из библиотек, и позволяет Mac заснуть, как только загрузка завершается или ставится на паузу. Использует собственные данные Steam, разрешение не требуется.",
 })
 
-# 1.18 strings
 APP.update({
     "%@ · next %@": "%@ · далее %@",
     "%d automation leases are waiting (safety pause)": "%d аренды автоматизации ожидают (пауза безопасности)",
@@ -812,18 +797,15 @@ APP.update({
     "just now": "только что",
 })
 
-# 1.23 strings
 APP.update({
     "If the lid shuts": "Если крышка закрывается",
     "Normally a MacBook sleeps the moment you shut the lid unless a display is attached. This keeps it running with the lid shut and nothing plugged in, on power or battery. What the screen itself does when the lid closes is your choice below (“If the lid shuts”): turn it off, keep it powered at zero brightness so a remote session stays live, or leave it alone. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off: closed and on battery, the Mac can still drain over time, so don't leave it on in a bag. “Only while brewing” ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for “Only while brewing”.": "Обычно MacBook засыпает сразу же, как только вы закрываете крышку, если не подключён дисплей. Эта функция позволяет ему продолжать работу с закрытой крышкой и без подключённых устройств, от сети или от батареи. Что делает сам экран при закрытии крышки, решать вам ниже (пункт «Если крышка закрывается»): выключить его, держать включённым при яркости 0%, чтобы удалённый сеанс оставался активным, или не трогать его. Работает за счёт переключения системного параметра (pmset disablesleep), поэтому остаётся действующим, пока вы его не выключите: с закрытой крышкой и от батареи Mac всё же может со временем разрядиться, поэтому не оставляйте его включённым в сумке. «Только во время заваривания» вместо этого привязывает функцию к сеансу: включается при запуске сеанса поддержания активности, выключается по завершении сеанса или при выходе из Keepresso (даже после аварийного завершения). Обе функции требуют прав администратора: бесшумно, если установлен помощник с правами администратора (см. верх этой вкладки), иначе macOS запрашивает пароль, один раз за запуск приложения для «Только во время заваривания».",
 })
 
-# Presence: "Only while brewing" off footer
 APP.update({
     "Also runs between sessions, which can keep the Mac from sleeping.": "Работает и между сеансами, поэтому может не давать Mac засыпать.",
 })
 
-# Closed-lid speaker mute
 APP.update({
     "Mute built-in speakers while the lid is closed": "Отключать звук встроенных динамиков при закрытой крышке",
     "Mutes the built-in speakers with the lid closed and closed-display mode active. Headphones and other outputs keep playing. Unmutes when the lid opens or the mode ends, unless you had muted them yourself.": "Отключает звук встроенных динамиков при закрытой крышке и активном режиме закрытого дисплея. Наушники и другие устройства вывода продолжают воспроизводить звук. Включает звук при открытии крышки или завершении режима, если вы не отключили его сами.",

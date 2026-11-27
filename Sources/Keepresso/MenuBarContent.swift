@@ -3,8 +3,6 @@ import AppKit
 import KeepressoCore
 import Combine
 
-/// Preview overrides presentation only. It cannot operate controls, register a
-/// status panel, refresh hardware, or change the real panel's visibility.
 struct MenuPreviewConfiguration {
     var layout: MenuLayout?
     var expanded: Bool
@@ -12,33 +10,20 @@ struct MenuPreviewConfiguration {
     var maxHeight: CGFloat = 480
 }
 
-/// The dropdown shown when the menu bar icon is clicked. Kept lean: status, the
-/// quick toggle (or a live trigger summary), and entries that open the
-/// Preferences, Setup, and About windows. Detailed settings live in Preferences.
 struct MenuBarContent: View {
     @Bindable var model: AppModel
 
-    /// The auto-updater behind the "Check for Updates…" item.
     let updater: any Updating
 
-    /// Receives this panel's window, so a right-click on the icon can close
-    /// the panel before showing the context menu.
     let bridge: StatusItemBridge
     var preview: MenuPreviewConfiguration? = nil
 
-    /// Opens the window scenes declared in ``KeepressoApp``.
     @Environment(\.openWindow) private var openWindow
 
-    /// The controller the views read live state from.
     private var session: SessionController { model.session }
 
-    /// Live panel values pulsed from the session ticker while open.
     private var panel: MenuPanelSnapshot { model.menuPanel }
 
-    /// Text styles and metrics at the readability scale (grows on very dense
-    /// screens; exactly 1 everywhere else). Recomputed each render, and the
-    /// body re-renders every second while open, so display changes are picked
-    /// up live.
     private var type: ScaledType { ScaledType() }
     private var advancedMenuLayout: MenuLayout? {
         if let preview { return preview.layout }
@@ -51,7 +36,6 @@ struct MenuBarContent: View {
     /// (stops Observation-graph growth and TimelineView CPU) and remounts
     /// when the menu opens again.
     @State private var panelVisible = true
-    /// Bumped when the lid-closed row is clicked while the automation owns it.
     @State private var lidRowShakes = 0
     @State private var showCustomDuration = false
     @State private var showUntilTime = false
@@ -66,7 +50,6 @@ struct MenuBarContent: View {
     /// Autoconnect only starts it for the preview, the one subscriber.
     @State private var previewTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     @State private var previewCollapsedSections: Set<MenuLayoutSection>?
-    /// An expanded group keeps its disclosure so the user can collapse it again.
     @State private var disclosedSections: Set<MenuLayoutSection> = []
 
     private static let durationOptions: [(label: String, mode: SessionMode)] = [
@@ -76,16 +59,12 @@ struct MenuBarContent: View {
         ("4 hours", .timed(duration: 4 * 60 * 60)),
     ]
 
-    /// The menu label for the current mode: a preset's name when it matches,
-    /// otherwise the custom duration spelled out ("2 h 30 min").
     static func modeLabel(_ mode: SessionMode) -> String {
         if let preset = durationOptions.first(where: { $0.mode == mode }) { return L(preset.label) }
         guard let duration = mode.duration else { return L("Indefinitely") }
         return shortDuration(duration)
     }
 
-    /// A compact duration like "15 min", "1 h", or "2 h 30 min", shared by the
-    /// mode label and the quick-stop buttons.
     static func shortDuration(_ duration: TimeInterval) -> String {
         let totalMinutes = wholeMinutes(duration)
         let hours = totalMinutes / 60, minutes = totalMinutes % 60
@@ -94,15 +73,12 @@ struct MenuBarContent: View {
         return L("%d min", max(1, minutes))
     }
 
-    /// A duration as finite whole minutes for display, saturating instead of
-    /// trapping on an imported non-finite or absurd value.
     static func wholeMinutes(_ duration: TimeInterval) -> Int {
         guard duration.isFinite, duration > 0 else { return 0 }
         let capped = min(duration, SessionMode.maxTimedMinutes * 60)
         return Int((capped / 60).rounded())
     }
 
-    /// A compact "M:SS" (or "Ns" under a minute) countdown for a grace window.
     static func graceCountdown(_ seconds: TimeInterval) -> String {
         // Saturate at a day rather than trap: `Int(_:)` faults past Int.max.
         let capped = seconds.isFinite ? min(max(0, seconds), 86_400) : 0
@@ -140,8 +116,6 @@ struct MenuBarContent: View {
             }
         }
         .keepsPanelKey()
-        // Hands the panel window to the bridge, so a right-click on the icon
-        // closes this panel before its context menu opens.
         .background(PanelWindowRegistrar { bridge.panelWindow = $0 })
         .background(WindowVisibilityReader(isVisible: $panelVisible))
         .onChange(of: panelVisible) { _, visible in
@@ -152,7 +126,6 @@ struct MenuBarContent: View {
         }
     }
 
-    /// The interactive panel. Only mounted while ``panelVisible`` is true.
     @ViewBuilder
     private var panelBody: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -213,7 +186,6 @@ struct MenuBarContent: View {
         .allowsHitTesting(preview == nil)
     }
 
-    // MARK: - Granular opt-in layout
 
     private func availableMenuItems(_ layout: MenuLayout) -> Set<MenuItem> {
         if preview?.includesUnavailableItems == true { return Set(MenuItem.allCases) }
@@ -223,9 +195,6 @@ struct MenuBarContent: View {
             case .manualToggle, .duration:
                 return !layout.adaptiveSessionControls || !triggerControlled
             case .manualOverride:
-                // In adaptive layouts the Automatic/Manual switch is the way
-                // into manual control; the shortcut stays only where the
-                // switch has been removed from the menu.
                 return !layout.adaptiveSessionControls
                     || (triggerControlled && layout.hiddenItems.contains(.triggerAction))
             case .endTime: return session.isActive && session.remaining != nil
@@ -242,9 +211,6 @@ struct MenuBarContent: View {
             case .batteryPause: return model.machineHasBattery
             case .batteryThreshold: return model.machineHasBattery && model.batteryAutoPauseEnabled
             case .leaseStatus:
-                // Shown in the banner under the mode switch instead, unless
-                // that item is out of sight: removed, or in a collapsed
-                // section, where the banner would be hidden with it.
                 return !session.liveLeases.isEmpty
                     && (layout.hiddenItems.contains(.triggerAction)
                         || layout.collapsedSections.contains(layout.placement(of: .triggerAction)))
@@ -311,7 +277,6 @@ struct MenuBarContent: View {
             || (brewingOnlyHidden && (model.closedDisplayAutoBusy || model.closedDisplayAutoError != nil))
         VStack(alignment: .leading, spacing: layout.density.spacing) {
             if model.helperAttention != nil { helperAttentionBanner.disabled(preview != nil) }
-            // A hidden caption must not conceal why an attempted start failed.
             if (session.pausedByBattery || session.pausedByThermal) && !visible.contains(.statusCaption) {
                 Text(statusDetail).font(type.caption).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
@@ -320,9 +285,6 @@ struct MenuBarContent: View {
                 if layout.showDividers && group.id != groups.first?.id { Divider() }
                 advancedGroup(group, layout: layout, combinesCaption: combinesCaption)
             }
-            // Collapsed groups retain their controls behind their disclosure.
-            // Hidden overrides still report their state, including status-only
-            // layouts where Preferences remains reachable by right-click.
             if needsSleepStatus {
                 VStack(alignment: .leading, spacing: 6) {
                     if layout.showDividers { Divider().opacity(0.5) }
@@ -330,8 +292,6 @@ struct MenuBarContent: View {
                 }
                 .padding(.top, layout.showDividers ? 0 : 4)
             }
-            // Manual controls pause triggers. If the trigger action is hidden
-            // or collapsed, keep the way back to automatic control beside them.
             if model.triggersEnabled && model.triggersPaused && session.liveLeases.isEmpty
                 && !visible.contains(.triggerAction)
                 && !visible.isDisjoint(with: [.manualToggle, .duration, .manualOverride, .quickStop]) {
@@ -378,8 +338,6 @@ struct MenuBarContent: View {
                 .accessibilityValue(collapsed ? L("Show more") : L("Show less"))
             }
             if !collapsed {
-                // The mode switch leads its group whatever the saved order:
-                // the controls under it belong to the mode it shows.
                 ForEach(group.items.contains(.triggerAction)
                     ? [.triggerAction] + group.items.filter { $0 != .triggerAction }
                     : group.items) { item in
@@ -393,8 +351,6 @@ struct MenuBarContent: View {
 
     @ViewBuilder
     private func advancedItem(_ item: MenuItem, layout: MenuLayout, combinesCaption: Bool) -> some View {
-        // Each ForEach row needs its own clock dependency: Date-based values
-        // and cached trigger states do not publish Observation changes.
         let _ = preview == nil ? panel.tick : UInt(previewTick)
         switch item {
         case .statusHeader:
@@ -500,7 +456,6 @@ struct MenuBarContent: View {
         }
     }
 
-    /// Computed once per render from the groups already built for the panel.
     private func combinesStatusCaption(_ layout: MenuLayout, groups: [MenuLayoutGroup]) -> Bool {
         guard layout.headerStyle == .card,
               layout.placement(of: .statusHeader) == layout.placement(of: .statusCaption) else { return false }
@@ -642,15 +597,10 @@ struct MenuBarContent: View {
         }
     }
 
-    /// The existing adaptive layout. Custom section choices never affect it.
     @ViewBuilder
     private var standardMenuSections: some View {
         Divider()
 
-        // With triggers set up, control is one of two modes, and the switch
-        // says which. Automatic shows the conditions deciding; Manual shows
-        // the controls you decide with. Without triggers there is only manual
-        // control, so there is nothing to switch.
         if model.triggersEnabled {
             modeSwitch
         }
@@ -689,10 +639,6 @@ struct MenuBarContent: View {
             }
 
             if session.isActive && !model.quickStopDurations.isEmpty {
-                // The three short defaults share a line with the label;
-                // four shortcuts, or compound durations ("1 h 30 min",
-                // wordier in some languages), get the full panel width
-                // on their own row so the buttons never clip.
                 if quickStopButtonsFitInline {
                     LabeledContent("Stop in") { quickStopButtons }
                 } else {
@@ -705,9 +651,6 @@ struct MenuBarContent: View {
 
         }
 
-        // The option toggles and app entries fold away behind the "Show
-        // less" row, leaving a status-and-controls-only panel; everything
-        // hidden stays reachable via right-click on the icon.
         if menuExpanded {
             optionToggles
         }
@@ -722,8 +665,6 @@ struct MenuBarContent: View {
     }
 
 
-    /// The middle option toggles (closed-display, only-while-brewing, battery),
-    /// hidden while the panel is collapsed.
     @ViewBuilder
     private var optionToggles: some View {
         Divider()
@@ -750,9 +691,6 @@ struct MenuBarContent: View {
 
     @ViewBuilder
     private var closedDisplayControls: some View {
-        // The same pmset switch wears two names: on a laptop it exists to
-        // survive the lid closing, on a desktop (no lid, no battery) it
-        // reads as a hard "never sleep" override.
         switchRow(model.machineHasBattery ? "Keep awake with lid closed" : "Disable system sleep",
                   isOn: Binding(
             get: { model.closedDisplayEnabled },
@@ -760,10 +698,6 @@ struct MenuBarContent: View {
         ), info: model.machineHasBattery
             ? L("Keeps the Mac running with the lid shut and no external display. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.")
             : L("Stops the Mac from sleeping at all, even with no session running. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password."),
-                  // While "Only while brewing" is on, the automation owns this
-                  // setting: the switch reports what it did instead of offering
-                  // a manual override the next tick would undo anyway. Clicking
-                  // it shakes the line below, which names what is driving it.
                   switchLocked: model.closedDisplayOnlyWhileBrewing,
                   onLockedTap: { lidRowShakes += 1 })
         .disabled(model.closedDisplayBusy)
@@ -864,7 +798,6 @@ struct MenuBarContent: View {
         }
     }
 
-    /// Folded away with Show less, so Help follows the panel's expanded state.
     @ViewBuilder
     private var appEntries: some View {
         Button("Preferences…") { open(KeepressoApp.preferencesWindowID) }
@@ -909,8 +842,6 @@ struct MenuBarContent: View {
             .buttonStyle(.menuRow)
     }
 
-    /// The bottom disclosure folds the standard options and app entries away.
-    /// Custom mode instead retains the first two enabled sections.
     private var expandToggleRow: some View {
         Button {
             model.menuPanelExpanded.toggle()
@@ -926,9 +857,6 @@ struct MenuBarContent: View {
             .foregroundStyle(.secondary)
         }
         .buttonStyle(.menuRow)
-        // Keep the panel's ⌘, and ⌘Q working while their visible carriers are
-        // folded away. As a background, the carriers take no layout slot in
-        // the panel's VStack (a zero-size child would still add its spacing).
         .background {
             if preview == nil && !menuExpanded {
                 Button("") { open(KeepressoApp.preferencesWindowID) }
@@ -941,7 +869,6 @@ struct MenuBarContent: View {
         }
     }
 
-    /// The quick "Stop in" shortcut buttons for the running session.
     private var quickStopButtons: some View {
         HStack(spacing: 6) {
             ForEach(model.quickStopDurations, id: \.self) { duration in
@@ -950,8 +877,6 @@ struct MenuBarContent: View {
         }
     }
 
-    /// Custom widths and translated compound durations can exceed a single
-    /// row. Measure the full labels before choosing a grid or column.
     private var adaptiveQuickStopButtons: some View {
         let durations = model.quickStopDurations
         return ViewThatFits(in: .horizontal) {
@@ -983,8 +908,6 @@ struct MenuBarContent: View {
             .lineLimit(1)
     }
 
-    /// Whether the shortcut buttons fit next to the "Stop in" label: at most
-    /// three, none of them a compound duration (hours and minutes both).
     private var quickStopButtonsFitInline: Bool {
         model.quickStopDurations.count <= 3 && !model.quickStopDurations.contains {
             let minutes = Self.wholeMinutes($0)
@@ -1010,7 +933,6 @@ struct MenuBarContent: View {
         openWindow(id: id)
     }
 
-    // MARK: - Header
 
     private var header: some View {
         HStack(spacing: 8) {
@@ -1029,8 +951,6 @@ struct MenuBarContent: View {
                     .font(type.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    // Roll the digits of "Awake for" / "Stops in" like a
-                    // timer instead of re-stamping the line every second.
                     .contentTransition(.numericText())
                     .animation(.linear(duration: 0.25), value: statusDetail)
             }
@@ -1040,22 +960,15 @@ struct MenuBarContent: View {
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .menuPreviewCard(preview: preview != nil, followsClarity: true)
-        // A faint warm wash behind the glass while brewing, like a lit burner.
         .background(
             Color.keepressoBrew.opacity(session.isActive ? 0.08 : 0),
             in: RoundedRectangle(cornerRadius: 12, style: .continuous)
         )
         .animation(.easeInOut(duration: 0.35), value: session.isActive)
-        // Flipping "Keep awake" on while a safety pause (battery or thermal)
-        // holds can't start a session, and the switch just snaps back. Shake
-        // the card whose subtitle explains why, so the refusal reads as
-        // deliberate.
         .modifier(ShakeEffect(animatableData: CGFloat(session.refusedStarts)))
         .animation(.easeInOut(duration: 0.45), value: session.refusedStarts)
     }
 
-    /// A horizontal shake driven by an incrementing counter: each +1 sweeps
-    /// the sine through three full oscillations and lands back at zero offset.
     private struct ShakeEffect: GeometryEffect {
         var animatableData: CGFloat
 
@@ -1067,10 +980,6 @@ struct MenuBarContent: View {
         }
     }
 
-    /// A warning row shown while the privileged helper needs the user (approve
-    /// again, or reinstall), so a missed attention window still leaves a
-    /// visible cue in the place the user looks anyway. "Fix" reopens the
-    /// walkthrough window.
     private var helperAttentionBanner: some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -1087,20 +996,13 @@ struct MenuBarContent: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            // Through open(_:) so the panel closes first; a window opened
-            // while the panel holds key status comes up behind it, drawn
-            // inactive (the exact bug open(_:) exists for).
             Button("Fix\u{2026}") { open(KeepressoApp.helperWindowID) }
         }
         .padding(8)
         .menuPreviewCard(preview: preview != nil, cornerRadius: 8, tint: Color.orange.opacity(0.16), followsClarity: true)
     }
 
-    // MARK: - Duration editors
 
-    /// Popover behind "Custom Duration…": hour/minute steppers that set the
-    /// session duration (used the next time it starts, or restarting a running
-    /// session, exactly like picking a preset duration).
     private struct CustomDurationEditor: View {
         @State private var hours: Int
         @State private var minutes: Int
@@ -1133,8 +1035,6 @@ struct MenuBarContent: View {
         }
     }
 
-    /// Popover behind "Until a Time…": picks a wall-clock time and starts (or
-    /// restarts) the session to end there, today or tomorrow.
     private struct UntilTimeEditor: View {
         let isActive: Bool
         let start: (Int, Int) -> Void
@@ -1164,8 +1064,6 @@ struct MenuBarContent: View {
     }
 
     private var statusDetail: String {
-        // Safety pauses override everything else: say so, or an otherwise
-        // satisfied session looks stuck for no visible reason.
         if session.pausedByBattery {
             return L("Battery below %d%%, Keepresso sessions paused until plugged in", model.pauseBelowBatteryPercent)
         }
@@ -1185,9 +1083,6 @@ struct MenuBarContent: View {
             return L("Awake for %@", MenuBarLabel.format(preview == nil ? panel.elapsed : session.elapsed))
     }
 
-    /// A compact line naming another process that's holding the Mac awake, so an
-    /// idle Keepresso still explains a Mac that won't sleep. Refreshes on the
-    /// session ticker pulse while the panel is open (assertion list is TTL-cached).
     @ViewBuilder
     private var heldByLine: some View {
         let _ = panel.tick
@@ -1207,17 +1102,11 @@ struct MenuBarContent: View {
         }
     }
 
-    /// Whether any live status caption exists, so the status card only
-    /// appears when there is something to say.
     private var hasStatusLines: Bool {
         model.fanBoostActivePercent != nil
             || (model.awdlStatus.isPausing && AWDLStatusStyle(model.awdlStatus) != nil)
     }
 
-    /// The live system statuses (automation leases, the fan boost, the AWDL
-    /// pause) gathered into one quiet card instead of loose caption lines, so
-    /// the panel's tail reads as a single "what Keepresso is doing right now"
-    /// block rather than scattered footnotes.
     @ViewBuilder
     private var statusStack: some View {
         let _ = panel.tick
@@ -1234,10 +1123,6 @@ struct MenuBarContent: View {
         }
     }
 
-    /// Live automation leases as one card right under the mode switch. A
-    /// lease is a third source of keep-awake, separate from both modes, so it
-    /// says so there, with its own way to end it (the switch can't). Nothing
-    /// renders while no lease is live.
     @ViewBuilder
     private var leaseBanner: some View {
         if !session.liveLeases.isEmpty {
@@ -1258,18 +1143,11 @@ struct MenuBarContent: View {
         }
     }
 
-    /// Live automation leases, so a lease-held session explains itself in the
-    /// place the user looks first: one caption line, then up to four
-    /// tool-and-task rows with their expiry countdowns. Refreshes on the 1s
-    /// tick.
     @ViewBuilder
     private var leaseStatusLine: some View {
         let _ = panel.tick
         let leases = session.liveLeases
         if !leases.isEmpty {
-            // During a safety pause nothing is actually held awake: the
-            // leases are waiting for the pause to lift, and claiming
-            // otherwise would contradict the pause explanation above.
             let paused = session.pausedByBattery || session.pausedByThermal
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
@@ -1315,8 +1193,6 @@ struct MenuBarContent: View {
         }
     }
 
-    /// A caption while the thermal safety net is forcing the fans, so the
-    /// sudden fan noise explains itself in the place the user looks first.
     @ViewBuilder
     private var fanStatusLine: some View {
         if let percent = model.fanBoostActivePercent {
@@ -1335,15 +1211,9 @@ struct MenuBarContent: View {
         }
     }
 
-    /// AWDL watchdog state, so a user testing the app sees why Wi-Fi discovery
-    /// is paused and, once they quit a game, the grace countdown before it
-    /// resumes (yellow), rather than wondering why it's still off. Hidden when
-    /// the watchdog isn't running. Refreshes on the 1s tick.
     @ViewBuilder
     private var awdlStatusLine: some View {
         let _ = panel.tick
-        // Only surface an active pause in the menu; the "watching" state would
-        // just be persistent noise here (it lives in the Streaming window).
         if model.awdlStatus.isPausing, let status = AWDLStatusStyle(model.awdlStatus) {
             HStack(spacing: 6) {
                 Image(systemName: status.icon)
@@ -1360,15 +1230,9 @@ struct MenuBarContent: View {
         }
     }
 
-    // MARK: - Live trigger summary
 
-    /// Which of the two modes controls keeping awake while triggers are on.
     private enum ControlMode: Hashable { case automatic, manual }
 
-    /// Automatic or Manual. Choosing Manual pauses the triggers (which also
-    /// stops a trigger-held session: Manual starts from "the Mac can sleep",
-    /// and Keep awake is one flip away). Choosing Automatic resumes them.
-    /// The pause stays in memory only, so a relaunch is always Automatic.
     private var modeSwitch: some View {
         Picker("Keep awake mode", selection: Binding(
             get: { model.triggersPaused ? ControlMode.manual : .automatic },
@@ -1384,7 +1248,7 @@ struct MenuBarContent: View {
 
     @ViewBuilder
     private var triggerSummary: some View {
-        let _ = panel.tick // re-read live trigger state each tick
+        let _ = panel.tick
         if let states = model.ruleStates(), !states.isEmpty {
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(Array(states.enumerated()), id: \.offset) { _, state in
@@ -1423,12 +1287,8 @@ struct MenuBarContent: View {
         }
     }
 
-    /// How many per-instance sub-rows a rule may show before collapsing into a
-    /// "+N more" line, so a wall of terminals can't swamp the menu.
     private static let maxDetailRows = 5
 
-    /// The accent for one detail row: each tool wears its own brand, and
-    /// agents without one yet keep the generic green.
     private static func detailAccent(_ detail: RuleDetail) -> Color {
         switch detail.agent {
         case "claude": return .claudeAccent
@@ -1441,15 +1301,11 @@ struct MenuBarContent: View {
         }
     }
 
-    /// Indented per-instance rows under a rule: one detected agent session per
-    /// line with a working/idle indicator and verdict.
     private func ruleDetailRows(_ details: [RuleDetail], limit: Int = Self.maxDetailRows) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             ForEach(Array(details.prefix(limit).enumerated()), id: \.offset) { _, detail in
                 let accent = Self.detailAccent(detail)
                 HStack(spacing: 6) {
-                    // Gated on visibility: SparkView's periodic timeline would
-                    // otherwise keep ticking inside the closed panel.
                     SparkView(agent: detail.agent, animated: detail.animated && panelVisible,
                               tint: detail.active ? accent : Color.secondary)
                         .foregroundStyle(detail.active ? accent : Color.secondary)
@@ -1487,7 +1343,6 @@ private struct CustomMenuControlStyle: ViewModifier {
                 .tint(style == .accent ? .keepressoBrew : .primary)
                 .foregroundStyle(style == .accent ? Color.keepressoBrew : .primary)
         case .duration, .manualOverride, .lidPolicy, .endAction, .presets:
-            // Menus select an option; reserve the accent for direct actions.
             content.tint(.primary).foregroundStyle(.primary)
         case .setup, .gaming, .keyboard, .wifi, .preferences, .customize,
              .welcome, .about, .updates, .support, .quit:

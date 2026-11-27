@@ -35,9 +35,6 @@ public enum SteamDownload {
         stateFlags & updateRunningFlag != 0
     }
 
-    /// Whether anything under `directory` was modified within
-    /// ``writeRecencyWindow``. Walks lazily and stops at the first fresh
-    /// file, which during a real download is one of the first visited.
     static func hasRecentWrite(
         under directory: URL,
         now: Date = Date(),
@@ -50,9 +47,6 @@ public enum SteamDownload {
             options: [.skipsHiddenFiles]
         ) else { return false }
         for case let file as URL in walker {
-            // Only real files count: Steam creates the folder skeleton the
-            // moment a download is queued, so fresh directory mtimes say
-            // nothing about bytes actually flowing.
             let values = try? file.resourceValues(
                 forKeys: [.contentModificationDateKey, .isRegularFileKey])
             guard values?.isRegularFile == true else { continue }
@@ -91,7 +85,6 @@ public enum SteamDownload {
     }
 }
 
-// MARK: - Monitor
 
 /// Abstraction over "is Steam downloading?" so the trigger is testable
 /// without a Steam install. Mirrors the other monitor seams.
@@ -110,7 +103,6 @@ public final class FileSteamDownloadMonitor: SteamDownloadMonitoring {
         self.init(probe: Self.probeSystem)
     }
 
-    /// The probe and clock are injectable so the cache can be unit-tested.
     init(
         ttl: TimeInterval = 5,
         now: @escaping () -> Date = Date.init,
@@ -125,8 +117,6 @@ public final class FileSteamDownloadMonitor: SteamDownloadMonitoring {
         let fm = FileManager.default
         let defaultSteamapps = SteamDownload.defaultRoot()
             .appendingPathComponent("steamapps", isDirectory: true)
-        // The default library's libraryfolders.vdf lists every library,
-        // itself included; fall back to the default alone if it is missing.
         var libraries = [defaultSteamapps]
         let vdf = defaultSteamapps.appendingPathComponent("libraryfolders.vdf")
         if let text = try? String(contentsOf: vdf, encoding: .utf8) {
@@ -145,8 +135,6 @@ public final class FileSteamDownloadMonitor: SteamDownloadMonitoring {
                 else { return false }
                 return SteamDownload.isActive(stateFlags: flags)
             }
-            // The walk only runs when a manifest claims a running update, so
-            // the common no-download case never touches the chunk folders.
             if flagged, SteamDownload.hasRecentWrite(
                 under: library.appendingPathComponent("downloading", isDirectory: true)
             ) {
@@ -157,7 +145,6 @@ public final class FileSteamDownloadMonitor: SteamDownloadMonitoring {
     }
 }
 
-// MARK: - Trigger
 
 /// Fires while any Steam library has a download or update actively running.
 public final class SteamDownloadTrigger: Trigger {

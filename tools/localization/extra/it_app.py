@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# Italian overlay for catalog_app.py: English source -> Italian.
 APP = {
     "Add": "Aggiungi",
     "Add:": "Aggiungi:",
@@ -527,7 +526,6 @@ APP = {
 }
 
 
-# --- Agent hooks (Claude Code connection) ---
 APP.update({
     "Claude Code connected: sessions report working and waiting exactly.": "Claude Code connesso: le sessioni segnalano con esattezza lavoro e attesa.",
     "Connect Claude Code for exact session tracking (adds hooks to its settings).": "Collega Claude Code per un monitoraggio esatto delle sessioni (aggiunge hook alle sue impostazioni).",
@@ -536,7 +534,6 @@ APP.update({
     "Couldn't update Claude Code's settings file.": "Impossibile aggiornare il file delle impostazioni di Claude Code.",
 })
 
-# --- Agent hooks (Cursor connection) ---
 APP.update({
     "Cursor connected: the app's agent and the CLI both report exactly.":
         "Cursor connesso: sia l'agente dell'app sia la CLI segnalano con esattezza.",
@@ -548,7 +545,6 @@ APP.update({
     "Couldn't update Cursor's hooks file.": "Impossibile aggiornare il file degli hook di Cursor.",
 })
 
-# --- Agent hooks (Antigravity connection) ---
 APP.update({
     "Antigravity connected: the app's agent and the CLI both report exactly.":
         "Antigravity connesso: sia l'agente dell'app sia la CLI segnalano con esattezza.",
@@ -560,7 +556,6 @@ APP.update({
     "Couldn't update Antigravity's hooks file.": "Impossibile aggiornare il file degli hook di Antigravity.",
 })
 
-# --- Agent hooks (Codex connection) ---
 APP.update({
     "Codex connected: sessions report working and waiting exactly.":
         "Codex connesso: le sessioni segnalano con esattezza lavoro e attesa.",
@@ -574,7 +569,6 @@ APP.update({
     "Couldn't update Codex's hooks file.": "Impossibile aggiornare il file degli hook di Codex.",
 })
 
-# --- Agent hooks (Grok connection) ---
 APP.update({
     "Grok connected: sessions report working and waiting exactly.":
         "Grok connesso: le sessioni segnalano con esattezza lavoro e attesa.",
@@ -601,7 +595,6 @@ APP.update({
     "A trigger is a condition Keepresso watches, checked once a second. With triggers on, they take over: Keepresso starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The menu then shows an Automatic and Manual switch: Manual sets the triggers aside without touching your rules, until you switch back or relaunch Keepresso.": "Un attivatore è una condizione che Keepresso monitora, controllata una volta al secondo. Con gli attivatori attivi, prendono il controllo: Keepresso inizia a essere in infusione nel momento in cui le tue condizioni sono soddisfatte e si ferma quando non lo sono più, così non lasci mai il Mac sveglio per errore. Il menu mostra quindi un selettore Auto e Manuale: Manuale mette da parte gli attivatori senza toccare le tue regole, finché non torni indietro o riavvii Keepresso.",
 })
 
-# --- Agentic onboarding step (offers to connect the tools you have) ---
 APP.update({
     "Know exactly when an agent is working": "Sappi con esattezza quando un agente sta lavorando",
     "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look.":
@@ -610,7 +603,6 @@ APP.update({
     "Couldn't be read": "Illeggibile",
 })
 
-# --- Agent hooks (repair) ---
 APP.update({
     "Claude Code's hooks need repairing, so sessions may not report correctly.":
         "Gli hook di Claude Code devono essere riparati, quindi le sessioni potrebbero non essere segnalate correttamente.",
@@ -624,7 +616,6 @@ APP.update({
 })
 
 
-# --- Desktop "disable sleep" naming ---
 APP.update({
     "Disable system sleep": "Disattiva la sospensione del sistema",
     "Disable sleep": "Disattiva la sospensione",
@@ -644,7 +635,6 @@ APP.update({
 })
 
 
-# v1.15 thermal safety net, fan test, helper texts, glass slider.
 APP.update({
     "(max %@)": "(max %@)",
     "15 seconds": "15 secondi",
@@ -731,7 +721,6 @@ APP.update({
         "Lascia comunque che il Mac si addormenti se la carica scende, o se resta caldo con il coperchio chiuso. Le soglie sono nelle Impostazioni.",
     "The menu-bar dropdown's glass, from frosty to clear Liquid Glass.":
         "Il vetro del menu a comparsa nella barra dei menu, da sfumato a Liquid Glass trasparente.",
-    # 1.16.0
     'Cancel': 'Annulla',
     'Off': 'Disattivato',
     'Time': 'Ora',
@@ -780,7 +769,6 @@ APP.update({
     'When something happens in Keepresso, run a Shortcut, POST a webhook, or run a shell command. Useful for a push to your phone when an overnight agent finishes (ntfy, or a Shortcut that sends a notification). Hooks are suspended while you edit them, so a half-written command never runs. No administrator helper needed. User-authored shell commands are intentional in this unsandboxed app: only add commands you trust.': 'Quando succede qualcosa in Keepresso, esegui un Comando, un webhook o uno shell. Utile per un push al telefono a fine agente notturno (ntfy o un Comando). Gli hook sono sospesi in modifica. Nessun assistente. I comandi shell sono voluti in questa app non sandbox: aggiungi solo ciò di cui ti fidi.',
     'These cover the times a session ends without you: a timer expiring, or trigger conditions dropping. Stopping it yourself stays silent, since you already know. The warning is a heads-up a few minutes before a timed session runs out, so you can extend it before the Mac drops off. Actions that put the Mac to sleep live under Automation.': 'Copre le fine sessione senza di te: timer o condizioni. Se la fermi tu, resta silenzioso. L’avviso arriva pochi minuti prima della fine a timer. Le azioni che mettono in stop il Mac sono in Automazione.',
 
-    # 1.16.0 fill (17)
     '/bin/sh -c …': '/bin/sh -c …',
     'Add Hook': 'Aggiungi hook',
     'Add Hook…': 'Aggiungi hook…',
@@ -799,7 +787,6 @@ APP.update({
     'Webhook': 'Webhook',
     'https://…': 'https://…',
 
-    # v1.17 automation leases
     'Held awake by an automation lease': 'Tenuto sveglio da una concessione di automazione',
     'Held awake by %d automation leases': 'Tenuto sveglio da %d concessioni di automazione',
     'and %d more': 'e altre %d',
@@ -812,8 +799,6 @@ APP.update({
 })
 
 
-# Teach-your-agent actions, end-action wording, and gaming comfort,
-# new in the 1.17 cycle (second batch).
 APP.update({
     'Copy Agent Instructions': 'Copia istruzioni per l’agente',
     'Let AI agents and scripts keep the Mac awake while work is running. It cannot wake a sleeping Mac.': 'Consente ad agenti IA e script di mantenere attivo il Mac mentre il lavoro è in corso. Non può riattivare un Mac in stop.',
@@ -862,7 +847,6 @@ APP.update({
         'Conta finché Steam sta scaricando o aggiornando attivamente un gioco in una delle sue librerie, e lascia che il Mac vada in stop una volta terminato o messo in pausa il download. Legge i registri interni di Steam, senza bisogno di alcun permesso.',
 })
 
-# 1.18 strings
 APP.update({
     "%@ · next %@": "%@ · prossima %@",
     "%d automation leases are waiting (safety pause)": "%d concessioni di automazione in attesa (pausa di sicurezza)",
@@ -922,18 +906,15 @@ APP.update({
     "just now": "proprio ora",
 })
 
-# 1.23 strings
 APP.update({
     "If the lid shuts": "Se il coperchio si chiude",
     "Normally a MacBook sleeps the moment you shut the lid unless a display is attached. This keeps it running with the lid shut and nothing plugged in, on power or battery. What the screen itself does when the lid closes is your choice below (“If the lid shuts”): turn it off, keep it powered at zero brightness so a remote session stays live, or leave it alone. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off: closed and on battery, the Mac can still drain over time, so don't leave it on in a bag. “Only while brewing” ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for “Only while brewing”.": "Normalmente un MacBook si addormenta appena chiudi il coperchio, a meno che non sia collegato un display. Questa opzione lo mantiene in funzione con il coperchio chiuso e nulla collegato, ad alimentazione o a batteria. Cosa fa il display quando il coperchio si chiude lo scegli qui sotto (“Se il coperchio si chiude”): spegnerlo, tenerlo acceso a luminosità zero così una sessione remota resta attiva, oppure lasciarlo invariato. Funziona modificando un’impostazione di sistema (pmset disablesleep), che quindi resta in vigore finché non la disattivi: chiuso e a batteria, il Mac può comunque scaricarsi col tempo, quindi non lasciarlo attivo in una borsa. “Solo durante l’infusione” lo collega invece alla sessione: attivo quando inizia una sessione di veglia, disattivato quando termina o Keepresso viene chiuso (anche dopo un crash). Entrambe richiedono i privilegi di amministratore: in silenzio con l’assistente amministratore installato (vedi in cima a questa scheda), altrimenti macOS chiede la password, una volta per esecuzione dell’app per “Solo durante l’infusione”.",
 })
 
-# Presence: "Only while brewing" off footer
 APP.update({
     "Also runs between sessions, which can keep the Mac from sleeping.": "Funziona anche tra una sessione e l’altra, quindi può impedire al Mac di andare in stop.",
 })
 
-# Closed-lid speaker mute
 APP.update({
     "Mute built-in speakers while the lid is closed": "Disattiva l’audio degli altoparlanti integrati con il coperchio chiuso",
     "Mutes the built-in speakers with the lid closed and closed-display mode active. Headphones and other outputs keep playing. Unmutes when the lid opens or the mode ends, unless you had muted them yourself.": "Disattiva l’audio degli altoparlanti integrati con il coperchio chiuso e la modalità a schermo chiuso attiva. Le cuffie e le altre uscite continuano a riprodurre. Riattiva l’audio quando apri il coperchio o termina la modalità, a meno che tu non l’avessi già disattivato.",

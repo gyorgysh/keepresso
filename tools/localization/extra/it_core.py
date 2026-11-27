@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# Italian overlay for catalog_core.py: English source -> Italian.
 CORE = {
     "On AC power": "Collegato alla corrente",
     "On battery": "A batteria",
@@ -177,7 +176,6 @@ WIDGET = {
 }
 
 
-# --- Agent hooks (Claude Code connection) ---
 CORE.update({
     "run": "esegue",
     "write": "scrive",
@@ -194,7 +192,6 @@ CORE.update({
 })
 
 
-# v1.15 thermal safety net: pressure levels and heat-pause lines.
 CORE.update({
     "Critical": "Critica",
     "Fair": "Discreta",
@@ -205,7 +202,6 @@ CORE.update({
     "Paused on high temperature": "In pausa per temperatura elevata",
     "Paused, the Mac is running hot": "In pausa, il Mac si sta surriscaldando",
     "Serious": "Seria",
-    # 1.16.0 fill (16)
     'Lock the screen': 'Blocca lo schermo',
     'Sleep the Mac': 'Metti in stop il Mac',
     'Session started': 'Sessione avviata',
@@ -223,7 +219,6 @@ CORE.update({
     'waiting counts': 'l’attesa conta',
     '%@ (%@)': '%@ (%@)',
 
-    # v1.17 automation leases
     'Automation lease: %@': 'Concessione di automazione: %@',
     'Automation lease acquired': 'Concessione di automazione acquisita',
     'Automation lease ended': 'Concessione di automazione terminata',
@@ -231,19 +226,16 @@ CORE.update({
 })
 
 
-# Controller trigger, new in the 1.17 cycle (second batch).
 CORE.update({
     "Game controller connected": "Controller di gioco connesso",
     "Steam is downloading": "Steam sta scaricando",
 })
 
-# 1.18 strings
 CORE.update({
     "Microphone in use by %@": "Microfono in uso da %@",
     "Microphone in use by app": "Microfono in uso da un’app",
 })
 
-# 1.23 strings
 CORE.update({
     "Brightness control is unavailable, turning the display off instead.": "Il controllo della luminosità non è disponibile, quindi spengo il display.",
     "Keepresso never touches the display.": "Keepresso non tocca mai il display.",

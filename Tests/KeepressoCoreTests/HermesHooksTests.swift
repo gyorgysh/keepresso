@@ -21,7 +21,6 @@ private func record(turn: String, in dir: URL) -> AgentHooks.HookRecord? {
 
 @Suite struct HermesHooksTests {
 
-    // MARK: - Turn lifecycle
 
     @Test func turnStartWritesAWorkingRowAnchoredToHermes() {
         let dir = tempHooksDir()
@@ -32,7 +31,6 @@ private func record(turn: String, in dir: URL) -> AgentHooks.HookRecord? {
         #expect(written?.agent == "hermes")
         #expect(written?.ownerPid == hermesPid)
         #expect(written?.agentPid == nil)
-        // A gateway turn has no terminal to name.
         #expect(written?.origin == nil)
     }
 
@@ -109,9 +107,6 @@ private func record(turn: String, in dir: URL) -> AgentHooks.HookRecord? {
         #expect(names.isEmpty)
     }
 
-    /// The rows are host-anchored, so they get the hook-only trust rules: a
-    /// turn whose heartbeat stopped (end event lost, plugin wedged) expires
-    /// instead of holding the Mac awake for the life of the gateway.
     @Test func aSilentTurnExpiresEvenWhileHermesRuns() {
         let dir = tempHooksDir()
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -126,7 +121,6 @@ private func record(turn: String, in dir: URL) -> AgentHooks.HookRecord? {
         #expect(stale.isEmpty)
     }
 
-    // MARK: - Detail tokens
 
     @Test func hermesToolNamesMapToSharedTokens() {
         #expect(HermesHooks.detailToken(forTool: "terminal") == "running-command")
@@ -137,7 +131,6 @@ private func record(turn: String, in dir: URL) -> AgentHooks.HookRecord? {
         #expect(HermesHooks.detailToken(forTool: "vision") == "tool:vision")
     }
 
-    // MARK: - Install state
 
     private func files(cliPath: String = cli) -> [String: Data?] {
         HermesHooks.pluginFiles(cliPath: cliPath).mapValues { Data($0.utf8) }
@@ -178,7 +171,6 @@ private func record(turn: String, in dir: URL) -> AgentHooks.HookRecord? {
         #expect(source.contains(HermesHooks.hookMarker))
     }
 
-    // MARK: - config.yaml
 
     @Test func enabledInABlockList() {
         let yaml = """
@@ -194,7 +186,6 @@ private func record(turn: String, in dir: URL) -> AgentHooks.HookRecord? {
         #expect(HermesHooks.isEnabled(inConfig: yaml))
     }
 
-    /// Exactly what `hermes plugins enable keepresso` writes (Hermes 0.20).
     @Test func enabledAsHermesWritesIt() {
         let yaml = """
             plugins:
@@ -232,7 +223,6 @@ private func record(turn: String, in dir: URL) -> AgentHooks.HookRecord? {
         #expect(!HermesHooks.isEnabled(inConfig: "plugins:\n  enabled: []\n"))
     }
 
-    // MARK: - Coexistence
 
     @Test func claudeUninstallLeavesHermesRowsAlone() {
         let row = AgentHooks.HookRecord(

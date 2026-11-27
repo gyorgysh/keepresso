@@ -58,9 +58,6 @@ public struct ScheduledAutomation: Equatable, Sendable, Identifiable {
 public enum Recurrence: Equatable, Sendable {
     case cron(CronExpression)
     case rrule(RecurrenceRule)
-    /// Every `every` seconds, starting from `anchor`. Used for tokenstat
-    /// interval jobs, which fire relative to their last schedule tick rather
-    /// than a fixed wall-clock time. `anchor` is usually the job's next run.
     case interval(every: TimeInterval, anchor: Date)
 
     /// The next `count` run times strictly after `date`, in order.
@@ -75,8 +72,6 @@ public enum Recurrence: Equatable, Sendable {
         }
     }
 
-    /// Project an interval series strictly after `date`. Floors at one minute
-    /// so a bad or zero period cannot spin.
     private static func intervalOccurrences(
         every: TimeInterval, anchor: Date, after date: Date, count: Int
     ) -> [Date] {
@@ -85,7 +80,6 @@ public enum Recurrence: Equatable, Sendable {
         if next <= date {
             let steps = floor(date.timeIntervalSince(next) / period) + 1
             next = next.addingTimeInterval(steps * period)
-            // Floating point can leave next still on or before date.
             while next <= date { next = next.addingTimeInterval(period) }
         }
         var result: [Date] = []
@@ -102,9 +96,6 @@ public enum Recurrence: Equatable, Sendable {
 /// unions several. Kept a protocol seam like ``PowerAsserting`` so the app wires
 /// the real disk-reading implementation and tests inject fakes.
 public protocol LocalAutomationReading: Sendable {
-    /// The automations currently defined in the source. Best-effort and
-    /// side-effect free: a missing or malformed store yields an empty list, not
-    /// an error, so discovery never breaks the app.
     func automations() -> [ScheduledAutomation]
 }
 

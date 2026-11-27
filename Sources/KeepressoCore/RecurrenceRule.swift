@@ -18,10 +18,10 @@ public struct RecurrenceRule: Equatable, Sendable {
     }
 
     private let frequency: Frequency
-    private let byHour: Set<Int>       // 0...23, empty = defaulted
-    private let byMinute: Set<Int>     // 0...59, empty = {0}
-    private let byWeekday: Set<Int>    // 0...6 Sun...Sat, empty = every day
-    private let byMonthDay: Set<Int>   // 1...31, empty = every day
+    private let byHour: Set<Int>
+    private let byMinute: Set<Int>
+    private let byWeekday: Set<Int>
+    private let byMonthDay: Set<Int>
 
     /// Parse an RRULE body, with or without the leading `RRULE:` prefix.
     /// Returns `nil` without a `FREQ`, which every valid rule carries.
@@ -56,8 +56,6 @@ public struct RecurrenceRule: Equatable, Sendable {
         Set(value.split(separator: ",").compactMap { Int($0) }.filter { $0 >= min && $0 <= max })
     }
 
-    /// `MO,TU,...` to cron-style weekday numbers (Sunday = 0). A numeric prefix
-    /// such as `2MO` (second Monday) is not modelled; the day code still counts.
     private static func weekdays(_ value: String) -> Set<Int> {
         let map = ["SU": 0, "MO": 1, "TU": 2, "WE": 3, "TH": 4, "FR": 5, "SA": 6]
         var result = Set<Int>()

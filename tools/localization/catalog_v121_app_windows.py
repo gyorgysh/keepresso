@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# Keepresso v1.21 app-window strings: English source -> all supported locales.
 
 APP = {
     "Keyboard Cleaner": {

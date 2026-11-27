@@ -1,6 +1,5 @@
 import Foundation
 
-// MARK: - Record
 
 /// One bounded keep-awake lease granted to an outside tool (an AI agent, a
 /// render script, a backup job). The record lives as a small JSON file that
@@ -70,7 +69,6 @@ public struct AutomationLeaseRecord: Codable, Equatable, Sendable {
     }
 }
 
-// MARK: - Policy
 
 /// Pure lease policy: validation, clamps, and adjudication. Everything here
 /// is deterministic over injected time so tests never wait.
@@ -140,11 +138,8 @@ public enum AutomationLease {
 
     /// The engine's judgment of one record at one instant.
     public enum Verdict: Equatable, Sendable {
-        /// Counts as demand; keeps the Mac awake.
         case live
-        /// Active on disk but past its horizon; stamp it `expired`.
         case lapsed(reason: String)
-        /// Already ended; prune once `terminalRetention` has passed.
         case terminal(prune: Bool)
     }
 
@@ -164,23 +159,14 @@ public enum AutomationLease {
     }
 }
 
-// MARK: - Store
 
 /// Persistence seam for lease records, so the engine's tests script
 /// snapshots without touching the filesystem.
 public protocol LeaseRecordStoring: AnyObject {
-    /// Every parseable record. Implementations may discard files that can
-    /// never become valid (unparseable, or named outside the id scheme).
     func loadAll() -> [AutomationLeaseRecord]
     func write(_ record: AutomationLeaseRecord)
     func delete(id: String)
-    /// Drop any in-memory listing cache so the next ``loadAll()`` rescans.
-    /// Default is a no-op; ``FileLeaseStore`` also rescans when on-disk
-    /// mtimes change, and uses this for the sync-leases doorbell path.
     func invalidateCache()
-    /// Write `new` only when the stored record for that id still equals
-    /// `expected`. Returns false when the record is gone or changed, so a
-    /// heartbeat cannot resurrect a concurrent revoke or expiry.
     func compareAndSwap(expected: AutomationLeaseRecord, new: AutomationLeaseRecord) -> Bool
 }
 
@@ -210,15 +196,9 @@ public extension LeaseRecordStoring {
 public final class FileLeaseStore: LeaseRecordStoring {
     private let directory: URL
     private let now: () -> Date
-    /// How long a cached listing may be trusted without a rescan when the
-    /// on-disk fingerprint is unchanged. Expiry adjudication still runs
-    /// every tick on whatever the cache holds.
     private let cacheTTL: TimeInterval
     private var cached: [String: AutomationLeaseRecord]?
     private var cachedAt: Date?
-    /// Names and modification dates of `*.json` files at the last scan or
-    /// local write. Compared on each ``loadAll()`` so foreign heartbeats
-    /// and acquires are visible within one tick without a doorbell.
     private var cachedStamp: String?
 
     /// `~/Library/Application Support/Keepresso/automation-leases/`.
@@ -251,8 +231,6 @@ public final class FileLeaseStore: LeaseRecordStoring {
         return decoder
     }()
 
-    /// The record's file name; the id was validated as a UUID, but flatten
-    /// anything path-hostile anyway, mirroring the agent-hooks rule.
     static func fileName(forId id: String) -> String {
         let safe = String(id.map { $0.isLetter || $0.isNumber || $0 == "-" ? $0 : "_" })
         return "\(safe.isEmpty ? "lease" : safe).json"
@@ -281,9 +259,6 @@ public final class FileLeaseStore: LeaseRecordStoring {
         return FileExclusiveLock.withLock(directory: directory) { rescan() }
     }
 
-    /// Cheap directory fingerprint: each `*.json` name plus its content
-    /// modification date. Atomic foreign writes change mtime (and often add
-    /// or remove names), so the next tick rescans without waiting for TTL.
     private func directoryStamp() -> String {
         let keys: Set<URLResourceKey> = [.contentModificationDateKey]
         let files = (try? FileManager.default.contentsOfDirectory(
@@ -312,8 +287,6 @@ public final class FileLeaseStore: LeaseRecordStoring {
                   let record = try? Self.decoder.decode(AutomationLeaseRecord.self, from: data),
                   AutomationLease.canonicalId(record.id) == record.id
             else {
-                // Unparseable or mis-identified files can never become valid
-                // leases; our directory, our mess.
                 try? FileManager.default.removeItem(at: file)
                 continue
             }
@@ -340,15 +313,12 @@ public final class FileLeaseStore: LeaseRecordStoring {
         }
     }
 
-    /// Disk read that bypasses the listing cache, for compare-and-swap.
     private func readFromDisk(id: String) -> AutomationLeaseRecord? {
         let url = directory.appendingPathComponent(Self.fileName(forId: id))
         guard let data = try? Data(contentsOf: url) else { return nil }
         return try? Self.decoder.decode(AutomationLeaseRecord.self, from: data)
     }
 
-    /// Write to disk and, only if that landed, update the listing cache.
-    /// Call with the directory lock held.
     @discardableResult
     private func persist(_ record: AutomationLeaseRecord) -> Bool {
         guard let data = try? Self.encoder.encode(record) else { return false }
@@ -364,14 +334,11 @@ public final class FileLeaseStore: LeaseRecordStoring {
             cachedAt = now()
         }
         cached?[record.id] = record
-        // Keep the stamp aligned with the local write so the next loadAll
-        // does not immediately rescan what we just put on disk.
         cachedStamp = directoryStamp()
         return true
     }
 }
 
-// MARK: - Engine
 
 /// One live lease, as the session controller and the menu see it.
 public struct LeaseSummary: Equatable, Sendable {
@@ -394,12 +361,7 @@ public struct LeaseSummary: Equatable, Sendable {
 /// drives expiry in tests exactly like every other time input.
 @MainActor
 public protocol LeaseProviding: AnyObject {
-    /// Rescan, expire what lapsed, prune what is long ended, and return the
-    /// leases that count as demand right now.
     func tick(now: Date) -> [LeaseSummary]
-    /// An explicit user stop: every live lease turns terminal so the session
-    /// cannot flap back on the next tick. Clients learn of the revocation
-    /// from their next heartbeat.
     func revokeAll(now: Date)
 }
 
@@ -424,9 +386,6 @@ public final class LeaseEngine: LeaseProviding {
     public func tick(now: Date) -> [LeaseSummary] {
         var live: [LeaseSummary] = []
         for raw in store.loadAll() {
-            // Heal clock-rollback damage on disk, not just in this pass:
-            // clients read the same files, and their view of the expiry
-            // should match the demand the app actually honors.
             let record = AutomationLease.normalized(raw, now: now)
             if record != raw { store.write(record) }
             switch AutomationLease.adjudicate(record, now: now) {
@@ -437,13 +396,9 @@ public final class LeaseEngine: LeaseProviding {
                 ended.state = .expired
                 ended.endedAt = now
                 ended.endReason = reason
-                // Compare-and-swap: a heartbeat that landed after this
-                // loadAll must not be overwritten with a stale expiry.
                 if store.compareAndSwap(expected: record, new: ended) {
                     break
                 }
-                // The write lost: honor whatever is on disk now so demand
-                // does not drop for a tick and bounce the session.
                 if let latest = store.loadAll().first(where: { $0.id == record.id }) {
                     let healed = AutomationLease.normalized(latest, now: now)
                     if case .live = AutomationLease.adjudicate(healed, now: now) {
@@ -454,7 +409,6 @@ public final class LeaseEngine: LeaseProviding {
                 if prune { store.delete(id: record.id) }
             }
         }
-        // Stable order for the menu: soonest expiry first, id as tiebreaker.
         return live.sorted {
             ($0.expiresAt, $0.id) < ($1.expiresAt, $1.id)
         }

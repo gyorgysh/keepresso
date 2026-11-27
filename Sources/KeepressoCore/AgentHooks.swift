@@ -12,7 +12,6 @@ import Foundation
 /// swallowed: a broken hook must never disturb an agent session).
 public enum AgentHooks {
 
-    // MARK: - Payload
 
     /// The hook payload Claude Code delivers on stdin. Tolerant by design:
     /// every field optional, unknown fields ignored, because the payload
@@ -68,7 +67,6 @@ public enum AgentHooks {
         }
     }
 
-    // MARK: - Event reduction
 
     /// What a hook event says the session is doing right now.
     public enum HookSessionState: String, Codable, Sendable {
@@ -87,9 +85,7 @@ public enum AgentHooks {
 
     /// The effect of one hook event on the session's state file.
     public enum HookEventEffect: Equatable, Sendable {
-        /// Write the state, with an optional semantic detail token.
         case set(HookSessionState, detail: String?)
-        /// The session is over: delete the state file.
         case end
     }
 
@@ -100,12 +96,6 @@ public enum AgentHooks {
     public static func reduce(event: String, toolName: String?, message: String? = nil) -> HookEventEffect? {
         switch event {
         case "SessionStart":
-            // A session that just started (or resumed) is waiting for its
-            // first prompt, not working. A never-prompted REPL emits no
-            // further events (no Stop, and the idle nudge only fires after
-            // message activity), so a `working` record here would hold the
-            // trigger for as long as the process lives. `idle` still writes
-            // the record, so the pid join and origin land immediately.
             return .set(.idle, detail: nil)
         case "UserPromptSubmit", "PostToolUse":
             return .set(.working, detail: nil)
@@ -114,17 +104,9 @@ public enum AgentHooks {
         case "PermissionRequest":
             return .set(.waiting, detail: "waiting-approval")
         case "Notification":
-            // A permission prompt fires PermissionRequest and a Notification
-            // in no guaranteed order, and the record keeps only the last
-            // event, so classify by the message to avoid overwriting the
-            // approval marker. Any other notification is the idle nudge
-            // ("waiting for your input"): a session at rest.
             let approval = message?.range(of: "permission", options: .caseInsensitive) != nil
             return .set(.waiting, detail: approval ? "waiting-approval" : nil)
         case "Stop", "StopFailure":
-            // StopFailure fires instead of Stop when an API error (a rate
-            // limit, an auth failure) ends the turn. Without it the record
-            // stays `working` while the agent process lives.
             return .set(.idle, detail: nil)
         case "SessionEnd":
             return .end
@@ -133,8 +115,6 @@ public enum AgentHooks {
         }
     }
 
-    /// The semantic token shown while a tool runs. `tool:<name>` is the
-    /// catch-all the app renders as "using <name>".
     static func detailToken(forTool tool: String) -> String? {
         switch tool {
         case "Bash", "run_terminal_command", "run_shell_command", "exec": return "running-command"
@@ -151,7 +131,6 @@ public enum AgentHooks {
         }
     }
 
-    // MARK: - State record
 
     /// One session's on-disk state, `<sessionId>.json` in the hooks folder.
     public struct HookRecord: Codable, Equatable, Sendable {
@@ -202,7 +181,6 @@ public enum AgentHooks {
         }
     }
 
-    // MARK: - Ancestor walk
 
     /// The agent process found above the hook process, with the origin
     /// classified from the ancestry above the agent itself.
@@ -297,10 +275,6 @@ public enum AgentHooks {
             parentOf: parentOf, commandOf: commandOf)
     }
 
-    /// The first recognizable host above the agent process: a shell or
-    /// terminal means a plain CLI session; a Claude-branded ancestor means
-    /// the Claude desktop app; an editor helper means an IDE. Unrecognized
-    /// ancestors are skipped, an exhausted walk returns `nil`.
     private static func classifyOrigin(
         above agentPid: Int32,
         depthLimit: Int,
@@ -321,19 +295,11 @@ public enum AgentHooks {
         return nil
     }
 
-    /// Matches one process against the agent names: by its short comm, or by
-    /// any component of its executable path (exact and case-sensitive, like
-    /// ``PSAgentActivityMonitor/agentName(for:agents:)``: the Claude desktop
-    /// app's Electron binary is `Claude`, the CLI is `claude`; a versioned
-    /// binary under `.../claude/versions/` matches through the directory name).
     static func agentMatch(comm: String?, path: String?, agents: [String]) -> String? {
         if let comm, let agent = agents.first(where: { $0 == comm }) {
             return agent
         }
         guard let path else { return nil }
-        // Only the names cleared for it are matched against a path component;
-        // see ``PSAgentActivityMonitor/pathMatchableAgents`` for why the short
-        // ones are held back.
         let byPath = agents.filter(PSAgentActivityMonitor.pathMatchableAgents.contains)
         for component in path.split(separator: "/") {
             if let agent = byPath.first(where: { $0 == component }) {
@@ -343,9 +309,6 @@ public enum AgentHooks {
         return nil
     }
 
-    /// Classification of one short BSD command name. Terminal apps are listed
-    /// alongside shells because a shell-less spawn (tmux server, `exec`) can
-    /// put the emulator itself next in the chain.
     static func origin(forComm comm: String) -> HookSessionOrigin? {
         let lower = comm.lowercased()
         let shells: Set<String> = [
@@ -355,18 +318,10 @@ public enum AgentHooks {
         if shells.contains(lower) { return .terminal }
         let terminalApps = ["terminal", "iterm", "kitty", "alacritty", "wezterm", "ghostty", "warp", "hyper"]
         if terminalApps.contains(where: { lower.hasPrefix($0) }) { return .terminal }
-        // Electron comms truncate to 16 chars: "Claude Helper (R", etc.
         if comm.hasPrefix("Claude") { return .claudeApp }
-        // "Cursor" exactly is the Electron main process; the helpers truncate
-        // to "Cursor Helper (R", "Cursor Helper: s", and so on. Matching the
-        // bare prefix instead would also swallow the system's unrelated
-        // CursorUIViewService.
         if comm.hasPrefix("Code Helper") || comm.hasPrefix("Code - ")
             || comm.hasPrefix("Cursor Helper") || comm == "Cursor"
             || comm.hasPrefix("Electron") { return .ide }
-        // Codex Desktop lives in ChatGPT.app. The main process is "ChatGPT";
-        // helpers truncate to "ChatGPT Helper (" the same 16-char way Cursor's
-        // do. Matching the prefix is safe: nothing else on a Mac is named that.
         if comm.hasPrefix("ChatGPT") { return .ide }
         return nil
     }
@@ -437,8 +392,6 @@ public enum AgentHooks {
 
     /// Real executable-path lookup via `proc_pidpath`.
     public static func defaultPathOf(_ pid: Int32) -> String? {
-        // PROC_PIDPATHINFO_MAXSIZE (4 * MAXPATHLEN); the macro itself doesn't
-        // import into Swift.
         var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
         guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
         return String(cString: buffer)
@@ -462,8 +415,6 @@ public enum AgentHooks {
         return parseProcArgs2(buffer, length: bufSize)
     }
 
-    /// `KERN_PROCARGS2` layout: int32 argc, then the executable path, then
-    /// padding NULs, then `argc` NUL-terminated argv strings.
     static func parseProcArgs2(_ buffer: UnsafePointer<CChar>, length: Int) -> String? {
         let argc = buffer.withMemoryRebound(to: Int32.self, capacity: 1) { $0.pointee }
         guard argc > 0, argc < 4096 else { return nil }
@@ -485,8 +436,6 @@ public enum AgentHooks {
                 )
                 if !value.isEmpty { args.append(value) }
             }
-            // An unterminated trailing argument: stop rather than reading past
-            // the buffer with `String(cString:)`.
             guard offset < length else { break }
             offset += 1
         }
@@ -516,9 +465,6 @@ public enum AgentHooks {
         )
     }
 
-    /// A Codex Desktop conversation: anchored to ChatGPT.app (`ownerPid`) with
-    /// no dedicated agent process, or a leftover record whose `agentPid` is
-    /// the shared `app-server`.
     static func isSharedHostRecord(
         _ record: HookRecord, isSharedHostAgent: (Int32) -> Bool
     ) -> Bool {
@@ -529,7 +475,6 @@ public enum AgentHooks {
         return false
     }
 
-    // MARK: - State files
 
     /// `~/Library/Application Support/Keepresso/agent-hooks/`, next to
     /// ``StatusFile/defaultURL(fileManager:)``.
@@ -539,8 +484,6 @@ public enum AgentHooks {
             .appendingPathComponent("agent-hooks", isDirectory: true)
     }
 
-    /// The record's file name. Session ids are UUIDs in practice, but the id
-    /// comes from an outside payload, so anything path-hostile is flattened.
     static func fileName(forSessionId sessionId: String) -> String {
         let safe = String(sessionId.map { $0.isLetter || $0.isNumber || $0 == "-" ? $0 : "_" })
         return "\(safe.isEmpty ? "session" : safe).json"
@@ -620,10 +563,6 @@ public enum AgentHooks {
         defaultAgent: String? = nil,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) {
-        // Grok loads ~/.claude/settings.json, so Claude-compat invocations
-        // reach this path. Dedicated GrokHooks.handle owns promptId,
-        // subagentType, and Grok-only events. Hand off so the two writers
-        // cannot clobber one session file.
         if nonEmpty(environment["GROK_SESSION_ID"]) != nil
             || findAgentAncestor(
                 startingAt: parentPid, parentOf: parentOf, commandOf: commandOf, pathOf: pathOf
@@ -673,7 +612,6 @@ public enum AgentHooks {
         return value
     }
 
-    // MARK: - Reading (monitor side)
 
     /// A record older than this is no longer trusted as live state: the
     /// session silently falls back to transcript + CPU evidence. Age only
@@ -723,16 +661,8 @@ public enum AgentHooks {
             let url = directory.appendingPathComponent(name)
             guard let data = try? Data(contentsOf: url),
                   let record = try? decoder.decode(HookRecord.self, from: data) else { continue }
-            // What proves this session still exists: the agent process for a
-            // CLI session, the hosting app for a hook-only one (which has no
-            // agent process to check), `nil` when there is nothing to verify.
-            // The host is probed for bare existence rather than for still
-            // being an agent, because it is an editor, not a CLI.
             let liveness = record.agentPid.map(isAlive) ?? record.ownerPid.map(isHostAlive)
             let shared = isSharedHostRecord(record, isSharedHostAgent: isSharedHostAgent)
-            // Leftover Desktop records named the app-server as agentPid.
-            // Rewrite them in memory as ownerPid-only so the join treats each
-            // conversation as a hook-only row instead of collapsing them.
             var usable = record
             if shared, usable.agentPid != nil {
                 usable.ownerPid = usable.ownerPid ?? usable.agentPid
@@ -743,11 +673,6 @@ public enum AgentHooks {
             let workingTrust = record.state == .working
                 || (record.state == .waiting && record.detail == "waiting-approval")
             if age < staleAfter {
-                // Fresh, but a record carrying a pid must still have a live one:
-                // a SIGKILL'd agent leaves a sub-staleAfter "working" record, and
-                // a pid reused by another detected session would otherwise be
-                // stamped working from it. A record with no pid (nothing to
-                // verify) is trusted as before.
                 if liveness ?? true {
                     records.append(usable)
                 }
@@ -755,23 +680,12 @@ public enum AgentHooks {
                       record.agentPid != nil,
                       liveness == true,
                       workingTrust {
-                // CLI only: trust the edge for as long as the agent process
-                // is alive. Stop, Notification, SessionEnd, or the pid dying
-                // ends a working turn or a sitting approval prompt, never
-                // the record's age. ownerPid alone is not enough: IDE hosts
-                // outlive individual conversations.
                 records.append(usable)
             } else if shared, liveness == true, workingTrust,
                       age < sharedHostWorkingStaleAfter
                         || hasFreshSharedHostEvidence(record.sessionId) {
-                // Codex Desktop: bound a missed Stop to ten minutes rather
-                // than the life of ChatGPT.app, unless that chat's rollout
-                // file is still inside the evidence window.
                 records.append(usable)
             } else if liveness != true || record.agentPid == nil || shared {
-                // Dead agent/host, a hook-only IDE record past staleAfter,
-                // or a shared-host working record past ten minutes: drop the
-                // file so a missed Stop cannot hold forever.
                 try? manager.removeItem(at: url)
             }
         }
@@ -791,27 +705,17 @@ public enum AgentHooks {
     public static func defaultIsAgentAlive(_ pid: Int32) -> Bool {
         guard defaultIsAlive(pid) else { return false }
         let path = defaultPathOf(pid)
-        // An editor that hosts its agent in-process counts too. Its binary is
-        // no agent command and never will be, so without this every record
-        // Antigravity's hooks write would be read back as belonging to a dead
-        // agent and thrown away. The path is as specific as a command name
-        // (that bundle, that binary), so it carries the same guarantee against
-        // a reused pid.
         if let path, AntigravityHooks.isEditorHostPath(path) { return true }
         if agentMatch(
             comm: defaultCommandOf(pid), path: path,
             agents: PSAgentActivityMonitor.agentCommands) != nil {
             return true
         }
-        // Agents run under a runtime (`node`, `bun`) or Qwen Code's bundled
-        // Node are named only by argv. Reading it the way the `ps` scan does
-        // is as specific a test as the scan's own.
         return defaultArgumentsOf(pid).flatMap {
             PSAgentActivityMonitor.agentName(for: $0, agents: PSAgentActivityMonitor.agentCommands)
         } != nil
     }
 
-    // MARK: - settings.json install/remove
 
     /// Ownership marker inside every installed hook command, what
     /// ``removeHooks(from:)`` keys on. Never change it: released versions
@@ -834,8 +738,6 @@ public enum AgentHooks {
     /// entire configuration.
     public static let stopFailureEvent = "StopFailure"
 
-    /// Events whose settings entries take a tool `matcher`; the others reject
-    /// or ignore one.
     static let matcherEvents: Set<String> = ["PreToolUse", "PostToolUse"]
 
     /// How one tool's Claude-format settings file takes Keepresso's entries.
@@ -904,25 +806,15 @@ public enum AgentHooks {
             + "\"$c\" \(format.subcommand) \(event); : # \(format.marker)"
     }
 
-    /// POSIX single-quoting: everything inside is literal, an embedded single
-    /// quote becomes `'\''`. The baked path is user-controlled (the app can be
-    /// installed anywhere), and a quote or backtick in it would be an `sh -c`
-    /// syntax error, which exits 2 before the trailing `:` can pin exit 0 and
-    /// which Claude Code treats as a blocking hook failure on every tool call.
     static func shellSingleQuoted(_ value: String) -> String {
         "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     /// Where a `keepresso agent-hook` install stands in a settings file.
     public enum HookInstallState: Equatable, Sendable {
-        /// Every event we install carries exactly one of our entries, and it
-        /// runs the command this build would write.
         case installed
         case notInstalled
-        /// Ours are in the file but not in a state that works: see the report
-        /// for which events and why. Re-installing repairs all of it.
         case needsRepair(HookInstallReport)
-        /// The file exists but isn't JSON we can safely edit.
         case unreadable
     }
 
@@ -1030,16 +922,8 @@ public enum AgentHooks {
     ) throws -> Data {
         var root = try parseRoot(data)
         var hooks = root["hooks"] as? [String: Any] ?? [:]
-        // Sweep our entries out of every event first, not only the ones about
-        // to be rewritten. An entry left under an event an older version
-        // installed is still ours and still fires, and Repair is just a
-        // re-install, so a re-install has to be able to clear it.
         for (event, value) in hooks {
             guard let groups = value as? [Any] else { continue }
-            // Only events that actually hold one of ours are touched. Counting
-            // our commands is the exact test: an array's length can stay the
-            // same while our entry is stripped out of a group beside a sibling
-            // we left alone.
             guard groups.contains(where: {
                 !keepressoCommands(in: $0, marker: format.marker).isEmpty
             }) else { continue }
@@ -1057,8 +941,6 @@ public enum AgentHooks {
                     [
                         "type": "command",
                         "command": hookCommand(event: event, cliPath: cliPath, format: format),
-                        // Our CLI answers in milliseconds; a tight timeout
-                        // means even a wedged disk can't stall a session.
                         "timeout": format.timeout,
                     ] as [String: Any],
                 ],
@@ -1111,18 +993,6 @@ public enum AgentHooks {
         return report.isHealthy ? .installed : .needsRepair(report)
     }
 
-    /// Drops our own commands from each matcher group (and groups that end
-    /// up empty), leaving foreign hooks in shared groups alone.
-    ///
-    /// Everything is walked as `[Any]`, never cast wholesale to
-    /// `[[String: Any]]`. A settings file is the user's, and a single element
-    /// we don't recognise (a `null` left by an editor, a shape a future Claude
-    /// Code writes) must not cost them the rest of the array: casting the
-    /// whole array and falling back to `[]` used to discard every one of their
-    /// hooks for that event, and casting a group's inner array used to leave
-    /// our own entry un-stripped, so the next install appended a second copy
-    /// that fired twice and could never be removed. Anything unrecognised is
-    /// carried through untouched.
     static func stripKeepressoEntries(_ groups: [Any], marker: String = hookMarker) -> [Any] {
         groups.compactMap { element -> Any? in
             guard let group = element as? [String: Any] else { return element }
@@ -1138,8 +1008,6 @@ public enum AgentHooks {
         }
     }
 
-    /// Our own commands inside one matcher group, walked element by element
-    /// so an unrecognised sibling can neither hide our entry nor be lost.
     static func keepressoCommands(in element: Any, marker: String = hookMarker) -> [String] {
         guard let group = element as? [String: Any],
               let inner = group["hooks"] as? [Any] else { return [] }
@@ -1162,7 +1030,6 @@ public enum AgentHooks {
         try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
     }
 
-    // MARK: - Coding
 
     private static var encoder: JSONEncoder {
         let encoder = JSONEncoder()

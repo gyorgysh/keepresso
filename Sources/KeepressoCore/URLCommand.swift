@@ -56,7 +56,6 @@ public enum URLCommand: Equatable, Sendable {
         }
     }
 
-    /// "18:00" (24-hour HH:MM) → the mode ending at its next occurrence.
     private static func untilMode(_ raw: String, now: Date, calendar: Calendar) -> SessionMode? {
         let parts = raw.split(separator: ":")
         guard parts.count == 2, let hour = Int(parts[0]), let minute = Int(parts[1]) else { return nil }

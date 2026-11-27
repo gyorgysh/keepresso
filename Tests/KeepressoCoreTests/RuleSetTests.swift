@@ -11,12 +11,10 @@ private final class FakeWorkspace: WorkspaceMonitoring {
     #expect(TriggerRule.wifiSSID("Cafe").requiredPermission == .location)
     #expect(TriggerRule.bluetoothDevice("AirPods").requiredPermission == .bluetooth)
     #expect(TriggerRule.calendarEvent.requiredPermission == .calendar)
-    // A rule reading only unrestricted state needs no permission.
     #expect(TriggerRule.gaming.requiredPermission == nil)
     #expect(TriggerRule.cpuLoad(thresholdPercent: 50).requiredPermission == nil)
 }
 
-// MARK: - App trigger (running / frontmost)
 
 @Test func appTriggerMatchesRunning() {
     let monitor = FakeWorkspace(WorkspaceSnapshot(runningBundleIDs: ["com.apple.Music"]))
@@ -33,7 +31,7 @@ private final class FakeWorkspace: WorkspaceMonitoring {
         frontmostBundleID: "com.apple.Music"
     ))
     let trigger = AppTrigger(bundleID: "com.apple.FaceTime", match: .frontmost, monitor: monitor)
-    #expect(trigger.isSatisfied() == false) // running but not frontmost
+    #expect(trigger.isSatisfied() == false)
 
     monitor.current = WorkspaceSnapshot(
         runningBundleIDs: ["com.apple.Music", "com.apple.FaceTime"],
@@ -89,8 +87,6 @@ private final class FakeWorkspace: WorkspaceMonitoring {
 }
 
 @Test func appTriggerWithoutPathStillMatchesByBundleID() {
-    // Path-less rules (presets, older saves) must keep matching by ID even when
-    // the snapshot also carries paths for those installs.
     let monitor = FakeWorkspace(WorkspaceSnapshot(
         runningBundleIDs: ["com.apple.dt.Xcode"],
         runningInstalls: [
@@ -144,7 +140,6 @@ private final class FakeWorkspace: WorkspaceMonitoring {
 }
 
 @Test func appTriggerPathMatchAlsoRequiresBundleID() {
-    // Path alone is not enough: a different app at the same path must not match.
     let path = "/Applications/Xcode-beta.app"
     let monitor = FakeWorkspace(WorkspaceSnapshot(
         runningBundleIDs: ["com.other.App"],
@@ -176,8 +171,6 @@ private final class FakeWorkspace: WorkspaceMonitoring {
 }
 
 @Test func appTriggerPathLockDoesNotCrossCoupleSeparateApps() {
-    // Path held by com.other.App while com.apple.dt.Xcode runs elsewhere must
-    // not satisfy a path-locked Xcode rule (independent set membership would).
     let lockedPath = "/Applications/Xcode-beta.app"
     let otherXcode = "/Applications/Xcode.app"
     let monitor = FakeWorkspace(WorkspaceSnapshot(
@@ -204,17 +197,17 @@ private final class FakeWorkspace: WorkspaceMonitoring {
     let inner = StubFlag(true)
     let grace = GracePeriodTrigger(wrapping: inner, grace: 60, now: { t })
 
-    grace.tick()                          // the once-per-reconcile step
-    #expect(grace.isSatisfied())          // condition true
+    grace.tick()
+    #expect(grace.isSatisfied())
     inner.value = false
     t = t.addingTimeInterval(30)
     grace.tick()
-    #expect(grace.isSatisfied())          // within grace window
-    t = t.addingTimeInterval(31)          // 61s since last true
+    #expect(grace.isSatisfied())
+    t = t.addingTimeInterval(31)
     grace.tick()
-    #expect(grace.isSatisfied() == false) // window expired
+    #expect(grace.isSatisfied() == false)
 
-    inner.value = true                    // re-arms
+    inner.value = true
     grace.tick()
     #expect(grace.isSatisfied())
 }
@@ -226,15 +219,15 @@ private final class FakeWorkspace: WorkspaceMonitoring {
 
     grace.tick()
     #expect(grace.wrappedIsSatisfied)
-    #expect(grace.graceRemaining == nil) // condition holds: no countdown
+    #expect(grace.graceRemaining == nil)
 
     inner.value = false
     t = t.addingTimeInterval(20)
     grace.tick()
     #expect(grace.wrappedIsSatisfied == false)
-    #expect(grace.graceRemaining == 40) // 60 - 20 left in the window
+    #expect(grace.graceRemaining == 40)
 
-    t = t.addingTimeInterval(50) // past the window
+    t = t.addingTimeInterval(50)
     grace.tick()
     #expect(grace.graceRemaining == nil)
 }
@@ -246,7 +239,6 @@ private final class StubFlag: Trigger {
     func isSatisfied() -> Bool { value }
 }
 
-// MARK: - Rule -> live trigger factory
 
 @MainActor
 @Test func factoryBuildsEngineFromRuleSet() {
@@ -257,11 +249,9 @@ private final class StubFlag: Trigger {
         network: ConstNetwork(NetworkSnapshot(ssid: "Home")),
         workspace: ConstWorkspace(WorkspaceSnapshot(runningBundleIDs: []))
     )
-    // AND of "external display" (true) and "on battery" (true) → satisfied.
     let ruleSet = RuleSet(combine: .all, rules: [.externalDisplay, .powerSource(.onBattery)])
     #expect(factory.makeEngine(from: ruleSet).isSatisfied())
 
-    // Add a Wi-Fi rule that won't match → AND fails.
     let strict = RuleSet(combine: .all, rules: [.externalDisplay, .wifiSSID("Office")])
     #expect(factory.makeEngine(from: strict).isSatisfied() == false)
 }
@@ -275,7 +265,6 @@ private final class StubFlag: Trigger {
             == "App com.x.y is frontmost (+30s)")
 }
 
-// MARK: - Persistence round-trip
 
 @Test func ruleSetCodableRoundTrip() throws {
     let original = RuleSet(combine: .all, rules: [
@@ -294,7 +283,7 @@ private final class StubFlag: Trigger {
     defaults.removePersistentDomain(forName: "keepresso.tests.settings")
     let store = UserDefaultsSettingsStore(defaults: defaults, key: "k")
 
-    #expect(store.load() == .default) // nothing saved yet
+    #expect(store.load() == .default)
 
     var settings = KeepressoSettings.default
     settings.triggersEnabled = true
@@ -305,7 +294,6 @@ private final class StubFlag: Trigger {
     #expect(store.load() == settings)
 }
 
-// Const monitors for the factory test.
 private final class ConstPower: PowerSourceMonitoring {
     let current: PowerSourceSnapshot; init(_ s: PowerSourceSnapshot) { current = s }
 }
@@ -319,11 +307,8 @@ private final class ConstWorkspace: WorkspaceMonitoring {
     let current: WorkspaceSnapshot; init(_ s: WorkspaceSnapshot) { current = s }
 }
 
-// MARK: - Forgiving decode (unknown rule types)
 
 @Test func absurdImportedGraceIsCappedAndLabelSafe() throws {
-    // A hand-edited or imported blob with an absurd grace must decode to a
-    // bounded value, and rendering its label must never trap `Int(_:)`.
     let appJSON = #"{ "bundleID": "com.example.App", "grace": 1e308 }"#
     let appRule = try JSONDecoder().decode(AppRule.self, from: Data(appJSON.utf8))
     #expect(appRule.grace == SessionMode.maxTimedMinutes * 60)
@@ -334,15 +319,12 @@ private final class ConstWorkspace: WorkspaceMonitoring {
     #expect(agentRule.grace == SessionMode.maxTimedMinutes * 60)
     _ = agentRule.label
 
-    // Non-finite and negative graces mean no grace, not a crash.
     let negative = try JSONDecoder().decode(AppRule.self, from: Data(#"{ "bundleID": "x", "grace": -5 }"#.utf8))
     #expect(negative.grace == 0)
     _ = negative.label
 }
 
 @Test func subSecondGraceOmitsDurationSuffixInLabels() {
-    // A fractional grace that rounds to zero whole seconds must omit the
-    // suffix rather than render a nonsense "+0s".
     let app = AppRule(bundleID: "com.example.App", match: .running, grace: 0.4)
     #expect(app.label == "App com.example.App is running")
     let agent = AgentRule(grace: 0.4)
@@ -350,10 +332,6 @@ private final class ConstWorkspace: WorkspaceMonitoring {
 }
 
 @Test func ruleSetDropsUnknownRuleInsteadOfWipingEverything() throws {
-    // A newer build's rule case (reached via a downgrade, or a set exported from
-    // a newer version and imported) must drop only that rule, not throw the
-    // whole decode — which, because settings load through `try?`, would silently
-    // reset every setting to defaults.
     let original = RuleSet(combine: .all, rules: [.gaming, .audioPlaying])
     let data = try JSONEncoder().encode(original)
     var object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -363,6 +341,6 @@ private final class ConstWorkspace: WorkspaceMonitoring {
     let spliced = try JSONSerialization.data(withJSONObject: object)
 
     let decoded = try JSONDecoder().decode(RuleSet.self, from: spliced)
-    #expect(decoded.combine == .all)                       // other fields survive
-    #expect(decoded.rules == [.gaming, .audioPlaying])     // known rules kept, in order
+    #expect(decoded.combine == .all)
+    #expect(decoded.rules == [.gaming, .audioPlaying])
 }

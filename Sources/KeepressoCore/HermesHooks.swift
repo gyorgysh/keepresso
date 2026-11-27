@@ -35,7 +35,6 @@ public enum HermesHooks {
         record.agent == "hermes"
     }
 
-    // MARK: - Locations
 
     /// `$HERMES_HOME`, or `~/.hermes`. The same root the activity heuristic
     /// reads Hermes' state database from.
@@ -43,7 +42,6 @@ public enum HermesHooks {
         home: String = NSHomeDirectory(),
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> String {
-        // Trimmed like CODEX_HOME and QWEN_HOME, so a blank value falls back.
         environment["HERMES_HOME"]
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .flatMap { $0.isEmpty ? nil : $0 } ?? "\(home)/.hermes"
@@ -85,7 +83,6 @@ public enum HermesHooks {
         return nil
     }
 
-    // MARK: - Plugin files
 
     /// The plugin's files, keyed by name. Pure: the baked CLI path is the only
     /// input, so an install is current exactly when these bytes are on disk.
@@ -116,8 +113,6 @@ public enum HermesHooks {
 
         """
 
-    /// The plugin. Python-quoted CLI path, `/Applications` fallback, exactly
-    /// like the shell hook commands the other tools get.
     static func pluginSource(cliPath: String) -> String {
         let quoted = pythonQuoted(cliPath)
         return """
@@ -328,7 +323,6 @@ public enum HermesHooks {
         """
     }
 
-    /// A Python string literal. JSON's string escaping is a valid subset.
     static func pythonQuoted(_ value: String) -> String {
         let data = (try? JSONSerialization.data(
             withJSONObject: [value], options: [.withoutEscapingSlashes])) ?? Data("[\"\"]".utf8)
@@ -336,7 +330,6 @@ public enum HermesHooks {
         return String(array.dropFirst().dropLast())
     }
 
-    // MARK: - Install state
 
     /// Whether `config.yaml` lists the plugin under `plugins.enabled`.
     ///
@@ -358,7 +351,6 @@ public enum HermesHooks {
             if indent == 0 {
                 inPlugins = trimmed.hasPrefix("plugins:")
                 inEnabled = false
-                // Flow style: `plugins: {enabled: [keepresso], ...}`.
                 if inPlugins, let open = trimmed.range(of: "enabled:") {
                     let rest = trimmed[open.upperBound...].trimmingCharacters(in: .whitespaces)
                     if rest.hasPrefix("["), let close = rest.firstIndex(of: "]") {
@@ -408,10 +400,6 @@ public enum HermesHooks {
     ) -> AgentHooks.HookInstallState {
         let expected = pluginFiles(cliPath: cliPath)
         let present = expected.keys.filter { (files[$0] ?? nil) != nil }
-        // No files is not installed, whatever the config says: a Remove whose
-        // `hermes plugins disable` couldn't run leaves the enabled entry
-        // behind, and treating that as repairable drift would reinstall the
-        // plugin the user just removed.
         if present.isEmpty { return .notInstalled }
         var stale: Set<String> = []
         var missing: Set<String> = []
@@ -434,7 +422,6 @@ public enum HermesHooks {
         return report
     }
 
-    // MARK: - Payload
 
     /// What the plugin sends. Every field optional.
     public struct HookPayload: Decodable, Equatable, Sendable {
@@ -455,12 +442,9 @@ public enum HermesHooks {
         }
     }
 
-    // MARK: - Reduction
 
-    /// What one plugin event does to a record.
     enum Effect: Equatable {
         case set(AgentHooks.HookSessionState, detail: String?)
-        /// Refresh the record's timestamp, keeping its state.
         case touch
         case end
     }
@@ -484,7 +468,6 @@ public enum HermesHooks {
         }
     }
 
-    /// Hermes' own tool names, then the shared table.
     static func detailToken(forTool tool: String) -> String? {
         switch tool {
         case "terminal", "process": return "running-command"
@@ -499,14 +482,11 @@ public enum HermesHooks {
         }
     }
 
-    /// The record id for a turn, or for the Hermes process itself.
     static func recordId(turn: String?, hostPid: Int32) -> String {
         if let turn = AgentHooks.nonEmpty(turn) { return "hermes-turn-\(turn)" }
         return "hermes-host-\(hostPid)"
     }
 
-    /// Whether this is the plugin's per-process presence record rather than
-    /// a turn.
     static func isPresence(_ record: AgentHooks.HookRecord) -> Bool {
         record.sessionId.hasPrefix("hermes-host-")
     }
@@ -519,7 +499,6 @@ public enum HermesHooks {
         return records.filter { !(isPresence($0) && $0.ownerPid.map(busyHosts.contains) == true) }
     }
 
-    // MARK: - Handling one invocation
 
     /// Applies one plugin event. `parentPid` is the Hermes process itself:
     /// the plugin runs in-process and spawns the CLI directly.
@@ -532,8 +511,6 @@ public enum HermesHooks {
     ) {
         let payload = (try? JSONDecoder().decode(HookPayload.self, from: payloadData)) ?? HookPayload()
         guard parentPid > 1, let effect = reduce(event: event, toolName: payload.toolName) else { return }
-        // Presence is the only event without a turn. Anything else without
-        // one is malformed and writes nothing.
         let turn = event == "Presence" ? nil : AgentHooks.nonEmpty(payload.turn)
         guard event == "Presence" || turn != nil else { return }
         let id = recordId(turn: turn, hostPid: parentPid)

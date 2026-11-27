@@ -4,43 +4,26 @@ import ServiceManagement
 import UserNotifications
 import KeepressoCore
 
-/// The first-run welcome window: a short intro to a menu-bar app that has no
-/// Dock icon or main window, then a one-click "how do you use your Mac" setup
-/// that applies a matching trigger preset, plus a couple of general options.
-/// Shown on launch until Get Started is pressed (the press is what sets
-/// ``AppModel/hasOnboarded``) and reopenable from Preferences > General.
-/// Every step here acts only when its control is used; nothing prompts for a
-/// permission just because the window opened.
 struct WelcomeView: View {
     @Bindable var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openWindow) private var openWindow
 
     @State private var launchAtLogin = LoginItem.isEnabled
-    /// The live notification authorization status, so the row reflects "already
-    /// on" / "not asked" / "denied" instead of always offering Enable.
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
-    /// The preset id of the use case the user picked, for the checkmark. Local
-    /// to this window: applying a preset is the persisted action.
     @State private var selectedUseCase: String?
     @State private var showOtherUseCases = false
-    /// Drives the one-time entrance: sections fade up in a quick stagger the
-    /// first time the window draws. Skipped entirely under Reduce Motion.
     @State private var revealed = false
-    /// Bumped when the lid-closed switch is clicked while the automation owns it.
     @State private var lidRowShakes = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// A way someone uses their Mac, mapped to a built-in preset that sets up the
-    /// matching triggers in one tap.
     private struct UseCase: Identifiable {
-        let id: String // the built-in preset id to apply
+        let id: String
         let title: String
         let detail: String
         let icon: String
     }
 
-    /// The id of the opt-out row: no triggers, keep-awake stays a manual toggle.
     private static let manualID = "manual"
 
     private static let useCases: [UseCase] = [
@@ -62,10 +45,6 @@ struct WelcomeView: View {
                 icon: "hand.tap"),
     ]
 
-    /// The onboarding is a short paged flow: an intro, then the "how do you use
-    /// your Mac" picker, then the general setup rows. Only Get Started on the
-    /// last step completes onboarding (sets ``AppModel/hasOnboarded``), so a
-    /// user who closes early still sees the welcome again next launch.
     private enum Step: Int, CaseIterable {
         case welcome, useCase, setup
         var isFirst: Bool { self == .welcome }
@@ -81,41 +60,21 @@ struct WelcomeView: View {
     /// last-remembered step.
     @State private var windowVisible = false
 
-    /// Whether the hero cup is brewing: a live session, or a use case just
-    /// picked (the pour is the payoff for the choice; the manual opt-out
-    /// keeps the cup honest and empty).
     private var cupBrewing: Bool {
         model.session.isActive
             || (selectedUseCase != nil && selectedUseCase != Self.manualID)
     }
 
-    /// The screen's visible height, kept live: resolutions change at runtime
-    /// and displays come and go, so this refreshes on every screen-parameter
-    /// change (and each open) rather than being read once per app run.
     @State private var screenHeight: CGFloat = NSScreen.main?.visibleFrame.height ?? 800
 
-    /// Text styles and metrics at the readability scale (grows on very dense
-    /// screens; exactly 1 everywhere else). The body re-renders whenever
-    /// `screenHeight` refreshes, which covers display and resolution changes.
     private var type: ScaledType { ScaledType() }
 
-    /// The scroll area's height cap: the visible screen height minus room
-    /// for the pinned footer and the window chrome (which grow with the
-    /// readability scale). On a regular display the whole checklist fits
-    /// under it and the window hugs the content exactly; on a low-resolution
-    /// one the checklist scrolls behind the footer instead of running off
-    /// screen.
     private var scrollCap: CGFloat { max(300, screenHeight - 230 * type.scale) }
 
     private static let scrollSpace = "welcome-scroll"
 
-    /// Measurements for the "more below" cue only. Deliberately never fed
-    /// back into layout: the scroll area's height comes from `maxHeight`
-    /// below, not from these.
     @State private var contentHeight: CGFloat = 0
     @State private var viewportHeight: CGFloat = 0
-    /// The checklist's top edge inside the scroll viewport: 0 at rest, going
-    /// negative as the user scrolls.
     @State private var scrollOffset: CGFloat = 0
 
     private var needsScroll: Bool { contentHeight > viewportHeight + 1 }
@@ -125,9 +84,6 @@ struct WelcomeView: View {
         Group {
             if windowVisible {
                 VStack(spacing: 0) {
-                    // The cup is a fixed header across every step, so the brand stays
-                    // put and picking a use case still "pours" it (the payoff for the
-                    // choice) no matter which step you're on.
                     BrewingCupView(isActive: cupBrewing, scale: 2.0 * type.scale)
                         .padding(.top, 22)
                         .padding(.bottom, 4)
@@ -158,9 +114,6 @@ struct WelcomeView: View {
                             value: proxy.size.height
                         )
                     })
-                    // The cue that more of the checklist sits below the fold: a fade
-                    // and a chevron, gone once the user reaches the end (and never
-                    // shown when everything fits).
                     .overlay(alignment: .bottom) {
                         if needsScroll && !reachedBottom {
                             moreBelowCue
@@ -179,18 +132,13 @@ struct WelcomeView: View {
                         .padding(.top, 12)
                         .padding(.bottom, 20)
                 }
-                // Cascades to every text that sets no font of its own (toggles,
-                // buttons, links), so the whole window scales together.
                 .font(type.body)
                 .onAppear {
-                    // Status reads only; showing the window never prompts for anything.
                     model.helper.refresh()
                     model.refreshAgentHookStatuses()
                     revealed = true
                     refreshScreenHeight()
                 }
-                // Resolution or display changes while the app runs must re-cap the
-                // window, or it can end up taller than the new screen.
                 .onReceive(NotificationCenter.default.publisher(
                     for: NSApplication.didChangeScreenParametersNotification
                 )) { _ in
@@ -216,13 +164,9 @@ struct WelcomeView: View {
             // covering window no longer counts as one (they used to send the
             // user back to step 1 mid-setup).
             guard visible else { return }
-            // The closed window keeps `@State` alive, so without this a reopen
-            // would land on the last step. Fresh open starts over.
             step = .welcome
             revealed = false
             refreshScreenHeight()
-            // Re-read setup rows and connect status; they can change while the
-            // window was away (e.g. login item or notifications in Preferences).
             launchAtLogin = LoginItem.isEnabled
             model.refreshAgentHookStatuses()
             Task { notificationStatus = await model.notificationAuthorizationStatus() }
@@ -234,8 +178,6 @@ struct WelcomeView: View {
         screenHeight = NSScreen.main?.visibleFrame.height ?? 800
     }
 
-    /// The current step's content. Each step is one of the sections that used
-    /// to be stacked on a single scrolling page.
     @ViewBuilder
     private var stepContent: some View {
         switch step {
@@ -245,8 +187,6 @@ struct WelcomeView: View {
         }
     }
 
-    /// Step 1: what Keepresso is, plus a language picker for anyone who landed
-    /// in the wrong language before reading anything else.
     private var welcomeStep: some View {
         VStack(spacing: 14) {
             Text("Welcome to Keepresso")
@@ -271,7 +211,6 @@ struct WelcomeView: View {
         .entrance(0, revealed: revealed, animated: !reduceMotion)
     }
 
-    /// One orienting bullet on the welcome step: an accent icon and a short line.
     private func pointRow(_ icon: String, _ text: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: icon)
@@ -286,7 +225,6 @@ struct WelcomeView: View {
         }
     }
 
-    /// Step 2: pick how you use your Mac to seed a matching preset in one tap.
     private var useCaseStep: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("When should it stay awake?")
@@ -321,8 +259,6 @@ struct WelcomeView: View {
         .entrance(0, revealed: revealed, animated: !reduceMotion)
     }
 
-    /// Step 3: a couple of general options. Each acts only when its own control
-    /// is used; reaching this step prompts for nothing.
     private var setupStep: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("A few basics")
@@ -354,10 +290,6 @@ struct WelcomeView: View {
             ) {
                 helperControl
             }
-            // Laptops only, matching Preferences: a desktop has no lid to keep
-            // working behind, and no battery or trapped heat to guard against.
-            // Both rows sit under the helper row on purpose, since installing
-            // it first is what makes the lid switch prompt-free.
             if model.machineHasBattery {
                 closedDisplaySetupRow
                 setupRow(
@@ -387,17 +319,6 @@ struct WelcomeView: View {
         .entrance(0, revealed: revealed, animated: !reduceMotion)
     }
 
-    /// The lid-closed row, offered here because it is what most people came
-    /// for: a MacBook that keeps working with the lid shut and nothing
-    /// plugged in. The same `pmset disablesleep` switch as
-    /// Preferences ▸ General, so it needs administrator rights, silently
-    /// through the helper above and otherwise with a password prompt (which
-    /// the note explains while the dialog is up).
-    ///
-    /// The switch itself is sticky (stays on until turned off). A callout
-    /// bubble under it offers **Only while brewing** as an optional tip, so
-    /// people who want session-tied automation can opt in without being
-    /// forced into it.
     private var closedDisplaySetupRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             setupRow(
@@ -412,9 +333,6 @@ struct WelcomeView: View {
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)
-                // Re-running setup with "only while brewing" already on: the
-                // automation owns the setting, so the row only reports it, and
-                // a click on the dead switch shakes the line that says why.
                 .disabled(model.closedDisplayBusy || model.closedDisplayOnlyWhileBrewing)
                 .overlay {
                     if model.closedDisplayOnlyWhileBrewing {
@@ -453,9 +371,6 @@ struct WelcomeView: View {
         }
     }
 
-    /// Optional tip after sticky lid-closed is on: offer session-tied
-    /// closed-display without turning it on for them. Same glass-card
-    /// callout shape as the gaming and agent tips on the use-case step.
     private var onlyWhileBrewingHint: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "cup.and.saucer.fill")
@@ -481,14 +396,6 @@ struct WelcomeView: View {
         .glassCard(cornerRadius: 10, tint: Color.keepressoBrew.opacity(0.04))
     }
 
-    /// The two safety nets as one switch: pause on low battery, and the
-    /// thermal net that watches a lid-closed Mac holding the sleep override.
-    /// Paired because they answer the same worry (a session you forget about
-    /// draining or cooking the Mac) and because a single answer is all this
-    /// step should ask for. It reads on only when both are on, so a Mac with
-    /// one of them already set up in Preferences shows it off. Switching off
-    /// clears each net's stored thresholds exactly as the individual switches
-    /// in Preferences do, so switching back on starts from the defaults.
     private var safetyNetsEnabled: Bool {
         model.batteryAutoPauseEnabled && model.thermalSafety != nil
     }
@@ -498,16 +405,10 @@ struct WelcomeView: View {
         model.thermalSafety = on ? (model.thermalSafety ?? ThermalSafetyConfig()) : nil
     }
 
-    /// Pinned under the scroll area, so Get Started is always on screen no
-    /// matter how small the display is. Get Started is what consumes the
-    /// first-run one-shot: not opening the window, not seeing it. Anything
-    /// short of that press (a language-switch relaunch, closing the window,
-    /// quitting) brings the welcome back on the next launch.
     private var footer: some View {
         VStack(spacing: 14) {
             Divider()
             HStack {
-                // Leading: "Learn more" on the first step, "Back" afterwards.
                 if step.isFirst {
                     Link("Learn more", destination: AppInfo.website)
                         .font(type.callout)
@@ -519,7 +420,6 @@ struct WelcomeView: View {
                 Spacer()
                 stepDots
                 Spacer()
-                // Trailing: advance, or finish onboarding on the last step.
                 if step.isLast {
                     Button("Get Started") {
                         model.hasOnboarded = true
@@ -539,7 +439,6 @@ struct WelcomeView: View {
         .entrance(3, revealed: revealed, animated: !reduceMotion)
     }
 
-    /// Small progress dots between the footer buttons, one per step.
     private var stepDots: some View {
         HStack(spacing: 6) {
             ForEach(Step.allCases, id: \.self) { s in
@@ -551,7 +450,6 @@ struct WelcomeView: View {
         .accessibilityHidden(true)
     }
 
-    /// A soft fade with a compact chevron over the scroll area's last points.
     private var moreBelowCue: some View {
         ZStack(alignment: .bottom) {
             LinearGradient(
@@ -582,17 +480,13 @@ struct WelcomeView: View {
                 .foregroundStyle(.secondary)
         case .denied:
             Button("Open Settings") { openNotificationSettings() }
-        default: // .notDetermined and any future case: safe to ask
+        default:
             Button("Enable") {
                 Task { notificationStatus = await model.requestNotificationAuthorization() }
             }
         }
     }
 
-    /// The Administrator helper row's trailing control, mirroring
-    /// ``HelperStatusRows`` in the compact welcome layout. Installing acts
-    /// only on the button press, never on the window appearing (the one-time
-    /// approval, with its password ask, happens over in System Settings).
     @ViewBuilder
     private var helperControl: some View {
         switch model.helper.status {
@@ -608,13 +502,6 @@ struct WelcomeView: View {
         }
     }
 
-    /// A quiet globe-and-menu row under the hero, so someone landed in the
-    /// wrong language can fix it before reading anything else. Switching
-    /// relaunches the app (the override resolves at process start); clearing
-    /// `hasOnboarded` first makes the fresh instance reopen this window in
-    /// the picked language, so the relaunch reads as a live switch. And since
-    /// only Get Started sets the flag back, the welcome keeps returning on
-    /// launch until the user confirms in the language they ended up with.
     private var languagePicker: some View {
         HStack(spacing: 4) {
             Image(systemName: "globe")
@@ -646,12 +533,6 @@ struct WelcomeView: View {
         NSWorkspace.shared.open(url)
     }
 
-    /// Offered when the gaming use case is picked: a hop to the Gaming &
-    /// Streaming window, where AWDL pausing (which steadies the connection and
-    /// cuts jitter) and the jitter test live. A hand-off rather than an inline
-    /// enable, because turning AWDL on needs an administrator password, which
-    /// that window sets up in context (and its jitter test shows whether it's
-    /// even needed first). Opening a window never prompts.
     private var gamingJitterCallout: some View {
         HStack(spacing: 12) {
             Image(systemName: "wifi")
@@ -676,15 +557,6 @@ struct WelcomeView: View {
         .glassCard(cornerRadius: 10, tint: Color.keepressoBrew.opacity(0.04))
     }
 
-    /// Offered when the agentic use case is picked: connect the coding tools on
-    /// this Mac, so a session's own reporting decides whether it is working
-    /// instead of Keepresso reading CPU use and guessing.
-    ///
-    /// Connected inline rather than handed off the way gaming is, because there
-    /// is nothing to prompt for: it edits one config file per tool, wants no
-    /// password and no permission, and a second click undoes it. Only tools
-    /// actually on this Mac appear (see ``AgentTool/setupTools(present:connected:)``),
-    /// and when none are, the whole callout is skipped rather than shown empty.
     private var agentHooksCallout: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
@@ -710,9 +582,6 @@ struct WelcomeView: View {
         .glassCard(cornerRadius: 10, tint: Color.keepressoBrew.opacity(0.04))
     }
 
-    /// Act on a picked use case: the manual opt-out turns trigger gating off (so
-    /// keep-awake stays a plain manual toggle), any other applies its preset,
-    /// which switches the rule set and turns triggers on.
     private func apply(_ useCase: UseCase) {
         if useCase.id == Self.manualID {
             model.triggersEnabled = false
@@ -723,8 +592,6 @@ struct WelcomeView: View {
         showOtherUseCases = false
     }
 
-    /// A pickable use case: applying it switches the whole rule set to the
-    /// matching preset (a switch, not a merge) and turns triggers on.
     private func useCaseRow(_ useCase: UseCase) -> some View {
         let selected = selectedUseCase == useCase.id
         return Button {
@@ -755,8 +622,6 @@ struct WelcomeView: View {
         .buttonStyle(.plain)
     }
 
-    /// One general setup step: an SF Symbol, a title and explanation, and a
-    /// trailing control (a toggle or a button).
     @ViewBuilder
     private func setupRow<Control: View>(
         icon: String,
@@ -782,9 +647,6 @@ struct WelcomeView: View {
     }
 }
 
-/// The welcome checklist's frame in the scroll view's space: the height
-/// sizes the window to the content, the top edge drives the "more below"
-/// cue.
 private struct ChecklistFrameKey: PreferenceKey {
     static let defaultValue: CGRect = .zero
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
@@ -792,8 +654,6 @@ private struct ChecklistFrameKey: PreferenceKey {
     }
 }
 
-/// The scroll viewport's height, compared against the checklist's to decide
-/// whether the cue is needed at all.
 private struct ViewportHeightKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
@@ -802,9 +662,6 @@ private struct ViewportHeightKey: PreferenceKey {
 }
 
 private extension View {
-    /// One step of the welcome window's one-time entrance: fade up in order,
-    /// a quick stagger per section. With `animated` false (Reduce Motion) the
-    /// reveal is instant.
     func entrance(_ order: Int, revealed: Bool, animated: Bool) -> some View {
         opacity(revealed ? 1 : 0)
             .offset(y: revealed ? 0 : 10)

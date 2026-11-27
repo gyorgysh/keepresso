@@ -5,8 +5,6 @@ import Foundation
 private let home = "/Users/me"
 private let cliPath = "/Applications/Keepresso.app/Contents/Helpers/keepresso"
 
-/// A Mac described as launchers (path -> resolved target), directory
-/// listings, and file contents.
 private func files(
     links: [String: String] = [:],
     dirs: [String: [String]] = [:],
@@ -55,7 +53,6 @@ private typealias V = ClaudeCodeVersions.Version
         ],
         contents: ["\(npmRoot)/package.json": #"{"name":"@anthropic-ai/claude-code","version":"2.0.10"}"#]))
     #expect(Set(found.known) == [V(2, 1, 200), V(2, 0, 10)])
-    // The old npm CLI reads the same settings file, so it vetoes the event.
     #expect(!found.supportsStopFailure)
 }
 
@@ -67,8 +64,6 @@ private typealias V = ClaudeCodeVersions.Version
 }
 
 @Test func anUnreadableInstallVetoesStopFailure() {
-    // A copied binary (no symlink to a versioned folder) is Claude Code of
-    // unknown age: it might predate the event, so it is not written.
     let found = ClaudeCodeVersions.detect(home: home, files: files(
         links: ["/usr/local/bin/claude": "/usr/local/bin/claude"],
         dirs: ["\(home)/Library/Application Support/Claude/claude-code": ["2.1.317"]]))
@@ -82,8 +77,6 @@ private typealias V = ClaudeCodeVersions.Version
 }
 
 @Test func oldLocalInstallIsReadFromItsNodeModules() {
-    // ~/.claude/local/claude is a wrapper script, not a symlink: the version
-    // comes from the package installed beside it.
     let local = "\(home)/.claude/local"
     let found = ClaudeCodeVersions.detect(home: home, files: files(
         links: ["\(local)/claude": "\(local)/claude"],
@@ -128,7 +121,6 @@ private typealias V = ClaudeCodeVersions.Version
     #expect(found.known == [V(2, 1, 317)])
 }
 
-// MARK: - Gated hook format
 
 @Test func stopFailureIsInstalledOnlyWhenSupported() throws {
     let with = try AgentHooks.installHooks(
@@ -144,7 +136,6 @@ private typealias V = ClaudeCodeVersions.Version
 
 @Test func anUpgradeAddsStopFailureAndADowngradeRemovesIt() throws {
     let old = try AgentHooks.installHooks(into: nil, cliPath: cliPath, format: .claude)
-    // Every install supports it now: the old file needs repair, and repair adds it.
     let supported = AgentHooks.SettingsFormat.claude(includingStopFailure: true)
     guard case .needsRepair(let report) = AgentHooks.hookInstallState(of: old, cliPath: cliPath, format: supported) else {
         Issue.record("expected needsRepair"); return
@@ -153,7 +144,6 @@ private typealias V = ClaudeCodeVersions.Version
     let upgraded = try AgentHooks.installHooks(into: old, cliPath: cliPath, format: supported)
     #expect(AgentHooks.hookInstallState(of: upgraded, cliPath: cliPath, format: supported) == .installed)
 
-    // An old Claude Code appears: the entry is orphaned and repair strips it.
     guard case .needsRepair(let back) = AgentHooks.hookInstallState(of: upgraded, cliPath: cliPath, format: .claude) else {
         Issue.record("expected needsRepair"); return
     }
@@ -171,7 +161,6 @@ private typealias V = ClaudeCodeVersions.Version
     #expect(root["model"] as? String == "opus")
     let hooks = try #require(root["hooks"] as? [String: Any])
     let stopFailure = try #require(hooks["StopFailure"] as? [[String: Any]])
-    // The user's own StopFailure hook survives our entry being stripped.
     #expect(stopFailure.count == 1)
     let command = (stopFailure[0]["hooks"] as? [[String: Any]])?.first?["command"] as? String
     #expect(command == "say failed")

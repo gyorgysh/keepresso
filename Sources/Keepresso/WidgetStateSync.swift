@@ -12,10 +12,6 @@ final class WidgetStateSync {
     /// The App Group defaults shared with the widget extension, or `nil` when
     /// the group entitlement isn't available (unsigned dev builds).
     private let defaults = WidgetBridge.groupDefaults()
-    /// Everything the change check compares, so the per-second tick only
-    /// writes on change. Lease ids are part of it: widgets don't render
-    /// leases, but `status.json` is the acquire acknowledgment channel, and a
-    /// second lease arriving during an active session changes nothing else.
     private struct Written: Equatable {
         var state: SharedSessionState
         var leaseIDs: [String]
@@ -27,8 +23,6 @@ final class WidgetStateSync {
     private let appVersion =
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
 
-    /// Write `state` and reload the widgets, but only when it actually changed:
-    /// the ticker calls this every second and the no-op path is the common one.
     func write(
         _ state: SharedSessionState,
         leaseIDs: [String] = [],
@@ -77,8 +71,6 @@ final class WidgetStateSync {
         last = nil
     }
 
-    /// Consume a pending widget command (a Control Center / widget button press
-    /// left in the App Group), or `nil` if there's none.
     func consumeCommand() -> WidgetCommand? {
         guard let defaults else { return nil }
         return WidgetBridge.consumeCommand(from: defaults)

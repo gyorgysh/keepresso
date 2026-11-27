@@ -4,14 +4,8 @@ import Observation
 /// Outcome of a lock attempt. Cancelled means the administrator prompt was
 /// dismissed: the keyboard stays live and no overlay should appear.
 public enum KeyboardLockResult: Equatable, Sendable {
-    /// hidutil remapped keys globally, including Mac special function keys.
-    /// Letters stay live at the HID layer (macOS would otherwise ignore the
-    /// whole map). The overlay swallows those while it is in front.
     case applied
-    /// The remap did not land (Karabiner, a managed Mac). Overlay can swallow
-    /// ordinary keyDown while focused; special keys still need the remap.
     case overlayOnly
-    /// User dismissed the administrator-password prompt. Do not lock.
     case cancelled
 }
 
@@ -47,20 +41,13 @@ public struct KeyboardKeyMapping: Equatable, Codable, Sendable {
 /// Applies or reads the keyboard `UserKeyMapping`. Tests inject a fake;
 /// production shells `hidutil`.
 public protocol KeyboardRemapping: AnyObject, Sendable {
-    /// Returns `nil` when the live mapping cannot be read. Callers must not
-    /// substitute an empty mapping, because restoring it would erase the
-    /// user's existing remaps.
     func currentMapping() -> KeyboardKeyMapping?
-    /// Returns whether the write landed. A failure leaves the hardware mapping
-    /// untouched; the overlay can still swallow keys while focused.
     func apply(_ mapping: KeyboardKeyMapping) -> Bool
 }
 
 /// Crash-recovery marker: the mapping that was live before a lock, persisted
 /// under Application Support so a force-quit mid-lock can restore it.
 public protocol KeyboardLockMarking: AnyObject, Sendable {
-    /// Persist the original mapping before any global remap is attempted.
-    /// Returns false when crash recovery could not be armed.
     @discardableResult func save(original: KeyboardKeyMapping) -> Bool
     func load() -> KeyboardKeyMapping?
     func clear()
@@ -71,12 +58,9 @@ public protocol KeyboardLockMarking: AnyObject, Sendable {
 /// keyboard usages to 0, restore the snapshot (never an empty mapping that
 /// would wipe the user's own remaps).
 public protocol KeyboardLocking: AnyObject, Sendable {
-    /// Apply the lock. `.cancelled` must not flip `isLocked`.
     func lock() -> KeyboardLockResult
     func unlock()
     var isLocked: Bool { get }
-    /// If a previous run crashed while locked, restore now. Idempotent, and
-    /// must not prompt for a password (launch restore).
     func restoreIfNeeded()
 }
 
@@ -132,9 +116,6 @@ public final class HidutilKeyboardRemapper: KeyboardRemapping, @unchecked Sendab
 public enum OsascriptKeyboardRemapper: Sendable {
     public static func apply(_ mapping: KeyboardKeyMapping) -> KeyboardLockResult {
         let json = mapping.hidutilSetJSON()
-        // Single-line JSON, so escaping backslashes and quotes makes it a safe
-        // AppleScript literal; `quoted form of` then hands it to the shell as
-        // one untouchable argument.
         let escaped = json
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
@@ -225,15 +206,10 @@ public final class KeyboardLocker: KeyboardLocking, @unchecked Sendable {
     private let marker: KeyboardLockMarking
     private let helper: PrivilegedHelperCalling?
     private let helperAvailable: @Sendable () -> Bool
-    /// Production passes osascript. Nil in tests (and as a last resort) uses
-    /// the user-level remapper, which never pops a password dialog.
     private let privilegedApply: ((KeyboardKeyMapping) -> KeyboardLockResult)?
     private let lockQueue = NSLock()
     private var locked = false
     private var usedHelper = false
-    /// True only after this run durably recorded a mapping, or when launch
-    /// recovery explicitly found a marker. An overlay-only fallback must not
-    /// consume an unrelated stale marker when it closes.
     private var restoreArmed = false
 
     public init(
@@ -264,9 +240,6 @@ public final class KeyboardLocker: KeyboardLocking, @unchecked Sendable {
         }
         lockQueue.unlock()
 
-        // A global remap is safe only when the exact live mapping was read and
-        // durably recorded. Otherwise use the focused overlay without touching
-        // hidutil, so an unlock can never erase an unknown user mapping.
         guard let original = remapper.currentMapping(), marker.save(original: original) else {
             lockQueue.lock()
             locked = true
@@ -306,9 +279,6 @@ public final class KeyboardLocker: KeyboardLocking, @unchecked Sendable {
             }
         }
 
-        // User-level hidutil: tests, or a last try after a failed privileged
-        // apply. Never a password dialog. Still mark locked on failure so
-        // the overlay can swallow ordinary keys.
         let ok = remapper.apply(.disabledKeyboard)
         lockQueue.lock()
         locked = true
@@ -329,10 +299,6 @@ public final class KeyboardLocker: KeyboardLocking, @unchecked Sendable {
         restoreMapping(allowPrompt: false)
     }
 
-    /// `allowPrompt` is false at launch: a leftover marker must not pop the
-    /// administrator dialog before the menu bar is up. Failure keeps the
-    /// marker and stays locked so Unlock can retry instead of snapshotting
-    /// the disable table as "original".
     private func restoreMapping(allowPrompt: Bool) {
         lockQueue.lock()
         let viaHelper = usedHelper
@@ -349,8 +315,6 @@ public final class KeyboardLocker: KeyboardLocking, @unchecked Sendable {
             return
         }
 
-        // Overlay-only lock, or a helper that already restored after a crash:
-        // hardware already matches the snapshot, nothing to write.
         if !viaHelper, remapper.currentMapping() == original {
             finishRestored()
             return
@@ -363,13 +327,6 @@ public final class KeyboardLocker: KeyboardLocking, @unchecked Sendable {
         if !restored {
             restored = remapper.apply(original)
             if restored {
-                // Believe the read-back, not the exit status: an unprivileged
-                // `hidutil --set` can exit 0 without overriding a
-                // root-installed mapping (quit-time restore after an
-                // osascript lock with no helper, or a dead helper after a
-                // helper lock). Verified here, before the privileged
-                // fallback below, so an unverified success still reaches the
-                // prompt that can actually undo a root mapping.
                 restored = remapper.currentMapping() == original
             }
         }
@@ -421,10 +378,6 @@ public final class KeyboardLockController {
 
     private let locker: KeyboardLocking
     private let now: () -> Date
-    /// True while a restore is running off the main actor. Both ``unlock()``
-    /// and ``tick()`` yield now, so without this the overlay's 4 Hz tick (or a
-    /// second Unlock click) would start concurrent restores: the synchronous
-    /// versions could not overlap.
     @ObservationIgnored private var restoreInFlight = false
 
     public init(
@@ -435,7 +388,6 @@ public final class KeyboardLockController {
         self.now = now
     }
 
-    /// `duration` 0 or `nil` means until the user clicks Unlock.
     @discardableResult
     public func lock(duration: TimeInterval? = nil) async -> KeyboardLockResult {
         if isLocked { return isGlobal ? .applied : .overlayOnly }
@@ -457,10 +409,6 @@ public final class KeyboardLockController {
         }
     }
 
-    /// An Unlock pressed while a restore is already running. The press is
-    /// remembered and serviced when the in-flight restore finishes, so a
-    /// click during a slow (up to the XPC timeout) tick restore is never
-    /// silently dropped.
     @ObservationIgnored private var unlockQueued = false
 
     /// Unlock, running the restore off the main actor: the helper XPC call and
@@ -478,10 +426,6 @@ public final class KeyboardLockController {
         await drainUnlockQueue()
     }
 
-    /// Run prompting restores until unlocked or no further press arrived
-    /// mid-restore. Each pass clears the flag first, so the loop ends when
-    /// the user stops clicking; it never spins on a persistently failing
-    /// restore.
     private func drainUnlockQueue() async {
         while true {
             unlockQueued = false
@@ -507,11 +451,7 @@ public final class KeyboardLockController {
     /// the administrator-password note, and this path cannot prompt.
     public func tick() async {
         guard isLocked, let unlockAt, now() >= unlockAt else { return }
-        // Claim the deadline before yielding, so the one silent attempt stays
-        // one attempt even though the restore now runs concurrently.
         self.unlockAt = nil
-        // A restore already running (an Unlock press got there first) doubles
-        // as the silent attempt; never start a second one.
         guard !restoreInFlight else { return }
         restoreInFlight = true
         await Task.detached { [locker] in locker.restoreIfNeeded() }.value
@@ -519,11 +459,9 @@ public final class KeyboardLockController {
         isLocked = locker.isLocked
         if !isLocked {
             isGlobal = true
-            unlockQueued = false // the queued press is moot: already unlocked
+            unlockQueued = false
             return
         }
-        // An Unlock pressed during the silent restore: service it now, with
-        // a prompt if needed, rather than dropping the click.
         if unlockQueued {
             await drainUnlockQueue()
         }
@@ -554,19 +492,11 @@ extension KeyboardKeyMapping {
         }
     }
 
-    /// Keyboard usage page 0x07 (unrestricted keys only), plus the Apple /
-    /// consumer usages the Mac top-row keys actually send when they are not
-    /// standard F-keys (Mission Control, Spotlight, Dictation, brightness,
-    /// media, Focus).
-    ///
     /// Letters, digits, and punctuation are omitted on purpose: including
     /// any of them makes macOS silently discard the entire map, so Mission
     /// Control and the other special keys keep working. The overlay swallows
     /// ordinary typing while it is in front. Destination 0 is an invalid
     /// HID key, which the filter drops.
-    ///
-    /// Special usages are listed first so a hidutil mapping-count cap still
-    /// disables the keys an overlay cannot swallow.
     public static let disabledKeyboard: KeyboardKeyMapping = {
         var entries: [Entry] = []
         func add(page: UInt64, _ usages: [UInt64]) {
@@ -615,7 +545,6 @@ extension KeyboardKeyMapping {
         return KeyboardKeyMapping(entries: entries)
     }()
 
-    /// JSON blob for `hidutil property --set`.
     func hidutilSetJSON() -> String {
         let items = entries.map {
             "{\"HIDKeyboardModifierMappingSrc\":\($0.src),\"HIDKeyboardModifierMappingDst\":\($0.dst)}"
@@ -623,8 +552,6 @@ extension KeyboardKeyMapping {
         return "{\"UserKeyMapping\":[\(items)]}"
     }
 
-    /// Parse `hidutil property --get UserKeyMapping`. `(null)` and unreadable
-    /// dumps become an empty mapping, which unlock restores as "no remaps".
     static func parseHidutilGet(_ raw: String) -> KeyboardKeyMapping {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty || trimmed.contains("(null)") {

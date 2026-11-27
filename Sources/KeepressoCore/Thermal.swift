@@ -60,32 +60,20 @@ public protocol ThermalPressureReading: AnyObject {
 /// (private IOHIDEventSystemClient on Apple Silicon) or in Core's SMC reader
 /// (Intel); both are unprivileged.
 public protocol ThermalSensorReading: AnyObject {
-    /// Every temperature sensor on this machine, or `[]` when the read path is
-    /// unsupported here (the UI then offers pressure mode only).
     func discoverSensors() -> [ThermalSensor]
 
-    /// Current readings in degrees Celsius for the requested ids. Ids that no
-    /// longer resolve are simply absent from the result. `nil` means the read
-    /// path itself failed this call; callers treat that as "no verdict" and
-    /// hold their state, never as "cool".
     func readCelsius(ids: [String]) -> [String: Double]?
 }
 
 /// Fan presence and state, for gating and describing the fan-boost feature.
 /// Reads only; forcing fans is the privileged ``FanControlling`` seam.
 public protocol FanInfoReading: AnyObject {
-    /// Number of fans, `nil` when unknown (SMC unreachable). 0 means fanless
-    /// (MacBook Air): the fan UI hides entirely.
     func fanCount() -> Int?
 
-    /// Current speed of the first fan in RPM, best effort, for status lines.
     func currentRPM() -> Double?
 
-    /// Current speed of one fan in RPM, `nil` when unreadable.
     func rpm(ofFan index: Int) -> Double?
 
-    /// The fan's reported minimum and maximum RPM, `nil` when unreadable or
-    /// nonsensical (max not above min).
     func rpmRange(ofFan index: Int) -> (min: Double, max: Double)?
 }
 

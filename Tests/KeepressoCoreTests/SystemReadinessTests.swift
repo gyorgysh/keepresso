@@ -2,16 +2,12 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-/// Probe that returns a canned snapshot, so the readiness logic is exercised
-/// without shelling out.
 private final class FakeProbe: SystemProbing, @unchecked Sendable {
     var snapshotToReturn: SystemSnapshot
     init(_ snapshot: SystemSnapshot) { snapshotToReturn = snapshot }
     func snapshot() -> SystemSnapshot { snapshotToReturn }
 }
 
-/// A representative `pmset -g` block. Indentation and column spacing mimic the
-/// real command so the parser is tested against realistic input.
 private let pmsetHeadlessReady = """
 System-wide power settings:
 Currently in use:
@@ -27,7 +23,6 @@ private func check(_ checks: [ReadinessCheck], _ id: String) -> ReadinessCheck {
     checks.first { $0.id == id }!
 }
 
-// MARK: - pmset parser
 
 @Test func pmsetParsesKeyedIntegers() {
     #expect(PMSet.value(forKey: "womp", in: pmsetHeadlessReady) == 1)
@@ -44,14 +39,11 @@ private func check(_ checks: [ReadinessCheck], _ id: String) -> ReadinessCheck {
 }
 
 @Test func pmsetDoesNotMatchKeyAsSubstring() {
-    // "sleep" must not be satisfied by the "displaysleep"/"disksleep" lines.
     let onlyDisplaySleep = " displaysleep         10\n disksleep            10"
     #expect(PMSet.value(forKey: "sleep", in: onlyDisplaySleep) == nil)
 }
 
-// MARK: - Power checks
 
-/// A snapshot where every probed setting is configured the headless-friendly way.
 private let headlessReadySnapshot = SystemSnapshot(
     pmset: pmsetHeadlessReady,
     fileVault: "FileVault is Off.",
@@ -72,10 +64,8 @@ private let headlessReadySnapshot = SystemSnapshot(
     #expect(checks.allSatisfy { $0.remediation == nil })
 }
 
-// MARK: - Remote access
 
 @Test func remoteAccessOffIsTipWithSharingLink() {
-    // SSH / Screen Sharing are conveniences, not requirements, so off is a tip.
     let checks = ReadinessCheck.evaluate(
         SystemSnapshot(remoteLogin: false, screenSharing: false)
     )
@@ -85,10 +75,9 @@ private let headlessReadySnapshot = SystemSnapshot(
 }
 
 @Test func remoteAccessUndetectableIsTip() {
-    let checks = ReadinessCheck.evaluate(SystemSnapshot()) // both nil
+    let checks = ReadinessCheck.evaluate(SystemSnapshot())
     #expect(check(checks, "remote-login").status == .tip)
     #expect(check(checks, "screen-sharing").status == .tip)
-    // The tip still guides the user to Sharing.
     #expect(check(checks, "remote-login").remediation != nil)
 }
 
@@ -119,11 +108,9 @@ private let headlessReadySnapshot = SystemSnapshot(
     #expect(check(checks, "wake-for-network").status == .unknown)
     #expect(check(checks, "auto-restart").status == .unknown)
     #expect(check(checks, "system-sleep").status == .unknown)
-    // Unknown still offers remediation guidance.
     #expect(check(checks, "system-sleep").remediation != nil)
 }
 
-// MARK: - FileVault
 
 @Test func fileVaultOnWarns() {
     let c = check(ReadinessCheck.evaluate(SystemSnapshot(fileVault: "FileVault is On.")), "filevault")
@@ -142,7 +129,6 @@ private let headlessReadySnapshot = SystemSnapshot(
     #expect(c.status == .unknown)
 }
 
-// MARK: - Auto-login
 
 @Test func autoLoginSetIsOK() {
     let c = check(ReadinessCheck.evaluate(SystemSnapshot(autoLoginUser: "mini")), "auto-login")
@@ -161,7 +147,6 @@ private let headlessReadySnapshot = SystemSnapshot(
     #expect(c.status == .warning)
 }
 
-// MARK: - Standing tip
 
 @Test func tokenstatSuggestionIsATipWithLink() {
     let tip = ReadinessCheck.tokenstatSuggestion()
@@ -169,26 +154,23 @@ private let headlessReadySnapshot = SystemSnapshot(
     let links = tip.remediation?.links ?? []
     #expect(links.count == 1)
     #expect(links.contains { $0.url.absoluteString == "https://tokenstat.ai" })
-    #expect(tip.remediation?.command == nil) // links, not a shell command
+    #expect(tip.remediation?.command == nil)
 }
 
-// MARK: - Controller
 
 @MainActor
 @Test func controllerRefreshPopulatesChecks() async {
     let probe = FakeProbe(headlessReadySnapshot)
     let controller = SystemReadinessController(probe: probe)
-    #expect(controller.checks.isEmpty) // nothing until refresh
+    #expect(controller.checks.isEmpty)
     await controller.refresh()
-    // 7 system checks + the standing tokenstat.ai tip.
     #expect(controller.checks.count == 8)
     #expect(controller.checks.filter { $0.status != .tip }.allSatisfy { $0.status == .ok })
-    #expect(controller.checks.last?.id == "tip-tokenstat") // tip after the system checks
+    #expect(controller.checks.last?.id == "tip-tokenstat")
 }
 
 @MainActor
 @Test func tipsAreConsecutive() async {
-    // SSH + Screen Sharing off → both tips; the tokenstat.ai tip should sit right after them.
     let probe = FakeProbe(SystemSnapshot(
         pmset: pmsetHeadlessReady, fileVault: "FileVault is Off.", autoLoginUser: "mini",
         remoteLogin: false, screenSharing: false
@@ -208,11 +190,9 @@ private let headlessReadySnapshot = SystemSnapshot(
     controller.permissionChecks = [
         ReadinessCheck(id: "perm-login-item", title: "Launch at login", status: .warning, detail: "Off.")
     ]
-    // 7 system + 1 tip + 1 permission.
     #expect(controller.checks.count == 9)
     #expect(controller.checks.contains { $0.id == "tip-tokenstat" })
-    #expect(controller.checks.last?.id == "perm-login-item") // permission checks come last
-    // A later system refresh keeps the permission checks in place.
+    #expect(controller.checks.last?.id == "perm-login-item")
     await controller.refresh()
     #expect(controller.checks.contains { $0.id == "perm-login-item" })
 }

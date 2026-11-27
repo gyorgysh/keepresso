@@ -2,8 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-/// Per-session Grok transcript evidence: pid join onto that conversation's
-/// jsonl, never the project folder.
 
 private let cwd = "/Users/x/git/demo"
 private let now = Date(timeIntervalSince1970: 1_700_000_000)

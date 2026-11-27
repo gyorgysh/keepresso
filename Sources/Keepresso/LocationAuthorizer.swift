@@ -20,7 +20,6 @@ import AppKit
 /// unsynchronized `status` mutation stays main-thread-confined in practice.
 @Observable
 final class LocationAuthorizer {
-    /// `nil` until Core Location has answered for the first time.
     private(set) var status: CLAuthorizationStatus?
     @ObservationIgnored private var observer: NSObjectProtocol?
 
@@ -39,21 +38,16 @@ final class LocationAuthorizer {
         if let observer { NotificationCenter.default.removeObserver(observer) }
     }
 
-    /// Core Location has not answered yet (it may be stuck).
     var isPending: Bool { status == nil }
 
-    /// Whether the SSID will be readable.
     var isAuthorized: Bool {
         status == .authorizedAlways || status == .authorized
     }
 
-    /// Whether we can still ask (vs. the user having denied). False while the
-    /// first answer is pending, so no button offers a prompt that may not apply.
     var canRequest: Bool {
         status == .notDetermined
     }
 
-    /// Show the system permission prompt (no-op if already decided).
     func request() {
         NSApp.activate(ignoringOtherApps: true)
         LocationAuthorization.shared.request()
@@ -68,17 +62,13 @@ final class LocationAuthorizer {
 final class LocationAuthorization: NSObject, CLLocationManagerDelegate, @unchecked Sendable {
     static let shared = LocationAuthorization()
 
-    /// Posted on the main queue whenever ``status`` changes.
     static let didChange = Notification.Name("sh.gyorgy.keepresso.location-authorization")
 
     private let lock = NSLock()
     private var cached: CLAuthorizationStatus?
     private var thread: Thread?
-    /// Created and used only on ``thread``.
     private var manager: CLLocationManager?
 
-    /// The last status Core Location reported, `nil` before its first answer.
-    /// Never blocks.
     var status: CLAuthorizationStatus? {
         lock.lock(); defer { lock.unlock() }
         return cached

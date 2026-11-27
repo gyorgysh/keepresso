@@ -3,10 +3,6 @@ import AppKit
 import CoreWLAN
 import KeepressoCore
 
-/// Diagnoses "associated but no internet / login page never appears" and
-/// offers the safe next steps: open Captive Network Assistant, open the
-/// portal URL, flush DNS if the helper is in. Opening the window does not
-/// request Location or an administrator password.
 struct WifiAssistantView: View {
     @Bindable var model: AppModel
     @State private var windowVisible = false

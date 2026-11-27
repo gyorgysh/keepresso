@@ -1,10 +1,6 @@
 import Foundation
 import IOKit
 
-/// Pure encoders/decoders for SMC key names and data types. The System
-/// Management Controller speaks four-character keys and a small set of wire
-/// encodings; nothing here touches hardware, so it's all directly unit-tested.
-///
 /// Encodings seen in the wild:
 /// - `flt `: 4-byte IEEE-754 float, little-endian (Apple Silicon RPM, temps)
 /// - `fpe2`: unsigned 14.2 fixed point, big-endian (Intel fan RPM)
@@ -15,11 +11,6 @@ import IOKit
 public enum SMCCodec {
     /// "F0Ac" → the UInt32 the SMC protocol carries key names in.
     public static func fourCC(_ name: String) -> UInt32 {
-        // SMC keys are exactly four bytes. A non-conforming name can only come
-        // from a fan index >= 10 (no real Mac has that many) or a malformed
-        // discovered key; return an invalid 0 key so the read/write simply
-        // fails, honoring this file's "degrade to nil, never crash" contract
-        // rather than trapping the (root) daemon.
         guard name.utf8.count == 4 else { return 0 }
         return name.utf8.reduce(0) { ($0 << 8) | UInt32($1) }
     }
@@ -67,9 +58,6 @@ public enum SMCCodec {
             let raw = Float(value).bitPattern
             return [0, 8, 16, 24].map { UInt8((raw >> $0) & 0xff) }
         case "fpe2":
-            // Clamp to the 14.2 fixed-point range before scaling, mirroring the
-            // `ui8` clamp below: an out-of-range value (e.g. a bogus fan max)
-            // would otherwise trap the UInt16 conversion in the root daemon.
             let raw = UInt16((min(max(value, 0), 16383.75) * 4).rounded())
             return [UInt8(raw >> 8), UInt8(raw & 0xff)]
         case "ui8 ":
@@ -80,26 +68,17 @@ public enum SMCCodec {
     }
 }
 
-/// The slice of ``SMCConnection`` the fan controller needs, as a seam so tests
-/// can drive the real ``SMCFanController`` against a fake SMC. Same contract as
-/// the connection: `keyInfo` and `read` return nil for a key the SMC does not
-/// have, `write` returns the SMC result code (nil when the call never got there).
 protocol SMCFanAccess {
     func keyInfo(_ name: String) -> (size: Int, type: String)?
     func read(_ name: String) -> Double?
     func write(_ name: String, value: Double) -> UInt8?
 }
 
-/// A connection to the `AppleSMC` IOKit user client. Reads (temperatures, fan
-/// speeds, key discovery) work unprivileged; writes are enforced root by the
-/// SMC itself, so only the privileged helper ever calls ``write(key:value:)``.
-///
 /// The struct layout and selector below are private knowledge (the same 80-byte
 /// `SMCParamStruct` every monitoring tool ships), expressed in plain Swift so
 /// this file builds anywhere Core does; a machine or OS where the service or
 /// layout stops cooperating degrades to `nil` reads, never a crash.
 public final class SMCConnection: SMCFanAccess {
-    // Command bytes for `data8` and the user-client method selector.
     private enum Command: UInt8 {
         case readKey = 5
         case writeKey = 6
@@ -149,8 +128,6 @@ public final class SMCConnection: SMCFanAccess {
     }
 
     private var connection: io_connect_t = IO_OBJECT_NULL
-    /// Key info (size + type) cached per key: it never changes while booted,
-    /// and every read/write needs it first.
     private var keyInfoCache: [UInt32: (size: Int, type: String)] = [:]
     private let lock = NSLock()
 
@@ -168,8 +145,6 @@ public final class SMCConnection: SMCFanAccess {
         if connection != IO_OBJECT_NULL { IOServiceClose(connection) }
     }
 
-    /// One YPC round-trip. Returns nil when the kernel call itself failed;
-    /// SMC-level failures come back in `result`.
     private func call(_ input: ParamStruct) -> ParamStruct? {
         var input = input
         var output = ParamStruct()
@@ -289,11 +264,7 @@ public final class SMCFanInfo: FanInfoReading {
 public final class SMCFanController: FanControlling, @unchecked Sendable {
     private let smc: (any SMCFanAccess)?
     private let lock = NSLock()
-    /// Per-fan RPM at the moment the current boost engaged (the clamp floor);
-    /// cleared when auto control is restored.
     private var engageFloor: [Int: Double] = [:]
-    /// Per-fan mode key, once found (see ``modeKey(ofFan:)``). A key name is
-    /// fixed by the firmware, so a hit is kept for the life of the process.
     private var modeKeys: [Int: String] = [:]
 
     public init(smc: SMCConnection? = SMCConnection()) {
@@ -360,12 +331,6 @@ public final class SMCFanController: FanControlling, @unchecked Sendable {
         smc?.write("Ftst", value: 1) == SMCConnection.ResultCode.success
     }
 
-    /// The fan's mode key. M5 firmware spells it with a lowercase `md`, older
-    /// machines with `Md`, so probe both, legacy spelling first: a machine
-    /// that has `Md` behaves exactly as it always did. The probe is a
-    /// read-only key lookup. Only a hit is remembered, so a fan whose key was
-    /// not found is probed again on the next call rather than written off.
-    /// Call with ``lock`` held.
     private func modeKey(ofFan fan: Int) -> String? {
         if let known = modeKeys[fan] { return known }
         for suffix in ["Md", "md"] {
@@ -391,7 +356,6 @@ public final class SMCFanController: FanControlling, @unchecked Sendable {
                 continue
             }
         }
-        // Clear the test-mode unlock if it was ever set; harmless when not.
         _ = smc.write("Ftst", value: 0)
         engageFloor.removeAll()
         return ok

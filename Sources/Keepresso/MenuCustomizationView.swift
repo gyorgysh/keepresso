@@ -112,8 +112,6 @@ extension MenuBarTextStyle {
     }
 }
 
-/// Presentation edits stay separate from the session and feature settings.
-/// The default experience can always be restored without deleting this layout.
 struct MenuCustomizationView: View {
     @Bindable var model: AppModel
     @State private var search = ""

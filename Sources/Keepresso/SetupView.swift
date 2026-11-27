@@ -2,13 +2,6 @@ import SwiftUI
 import AppKit
 import KeepressoCore
 
-/// The headless-readiness Setup screen (v0.6): probes the system for the
-/// settings an always-on, headless Mac needs and shows each as ✅ / ⚠️ / 💡 / ❔
-/// with a deep link to the right System Settings pane and/or a copyable command.
-///
-/// Read-only by design: Keepresso never mutates system state (most of these are
-/// admin-only and we ship unsandboxed but unprivileged), so this validates and
-/// guides rather than changing anything.
 struct SetupView: View {
     @Bindable var model: AppModel
     /// Closed Setup windows stay alive on current macOS; unmount the checklist

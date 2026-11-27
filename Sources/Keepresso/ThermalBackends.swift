@@ -67,18 +67,12 @@ final class SystemThermalPressure: ThermalPressureReading {
     }
 }
 
-/// Temperature sensors for this machine: the private HID path (Apple Silicon,
-/// real sensor names) when it yields anything, otherwise Core's SMC key reads
-/// (Intel). Readings go through a 1 s TTL cache: the guard tick and the
-/// Preferences picker's live column read within the same second.
 final class MachineThermalSensors: ThermalSensorReading {
     private let smcFallback = SMCThermalSensors()
     private lazy var cache = TTLCache<[String: Double]?>(ttl: 1.0) {
         Self.readAll()
     }
 
-    /// One full HID sweep, or nil when the API is gone. Sensor discovery and
-    /// value reads are the same call, so the cache holds the whole dictionary.
     private static func readAll() -> [String: Double]? {
         guard let readings = KPHIDTemperatureReadings() else { return nil }
         return readings.reduce(into: [:]) { result, entry in

@@ -28,13 +28,11 @@ public enum HookEvent: String, Codable, CaseIterable, Sendable {
 
 /// What an ``EventHook`` runs when its event fires.
 public enum HookAction: Codable, Equatable, Sendable {
-    /// Run a Shortcut by name (`shortcuts run "Name"`).
     case runShortcut(name: String)
-    /// POST an empty body to a URL (ntfy, a webhook, …).
     case webhook(url: String)
-    /// Run a shell command through `/bin/sh -c`.
     case shell(command: String)
 
+    /// A Preferences-row label.
     public var label: String {
         switch self {
         case .runShortcut(let name): return L("Shortcut: %@", name)
@@ -175,8 +173,6 @@ public final class SystemHookRunner: HookRunning, @unchecked Sendable {
             else { return }
             var request = URLRequest(url: url, timeoutInterval: timeout)
             request.httpMethod = "POST"
-            // Fire and forget: a webhook that hangs must not block the main
-            // actor. URLSession's own timeout bounds the request.
             let task = URLSession.shared.dataTask(with: request) { _, _, _ in }
             task.resume()
         case .shell(let command):
@@ -197,11 +193,6 @@ public final class SystemHookRunner: HookRunning, @unchecked Sendable {
         } catch {
             return
         }
-        // Never wait on the caller's thread: hooks fire on the main actor
-        // mid-reconcile, and a slow command would freeze the menu bar and the
-        // 1 Hz tick for its whole runtime. Reap the child from a background
-        // queue instead; a long-running command is the user's own business
-        // (killing their work mid-flight is worse than a lingering child).
         let box = ProcessWaitBox(process)
         DispatchQueue.global(qos: .utility).async {
             box.wait()
@@ -209,8 +200,6 @@ public final class SystemHookRunner: HookRunning, @unchecked Sendable {
     }
 }
 
-/// Tiny wrapper so a process can be waited on from a background queue without
-/// capturing a non-Sendable Process across isolation (Process is a class).
 private final class ProcessWaitBox: @unchecked Sendable {
     private let process: Process
     init(_ process: Process) { self.process = process }

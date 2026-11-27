@@ -52,8 +52,6 @@ public protocol StreamingProbing: AnyObject, Sendable {
 }
 
 public extension ReadinessCheck {
-    /// Interpret a ``StreamingSnapshot`` into the check rows of the Gaming &
-    /// Streaming Setup screen. Pure: the unit under test.
     static func evaluateStreaming(_ snapshot: StreamingSnapshot) -> [ReadinessCheck] {
         [
             ethernet(snapshot),
@@ -62,7 +60,6 @@ public extension ReadinessCheck {
         ]
     }
 
-    // MARK: - Ethernet (the reliable fix)
 
     static func ethernet(_ snapshot: StreamingSnapshot) -> ReadinessCheck {
         let id = "stream-ethernet"
@@ -98,10 +95,6 @@ public extension ReadinessCheck {
         )
     }
 
-    /// Devices of hardware ports that are wired network ports: named like
-    /// Ethernet/LAN, excluding Wi-Fi, Bluetooth PAN, bridges, and tethered
-    /// devices. ("Thunderbolt Ethernet" adapters stay in; bare "Thunderbolt N"
-    /// ports carry neither keyword and fall out on their own.)
     static func wiredPortDevices(fromHardwarePorts output: String) -> [String] {
         var devices: [String] = []
         var currentPortIsWired = false
@@ -123,8 +116,6 @@ public extension ReadinessCheck {
         return lower.contains("ethernet") || lower.contains("lan")
     }
 
-    /// Whether a device's `ifconfig -a` block reports `status: active`
-    /// (a cable with link, not just a known adapter).
     static func isActive(device: String, inIfconfig output: String) -> Bool {
         var inBlock = false
         for line in output.split(whereSeparator: \.isNewline) {
@@ -133,19 +124,13 @@ public extension ReadinessCheck {
                 continue
             }
             guard inBlock else { continue }
-            // The next interface starts at column zero; the block is over.
             if !line.hasPrefix("\t"), !line.hasPrefix(" ") { break }
             if line.trimmingCharacters(in: .whitespaces) == "status: active" { return true }
         }
         return false
     }
 
-    // MARK: - Wi-Fi channel vs AWDL's social channels
 
-    /// AWDL parks its off-channel hops on fixed "social channels": 6 on
-    /// 2.4 GHz, and on 5 GHz either 44 (EU) or 149 (the US, Canada, and other
-    /// regions that allow UNII-3). A router aligned with the right one keeps the
-    /// hop on-channel, so it stops costing a retune. 6 GHz has no social channel.
     static func wifiChannel(_ snapshot: StreamingSnapshot) -> ReadinessCheck {
         let id = "stream-wifi-channel"
         let title = L("Wi-Fi channel")
@@ -158,8 +143,6 @@ public extension ReadinessCheck {
                 )
             )
         }
-        // "channel 6" or "channel 6 at 80 MHz", the shared clause every
-        // sentence below builds on.
         let channelClause: String = snapshot.wifiWidthMHz.map {
             L("channel %d at %d MHz", channel, $0)
         } ?? L("channel %d", channel)
@@ -202,12 +185,6 @@ public extension ReadinessCheck {
         }
     }
 
-    /// AWDL's 5 GHz social channel is region-dependent: 44 in the EU and other
-    /// regions that don't permit the UNII-3 band, 149 where UNII-3 is allowed
-    /// (the US, Canada, and much of the world). Returns the aligned channel (or
-    /// `nil` when the region is unknown, so alignment can't be confirmed) plus a
-    /// human phrase naming it. The country read is Location-gated, so when it's
-    /// unavailable both channels are named and no alignment is claimed.
     static func social5GHzChannel(countryCode: String?) -> (channel: Int?, description: String) {
         guard let code = countryCode?.uppercased() else {
             return (nil, L("channel 44 (the EU social channel) or 149 (the US and Canada social channel), whichever your region allows"))
@@ -218,15 +195,12 @@ public extension ReadinessCheck {
         return (149, L("channel 149, AWDL's 5 GHz social channel where UNII-3 is allowed (the US, Canada, and most of the world)"))
     }
 
-    /// EU / EEA / UK regulatory regions, where UNII-3 (channels 149+) is not
-    /// permitted, so AWDL parks its 5 GHz social channel on 44 instead of 149.
     static let euCountryCodes: Set<String> = [
         "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR",
         "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK",
         "SI", "ES", "SE", "GB", "UK", "NO", "IS", "LI", "CH",
     ]
 
-    // MARK: - Bluetooth (shares the radio chip)
 
     static func bluetoothRadio(_ snapshot: StreamingSnapshot) -> ReadinessCheck {
         let id = "stream-bluetooth"
@@ -253,12 +227,7 @@ public extension ReadinessCheck {
         }
     }
 
-    // MARK: - Standing notes
 
-    /// Game Mode explainer. There is no supported way for an app to turn
-    /// Game Mode on (the only switch, `gamepolicyctl`, ships inside Xcode),
-    /// but macOS enables it by itself when a game runs full screen, so the
-    /// actionable advice is simply "go full screen".
     static func gameModeTip() -> ReadinessCheck {
         ReadinessCheck(
             id: "stream-game-mode",
@@ -277,8 +246,6 @@ public extension ReadinessCheck {
         )
     }
 
-    /// Browser cloud gaming can't be matched by an app rule; the
-    /// audio-playing condition is the reliable stand-in.
     static func browserCloudGamingTip() -> ReadinessCheck {
         ReadinessCheck(
             id: "stream-browser-gaming",
@@ -307,7 +274,6 @@ public extension ReadinessCheck {
         )
     }
 
-    /// Pointer to the blog post the whole screen is built around.
     static func awdlReadMore() -> ReadinessCheck {
         ReadinessCheck(
             id: "stream-read-more",
@@ -378,9 +344,6 @@ public final class SystemStreamingProbe: StreamingProbing {
         )
     }
 
-    /// Pure parse of `system_profiler SPBluetoothDataType -json`: the
-    /// controller state reads `attrib_on` / `attrib_off`. `nil` when the
-    /// shape is unexpected (no Bluetooth hardware, a future format change).
     static func parseBluetoothOn(fromProfilerJSON json: String?) -> Bool? {
         guard let data = json?.data(using: .utf8),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

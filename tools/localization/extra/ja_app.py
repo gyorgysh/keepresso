@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# Japanese overlay for catalog_app.py: English source -> Japanese.
 APP = {
     "Add": "追加",
     "Add:": "追加：",
@@ -443,7 +442,6 @@ APP = {
 }
 
 
-# v1.15 thermal safety net, fan test, helper texts, glass slider.
 APP.update({
     '(max %@)': '（最大 %@）',
     '15 seconds': '15 秒',
@@ -508,7 +506,6 @@ APP.update({
 })
 
 
-# --- Agent hooks (Claude Code connection) ---
 APP.update({
     "Claude Code connected: sessions report working and waiting exactly.": "Claude Code 接続済み: セッションが作業中と待機中を正確に報告します。",
     "Connect Claude Code for exact session tracking (adds hooks to its settings).": "Claude Code を接続するとセッションを正確に追跡できます（設定にフックを追加します）。",
@@ -517,7 +514,6 @@ APP.update({
     "Couldn't update Claude Code's settings file.": "Claude Code の設定ファイルを更新できませんでした。",
 })
 
-# --- Agent hooks (Cursor connection) ---
 APP.update({
     "Cursor connected: the app's agent and the CLI both report exactly.": "Cursor 接続済み: アプリ内エージェントと CLI の両方が正確に報告します。",
     "Connect Cursor to track its app agent too (adds hooks to its config).": "Cursor を接続すると、アプリ内エージェントも追跡できます（設定にフックを追加します）。",
@@ -526,7 +522,6 @@ APP.update({
     "Couldn't update Cursor's hooks file.": "Cursor のフックファイルを更新できませんでした。",
 })
 
-# --- Agent hooks (Antigravity connection) ---
 APP.update({
     "Antigravity connected: the app's agent and the CLI both report exactly.": "Antigravity 接続済み: アプリ内エージェントと CLI の両方が正確に報告します。",
     "Connect Antigravity to track its editor agent too (adds hooks to its config).": "Antigravity を接続すると、エディタ内エージェントも追跡できます（設定にフックを追加します）。",
@@ -535,7 +530,6 @@ APP.update({
     "Couldn't update Antigravity's hooks file.": "Antigravity のフックファイルを更新できませんでした。",
 })
 
-# --- Agent hooks (Codex connection) ---
 APP.update({
     "Codex connected: sessions report working and waiting exactly.": "Codex 接続済み: セッションが作業中と待機中を正確に報告します。",
     "Codex asks you to review new hooks before it runs them, so approve them there once.": "Codex は新しいフックを実行する前にレビューを求めるため、Codex 内で一度承認してください。",
@@ -545,7 +539,6 @@ APP.update({
     "Couldn't update Codex's hooks file.": "Codex のフックファイルを更新できませんでした。",
 })
 
-# --- Agent hooks (Grok connection) ---
 APP.update({
     "Grok connected: sessions report working and waiting exactly.": "Grok 接続済み: セッションが作業中と待機中を正確に報告します。",
     "Connect Grok for exact session tracking (adds hooks to its config).": "Grok を接続するとセッションを正確に追跡できます（設定にフックを追加します）。",
@@ -567,7 +560,6 @@ APP.update({
     "A trigger is a condition Keepresso watches, checked once a second. With triggers on, they take over: Keepresso starts brewing the moment your conditions are met and stops when they aren't, so you never leave the Mac awake by accident. The menu then shows an Automatic and Manual switch: Manual sets the triggers aside without touching your rules, until you switch back or relaunch Keepresso.": "トリガーとは、Keepresso が監視する条件で、1 秒ごとに確認されます。トリガーがオンのときはトリガーが主導権を持ちます。条件が満たされた瞬間に Keepresso はスリープ防止を開始し、満たされなくなると停止するため、うっかり Mac を起きたままにしてしまうことがありません。その後、メニューに自動と手動のスイッチが表示されます。手動にすると、ルールを変更せずにトリガーが脇に置かれ、自動に戻すか Keepresso を再起動するまで続きます。",
 })
 
-# --- Agentic onboarding step (offers to connect the tools you have) ---
 APP.update({
     "Know exactly when an agent is working": "エージェントが作業中かを正確に把握",
     "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look.": "使っているコーディングツールを接続すると、セッションが自分で状態を報告するようになり、Keepresso が忙しさの見た目だけで判断することはなくなります。",
@@ -575,7 +567,6 @@ APP.update({
     "Couldn't be read": "読み取れませんでした",
 })
 
-# --- Agent hooks (repair) ---
 APP.update({
     "Claude Code's hooks need repairing, so sessions may not report correctly.": "Claude Code のフックに修復が必要なため、セッションが正しく報告されないことがあります。",
     "Cursor's hooks need repairing, so sessions may not report correctly.": "Cursor のフックに修復が必要なため、セッションが正しく報告されないことがあります。",
@@ -585,7 +576,6 @@ APP.update({
 })
 
 
-# --- Desktop "disable sleep" naming ---
 APP.update({
     "Disable system sleep": "システムのスリープを無効化",
     "Disable sleep": "スリープを無効化",
@@ -597,7 +587,6 @@ APP.update({
     "Stops the Mac from sleeping at all, even with no session running. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.": "セッションが実行されていないときでも、Mac が一切スリープしないようにします。これは管理者権限が必要なシステム設定を切り替えます。管理者ヘルパーがインストールされていれば静かに実行されます（設定 ▸ 一般）。そうでない場合、macOS がパスワードを求めます。",
     "Stops the Mac from sleeping at all, even with no session running. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off, even if Keepresso quits. The display still sleeps as usual. “Only while brewing” ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for “Only while brewing”.": "セッションが実行されていないときでも、Mac が一切スリープしないようにします。システム設定（pmset disablesleep）を切り替えることで機能するため、オフにするまで、Keepresso が終了しても有効なままになります。ディスプレイは通常どおりスリープします。「抽出中のみ」はこれをセッションに結び付け、スリープ防止セッションの開始時にオンに、終了時または（クラッシュ後も含め）Keepresso の終了時にオフになります。どちらにも管理者権限が必要です。管理者ヘルパーがインストールされていれば静かに実行されます（このタブの上部を参照）。そうでない場合、macOS がパスワードを求めます。「抽出中のみ」では App の実行ごとに 1 回です。",
     "%@ before": "%@ 前",
-    # 1.16.0
     'Cancel': 'キャンセル',
     'Off': 'オフ',
     'Time': '時刻',
@@ -646,7 +635,6 @@ APP.update({
     'When something happens in Keepresso, run a Shortcut, POST a webhook, or run a shell command. Useful for a push to your phone when an overnight agent finishes (ntfy, or a Shortcut that sends a notification). Hooks are suspended while you edit them, so a half-written command never runs. No administrator helper needed. User-authored shell commands are intentional in this unsandboxed app: only add commands you trust.': 'Keepresso で何かが起きるとショートカット、Webhook、シェルを実行します。夜間エージェント終了時のスマホ通知（ntfy や通知ショートカット）に便利。編集中はフックを停止。管理者ヘルパーは不要。サンドボックスなしの本アプリではユーザーシェルを許可します。信頼できるコマンドだけ追加してください。',
     'These cover the times a session ends without you: a timer expiring, or trigger conditions dropping. Stopping it yourself stays silent, since you already know. The warning is a heads-up a few minutes before a timed session runs out, so you can extend it before the Mac drops off. Actions that put the Mac to sleep live under Automation.': 'タイマー満了やトリガー解除など、自分で止めない終了を対象にします。自分で止めたときは静かにします。警告は時間制限の数分前。Mac をスリープさせる操作は自動化にあります。',
 
-    # 1.16.0 fill (17)
     '/bin/sh -c …': '/bin/sh -c …',
     'Add Hook': 'フックを追加',
     'Add Hook…': 'フックを追加…',
@@ -665,7 +653,6 @@ APP.update({
     'Webhook': 'Webhook',
     'https://…': 'https://…',
 
-    # 1.17.0 leases (7)
     'Held awake by an automation lease': '自動化リースによりスリープ防止中',
     'Held awake by %d automation leases': '自動化リース %d 件によりスリープ防止中',
     'and %d more': '他 %d 件',
@@ -674,7 +661,6 @@ APP.update({
     'Automation access': '自動化アクセス',
     'A lease is a bounded keep-awake grant an outside tool asks for through the keepresso command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning leases off ends any live lease. The wake schedule switch is separate and off by default because a scheduled wake is a system-wide change applied by the administrator helper: leave it off unless a tool you trust should plan wake-ups for you.': 'リースとは、keepresso コマンドラインや同梱の MCP サーバーを通じて外部ツールが要求する、期限付きのスリープ防止権限です。夜間に作業する AI エージェント、レンダリングスクリプト、バックアップジョブなどが対象です。各リースには保有ツールが更新し続けなければならない期限に加えて最長7日間の上限があり、クラッシュしたツールが Mac を永久に起こしたままにすることはありません。メニューには有効なリースがすべて表示され、「停止」ですべて終了し、最後の1つが終わると Mac は再びスリープできます。リースをオフにすると、有効なリースはすべて終了します。起床スケジュールのスイッチは別物で、既定はオフです。スケジュール起床は管理者ヘルパーが適用するシステム全体の変更なので、信頼できるツールに起床の計画を任せたい場合以外はオフのままにしてください。',
 
-    # 1.17.0 second batch: teach-your-agent actions, end-action wording, gaming comfort
     'Copy Agent Instructions': 'エージェントへの指示をコピー',
     'Let AI agents and scripts keep the Mac awake while work is running. It cannot wake a sleeping Mac.': 'AI エージェントやスクリプトが作業中に Mac を起動状態に保てます。スリープ中の Mac を起動することはできません。',
     "Let trusted tools set or clear the Mac's scheduled wake. It needs the administrator helper and does not keep the Mac awake after it wakes.": '信頼できるツールが Mac のスケジュール起動を設定または消去できます。管理者ヘルパーが必要で、起動後も Mac を起動状態に保つ機能ではありません。',
@@ -709,7 +695,6 @@ APP.update({
     "Counts while Steam is actively downloading or updating a game in any of its libraries, and lets the Mac sleep once the download finishes or is paused. Reads Steam's own bookkeeping, no permission needed.": 'Steam がライブラリ内のいずれかのゲームを実際にダウンロードまたはアップデートしている間カウントし、ダウンロードが完了するか一時停止されると Mac をスリープさせます。Steam 自身の記録を読み取るだけなので、許可は不要です。',
 })
 
-# 1.18 strings
 APP.update({
     "%@ · next %@": "%@・次回 %@",
     "%d automation leases are waiting (safety pause)": "%d件の自動化リースが待機中です（安全のための一時停止）",
@@ -769,18 +754,15 @@ APP.update({
     "just now": "たった今",
 })
 
-# 1.23 strings
 APP.update({
     "If the lid shuts": "蓋を閉じたとき",
     "Normally a MacBook sleeps the moment you shut the lid unless a display is attached. This keeps it running with the lid shut and nothing plugged in, on power or battery. What the screen itself does when the lid closes is your choice below (“If the lid shuts”): turn it off, keep it powered at zero brightness so a remote session stays live, or leave it alone. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off: closed and on battery, the Mac can still drain over time, so don't leave it on in a bag. “Only while brewing” ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for “Only while brewing”.": "通常、MacBook はディスプレイが接続されていない限り、蓋を閉じた瞬間にスリープします。これは、蓋を閉じて何も接続していない状態でも、電源でもバッテリーでも動作し続けるようにします。蓋を閉じたときにディスプレイ自体をどうするかは、下の「蓋を閉じたとき」で選べます。オフにする、リモートセッションを維持するために輝度ゼロで通電したままにする、何もしない、のいずれかです。システム設定（pmset disablesleep）を切り替えることで機能するため、オフにするまで有効なままになります。蓋を閉じてバッテリー使用時は、それでも時間とともにバッテリーを消耗することがあるため、バッグの中でオンのままにしないでください。「抽出中のみ」はこれをセッションに結び付け、スリープ防止セッションの開始時にオンに、終了時または（クラッシュ後も含め）Keepresso の終了時にオフになります。どちらにも管理者権限が必要です。管理者ヘルパーがインストールされていれば静かに実行されます（このタブの上部を参照）。そうでない場合、macOS がパスワードを求めます。「抽出中のみ」では App の実行ごとに1回です。",
 })
 
-# Presence: "Only while brewing" off footer
 APP.update({
     "Also runs between sessions, which can keep the Mac from sleeping.": "セッションの合間にも実行されるため、Mac のスリープを妨げることがあります。",
 })
 
-# Closed-lid speaker mute
 APP.update({
     "Mute built-in speakers while the lid is closed": "蓋を閉じたら内蔵スピーカーをミュート",
     "Mutes the built-in speakers with the lid closed and closed-display mode active. Headphones and other outputs keep playing. Unmutes when the lid opens or the mode ends, unless you had muted them yourself.": "蓋を閉じ、クラムシェルモードが有効な間、内蔵スピーカーをミュートします。ヘッドフォンなどの他の出力は再生され続けます。蓋を開くかモードが終了するとミュートを解除します。ただし、自分でミュートしていた場合は解除しません。",

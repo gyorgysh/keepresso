@@ -8,22 +8,9 @@ import Foundation
 /// this sees *every* process, including command-line tools and background jobs
 /// like `node`, `python`, `ffmpeg`, or `claude`.
 public protocol ProcessListing: AnyObject {
-    /// The full command line of every currently running process.
     var current: [String] { get }
 }
 
-/// Real backend over `ps`. Lists each process's full, untruncated command line.
-/// Spawning `ps` is not free, and the trigger engine plus the menu can read
-/// ``current`` several times a second, so results are cached for ``ttl``
-/// seconds: repeated reads reuse one snapshot instead of forking `ps` each
-/// time. A process starting or stopping doesn't need sub-second reaction for a
-/// keep-awake decision, so a few seconds of staleness is fine. The clock is
-/// injectable so the cache can be unit-tested.
-///
-/// When constructed through ``TriggerFactory``, the fetch is a
-/// ``SharedPSSnapshot`` so agent detection shares the same `ps` run. The
-/// standalone default still forks a command-only listing of its own.
-///
 /// ``current`` is read synchronously from the menu's `body` on the main
 /// thread, so it must never block on `Process.waitUntilExit()` itself (see the
 /// same hazard documented on ``ShellSystemProbe`` and ``PMSetSleepControl``: a
@@ -33,8 +20,6 @@ public protocol ProcessListing: AnyObject {
 public final class PSProcessLister: ProcessListing {
     private let ttl: TimeInterval
     private let now: () -> Date
-    /// Produces the raw `ps` output (`nil` on failure). Injectable so the
-    /// cache/refresh logic can be unit-tested without spawning processes.
     private let fetch: @Sendable () -> String?
     private let lock = NSLock()
     private var cached: [String] = []
@@ -62,10 +47,6 @@ public final class PSProcessLister: ProcessListing {
         if shouldRefresh {
             Task.detached { [weak self] in
                 guard let self else { return }
-                // A transient `ps` failure keeps the previous snapshot: an
-                // empty one would make a process trigger drop a keep-awake
-                // session mid-download or build. Agent monitoring does the
-                // same; match it here.
                 guard let raw = self.fetch() else {
                     self.withLock {
                         self.lastFetch = self.now()

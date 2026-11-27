@@ -35,12 +35,6 @@ public enum GrokHooks {
             .appendingPathComponent("keepresso.json")
     }
 
-    /// The shell command an installed hook runs.
-    ///
-    /// Grok fails open: empty stdout and a non-zero exit let the action
-    /// proceed. Only an explicit `deny` / Stop `block` changes control flow.
-    /// Stop defaults to a 600s timeout because it is a gate. We set 5 so a
-    /// wedged Keepresso cannot stall a turn for ten minutes.
     static func hookCommand(event: String, cliPath: String) -> String {
         "c=\(AgentHooks.shellSingleQuoted(cliPath)); [ -x \"$c\" ] || "
             + "c=/Applications/Keepresso.app/Contents/Helpers/keepresso; "
@@ -51,7 +45,6 @@ public enum GrokHooks {
         record.agent == "grok"
     }
 
-    // MARK: - Payload
 
     /// Grok's file-hook envelope. CamelCase on the wire, snake_case when
     /// the grok-agent-sdk rewrites keys. Every field optional.
@@ -114,11 +107,9 @@ public enum GrokHooks {
         }
     }
 
-    // MARK: - Reduction
 
     static let turnEndEvents: Set<String> = ["Stop", "StopFailure", "StopCancelled"]
 
-    /// Maps a Grok hook event to its effect. Unknown events write nothing.
     static func reduce(
         event: String,
         toolName: String?,
@@ -145,7 +136,6 @@ public enum GrokHooks {
         }
     }
 
-    // MARK: - Handling one invocation
 
     /// Applies one hook invocation. Child-session events (`subagentType`
     /// set) are ignored so a subagent Stop cannot idle the parent pid.
@@ -183,11 +173,6 @@ public enum GrokHooks {
                incoming != current {
                 return
             }
-            // A submit deliberately does NOT inherit the previous turn's id: a
-            // new turn invalidates it, and keeping the stale one would make the
-            // guard above reject the new turn's own (differing) turn-end event,
-            // leaving the session stuck "working". With no id on file the guard
-            // is skipped, so any turn-end may settle the turn.
             let promptId: String?
             if event == "UserPromptSubmit" {
                 promptId = AgentHooks.nonEmpty(payload.promptId)
@@ -216,7 +201,6 @@ public enum GrokHooks {
         }
     }
 
-    // MARK: - keepresso.json
 
     /// Writes Keepresso's hook object. This file is ours: a re-install
     /// replaces it wholesale so a stale baked path heals, and we never

@@ -158,7 +158,6 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
             try? c.decodeIfPresent(TimeInterval.self, forKey: .dimDisplayAfter))
         dimFloor = min(max((try? c.decodeIfPresent(Double.self, forKey: .dimFloor)) ?? 0, 0), 1)
         simulateUserActivity = (try? c.decodeIfPresent(Bool.self, forKey: .simulateUserActivity)) ?? false
-        // Raw string, not the enum, so an unknown method falls back here.
         activitySimulationMethod = (try? c.decodeIfPresent(String.self, forKey: .activitySimulationMethod))
             .flatMap(ActivitySimulationMethod.init(rawValue:)) ?? .powerWarp
         activitySimulationKeyCode = try? c.decodeIfPresent(Int.self, forKey: .activitySimulationKeyCode)
@@ -169,9 +168,6 @@ public struct SleepPreventionOptions: Equatable, Codable, Sendable {
         activityOnlyWhileBrewing = (try? c.decodeIfPresent(Bool.self, forKey: .activityOnlyWhileBrewing)) ?? true
     }
 
-    /// A decoded idle threshold: finite, positive, and bounded to a real
-    /// session length (an imported `1e308` would otherwise trap in display
-    /// conversions downstream).
     private static func sanitizedInterval(_ raw: TimeInterval?) -> TimeInterval? {
         raw.flatMap { $0.isFinite && $0 > 0 ? min($0, SessionMode.maxTimedMinutes * 60) : nil }
     }

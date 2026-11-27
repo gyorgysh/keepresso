@@ -2,13 +2,11 @@ import Foundation
 import GameController
 import IOKit.hid
 
-// MARK: - Monitor seam
 
 /// Abstraction over "is a game controller connected?" so the trigger and the
 /// activity poke can be tested without hardware. Mirrors the other monitor
 /// seams (``GamingMonitoring``, ``BluetoothMonitoring``).
 public protocol ControllerMonitoring: AnyObject {
-    /// Number of currently connected game controllers.
     var connectedCount: Int { get }
 }
 
@@ -28,7 +26,6 @@ public final class GCControllerMonitor: ControllerMonitoring {
         self.init(steamProbe: SteamControllerHID.probeSystem)
     }
 
-    /// The probe and clock are injectable so the cache can be unit-tested.
     init(
         ttl: TimeInterval = 3,
         now: @escaping () -> Date = Date.init,
@@ -38,32 +35,21 @@ public final class GCControllerMonitor: ControllerMonitoring {
     }
 
     public var connectedCount: Int {
-        // The two sources never overlap: the framework refuses Valve
-        // hardware, and the sweep matches only Valve's vendor id.
         GCController.controllers().count + steamHardware.current
     }
 }
 
-/// Permission-free detection of Steam Controller hardware (wired, dongle, or
-/// the Steam Controller puck) at the HID layer.
 enum SteamControllerHID {
-    /// Valve's USB vendor id.
     static let valveVendorID = 0x28DE
 
-    /// Wireless receivers (the standalone dongle and the Steam Controller
-    /// puck). A receiver sits on the bus whether or not a controller is
-    /// talking to it, so its interfaces alone must never count as a
-    /// controller.
     static let receiverProductIDs: Set<Int> = [0x1142, 0x1304]
 
-    /// One HID interface, reduced to what the count needs.
     struct Device: Equatable, Sendable {
         var transport: String?
         var productID: Int?
         var location: Int?
     }
 
-    /// Count Steam Controllers currently live.
     static func probeSystem() -> Int {
         let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
         IOHIDManagerSetDeviceMatching(manager, [kIOHIDVendorIDKey: valveVendorID] as CFDictionary)
@@ -78,16 +64,6 @@ enum SteamControllerHID {
         })
     }
 
-    /// Pure judgment over the enumeration, shaped by probing real hardware
-    /// in both states:
-    /// - One physical device fans out into several HID interfaces (the puck
-    ///   shows five at one location); interfaces collapse by location id.
-    /// - A controller actively talking creates Valve *virtual*
-    ///   keyboard/mouse children (lizard mode). Those children vanish the
-    ///   moment the controller powers off while the receiver's interfaces
-    ///   stay, so for receivers the virtuals ARE the live-controller
-    ///   evidence: a receiver counts only while they exist.
-    /// - Directly attached controllers (wired) count by presence alone.
     static func distinctHardwareCount(devices: [Device]) -> Int {
         let hasLiveVirtuals = devices.contains { ($0.transport ?? "") == "Virtual" }
         let physical = devices.filter { ($0.transport ?? "") != "Virtual" }
@@ -100,7 +76,6 @@ enum SteamControllerHID {
         return count
     }
 
-    /// Distinct location ids, or one device when locations are missing.
     private static func collapsedByLocation(_ devices: [Device]) -> Int {
         guard !devices.isEmpty else { return 0 }
         let locations = Set(devices.compactMap(\.location)).subtracting([0])
@@ -108,7 +83,6 @@ enum SteamControllerHID {
     }
 }
 
-// MARK: - Trigger
 
 /// Fires while at least one game controller is connected. Deliberately
 /// parameterless: unlike Bluetooth audio devices, people rarely need to
@@ -132,7 +106,6 @@ public final class ControllerTrigger: Trigger {
     }
 }
 
-// MARK: - Controller activity poke
 
 /// Declares user activity while someone plays with a controller, because
 /// gamepad input does not reliably reset the HID idle timer: a controller-only

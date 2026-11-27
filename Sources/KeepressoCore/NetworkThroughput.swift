@@ -3,9 +3,6 @@ import Foundation
 /// Abstraction over the machine's overall network throughput so a transfer
 /// trigger can be tested with scripted readings. Mirrors ``CPULoadReading``.
 public protocol NetworkThroughputReading: AnyObject {
-    /// Combined in + out throughput across the physical interfaces since the
-    /// previous call, in bytes per second, or `nil` when no reading is available
-    /// yet (first call, a failed read, or a counter that went backwards).
     func currentBytesPerSecond() -> Double?
 }
 
@@ -32,8 +29,6 @@ public final class GetifaddrsThroughputReader: NetworkThroughputReading {
     private let ttl: TimeInterval
     private let now: () -> Date
     private let readBytes: () -> UInt64?
-    /// Built lazily on first read (the probe reads `self`), holding `self`
-    /// unowned: the cache and this reader share a lifetime.
     private lazy var cache = TTLCache<Double?>(ttl: ttl, now: now) { [unowned self] in
         self.readThroughputDelta()
     }
@@ -42,8 +37,6 @@ public final class GetifaddrsThroughputReader: NetworkThroughputReading {
         self.init(readBytes: Self.interfaceBytes)
     }
 
-    /// The byte source and clock are injectable so the delta and TTL logic can
-    /// be unit-tested without real interface counters.
     init(
         ttl: TimeInterval = 0.5,
         now: @escaping () -> Date = Date.init,
@@ -60,19 +53,12 @@ public final class GetifaddrsThroughputReader: NetworkThroughputReading {
         guard let bytes = readBytes() else { return nil }
         let at = now()
         defer { previous = (bytes, at) }
-        // A backwards counter means an interface reset or a 32-bit wrap (the
-        // per-interface counters are 32-bit): skip that one interval rather than
-        // report a bogus negative rate. The EMA holds the prior verdict meanwhile.
         guard let previous, bytes >= previous.bytes else { return nil }
         let elapsed = at.timeIntervalSince(previous.at)
         guard elapsed > 0 else { return nil }
         return Double(bytes - previous.bytes) / elapsed
     }
 
-    /// Sum of in + out bytes across every non-loopback interface. Deliberately
-    /// sums all of them (physical, VPN, bridge): the goal is a rough "is a large
-    /// transfer running" gauge, and the threshold plus hysteresis absorb the
-    /// double-counting a tunnel-over-physical setup introduces.
     private static func interfaceBytes() -> UInt64? {
         var head: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&head) == 0, let first = head else { return nil }
@@ -81,8 +67,6 @@ public final class GetifaddrsThroughputReader: NetworkThroughputReading {
         var cursor: UnsafeMutablePointer<ifaddrs>? = first
         while let entry = cursor {
             defer { cursor = entry.pointee.ifa_next }
-            // Only the link-layer (AF_LINK) row of each interface carries the
-            // if_data byte counters.
             guard let addr = entry.pointee.ifa_addr, addr.pointee.sa_family == UInt8(AF_LINK) else { continue }
             guard entry.pointee.ifa_flags & UInt32(IFF_LOOPBACK) == 0 else { continue }
             guard let data = entry.pointee.ifa_data else { continue }
@@ -107,11 +91,7 @@ public final class NetworkThroughputTrigger: Trigger {
     /// Throughput (in KB/s, 1 KB = 1024 bytes) the smoothed rate must reach.
     public var thresholdKilobytesPerSecond: Int
 
-    /// Smoothing weight of each new sample; ~0.25 at one sample per second means
-    /// a sustained transfer settles in a few seconds.
     static let alpha = 0.25
-    /// Fraction of the threshold the average must fall below to turn off again.
-    /// A relative band (unlike CPU's absolute one) since throughput is unbounded.
     static let releaseFraction = 0.7
 
     public struct SmoothingState: Equatable, Sendable {
@@ -146,15 +126,8 @@ public final class NetworkThroughputTrigger: Trigger {
 
     public func isSatisfied() -> Bool { state.isSatisfied }
 
-    /// Pure decision step, exposed for direct unit testing. A `nil` sample
-    /// (failed read / counter wrap) keeps the previous average and verdict
-    /// rather than dropping an active session on a transient hiccup.
     static func step(_ state: SmoothingState, sampleBytesPerSecond sample: Double?, thresholdKilobytesPerSecond: Int) -> SmoothingState {
         var next = state
-        // A non-positive threshold is malformed (the picker never makes one).
-        // Treat it as "never satisfied" instead of the always-true it would
-        // otherwise compute (average >= 0), so a corrupt or imported rule can't
-        // pin the Mac awake with nothing able to release it.
         guard thresholdKilobytesPerSecond > 0 else {
             next.average = nil
             next.isSatisfied = false

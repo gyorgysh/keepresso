@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# Turkish overlay for catalog_core.py: English source -> Turkish.
 CORE = {
     "On AC power": "Elektrik gücündeyken",
     "On battery": "Pil gücündeyken",
@@ -177,7 +176,6 @@ WIDGET = {
 }
 
 
-# --- Agent hooks (Claude Code connection) ---
 CORE.update({
     "run": "çalıştır",
     "write": "yaz",
@@ -193,7 +191,6 @@ CORE.update({
     "IDE": "IDE",
 })
 
-# v1.15 thermal safety net: pressure levels and heat-pause lines.
 CORE.update({
     "Critical": "Kritik",
     "Fair": "Makul",
@@ -203,7 +200,6 @@ CORE.update({
     "Paused on high temperature": "Yüksek sıcaklıkta duraklatıldı",
     "Paused, the Mac is running hot": "Duraklatıldı, Mac aşırı ısınıyor",
     "Serious": "Ciddi",
-    # 1.16.0 fill (16)
     'Lock the screen': 'Ekranı kilitle',
     'Sleep the Mac': 'Mac’i uyut',
     'Session started': 'Oturum başladı',
@@ -223,26 +219,22 @@ CORE.update({
 
 })
 
-# v1.17 automation leases
 CORE.update({
     "Automation lease: %@": "Otomasyon kirası: %@",
     "Automation lease acquired": "Otomasyon kirası alındı",
     "Automation lease ended": "Otomasyon kirası sona erdi",
 })
 
-# Controller trigger, new in the 1.17 cycle (second batch).
 CORE.update({
     "Game controller connected": "Oyun denetleyicisi bağlı",
     "Steam is downloading": "Steam indiriyor",
 })
 
-# 1.18 strings
 CORE.update({
     "Microphone in use by %@": "%@ tarafından mikrofon kullanılıyor",
     "Microphone in use by app": "Uygulama tarafından mikrofon kullanılıyor",
 })
 
-# 1.23 strings
 CORE.update({
     "Brightness control is unavailable, turning the display off instead.": "Parlaklık denetimi kullanılamıyor, bunun yerine ekran kapatılıyor.",
     "Keepresso never touches the display.": "Keepresso ekrana hiç dokunmaz.",

@@ -11,26 +11,6 @@ import Foundation
 /// shared. Only the payload shape, the event names, and the config file differ.
 public enum CursorHooks {
 
-    // MARK: - Events
-    //
-    // Cursor splits its hook steps in two, and the split is a safety boundary
-    // rather than a matter of taste.
-    //
-    // On a *permission* step (`preToolUse`, `beforeShellExecution`,
-    // `beforeMCPExecution`, `beforeReadFile`, `subagentStart`) the hook's
-    // stdout is a verdict on whether the action may run, and Cursor blocks the
-    // action when a hook returns empty or unparseable output. That is not the
-    // documented fail-open behavior, it is a deliberate "blocked for safety"
-    // path that ignores `failClosed`. Keepresso's hook command is built to be
-    // a silent no-op when the CLI is missing (a deleted app, a stale entry),
-    // and a silent no-op on a permission step denies every tool call in the
-    // session. So Keepresso installs on **observation steps only**, and the
-    // list below must never grow a permission step.
-    //
-    // The same rule cuts the other way: a hook must never answer
-    // `{"permission": "allow"}` either, because that would wave through
-    // commands the user's own approval settings meant to stop. Keepresso has
-    // no business voting on permissions in either direction.
 
     /// The observation events Keepresso installs. The reducer also accepts
     /// retired events while an older config is being migrated.
@@ -44,14 +24,11 @@ public enum CursorHooks {
         "preCompact", "stop", "sessionEnd",
     ]
 
-    /// The steps whose stdout Cursor reads as a permission verdict. Kept here
-    /// as an explicit tripwire for ``installedEvents``, never installed on.
     static let permissionEvents: Set<String> = [
         "preToolUse", "beforeShellExecution", "beforeMCPExecution",
         "beforeReadFile", "beforeTabFileRead", "subagentStart",
     ]
 
-    // MARK: - Payload
 
     /// The hook payload Cursor delivers on stdin. Tolerant like
     /// ``AgentHooks/HookPayload``: every field optional, unknown fields
@@ -105,7 +82,6 @@ public enum CursorHooks {
         public var directory: String? { cwd ?? workspaceRoots?.first }
     }
 
-    // MARK: - Event reduction
 
     /// Maps a Cursor hook event to its effect on the session record. Unknown
     /// events return `nil` (write nothing), so a new Cursor event name can
@@ -119,9 +95,6 @@ public enum CursorHooks {
     public static func reduce(event: String, toolName: String?) -> AgentHooks.HookEventEffect? {
         switch event {
         case "sessionStart":
-            // Like Claude's SessionStart: a session that just opened is
-            // waiting for its first prompt, not working. Writing the record
-            // anyway is what lands the pid join and the origin immediately.
             return .set(.idle, detail: nil)
         case "beforeSubmitPrompt":
             return .set(.working, detail: nil)
@@ -134,8 +107,6 @@ public enum CursorHooks {
         case "subagentStop":
             return .set(.working, detail: "subagent")
         case "afterAgentThought", "afterAgentResponse", "preCompact":
-            // The agent is between steps: still working, but no longer on
-            // whatever tool the last postToolUse named.
             return .set(.working, detail: nil)
         case "stop":
             return .set(.idle, detail: nil)
@@ -146,10 +117,6 @@ public enum CursorHooks {
         }
     }
 
-    /// The semantic token for one of Cursor's tool names. Cursor names its
-    /// built-ins differently from Claude Code (`Shell`, not `Bash`) and
-    /// prefixes MCP tools with `MCP:`; everything else falls through to the
-    /// shared `tool:<name>` catch-all the app renders as "using <name>".
     static func detailToken(forTool tool: String) -> String? {
         switch tool {
         case "Shell": return "running-command"
@@ -164,7 +131,6 @@ public enum CursorHooks {
         }
     }
 
-    // MARK: - Handling one invocation
 
     /// Applies one hook invocation end to end: decode the payload, reduce the
     /// event, resolve the owning process, write or delete the record. Never
@@ -224,7 +190,6 @@ public enum CursorHooks {
         record.agent == "cursor" || record.agent == "cursor-agent"
     }
 
-    // MARK: - hooks.json install/remove
 
     /// Ownership marker inside every installed hook command, what
     /// ``removeHooks(from:)`` keys on. Never change it: released versions must
@@ -240,15 +205,6 @@ public enum CursorHooks {
             .appendingPathComponent("hooks.json")
     }
 
-    /// The shell command an installed hook runs. Same shape as
-    /// ``AgentHooks/hookCommand(event:cliPath:)``, with one addition: it
-    /// prints `{}` first, unconditionally.
-    ///
-    /// The empty object is a valid response for every installed event and
-    /// carries no opinion (no `permission`, no `continue`), so it can neither
-    /// allow nor block anything. Printing it before running the CLI means the
-    /// response is already on stdout even if the binary is missing or wedged,
-    /// which keeps a stale hook from a deleted app completely inert.
     static func hookCommand(event: String, cliPath: String) -> String {
         "printf '{}'; c=\(AgentHooks.shellSingleQuoted(cliPath)); [ -x \"$c\" ] || "
             + "c=/Applications/Keepresso.app/Contents/Helpers/keepresso; "
@@ -262,16 +218,10 @@ public enum CursorHooks {
     /// yet) starts from an empty object.
     public static func installHooks(into data: Data?, cliPath: String) throws -> Data {
         var root = try parseRoot(data)
-        // Cursor rejects a config without its schema version.
         if root["version"] == nil { root["version"] = 1 }
         var hooks = root["hooks"] as? [String: Any] ?? [:]
-        // Sweep our entries out of every event first, not only the ones about
-        // to be rewritten. An entry left under an event an older version
-        // installed is still ours and still fires, and Repair is just a
-        // re-install, so a re-install has to be able to clear it.
         for (event, value) in hooks {
             guard let groups = value as? [Any] else { continue }
-            // Only events that actually hold one of ours are touched.
             guard groups.contains(where: { isKeepresso($0) }) else { continue }
             let kept = stripKeepressoEntries(groups)
             if kept.isEmpty {
@@ -285,8 +235,6 @@ public enum CursorHooks {
             var entries = (hooks[event] as? [Any]) ?? []
             entries.append([
                 "command": hookCommand(event: event, cliPath: cliPath),
-                // Our CLI answers in milliseconds; a tight timeout means even
-                // a wedged disk can't stall a session.
                 "timeout": 5,
             ] as [String: Any])
             hooks[event] = entries
@@ -362,10 +310,6 @@ public enum CursorHooks {
         return report.isHealthy ? .installed : .needsRepair(report)
     }
 
-    /// Drops our own entries, carrying anything unrecognised through
-    /// untouched. Walked as `[Any]` for the reason spelled out on
-    /// ``AgentHooks/stripKeepressoEntries(_:)``: a single element we cannot
-    /// read must never cost the user the rest of their hooks for that event.
     static func stripKeepressoEntries(_ entries: [Any]) -> [Any] {
         entries.filter { !isKeepresso($0) }
     }

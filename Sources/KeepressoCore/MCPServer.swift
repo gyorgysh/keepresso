@@ -44,7 +44,6 @@ public struct MCPServer {
         self.serverVersion = serverVersion
     }
 
-    // MARK: - Dispatch
 
     /// One request line in, one response line out; nil for notifications and
     /// unparseable-but-ignorable input. Never throws, never blocks beyond the
@@ -61,9 +60,6 @@ public struct MCPServer {
         let method = object["method"] as? String ?? ""
         let params = object["params"] as? [String: Any] ?? [:]
 
-        // Notifications get no response, including when a client stamps one
-        // with an explicit null id. A null id on a regular request is
-        // accepted and echoed back as null in the response.
         guard let id, !method.hasPrefix("notifications/") else { return nil }
 
         switch method {
@@ -94,16 +90,11 @@ public struct MCPServer {
         }
     }
 
-    // MARK: - Tools
 
     private func call(tool: String, arguments: [String: Any]) -> LeaseOutcome? {
         func string(_ key: String) -> String? { arguments[key] as? String }
         func seconds(_ key: String) -> Int? {
             if let i = arguments[key] as? Int { return i }
-            // `Int(_: Double)` traps on NaN/±inf/out-of-range, so a hostile or
-            // sloppy `1e19` (or `1e400` → +inf) from stdin would abort the
-            // whole server. `Int(exactly:)` returns nil instead; the callers'
-            // `> 0` guards then reject it as a normal argument error.
             if let d = arguments[key] as? Double { return Int(exactly: d.rounded()) }
             return nil
         }
@@ -169,8 +160,6 @@ public struct MCPServer {
         }
     }
 
-    /// The same shape as `keepresso status --json`: the snapshot plus
-    /// whether the writing app is still alive.
     private func statusOutcome() -> LeaseOutcome {
         struct Report: Codable {
             var appRunning: Bool
@@ -199,7 +188,6 @@ public struct MCPServer {
         return LeaseOutcome(exitCode: 0, json: encodeJSON(report), human: "")
     }
 
-    // MARK: - Tool schemas
 
     static let toolList: [[String: Any]] = [
         [
@@ -273,7 +261,6 @@ public struct MCPServer {
         ],
     ]
 
-    // MARK: - Encoding
 
     private func encode(result: [String: Any], id: Any) -> String {
         encodeEnvelope(["jsonrpc": "2.0", "id": id, "result": result])

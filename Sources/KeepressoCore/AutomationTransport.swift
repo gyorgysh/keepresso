@@ -54,10 +54,6 @@ public enum AppDoorbell {
     }
 }
 
-/// Cross-process exclusive lock for the automation file stores (leases and
-/// the pending wake request). `flock` on a sidecar file serializes the
-/// check-then-write that compare-and-swap and claim need; atomic file
-/// replaces alone cannot.
 enum FileExclusiveLock {
     static func withLock<T>(directory: URL, name: String = ".lock", _ body: () -> T) -> T {
         try? FileManager.default.createDirectory(
@@ -66,8 +62,6 @@ enum FileExclusiveLock {
         let fd = open(path, O_CREAT | O_RDWR, 0o644)
         guard fd >= 0 else { return body() }
         defer { close(fd) }
-        // A signal can interrupt the wait (EINTR); retry rather than run the
-        // body unlocked, which would silently defeat the compare-and-swap.
         var locked = false
         while true {
             if flock(fd, LOCK_EX) == 0 {

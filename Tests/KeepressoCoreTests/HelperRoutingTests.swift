@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-// MARK: - Fakes
 
 final class HelperRoutingTestClient: PrivilegedHelperCalling, @unchecked Sendable {
     private let lock = NSLock()
@@ -102,8 +101,6 @@ final class BlockingLowPowerTestCall: @unchecked Sendable {
         onStarted = nil
         lock.unlock()
         callback?({ self.release() })
-        // Ordering is controlled by the test, not runner speed. The test's
-        // defer always releases this barrier even if it throws or is cancelled.
         permit.wait()
     }
     func release() { permit.signal() }
@@ -140,7 +137,6 @@ private final class FakeFallbackSleepControl: SleepSettingControlling, @unchecke
     }
 }
 
-// MARK: - Watchdog routing
 
 @Test func routedSleepWatchdogUsesDaemonWithoutAnyPromptWhenInstalled() {
     let client = HelperRoutingTestClient()
@@ -152,7 +148,6 @@ private final class FakeFallbackSleepControl: SleepSettingControlling, @unchecke
     )
 
     #expect(routed.createFlag())
-    // "Starting the helper" is a version-checked ping: nothing spawns, no prompt.
     #expect(routed.startHelper(appPID: 1) == .applied)
     #expect(routed.isFlagPresent())
     routed.removeFlag()
@@ -178,13 +173,10 @@ private final class FakeFallbackSleepControl: SleepSettingControlling, @unchecke
     routed.removeFlag()
 
     #expect(fallback.startCalls == 1)
-    // Not installed and never held via the daemon: no XPC traffic at all.
     #expect(client.calls.isEmpty)
 }
 
 @Test func routedWatchdogFailureMessageNamesTheActiveBackend() {
-    // A failed engage through the daemon is an XPC failure, not a file-write
-    // one; the message must match whichever backend is actually in use.
     let client = HelperRoutingTestClient()
     let installed = LockedFlag(true)
     let routed = RoutedSleepWatchdog(
@@ -208,8 +200,6 @@ private final class FakeFallbackSleepControl: SleepSettingControlling, @unchecke
     )
 
     #expect(routed.createFlag())
-    // The helper is removed mid-hold: the release must still reach the daemon
-    // side (its local hold bookkeeping), not silently route away.
     installed.value = false
     routed.removeFlag()
     #expect(client.calls.contains("setSleepHold(false)"))
@@ -246,12 +236,10 @@ private final class FakeFallbackSleepControl: SleepSettingControlling, @unchecke
     routed.removeFlag()
     #expect(client.calls == ["setAWDLHold(true)", "ping", "setAWDLHold(false)"])
 
-    // A dead daemon surfaces as a failure, not a hang or a false start.
     client.pingSucceeds = false
     #expect(routed.startHelper(appPID: 1) == .failed("The Keepresso helper isn't responding."))
 }
 
-// MARK: - Sleep-setting routing
 
 @Test func routedSleepControlReadsLocallyAndWritesThroughTheHelper() {
     let client = HelperRoutingTestClient()
@@ -262,7 +250,6 @@ private final class FakeFallbackSleepControl: SleepSettingControlling, @unchecke
         helperInstalled: { true }
     )
 
-    // Reads never need privileges; they stay on the plain pmset backend.
     fallback.reading = true
     #expect(routed.isSleepDisabled() == true)
 
@@ -288,7 +275,6 @@ private final class FakeFallbackSleepControl: SleepSettingControlling, @unchecke
     #expect(client.calls.isEmpty)
 }
 
-/// A tiny lock-guarded flag for simulating install-state flips mid-test.
 private final class LockedFlag: @unchecked Sendable {
     private let lock = NSLock()
     private var stored: Bool
@@ -395,7 +381,6 @@ private final class LockedFlag: @unchecked Sendable {
     for _ in 0..<100 { if !controller.busy { break }; try await Task.sleep(for: .milliseconds(10)) }
     #expect(controller.batteryHolding && controller.adapterHolding)
     #expect(controller.status == .active)
-    // Unplugging needs no profile rewrite when both profiles were opted in.
     controller.tick(enabled: true, lidClosed: true, closedDisplayActive: true, onBattery: true, helperAvailable: true, allowOnAC: true)
     #expect(helper.calls == ["setLowPowerHold(true)", "setAdapterLowPowerHold(true)"])
     controller.tick(enabled: true, lidClosed: false, closedDisplayActive: true, onBattery: true, helperAvailable: true, allowOnAC: true)

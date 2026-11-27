@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-// MARK: - Machine identity for user-facing copy
 
 @Test func deviceNameMapsModelFamilies() {
     #expect(MachineIdentity.deviceName(modelIdentifier: "MacBookPro18,3") == "your MacBook Pro")
@@ -28,7 +27,6 @@ import Foundation
     #expect(MachineIdentity.powerQualifier(snap(.unknown, charging: false, battery: false)) == nil)
 }
 
-/// Power-source monitor stub returning a canned snapshot.
 private final class FakePowerSource: PowerSourceMonitoring {
     var current: PowerSourceSnapshot
     init(_ snapshot: PowerSourceSnapshot) { self.current = snapshot }
@@ -56,7 +54,7 @@ private extension PowerSourceSnapshot {
 
 @Test func chargingMatchesOnlyWhileCharging() {
     #expect(PowerSourceTrigger.evaluate(.charging, against: .charging))
-    #expect(!PowerSourceTrigger.evaluate(.charging, against: .onAC))   // plugged in but full
+    #expect(!PowerSourceTrigger.evaluate(.charging, against: .onAC))
     #expect(!PowerSourceTrigger.evaluate(.charging, against: .onBattery))
 }
 
@@ -67,7 +65,7 @@ private extension PowerSourceSnapshot {
     #expect(trigger.label == "On battery")
 
     monitor.current = .charging
-    #expect(!trigger.isSatisfied()) // re-reads live state each call
+    #expect(!trigger.isSatisfied())
 }
 
 @Test func unknownProviderSatisfiesNothing() {

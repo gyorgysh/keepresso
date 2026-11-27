@@ -16,10 +16,8 @@ private func request(
     )
 }
 
-// MARK: - Adjudication
 
 @Test func wakeAdjudicationAcceptsSaneRequests() throws {
-    // A one-shot an hour out.
     let oneShot = AutomationWakeControl.adjudicate(
         request(oneShot: base.addingTimeInterval(3_600)), now: base)
     guard case .apply(let config?) = oneShot else {
@@ -29,7 +27,6 @@ private func request(
     #expect(config.oneShot == base.addingTimeInterval(3_600))
     #expect(!config.repeatingEnabled)
 
-    // A weekday-morning repeat.
     let repeating = AutomationWakeControl.adjudicate(
         request(repeatDays: "mtwrf", repeatTime: "07:30"), now: base)
     guard case .apply(let repeatConfig?) = repeating else {
@@ -40,7 +37,6 @@ private func request(
     #expect(repeatConfig.repeatWeekdays == "MTWRF")
     #expect(repeatConfig.repeatSecondsFromMidnight == 7 * 3600 + 30 * 60)
 
-    // All nil: clear.
     #expect(AutomationWakeControl.adjudicate(request(), now: base) == .apply(nil))
 }
 
@@ -49,29 +45,24 @@ private func request(
         if case .invalid = verdict { return true }
         return false
     }
-    // Past, too-soon, and absurdly far one-shots.
     #expect(isInvalid(AutomationWakeControl.adjudicate(
         request(oneShot: base.addingTimeInterval(-60)), now: base)))
     #expect(isInvalid(AutomationWakeControl.adjudicate(
         request(oneShot: base.addingTimeInterval(10)), now: base)))
     #expect(isInvalid(AutomationWakeControl.adjudicate(
         request(oneShot: base.addingTimeInterval(400 * 24 * 3600)), now: base)))
-    // Repeating halves alone, junk days, junk time.
     #expect(isInvalid(AutomationWakeControl.adjudicate(request(repeatDays: "MTW"), now: base)))
     #expect(isInvalid(AutomationWakeControl.adjudicate(request(repeatTime: "07:30"), now: base)))
     #expect(isInvalid(AutomationWakeControl.adjudicate(
         request(repeatDays: "XYZ", repeatTime: "07:30"), now: base)))
     #expect(isInvalid(AutomationWakeControl.adjudicate(
         request(repeatDays: "MTW", repeatTime: "25:99"), now: base)))
-    // A junk request id.
     var bad = request(oneShot: base.addingTimeInterval(3_600))
     bad.requestId = "../../etc"
     #expect(isInvalid(AutomationWakeControl.adjudicate(bad, now: base)))
 }
 
-// MARK: - Client ack loop
 
-/// A scripted wake-client world mirroring LeaseClientTests' shape.
 private final class World {
     var now = base
     var written: [AutomationWakeRequest] = []
@@ -141,7 +132,6 @@ private func ack(_ outcome: String) -> StatusSnapshot {
 @Test func wakeApplyTimesOutWithoutAnAck() {
     let world = World()
     world.statusScript = [ack("applied")]
-    // The ack belongs to a different request id.
     world.statusScript = [StatusSnapshot(
         isActive: false, pid: 77, writtenAt: base,
         lastWakeRequestId: "dddddddd-1111-2222-3333-444444444444",
@@ -152,7 +142,6 @@ private func ack(_ outcome: String) -> StatusSnapshot {
         oneShot: base.addingTimeInterval(3_600), repeatDays: nil, repeatTime: nil)
     #expect(outcome.exitCode == 2)
     #expect(world.now >= base.addingTimeInterval(LeaseClient.ackTimeout))
-    // Timeout claims only this request id so the app cannot apply it later.
     #expect(world.claimed == [reqId])
     #expect(world.pending == nil)
 }
@@ -172,7 +161,6 @@ private func ack(_ outcome: String) -> StatusSnapshot {
     #expect(AutomationWakeRequestFile.read(from: url) == request)
     #expect(AutomationWakeRequestFile.claim(requestId: reqId, at: url))
     #expect(AutomationWakeRequestFile.read(from: url) == nil)
-    // A late claim after the client timed out finds nothing.
     #expect(AutomationWakeRequestFile.claim(requestId: reqId, at: url) == false)
 }
 
@@ -210,7 +198,6 @@ private func ack(_ outcome: String) -> StatusSnapshot {
     #expect(outcome.human.contains("wakeorpoweron at 7:30AM MTWRF"))
 }
 
-// MARK: - Request file round trip
 
 @Test func wakeRequestFileRoundTrips() {
     let url = FileManager.default.temporaryDirectory
@@ -229,7 +216,6 @@ private func ack(_ outcome: String) -> StatusSnapshot {
     #expect(AutomationWakeRequestFile.read(from: url) == nil)
 }
 
-// MARK: - CLI parsing
 
 @Test func wakeCommandsParse() throws {
     #expect(try CLIRequest.parse(["wake", "status", "--json"]) == .wake(.status(json: true)))

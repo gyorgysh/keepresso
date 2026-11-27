@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-// MARK: - Parsing
 
 @Test func jitterParserReadsRepliesAndTimeouts() {
     let output = """
@@ -30,10 +29,7 @@ import Foundation
     #expect(JitterAnalyzer.parse("ping: cannot resolve nowhere.invalid: Unknown host").isEmpty)
 }
 
-// MARK: - Analysis
 
-/// Fifty samples on a flat baseline, with `spikeEvery > 0` raising every n-th
-/// sample by `spikeBy` ms (n = 5 at 0.2 s is the once-a-second AWDL cadence).
 private func synthetic(baseline: Double, spikeEvery: Int = 0, spikeBy: Double = 0) -> [PingSample] {
     (0..<50).map { seq in
         let spiked = spikeEvery > 0 && seq % spikeEvery == 0
@@ -50,8 +46,6 @@ private func synthetic(baseline: Double, spikeEvery: Int = 0, spikeBy: Double = 
 }
 
 @Test func onceASecondSpikesLookLikeAWDL() {
-    // The post's signature: a flat baseline with 50-100 ms detours every
-    // second (every 5th sample at 0.2 s).
     let report = JitterAnalyzer.analyze(
         synthetic(baseline: 15, spikeEvery: 5, spikeBy: 80), interval: 0.2)
     #expect(report.verdict == .looksLikeAWDL)
@@ -60,7 +54,6 @@ private func synthetic(baseline: Double, spikeEvery: Int = 0, spikeBy: Double = 
 }
 
 @Test func aperiodicSpikesAreJitteryNotAWDL() {
-    // Same spike magnitude, but bunched, not periodic: congestion, not AWDL.
     var samples = synthetic(baseline: 15)
     for seq in [7, 8, 9, 30] {
         samples[seq].milliseconds = 95
@@ -71,7 +64,6 @@ private func synthetic(baseline: Double, spikeEvery: Int = 0, spikeBy: Double = 
 }
 
 @Test func constantSpikingIsJitteryEvenWhenEvenlySpaced() {
-    // Every other sample spiking is not the AWDL minority-detour shape.
     let report = JitterAnalyzer.analyze(
         synthetic(baseline: 15, spikeEvery: 2, spikeBy: 80), interval: 0.2)
     #expect(report.verdict == .jittery)
@@ -87,8 +79,6 @@ private func synthetic(baseline: Double, spikeEvery: Int = 0, spikeBy: Double = 
 }
 
 @Test func spikeThresholdClearsNormalWanderOnTinyBaselines() {
-    // On a 3 ms LAN-grade baseline, doubling alone (6 ms) must not count as a
-    // spike; only the +25 ms absolute floor should.
     let report = JitterAnalyzer.analyze(
         synthetic(baseline: 3, spikeEvery: 5, spikeBy: 10), interval: 0.2)
     #expect(report.verdict == .clean)
@@ -101,7 +91,6 @@ private func synthetic(baseline: Double, spikeEvery: Int = 0, spikeBy: Double = 
     #expect(report.summary == "Baseline 15 ms, 10 spikes up to 95 ms, 1 lost")
 }
 
-// MARK: - Controller
 
 private final class FakePingRunner: PingRunning, @unchecked Sendable {
     let output: String?

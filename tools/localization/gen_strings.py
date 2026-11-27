@@ -12,15 +12,8 @@ import os
 
 LANGS = ["hu", "es", "fr", "de", "zh-Hans", "it", "ja", "ko", "ru", "pt-BR", "tr", "pl", "uk", "zh-Hant"]
 
-# Languages whose translations live in per-language overlay files
-# (extra/<stem>_app.py with APP, extra/<stem>_core.py with CORE and WIDGET)
-# instead of inline in the catalogs. Merged into the catalogs before emitting;
-# validate an overlay on its own with check_extra.py.
 EXTRA_LANGS = ["it", "ja", "ko", "ru", "pt-BR", "tr", "pl", "uk", "zh-Hant"]
 
-# Anchored to the repo root (two levels above this script), so running it
-# from any working directory writes to the real source trees instead of
-# silently creating a stray Sources/ next to the cwd.
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 APP_DIR = os.path.join(_REPO_ROOT, "Sources/Keepresso")
 CORE_DIR = os.path.join(_REPO_ROOT, "Sources/KeepressoCore")
@@ -63,8 +56,6 @@ def write_table(base_dir: str, lang: str, table: dict):
     print(f"wrote {path} ({len(table)} keys)")
 
 
-# Catalogs are imported from catalog_app.py / catalog_core.py / catalog_widget.py
-# to keep this file small. They map English source string -> {lang: translation}.
 from catalog_app import APP
 from catalog_core import CORE
 from catalog_widget import WIDGET
@@ -100,10 +91,6 @@ def merge_extra_langs():
         merge_overlay(CORE, lang, core_mod.CORE, "CORE")
         merge_overlay(WIDGET, lang, core_mod.WIDGET, "WIDGET")
 
-    # Feature batches added after the per-language overlays already contain all
-    # shipping languages in one place. Merge them only after validating the
-    # older overlays, otherwise every overlay would need placeholder entries
-    # for keys whose translations live in these supplemental catalogs.
     APP.update(V121_APP_WINDOWS)
     APP.update(V121_APP_SETTINGS)
     CORE.update(V121_CORE)

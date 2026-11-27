@@ -37,8 +37,6 @@ public final class SessionController {
     /// Leave `nil` for the classic manual toggle.
     public var triggerGate: TriggerEvaluating? {
         didSet {
-            // Triggers own activation from here: a manual session a safety
-            // pause remembered must not resume underneath the gate later.
             if triggerGate != nil { safetyPausedManual = nil }
         }
     }
@@ -52,10 +50,6 @@ public final class SessionController {
     /// The leases counting as demand as of the last reconcile, for the menu.
     public private(set) var liveLeases: [LeaseSummary] = []
 
-    /// True while the running session's only demand is leases: its end is
-    /// attributed to the lease, the timed cap and ``stopIn(_:)`` don't apply,
-    /// and assertions are capped at `.system`. A manual ``start(mode:options:cause:)``
-    /// takes ownership back.
     private var leaseHeld = false
 
     /// Whether the running session is sustained by leases alone, for hosts
@@ -63,9 +57,6 @@ public final class SessionController {
     /// app's trigger pause, the menu's explicit lease stop).
     public var isLeaseHeld: Bool { leaseHeld }
 
-    /// The last reconcile instant that saw live lease demand, so a lease end
-    /// noticed long after it happened (the Mac slept across the expiry) can
-    /// skip the end action, mirroring the timed path's staleness rule.
     private var lastLeaseDemandAt: Date?
 
     /// Fire a "still brewing" reminder once the active session has run this long,
@@ -118,9 +109,6 @@ public final class SessionController {
     /// level.
     public var pauseBelowBatteryPercent: Int? {
         didSet {
-            // Turning the feature off clears a latched pause at once, so a
-            // `start()` in the same tick isn't refused by a stale latch.
-            // `reconcile` also clears it, but only on the next tick.
             if pauseBelowBatteryPercent == nil { pausedByBattery = false }
         }
     }
@@ -134,25 +122,15 @@ public final class SessionController {
     /// clear it, activate for one tick, and die again with natural-end effects
     /// (notification, display sleep) the user never asked for.
     public enum BatteryReading: Equatable, Sendable {
-        /// Discharging on battery at this charge percentage (0-100).
         case discharging(Int)
-        /// Plugged in (charging or not): the battery cannot run flat.
         case onAC
-        /// No reading this call; leaves the pause latch as it is.
         case unknown
     }
 
     /// Whether any display worth holding awake is currently usable.
     public enum DisplayReading: Equatable, Sendable {
-        /// The lid is shut with no external display attached: the only panel
-        /// there is sits inside a closed lid. The display assertion stands
-        /// down unless zero-brightness mode keeps it live for remote use.
         case lidShutNoExternal
-        /// The lid is shut but an external monitor is attached (clamshell).
-        /// The display assertion stays so the external can stay awake; the
-        /// built-in panel and keyboard backlight are forced dark instead.
         case lidShutWithExternal
-        /// A usable built-in panel: the lid is open.
         case usable
         /// No reading this call. Leaves the last known reading in place so a
         /// fluttering `AppleClamshellState` or an out-of-band reconcile (start,
@@ -179,19 +157,9 @@ public final class SessionController {
     private let brightness: BrightnessControlling
     private let now: () -> Date
 
-    /// When the keep-active poke last fired, so it runs on a slow cadence
-    /// (``activityPokeInterval``) rather than every reconcile. Kept across a
-    /// stop so presence between sessions holds the same cadence.
     private var lastActivityPokeAt: Date?
-    /// The idle reading the last poke was taken against. A HID poke resets
-    /// the system's idle time itself, so later readings are read through
-    /// ``pokeAdjustedIdle(_:at:)`` to tell that reset from real input.
     private var idleAtLastPoke: TimeInterval = 0
 
-    /// Set when a session end action fires (sleep the display, lock, screen
-    /// saver, sleep the Mac). Presence between sessions then holds until real
-    /// input, so a poke never wakes the display the action just slept or
-    /// types into the lock screen.
     private var presenceHeldUntilInput = false
     /// The previous HID idle reading while held. Real input shows up as a
     /// reading below it. A short idle alone is not enough: a key or
@@ -199,14 +167,8 @@ public final class SessionController {
     /// idle time, and must not count as the user coming back.
     private var presenceHeldIdle: TimeInterval?
 
-    /// The display brightness before dim-don't-sleep or the clamshell dark
-    /// force lowered it, or `nil` when the panel is not currently held dark by
-    /// us. Set once on the first transition and cleared on restore, so
-    /// dim/restore stays idempotent under the 1 Hz caller.
     private var preDimLevel: Double?
 
-    /// The keyboard backlight before the clamshell dark force zeroed it, or
-    /// `nil` when we are not holding the keyboard dark.
     private var preKeyboardLevel: Double?
 
     /// Last panel / keyboard levels observed while the lid was open. The first
@@ -217,38 +179,17 @@ public final class SessionController {
     private var lastOpenPanelLevel: Double?
     private var lastOpenKeyboardLevel: Double?
 
-    /// Whether the clamshell dark force already wrote panel / keyboard to 0
-    /// for this hold. Cleared on restore so a new clamshell stretch re-applies
-    /// once instead of every 1 Hz tick.
     private var clamshellPanelForced = false
     private var clamshellKeyboardForced = false
 
-    /// How often the prompt-free keep-active method reports activity to the OS.
-    /// Comfortably under the shortest common idle timeout (a minute or two).
-    /// HID methods use ``ActivitySimulationMethod/pokeInterval`` (60s) instead.
     static let activityPokeInterval: TimeInterval = 30
 
-    /// Only report synthetic activity once the user has been genuinely idle this
-    /// long. While they're providing real input (typing, or gaming with constant
-    /// mouse movement) they already read as active, so there's nothing to fake
-    /// and a cursor nudge would just be the "weird mouse movement" to avoid.
     static let activityIdleThreshold: TimeInterval = 10
 
-    /// How far an idle reading may trail the time since our own poke and
-    /// still be explained by it. The host samples idle and the clock
-    /// together, so they differ only by the moment the post takes to land.
-    /// Real input inside this half second after a poke reads as the poke
-    /// itself, until the next input.
     static let pokeIdleSlack: TimeInterval = 0.5
 
-    /// How many reminder intervals have already been surfaced this session, so
-    /// the per-second ``reconcile(now:systemIdleSeconds:)`` fires each at most
-    /// once (and a recurring reminder advances one nudge per interval crossed).
     private var remindersFired = 0
 
-    /// True once the ``endingSoonNotice`` heads-up has fired for the current
-    /// countdown (or was suppressed at arming), so the per-second reconcile
-    /// posts it at most once per arming.
     private var endingSoonFired = false
 
     /// True once ``pauseBelowBatteryPercent`` has force-stopped the session, so
@@ -258,10 +199,6 @@ public final class SessionController {
     /// below the cutoff and Keepresso is deliberately letting the Mac sleep.
     public private(set) var pausedByBattery = false
 
-    /// Extra charge (percentage points) above the cutoff required before a
-    /// battery-paused session may reactivate. A dead-band: without it a reading
-    /// bouncing 19/20/19/20 around a threshold of 20 would force-stop and
-    /// immediately restart every second.
     static let batteryResumeMargin = 3
 
     /// Bumped each time ``start(mode:options:cause:)`` is refused by the
@@ -276,8 +213,6 @@ public final class SessionController {
     /// thermal latch is cleared at once (and again on the next reconcile).
     public var pauseWhenHot = false {
         didSet {
-            // Same as the battery latch: disabling clears immediately so a
-            // start() in the same tick isn't refused by a stale thermal latch.
             if !pauseWhenHot { pausedByThermal = false }
         }
     }
@@ -291,14 +226,6 @@ public final class SessionController {
     /// The thermal twin of ``batteryRefusedStarts``.
     public private(set) var thermalRefusedStarts = 0
 
-    /// A manual session a safety pause (battery or thermal) force-stopped,
-    /// remembered so ``reconcile`` restarts it when the pause lifts. Only
-    /// manual sessions need this: trigger-gated and lease-held sessions
-    /// reactivate through the gate and lease demand on the next tick, and
-    /// recording them would fight that ownership. Any explicit `start` or
-    /// `stop` clears it, so user intent always wins over the remembered pause.
-    /// Options are not part of it: the session resumes with the live
-    /// ``options``, so a setting changed during the pause is kept.
     private var safetyPausedManual: (
         mode: SessionMode,
         startedAt: Date?,
@@ -317,14 +244,9 @@ public final class SessionController {
     /// "that didn't work, and here's why" shake.
     public var refusedStarts: Int { batteryRefusedStarts + thermalRefusedStarts }
 
-    /// End action waiting out ``endActionDebounce``, or `nil` when none.
     private var pendingEndAction: SessionEndAction?
-    /// When ``pendingEndAction`` should fire, wall-clock of the injected
-    /// ``now`` source.
     private var pendingEndActionAt: Date?
 
-    /// Last discharging battery percent fed to reconcile, for decision-log
-    /// snapshots. Cleared on AC / unknown.
     private var lastBatteryPercent: Int?
 
     /// Last known display usability from a real host reading (``.usable`` or
@@ -357,7 +279,6 @@ public final class SessionController {
         self.now = now
     }
 
-    // MARK: - Lifecycle
 
     /// Begin (or restart) a session with the given policy.
     public func start(
@@ -365,10 +286,6 @@ public final class SessionController {
         options: SleepPreventionOptions? = nil,
         cause: SessionCause = .manual
     ) {
-        // Honor the battery pause: activating here would only live until the
-        // next tick's reading re-paused it, firing the natural-end effects at
-        // the user seconds after they asked to start. The menu explains the
-        // pause; raising the threshold or plugging in lifts it.
         if pausedByBattery {
             batteryRefusedStarts += 1
             log.record(
@@ -380,8 +297,6 @@ public final class SessionController {
             )
             return
         }
-        // Same contract for the thermal pause: the guard decides when the Mac
-        // has cooled; a start now would just be re-stopped on the next tick.
         if pausedByThermal {
             thermalRefusedStarts += 1
             log.record(
@@ -393,13 +308,8 @@ public final class SessionController {
             )
             return
         }
-        // A restart within the debounce window cancels a pending end action
-        // (the session is back on, so sleep/lock would fight the user).
         cancelPendingEndAction()
-        // A manual start takes ownership: lease expiry no longer ends the
-        // session, and the timed cap applies again.
         leaseHeld = false
-        // Fresh user intent supersedes anything a safety pause remembered.
         safetyPausedManual = nil
         let restarted = isActive
         if let options { self.options = options }
@@ -438,25 +348,12 @@ public final class SessionController {
         stop(reason: cause == .manual ? L("Stopped manually") : L("Stopped by a command"))
     }
 
-    /// What effects a stop may fire beyond releasing assertions.
     private enum StopEffects {
-        /// Manual or command stop: silent.
         case none
-        /// Natural end: notification (if configured) and a debounced end action.
         case natural(kind: SessionEventKind)
-        /// Safety pause (battery / thermal): notification only, never the end
-        /// action. Those pauses already manage sleep on their own.
         case safetyPause(kind: SessionEventKind)
     }
 
-    /// The shared teardown: logs `reason` when a session was actually running
-    /// (idempotent stops don't spam the log), then releases everything. When the
-    /// session ended on its own, fire the end notification and (for natural
-    /// ends) schedule the end action; a manual stop stays silent so it never
-    /// surprise-sleeps the Mac. A `notice` replaces the generic end
-    /// notification with a specific explanation (the battery pause), delivered
-    /// even when ``notifyOnEnd`` is off: that stop is invisible otherwise,
-    /// which is the notice's whole point.
     private func stop(
         reason: String,
         effects: StopEffects = .none,
@@ -483,13 +380,7 @@ public final class SessionController {
         leaseHeld = false
         remindersFired = 0
         endingSoonFired = false
-        // An explicit stop cancels a pending auto-resume: the user ended it,
-        // so a later pause lift must not restart brewing behind their back.
-        // The safety-pause paths re-record below, after this teardown.
         safetyPausedManual = nil
-        // Drop the lid latch so the next start fails open until the host
-        // supplies a real display reading (avoids holding a stale shut
-        // verdict across open-then-start before the next ticker sample).
         lastDisplayReading = .unknown
         restorePanelBrightness()
         restoreKeyboardBrightness()
@@ -506,11 +397,6 @@ public final class SessionController {
         }
     }
 
-    /// Force-stop for a safety pause (battery or thermal), remembering a
-    /// manual session so the pause lifting restarts it. Trigger-gated and
-    /// lease-held sessions reactivate through the gate and lease demand, so
-    /// only a session the manual toggle owns is recorded; anything else would
-    /// fight that ownership on resume.
     private func safetyStop(
         reason: String,
         effects: StopEffects,
@@ -528,11 +414,6 @@ public final class SessionController {
         if manualOwned { safetyPausedManual = snapshot }
     }
 
-    /// Restart a manual session a safety pause stopped, now that the pause
-    /// has lifted. Mirrors what ``start(mode:options:cause:)`` sets, but logs
-    /// the resume truthfully instead of as a fresh manual start, and keeps
-    /// the original `startedAt` so a timed session's remaining time stays
-    /// honest (an overdue deadline ends on the next tick, as it should).
     private func resumeSafetyPausedSession(
         _ paused: (
             mode: SessionMode,
@@ -548,8 +429,6 @@ public final class SessionController {
         mode = paused.mode
         startedAt = paused.startedAt ?? instant
         isActive = true
-        // Keep the nudge counter: the pause must not re-fire a one-shot
-        // "still brewing" reminder the session already delivered.
         remindersFired = paused.remindersFired
         lastActivityPokeAt = nil
         armEndingSoon(remaining: paused.mode.duration.map {
@@ -564,9 +443,6 @@ public final class SessionController {
         )
     }
 
-    /// Notify (and optionally schedule the end action) when a session ends on
-    /// its own. The cancelled reminder above is the mid-session nudge; this is
-    /// a separate one-shot. The action is debounced so a flap can cancel it.
     private func performEndEffects(
         notice: (title: String, body: String)?,
         scheduleAction: Bool
@@ -595,12 +471,6 @@ public final class SessionController {
         pendingEndActionAt = nil
     }
 
-    /// Fire a due end action, unless it has gone stale. Called from
-    /// ``reconcile`` so the host's 1 Hz tick drives the debounce without a
-    /// separate timer. The staleness bound covers what the scheduling-time
-    /// check can't see: a Mac that slept across the debounce window, or a
-    /// safety pause that starved the flush for hours, must not have the
-    /// action sleep or lock the just-woken Mac long after the session ended.
     private func flushPendingEndAction(at instant: Date) {
         guard let action = pendingEndAction,
               let due = pendingEndActionAt,
@@ -625,7 +495,6 @@ public final class SessionController {
         isActive ? stop() : start(mode: mode)
     }
 
-    // MARK: - Derived state
 
     /// Seconds the current session has been running, or 0 while idle.
     public var elapsed: TimeInterval {
@@ -674,7 +543,6 @@ public final class SessionController {
         pauseWhenHot
     }
 
-    // MARK: - Reconciliation
 
     /// Bring live power assertions in line with current state, expire timed
     /// sessions, and apply the screen-saver yield. Safe to call frequently.
@@ -722,9 +590,6 @@ public final class SessionController {
             effectiveDisplay = lastDisplayReading
         }
 
-        // Tick leases first so expiry runs and the menu's rows stay fresh
-        // even when a safety pause below early-returns (the same reason those
-        // paths call `triggerGate?.tick()`).
         let summaries = leases?.tick(now: instant) ?? []
         if summaries != liveLeases { liveLeases = summaries }
         let leaseDemand = !summaries.isEmpty
@@ -738,24 +603,16 @@ public final class SessionController {
         }
 
         if pauseBelowBatteryPercent == nil {
-            // Feature off: never leave a stale pause latched.
             pausedByBattery = false
         } else if let threshold = pauseBelowBatteryPercent, case .discharging(let percent) = battery {
             if pausedByBattery {
-                // Stay paused until charge clears the cutoff by the resume margin,
-                // so a reading hovering at the threshold doesn't restart every tick.
                 guard percent >= threshold + Self.batteryResumeMargin else {
-                    // Keep trigger state advancing so the rule list stays live
-                    // and the first post-resume decision isn't hours stale.
                     triggerGate?.tick()
                     return
                 }
                 pausedByBattery = false
             } else if percent < threshold {
                 pausedByBattery = true
-                // The safety pause owns sleep from here: a pending end action
-                // from a just-ended session must not fire when the pause
-                // lifts, arbitrarily later.
                 cancelPendingEndAction()
                 if isActive {
                     safetyStop(
@@ -771,27 +628,19 @@ public final class SessionController {
                 return
             }
         } else if case .onAC = battery {
-            // Plugged in: the pause is moot, resume normal control.
             pausedByBattery = false
         } else if pausedByBattery {
-            // No reading (an internal reconcile from start/stop): hold the
-            // latch rather than activating for one tick and dying on the next.
             triggerGate?.tick()
             return
         }
 
-        // The thermal pause, mirroring the battery block above. The guard has
-        // already applied dwell and hysteresis, so this only latches: `.hot`
-        // stops and holds, `.clear` releases, `.unknown` changes nothing.
         if !pauseWhenHot {
-            // Feature off: never leave a stale pause latched.
             pausedByThermal = false
         } else {
             switch thermal {
             case .hot:
                 if !pausedByThermal {
                     pausedByThermal = true
-                    // Same rule as the battery latch above.
                     cancelPendingEndAction()
                     if isActive {
                         safetyStop(
@@ -817,21 +666,11 @@ public final class SessionController {
             }
         }
 
-        // A lifted safety pause restarts the manual session it stopped ahead
-        // of the chain below, so an overdue timed deadline still ends on
-        // this same tick through the normal expiry path instead of holding
-        // assertions for a tick past it. No gate (it reactivates on its own)
-        // and no leases (they take precedence): with either present, the
-        // remembered session stays out of the way.
         if triggerGate == nil, !isActive, !leaseDemand, let paused = safetyPausedManual {
             resumeSafetyPausedSession(paused, at: instant)
         }
 
         if let triggerGate {
-            // Triggers own activation, leases union in; the timed cap doesn't
-            // apply. Ownership (`leaseHeld`) tracks what sustains the session
-            // while demand lasts, so the eventual drop is attributed to the
-            // right source.
             triggerGate.tick()
             let gateOn = triggerGate.isSatisfied()
             let want = gateOn || leaseDemand
@@ -855,10 +694,6 @@ public final class SessionController {
             }
         } else if isActive, !leaseHeld, let total = mode.duration, let startedAt,
                   instant.timeIntervalSince(startedAt) >= total {
-            // A deadline noticed long after it passed (Mac slept across it)
-            // still ends the session and may notify, but must not fire the
-            // end action: waking the lid would immediately re-sleep the
-            // display or lock the screen.
             let overdue = instant.timeIntervalSince(startedAt) - total
             let fireAction = overdue <= Self.endActionStaleGrace
             stop(
@@ -867,10 +702,6 @@ public final class SessionController {
                     ? .natural(kind: .sessionEnded)
                     : .safetyPause(kind: .sessionEnded)
             )
-            // Live leases carry the awake state straight through the expiry:
-            // the timed session ends normally (log, optional notice), then a
-            // lease session begins in the same tick, cancelling the pending
-            // end action before it can fire mid-lease.
             if leaseDemand {
                 beginLeaseSession(at: instant)
             } else {
@@ -878,8 +709,6 @@ public final class SessionController {
                 return
             }
         } else if !isActive, leaseDemand {
-            // A safety pause never reaches this point (the latches above
-            // early-return), so activating on lease demand is always safe.
             beginLeaseSession(at: instant)
         } else if isActive, leaseHeld, !leaseDemand {
             stop(
@@ -890,8 +719,6 @@ public final class SessionController {
             return
         }
 
-        // Taken before this tick's poke: every idle consumer reads the user's
-        // idle, not the reset our own posted key or mouse event caused.
         let userIdle = pokeAdjustedIdle(systemIdleSeconds, at: instant)
         let ownPokeReset = systemIdleSeconds.map { idleResetIsOwnPoke($0, at: instant) } ?? false
         let desired = desiredAssertions(systemIdleSeconds: userIdle, display: effectiveDisplay)
@@ -899,9 +726,6 @@ public final class SessionController {
             desired,
             reason: "Keepresso is brewing"
         )
-        // Surface create failures: a session can be "active" in state while
-        // IOPMAssertionCreateWithName quietly refused, which would otherwise
-        // look like a keep-awake that does nothing.
         if desired.isSubset(of: assertions.held) {
             lastAssertionError = nil
         } else {
@@ -917,8 +741,6 @@ public final class SessionController {
         flushPendingEndAction(at: instant)
     }
 
-    /// Panel and keyboard brightness for the current display situation.
-    ///
     /// - **Lid shut** (either external layout, prevent-display-sleep on): force
     ///   the built-in panel and keyboard backlight to 0. A shut lid means the
     ///   built-in should emit nothing, and macOS offers no way to sleep one
@@ -930,30 +752,17 @@ public final class SessionController {
     ///   displays and keyboards are untouched either way: this seam only addresses the
     ///   built-in. Restore targets come from the last open-lid sample (not a
     ///   live read after macOS has already zeroed them).
-    /// - **Lid open**: remember levels for a later clamshell stretch, then
-    ///   optional "dim, don't sleep" after idle.
-    ///
-    /// Idempotent under the 1 Hz caller. Not while a lease holds the session.
     private func maybeDim(systemIdleSeconds: TimeInterval?, display: DisplayReading = .unknown) {
         let canTouch = isActive && !leaseHeld && options.preventDisplaySleep
 
-        // While the lid is open, keep a restore target for clamshell. Do this
-        // before any force/restore so a usable tick after open refreshes the
-        // cache with the levels the user actually wants.
         if display == .usable {
             noteOpenBrightnessLevels()
         }
 
-        // Lid shut: the built-in panel and keyboard go dark, whether or not an
-        // external is attached. With an external the assertion keeps that
-        // monitor awake and this is the only way to darken the built-in; with
-        // no external the panel is being slept as well and this is the layer
-        // underneath. Runs before idle dim so the two don't fight.
         if canTouch, display == .lidShutWithExternal || display == .lidShutNoExternal {
             forceClamshellDark()
             return
         }
-        // Left clamshell (or never entered): put the keyboard back first.
         restoreKeyboardBrightness()
 
         guard canTouch,
@@ -961,29 +770,17 @@ public final class SessionController {
               brightness.isSupported
         else { restorePanelBrightness(); return }
 
-        // No idle reading this tick: hold whatever state we're in. Treating an
-        // unknown idle time as "active" would flicker a dimmed panel back up.
         guard let idle = systemIdleSeconds else { return }
         if idle >= threshold {
-            // Only dim once the current level actually reads back: a failed read
-            // must not be assumed to be full brightness, or restoring later would
-            // snap the panel to 100% instead of the user's setting.
             if preDimLevel == nil, let current = brightness.currentBrightness() {
                 preDimLevel = current
-                // Idle dim holds the panel at dimFloor (often 0). Keep the
-                // open-lid cache on the real pre-dim level so a later clamshell
-                // stretch cannot learn the floor as the restore target.
                 lastOpenPanelLevel = current
                 brightness.setBrightness(options.dimFloor)
             } else if clamshellPanelForced {
-                // Left clamshell while still idle: the panel may still be at 0
-                // from the dark force. Re-apply the configured floor so a
-                // non-zero dimFloor is not left darker than intended.
                 brightness.setBrightness(options.dimFloor)
                 clamshellPanelForced = false
             }
         } else {
-            // Definitely active again: undo the dim.
             restorePanelBrightness()
         }
     }
@@ -991,30 +788,21 @@ public final class SessionController {
     /// Remember panel and keyboard levels while the lid is open. Used as the
     /// clamshell restore target so we never learn macOS's post-close zero.
     private func noteOpenBrightnessLevels() {
-        // Skip the panel while we hold it dimmed or forced dark: the live
-        // reading is our floor/zero, not the user's open-lid preference.
         if preDimLevel == nil, !clamshellPanelForced,
            let panel = brightness.currentBrightness() {
             lastOpenPanelLevel = panel
         }
-        // Keyboard is not idle-dimmed; only skip while the clamshell force holds it.
         if !clamshellKeyboardForced, let keys = brightness.currentKeyboardBrightness() {
             lastOpenKeyboardLevel = keys
         }
     }
 
-    /// Force the built-in panel and keyboard to 0 for clamshell keep-awake.
-    ///
     /// Restore targets prefer a live **lit** reading, then the last open-lid
     /// sample. A live near-zero is never stored as the restore target: on the
     /// first clamshell tick macOS has usually already darkened the keyboard,
     /// and capturing that 0 was what left keys dark after lid open (#13).
     /// When no good target exists, that side is left alone so macOS can own it.
     private func forceClamshellDark() {
-        // Panel: try even when `isSupported` flipped false after the lid shut
-        // (lists lose the built-in). setBrightness no-ops if the backend has
-        // no id; preDimLevel still drives a correct restore when the panel
-        // reappears.
         if preDimLevel == nil {
             if let current = brightness.currentBrightness(), current > 0.02 {
                 preDimLevel = current
@@ -1029,11 +817,8 @@ public final class SessionController {
             if !clamshellPanelForced {
                 needsWrite = true
             } else if let current = brightness.currentBrightness() {
-                // Drift or a rejected first set: re-assert without 1 Hz spam
-                // when the panel is unreadable under a closed lid.
                 needsWrite = current > 0.02
             } else {
-                // No live read (common under a shut lid): do not spam set.
                 needsWrite = false
             }
             if needsWrite {
@@ -1054,7 +839,6 @@ public final class SessionController {
                 preKeyboardLevel = open
                 clamshellKeyboardForced = false
             }
-            // else: no open sample and already dark → leave keyboard to macOS.
         }
         if preKeyboardLevel != nil {
             let needsWrite: Bool
@@ -1072,20 +856,14 @@ public final class SessionController {
         }
     }
 
-    /// Put the panel back to the level captured before we dimmed or forced it
-    /// dark. A no-op otherwise, so it's safe on every stop and losing tick.
     private func restorePanelBrightness() {
         guard let level = preDimLevel else { return }
         brightness.setBrightness(level)
-        // Refresh the open-lid cache with the level we just restored so a
-        // stop-while-dimmed (or activity restore) still seeds the next
-        // clamshell stretch correctly.
         lastOpenPanelLevel = level
         preDimLevel = nil
         clamshellPanelForced = false
     }
 
-    /// Put the keyboard backlight back after a clamshell dark force.
     private func restoreKeyboardBrightness() {
         guard let level = preKeyboardLevel else { return }
         brightness.setKeyboardBrightness(level)
@@ -1103,22 +881,6 @@ public final class SessionController {
         restoreKeyboardBrightness()
     }
 
-    /// Report user activity on a slow cadence while a keep-active session
-    /// runs (or between sessions too, with the brewing scope off), so
-    /// software with its own idle timeout keeps the user present.
-    /// Skipped while they are actually providing input (real input already
-    /// counts, and a key tap or nudge then is the jitter to avoid). Once idle
-    /// past ``activityIdleThreshold`` it pokes, then repeats on the method's
-    /// interval. With the idle-only mode on (``SleepPreventionOptions/
-    /// activityPokeIdleMinutes``) the bar rises to that many idle minutes
-    /// and a frontmost game suppresses the poke too. No-op unless the option
-    /// is on, and unless a session is active while scoped to brewing
-    /// (``SleepPreventionOptions/activityOnlyWhileBrewing``). Safety pauses
-    /// return from reconcile before this runs, so they always silence it.
-    /// `systemIdleSeconds` is the raw reading, used by the between-sessions
-    /// hold (nothing is posted while it holds). `userIdle` is the same
-    /// reading through ``pokeAdjustedIdle(_:at:)``, used for every idle
-    /// decision after it.
     private func maybePokeActivity(
         at instant: Date,
         rawIdle: TimeInterval?,
@@ -1130,16 +892,9 @@ public final class SessionController {
         guard options.simulateUserActivity,
               isActive || !options.activityOnlyWhileBrewing else { return }
         if !isActive {
-            // Between sessions, only the host's tick carries an idle reading.
-            // An out-of-band reconcile (lease doorbell, ending leases) has
-            // none and may land while the user is typing, so it never pokes.
             guard let idle = rawIdle else { return }
-            // An end action is about to fire: a poke now is undone by it, and
-            // a posted event would only blur the input check below.
             guard pendingEndAction == nil else { return }
             if presenceHeldUntilInput {
-                // Nothing is posted while held, so idle dropping below the
-                // previous reading can only be real input.
                 guard let previous = presenceHeldIdle, idle < previous else {
                     presenceHeldIdle = idle
                     return
@@ -1150,29 +905,15 @@ public final class SessionController {
         }
         let idleOnlyMinutes = options.activityPokeIdleMinutes.flatMap { $0 > 0 ? $0 : nil }
         if let minutes = idleOnlyMinutes {
-            // Idle-only mode: a frontmost game already reports the user as
-            // present to everything watching, so there is nothing to fake.
-            // Re-arm so the poke fires promptly once the game quits.
             if gameFrontmost {
                 lastActivityPokeAt = nil
                 return
             }
             let needed = TimeInterval(minutes * 60)
-            // No idle reading means "not known to be idle": hold the poke
-            // rather than firing one on an out-of-band reconcile (lease
-            // doorbell, start, URL command) while the user may be typing.
-            // The arm is left alone so the hold neither fires now nor resets
-            // the cadence: clearing it here would make every nil-idle
-            // reconcile re-arm, and the next tick would poke immediately,
-            // bypassing `pokeInterval` under a heartbeating agent.
             guard let idle = userIdle, idle >= needed else {
                 return
             }
         } else if let idle = userIdle, idle < Self.activityIdleThreshold, !ownPokeReset {
-            // Actively in use: nothing to fake. Arm the next poke to fire
-            // promptly once they step away rather than a full interval later.
-            // A short reading our own poke explains is not use: the interval
-            // below holds the next poke instead.
             lastActivityPokeAt = nil
             return
         }
@@ -1180,9 +921,6 @@ public final class SessionController {
         if let last = lastActivityPokeAt,
            instant.timeIntervalSince(last) < interval { return }
         lastActivityPokeAt = instant
-        // The user's idle at the poke, for ``pokeAdjustedIdle(_:at:)`` to
-        // carry on from. With no reading (the start poke, just after they
-        // clicked) that is zero.
         idleAtLastPoke = userIdle ?? 0
         activity.poke(options.activityPokeKind)
     }
@@ -1202,27 +940,18 @@ public final class SessionController {
         return max(raw, idleAtLastPoke + instant.timeIntervalSince(last))
     }
 
-    /// Whether an idle reading is explained by our own last poke: it keeps
-    /// pace with the time since that poke, so nothing else touched the Mac.
     private func idleResetIsOwnPoke(_ raw: TimeInterval, at instant: Date) -> Bool {
         guard let last = lastActivityPokeAt else { return false }
         let sincePoke = instant.timeIntervalSince(last)
         return sincePoke >= 0 && raw + Self.pokeIdleSlack >= sincePoke
     }
 
-    /// Surface the reminder once an active session crosses an interval boundary.
-    /// One-shot fires a single time at ``reminderAfter``; recurring fires once per
-    /// interval (and never floods if several intervals elapse between ticks, e.g.
-    /// across a sleep). No-op when reminders are off.
     private func maybeRemind(at instant: Date) {
         guard isActive, let after = reminderAfter, after > 0, after.isFinite, let startedAt else { return }
-        // Clamp before converting: a directly assigned (unsanitized)
-        // `reminderAfter` near zero would make this ratio trap `Int(_:)`.
         let ratio = instant.timeIntervalSince(startedAt) / after
         guard ratio.isFinite, ratio >= 0 else { return }
         let intervalsPassed = Int(min(ratio, Double(Int.max / 2)))
         guard intervalsPassed >= 1 else { return }
-        // Recurring tracks every interval; one-shot caps at the first.
         let target = reminderRepeats ? intervalsPassed : 1
         guard target > remindersFired else { return }
         remindersFired = target
@@ -1234,10 +963,6 @@ public final class SessionController {
         reminder?.notify(title: L("Keepresso is still brewing"), body: body, sound: reminderSound)
     }
 
-    /// Arm the one-shot ``endingSoonNotice`` for a countdown with this much
-    /// time on it: starting already inside the window marks it fired, so the
-    /// user isn't pinged moments after choosing a duration shorter than the
-    /// notice. `nil` remaining (an indefinite session) simply re-arms.
     private func armEndingSoon(remaining: TimeInterval?) {
         guard let notice = endingSoonNotice, notice > 0, let remaining else {
             endingSoonFired = false
@@ -1246,10 +971,6 @@ public final class SessionController {
         endingSoonFired = remaining <= notice
     }
 
-    /// Post the "ending soon" heads-up once a timed session's remaining time
-    /// drops inside ``endingSoonNotice``. One-shot per arming (see
-    /// ``armEndingSoon(remaining:)``); never fires for indefinite or
-    /// trigger-gated sessions.
     private func maybeNotifyEndingSoon(at instant: Date) {
         guard isActive, triggerGate == nil, !leaseHeld, !endingSoonFired,
               let notice = endingSoonNotice, notice > 0,
@@ -1257,10 +978,6 @@ public final class SessionController {
         let remaining = total - instant.timeIntervalSince(startedAt)
         guard remaining <= notice else { return }
         endingSoonFired = true
-        // Round up to a whole minute for display: the first tick inside the
-        // window sees remaining just under the lead time, and the formatter
-        // truncates, so a 5-minute notice would read "4 minutes" as often
-        // as not.
         let display = (remaining / 60).rounded(.up) * 60
         reminder?.notify(
             title: L("Keepresso stops soon"),
@@ -1269,12 +986,7 @@ public final class SessionController {
         )
     }
 
-    /// A short, localized human duration like "30 minutes", "1 hour", or
-    /// "2 hours, 15 minutes". `DateComponentsFormatter` follows the app's
-    /// language and each language's plural rules, so no per-unit strings table.
     static func humanDuration(_ seconds: TimeInterval) -> String {
-        // Defensive: imported settings can carry huge or non-finite
-        // durations, and `Int(_:)` traps outside its range.
         guard seconds.isFinite, seconds > 0,
               seconds < Double(Int.max / 2)
         else { return "" }
@@ -1283,7 +995,6 @@ public final class SessionController {
         formatter.unitsStyle = .full
         formatter.allowedUnits = total >= 3600 ? [.hour, .minute] : [.minute]
         formatter.maximumUnitCount = 2
-        // At least a minute, so a just-crossed one-shot never reads "0 minutes".
         return formatter.string(from: TimeInterval(max(60, total))) ?? ""
     }
 
@@ -1298,11 +1009,6 @@ public final class SessionController {
         leaseHeld = true
     }
 
-    /// How a lease-ended stop behaves: a lease end noticed shortly after the
-    /// demand was last seen is a natural end (notification plus the end
-    /// action), but one noticed past ``endActionStaleGrace``, meaning the Mac
-    /// slept across the expiry, must not sleep or lock the just-woken Mac, so
-    /// only the notification fires.
     private func leaseEndEffects(at instant: Date) -> StopEffects {
         let late = lastLeaseDemandAt.map {
             instant.timeIntervalSince($0) > Self.endActionStaleGrace
@@ -1310,11 +1016,8 @@ public final class SessionController {
         return late ? .safetyPause(kind: .leaseReleased) : .natural(kind: .leaseReleased)
     }
 
-    /// The activation half of ``setActive(_:at:)`` for a session whose only
-    /// demand is leases, with the log attributed to the first live lease.
     private func beginLeaseSession(at instant: Date) {
         cancelPendingEndAction()
-        // The lease owns the session from here, not a remembered manual one.
         safetyPausedManual = nil
         isActive = true
         startedAt = instant
@@ -1331,12 +1034,8 @@ public final class SessionController {
         )
     }
 
-    /// Drive `isActive` toward `want` without disturbing it when already there,
-    /// so a trigger-held session keeps its original `startedAt`.
     private func setActive(_ want: Bool, at instant: Date) {
         if want, !isActive {
-            // Trigger re-satisfied within the debounce: cancel a pending
-            // end action so a flap doesn't sleep the Mac mid-session.
             cancelPendingEndAction()
             isActive = true
             startedAt = instant
@@ -1358,22 +1057,14 @@ public final class SessionController {
         }
     }
 
-    /// The assertion set implied by the current session and options.
     func desiredAssertions(
         systemIdleSeconds: TimeInterval?,
         display: DisplayReading = .unknown
     ) -> Set<PowerAssertionKind> {
         guard isActive else { return [] }
-        // A lease-held session keeps the system awake, never the display:
-        // unattended work has nobody watching the screen.
         if leaseHeld { return [.system] }
         var kinds: Set<PowerAssertionKind> = []
         if options.preventSystemSleep { kinds.insert(.system) }
-        // Zero-brightness mode needs a live display even without an external
-        // monitor: dropping the assertion lets idle display sleep lock a remote
-        // session. Other policies retain the closed-lid stand-down. Clamshell
-        // with an external monitor keeps the assertion for that screen; the
-        // built-in panel is forced dark via brightness instead.
         let canHoldDisplay = display != .lidShutNoExternal || closedLidDisplayPolicy == .zeroBrightness
         if options.preventDisplaySleep, canHoldDisplay {
             let yielded: Bool = {

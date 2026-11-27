@@ -3,17 +3,10 @@ import SwiftUI
 import WidgetKit
 import KeepressoCore
 
-/// Localized-string lookup against the widget extension's own bundle. The
-/// appex has never been localized before; this mirrors the app's `L(_:)` in
-/// `Keepresso/Localization.swift`, kept file-private and inline here since the
-/// Xcode project's file list is generated from `project.yml`, so adding a
-/// sibling file isn't an option.
 private func L(_ key: String) -> String {
     NSLocalizedString(key, comment: "")
 }
 
-/// The widget extension's entry point: the desktop status widget everywhere
-/// (macOS 14+), plus the Control Center toggle where it exists (macOS 26+).
 @main
 struct KeepressoWidgetBundle: WidgetBundle {
     var body: some Widget {
@@ -24,8 +17,6 @@ struct KeepressoWidgetBundle: WidgetBundle {
     }
 }
 
-/// The macOS 26 controls, split into their own bundle so the main bundle can
-/// keep a macOS 14 floor.
 @available(macOS 26.0, *)
 struct KeepressoControls: WidgetBundle {
     var body: some Widget {
@@ -33,15 +24,11 @@ struct KeepressoControls: WidgetBundle {
     }
 }
 
-// MARK: - Shared plumbing
-//
 // The widget views run in the sandboxed appex process, which can't touch the
 // app's memory, so state rides the ``WidgetBridge`` App Group channel: the
 // widgets read what the app mirrors on every change. The button/toggle intents
 // live in `WidgetIntents.swift`, shared with the app target so
 // `openAppWhenRun` can launch a quit app before the command is consumed.
-
-// MARK: - Desktop widget
 
 struct SessionEntry: TimelineEntry {
     let date: Date
@@ -49,7 +36,6 @@ struct SessionEntry: TimelineEntry {
 }
 
 struct SessionProvider: TimelineProvider {
-    /// A friendly preview for the widget gallery: mid-brew with time left.
     func placeholder(in context: Context) -> SessionEntry {
         SessionEntry(
             date: .now,
@@ -117,9 +103,6 @@ struct KeepAwakeWidget: Widget {
     }
 }
 
-/// The brand's copper palette (matching `Theme.keepressoBrew`), fixed rather
-/// than appearance-driven because the widget paints its own background. The
-/// dark-mode variants apply: everything sits on the dark roast.
 private enum WidgetPalette {
     static let brew = Color(red: 217 / 255, green: 143 / 255, blue: 82 / 255)
     static let steam = Color(red: 208 / 255, green: 130 / 255, blue: 74 / 255)
@@ -132,7 +115,6 @@ private enum WidgetPalette {
     static let creamDim = cream.opacity(0.6)
 }
 
-/// Deep roast with a caramel glow while brewing; flat and dim while idle.
 private struct WidgetBackground: View {
     let isActive: Bool
 
@@ -160,7 +142,6 @@ struct KeepAwakeWidgetView: View {
         }
     }
 
-    /// Small: the whole tile is the toggle.
     private var small: some View {
         Button(intent: ToggleKeepAwakeWidgetIntent()) {
             VStack(spacing: 6) {
@@ -176,7 +157,6 @@ struct KeepAwakeWidgetView: View {
         .buttonStyle(.plain)
     }
 
-    /// Medium: status on the left, actions on the right.
     private var medium: some View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
@@ -222,7 +202,6 @@ struct KeepAwakeWidgetView: View {
         }
     }
 
-    /// Live countdown for timed sessions; nothing for indefinite ones.
     @ViewBuilder
     private var countdown: some View {
         if state.isActive, let endsAt = state.endsAt, endsAt > .now {
@@ -233,8 +212,6 @@ struct KeepAwakeWidgetView: View {
     }
 }
 
-/// The real brand mark, drawn from the shared ``BrandCupMark`` geometry:
-/// filled caramel cup with steam while brewing, a quiet outline while idle.
 private struct BrandCupBadge: View {
     var active: Bool
 
@@ -273,8 +250,6 @@ private struct BrandCupBadge: View {
         }
     }
 }
-
-// MARK: - Control Center toggle (macOS 26+)
 
 @available(macOS 26.0, *)
 struct KeepAwakeControl: ControlWidget {

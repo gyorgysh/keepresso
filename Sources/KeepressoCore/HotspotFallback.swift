@@ -99,7 +99,6 @@ public struct HotspotFallbackPolicy: Sendable {
 public protocol HotspotNetworking: Sendable {
     func snapshot() -> HotspotNetworkState
     func nearbyNetworks() throws -> [String]
-    /// Recheck route and cancellation after scanning, immediately before association.
     func connect(ssid: String, password: String) throws
 }
 
@@ -157,8 +156,6 @@ public final class HotspotFallbackController {
             guard !Task.isCancelled else { return }
             if state.ssid == config.ssid && state.hasRoute == true { self.status = .connected; return }
             guard self.policy.shouldConnect(config: config, conditions: conditions, network: state, now: now) else {
-                // Keep a failure visible during this outage's retry interval.
-                // A recovered route or powered-off radio gets a fresh status.
                 if state.wifiPowered && state.hasRoute == false && state.ssid != config.ssid {
                     switch self.status {
                     case .failed, .needsPassword: return
@@ -169,7 +166,6 @@ public final class HotspotFallbackController {
                 return
             }
             self.status = .connecting
-            // The worker itself is cancelled too, so it can stop after its blocking Wi-Fi scan.
             let worker = Task.detached { () -> Result<Void, Error> in
                 do {
                     guard let password = try credentials.password(for: config.ssid), !password.isEmpty else {

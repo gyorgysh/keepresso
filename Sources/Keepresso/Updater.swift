@@ -2,19 +2,12 @@ import AppKit
 import Observation
 import Sparkle
 
-/// App-side seam over the auto-updater so the menu depends on a protocol rather
-/// than on Sparkle directly. The app target owns Sparkle's UI and bridges its
-/// update-session callbacks into observable reminder state.
 @MainActor
 protocol Updating {
-    /// Whether Sparkle can handle a manual check or focus an existing update
-    /// session. Used to keep update actions enabled only when available.
     var canCheckForUpdates: Bool { get }
 
-    /// A scheduled update is waiting for the user's attention.
     var updateAvailable: Bool { get }
 
-    /// Begin a user-initiated update check, showing Sparkle's standard UI.
     func checkForUpdates()
 }
 
@@ -62,8 +55,6 @@ final class SparkleUpdater: NSObject, Updating, @preconcurrency SPUStandardUserD
 
     var supportsGentleScheduledUpdateReminders: Bool { true }
 
-    // Keep Sparkle's standard presentation, including urgent updates. Add a
-    // visible reminder for scheduled alerts that might be behind other apps.
     func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool,
                                                    forUpdate update: SUAppcastItem,
                                                    state: SPUUserUpdateState) {

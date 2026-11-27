@@ -36,8 +36,6 @@ private final class FakeBluetoothMonitor: BluetoothMonitoring {
 }
 
 @Test func factoryWrapsBluetoothTriggerInReleaseGrace() {
-    // A brief disconnect (host switch, re-pair) must not drop the session;
-    // only an outage past the grace does.
     let monitor = FakeBluetoothMonitor(connected: ["AirPods Pro"])
     var now = Date(timeIntervalSinceReferenceDate: 0)
     let factory = TriggerFactory(bluetooth: monitor, now: { now })

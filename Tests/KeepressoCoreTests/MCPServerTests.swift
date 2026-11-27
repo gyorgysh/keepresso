@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-// MARK: - Fixtures
 
 private let base = Date(timeIntervalSince1970: 3_000_000)
 private let idA = "aaaaaaaa-1111-2222-3333-444444444444"
@@ -14,8 +13,6 @@ private final class MemoryStore: LeaseRecordStoring {
     func delete(id: String) { records[id] = nil }
 }
 
-/// A server over a fully scripted world: acquire acks instantly, the clock
-/// never really advances, and the wake state is canned.
 private func makeServer(
     store: MemoryStore = MemoryStore(),
     snapshot: StatusSnapshot? = nil,
@@ -60,7 +57,6 @@ private func json(_ line: String?) throws -> [String: Any] {
     return try #require(object as? [String: Any])
 }
 
-// MARK: - Protocol surface
 
 @Test func initializeHandshakes() throws {
     let (server, _) = makeServer()
@@ -85,13 +81,11 @@ private func json(_ line: String?) throws -> [String: Any] {
 @Test func explicitNullIdsAreAccepted() throws {
     let (server, _) = makeServer()
 
-    // A null-id request is answered, echoing the null id back.
     let pong = try json(server.handle(line: #"{"jsonrpc":"2.0","id":null,"method":"ping"}"#))
     #expect(pong["id"] is NSNull)
     #expect((pong["result"] as? [String: Any]) != nil)
     #expect(pong["error"] == nil)
 
-    // Notification methods stay silent whatever their id field carries.
     #expect(server.handle(line: #"{"jsonrpc":"2.0","id":null,"method":"notifications/initialized"}"#) == nil)
     #expect(server.handle(line: #"{"jsonrpc":"2.0","id":9,"method":"notifications/cancelled"}"#) == nil)
 }
@@ -121,11 +115,9 @@ private func json(_ line: String?) throws -> [String: Any] {
         "list_leases", "get_status", "get_wake_schedule",
         "set_wake_schedule", "clear_wake_schedule",
     ])
-    // Every tool carries a JSON Schema for its input.
     #expect(tools.allSatisfy { ($0["inputSchema"] as? [String: Any])?["type"] as? String == "object" })
 }
 
-// MARK: - Tool calls
 
 @Test func acquireLeaseGeneratesAnIdWhenNoneGiven() throws {
     let (server, store) = makeServer()
@@ -136,20 +128,18 @@ private func json(_ line: String?) throws -> [String: Any] {
     #expect(result["isError"] as? Bool == false)
     let content = try #require(result["content"] as? [[String: Any]])
     let text = try #require(content.first?["text"] as? String)
-    #expect(text.contains(idA)) // the injected generator's id
+    #expect(text.contains(idA))
     #expect(store.records[idA]?.tool == "agent")
 }
 
 @Test func toolCallFailuresRenderAsToolErrors() throws {
     let (server, _) = makeServer()
 
-    // Missing required arguments never touch the store.
     let missing = try json(server.handle(
         line: #"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"acquire_lease","arguments":{"task":"x","ttl_seconds":60}}}"#
     ))
     #expect((missing["result"] as? [String: Any])?["isError"] as? Bool == true)
 
-    // A heartbeat against nothing is the lease-lost signal.
     let lost = try json(server.handle(
         line: #"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"heartbeat_lease","arguments":{"id":"\#(idA)"}}}"#
     ))
@@ -200,9 +190,6 @@ private func json(_ line: String?) throws -> [String: Any] {
 
 @Test func outOfRangeNumericArgumentIsRejectedNotCrashed() throws {
     let (server, store) = makeServer()
-    // A ttl far past Int range (or +inf from something like 1e400) must not trap
-    // the Int conversion and abort the whole server; it comes back as an
-    // ordinary tool error and nothing is acquired.
     let response = try json(server.handle(
         line: #"{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"acquire_lease","arguments":{"tool":"agent","task":"work","ttl_seconds":1e19}}}"#
     ))
@@ -218,8 +205,6 @@ private func json(_ line: String?) throws -> [String: Any] {
 
 @Test func setWakeScheduleAcceptsFractionalISO8601() throws {
     let (server, _) = makeServer()
-    // A past instant: parsing must succeed (fractional seconds), then policy
-    // rejects it as too soon. That path never waits for an app ack.
     let response = try json(server.handle(
         line: #"{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"set_wake_schedule","arguments":{"one_shot":"1970-01-01T00:00:00.000Z"}}}"#
     ))

@@ -1,7 +1,3 @@
-// Run from the repository root on macOS:
-// swiftc -parse-as-library Sources/Keepresso/WindowVisibility.swift tools/check_window_visibility.swift -o /tmp/keepresso-visibility-check
-// /tmp/keepresso-visibility-check
-// Uses isolated windows; does not load app settings or operate power controls.
 
 import AppKit
 import SwiftUI

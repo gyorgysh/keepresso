@@ -35,8 +35,6 @@ public final class IOBluetoothDeviceMonitor: BluetoothMonitoring {
         self.init(probe: Self.probeSystem)
     }
 
-    /// The probe and clock are injectable so the cache can be unit-tested
-    /// without paired hardware.
     init(
         ttl: TimeInterval = 3,
         now: @escaping () -> Date = Date.init,
@@ -47,7 +45,6 @@ public final class IOBluetoothDeviceMonitor: BluetoothMonitoring {
 
     public var current: BluetoothSnapshot { cache.current }
 
-    /// The real probe: sweep the pairing registry once.
     static func probeSystem() -> BluetoothSnapshot {
         let devices = (IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice]) ?? []
         var paired: [String] = []

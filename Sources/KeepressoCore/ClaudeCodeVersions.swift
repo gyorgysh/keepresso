@@ -51,8 +51,6 @@ public struct ClaudeCodeVersions: Equatable, Sendable {
             self.parts = parts
         }
 
-        /// Trailing zeros dropped, so 2.1 and 2.1.0 are one version for
-        /// equality, hashing, and ordering alike.
         private var normalized: ArraySlice<Int> {
             var end = parts.count
             while end > 0, parts[end - 1] == 0 { end -= 1 }
@@ -79,7 +77,6 @@ public struct ClaudeCodeVersions: Equatable, Sendable {
         public var description: String { parts.map(String.init).joined(separator: ".") }
     }
 
-    // MARK: - Detection
 
     /// File-system access, injectable for tests.
     public struct FileAccess: Sendable {
@@ -140,12 +137,10 @@ public struct ClaudeCodeVersions: Equatable, Sendable {
                 launchers.append("\(nvm)/\(node)/bin/claude")
             }
         } else if files.exists(nvm) {
-            // An unreadable directory may hide an older CLI sharing settings.
             result.unknownCount += 1
         }
         for launcher in launchers where files.exists(launcher) {
             let target = files.resolve(launcher)
-            // Two launchers pointing at one install count once.
             guard seen.insert(target).inserted else { continue }
             if let version = version(ofLauncherTarget: target, files: files)
                 ?? packageVersion(
@@ -171,19 +166,16 @@ public struct ClaudeCodeVersions: Equatable, Sendable {
 
     static func version(ofLauncherTarget target: String, files: FileAccess) -> Version? {
         let components = target.split(separator: "/").map(String.init)
-        // Native installer: .../claude/versions/<version>[/...]
         if let i = components.lastIndex(of: "versions"), i + 1 < components.count,
            i > 0, components[i - 1] == "claude",
            let v = Version(components[i + 1]) {
             return v
         }
-        // Homebrew cask: .../Caskroom/claude-code/<version>/claude
         if let i = components.lastIndex(of: "Caskroom"), i + 2 < components.count,
            components[i + 1] == "claude-code",
            let v = Version(components[i + 2]) {
             return v
         }
-        // npm or bun: .../node_modules/@anthropic-ai/claude-code/<entry>
         if let i = components.lastIndex(of: "claude-code"), i > 1,
            components[i - 1] == "@anthropic-ai", components[i - 2] == "node_modules" {
             return packageVersion("/" + components[...i].joined(separator: "/"), files: files)
@@ -191,7 +183,6 @@ public struct ClaudeCodeVersions: Equatable, Sendable {
         return nil
     }
 
-    /// The `version` field of the npm package at `directory`.
     static func packageVersion(_ directory: String, files: FileAccess) -> Version? {
         guard let data = files.read(directory + "/package.json"),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

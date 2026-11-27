@@ -1,16 +1,6 @@
 import SwiftUI
 import KeepressoCore
 
-/// The quit modal: brand art with looping native animation, variant copy, and
-/// a warning badge, run app-modal while termination waits. It deliberately
-/// mirrors ``HelperAttentionView`` (centered copy, copper badge and
-/// bronze-tinted buttons) so a quit-time warning reads as the same app.
-/// Every string reuses an existing catalog key, so no language falls back.
-///
-/// The art is drawn, not loaded: ``SessionArt`` pours nothing and waits for
-/// no appear event (a static filled glyph plus timeline steam), and
-/// ``LidClosedArt`` warns about the lid-shut override with a breathing sleep
-/// LED and rising Zzz. Both honor Reduce Motion with a steady frame.
 struct QuitSleepModalView: View {
     enum Action {
         case turnOffAndQuit
@@ -22,8 +12,6 @@ struct QuitSleepModalView: View {
     let coverage: QuitSleepCheck.Coverage
     let device: String
     let qualifier: String?
-    /// Lid mode is on but the session automation holds it, so quitting ends
-    /// it by itself. Shown, not warned about.
     var scopedLid: Bool = false
     let decide: (Action) -> Void
 
@@ -67,9 +55,6 @@ struct QuitSleepModalView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "moon.fill")
                         .foregroundStyle(Color.keepressoBrew)
-                    // Names the feature in Preferences' own words and warns
-                    // it stays on until switched off: that is the indefinite
-                    // part the dialog exists to prevent stranding.
                     Text(verbatim: showsOverrideLine
                         ? L("Keep running with the lid shut and no external display. Stays on until you switch it off.")
                         : L("Keep running with the lid shut and no external display."))
@@ -98,13 +83,9 @@ struct QuitSleepModalView: View {
         }
         .padding(24)
         .frame(width: 380)
-        // The bronze buttons: without this the default action renders
-        // system blue, which belongs to no part of this app.
         .tint(.keepressoBrew)
     }
 
-    /// Through `L` (not a bare literal) so the localization gate sees the
-    /// keys: a renamed literal must never silently fall back to English.
     private var title: String {
         switch coverage {
         case .session: L("Quit while still brewing?")
@@ -112,9 +93,6 @@ struct QuitSleepModalView: View {
         }
     }
 
-    /// Only when the session is the whole story. With the lid line present,
-    /// the session sentence is the one nobody reads: the stranded override is
-    /// the consequence worth acting on, and two paragraphs bury it.
     private var showsSessionLine: Bool {
         coverage == .session
     }
@@ -125,8 +103,6 @@ struct QuitSleepModalView: View {
 
     private var showsOverrideActions: Bool { showsOverrideLine }
 
-    /// The lid figure stands in whenever lid mode is actually on, however it
-    /// is held. Which held it only changes the words and the buttons.
     private var showsLidArt: Bool { showsOverrideLine || scopedLid }
 
     private var overrideLine: String {
@@ -138,11 +114,6 @@ struct QuitSleepModalView: View {
     }
 }
 
-/// The brand mark itself, brewing, at modal size. Deliberately
-/// ``BrewingCupView`` rather than a local redraw: the cup, the steam
-/// geometry, the wisp count and spacing, the loop timing and the Reduce
-/// Motion frame all have one definition, so the modal cannot drift away from
-/// the menu bar and the dropdown.
 private struct SessionArt: View {
     var body: some View {
         BrewingCupView(isActive: true, scale: 4.6)
@@ -150,12 +121,6 @@ private struct SessionArt: View {
     }
 }
 
-/// The website's LidClose figure, ported to SwiftUI: a MacBook whose lid
-/// snaps shut with an overshoot bounce on a 6.5s loop while the green awake
-/// LED and the copper activity bars never stop, over the site's steam
-/// timing. Geometry and keyframes mirror home.jsx (viewBox 380x260),
-/// colors resolve to the app palette. Draws the full closed-lid frame even
-/// when the timeline never ticks; steady closed frame under Reduce Motion.
 private struct LidClosedArt: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -174,16 +139,10 @@ private struct LidClosedArt: View {
     }
 }
 
-/// Drawn at its final 200x140 size, no `scaleEffect`: the previous version
-/// laid out a 380x260 canvas and scaled it down, which neither clips nor
-/// resizes the layout frame, so the figure overflowed its slot and sat in a
-/// thin band with most of the canvas empty.
 private struct LidCloseFigure: View {
     var time: TimeInterval
     var reduceMotion: Bool
 
-    /// Where the lid meets the base. The hinge is the lid rect's own
-    /// bottom-trailing corner, which is what makes the rotation anchor work.
     private static let deskY: CGFloat = 125
     private static let baseCenter = CGPoint(x: 126, y: 122)
     private static let baseSize = CGSize(width: 112, height: 6)
@@ -191,21 +150,18 @@ private struct LidCloseFigure: View {
 
     var body: some View {
         ZStack {
-            // Desk line.
             Path { path in
                 path.move(to: CGPoint(x: 16, y: Self.deskY))
                 path.addLine(to: CGPoint(x: 184, y: Self.deskY))
             }
             .stroke(Color.secondary.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
 
-            // The base, sitting on the desk.
             RoundedRectangle(cornerRadius: 3)
                 .fill(Color.secondary.opacity(0.22))
                 .stroke(Color.secondary, lineWidth: 1.2)
                 .frame(width: Self.baseSize.width, height: Self.baseSize.height)
                 .position(Self.baseCenter)
 
-            // The awake LED: the Mac stays up under the shut lid.
             Circle()
                 .fill(Color.green)
                 .frame(width: 3.6, height: 3.6)
@@ -228,16 +184,12 @@ private struct LidCloseFigure: View {
                     x: Self.baseCenter.x - 1,
                     y: Self.baseCenter.y - (Self.baseSize.height + Self.lidSize.height) / 2)
 
-            // The brand mark beside the Mac, standing on the same desk line.
             BrewingCupView(isActive: true, scale: 1.5)
                 .position(x: 40, y: Self.deskY - 26.6 * 1.5 / 2)
         }
         .frame(width: 200, height: 140)
     }
 
-    /// Hold open, snap shut with an overshoot bounce, hold closed, glide back
-    /// open. Whole loop 6.5s. 90 is fully open, 0 fully shut; the caller
-    /// negates it to turn the lid the right way.
     static func lidAngle(at time: TimeInterval) -> Double {
         let phase = (time.truncatingRemainder(dividingBy: 6.5)) / 6.5
         switch phase {
@@ -253,7 +205,6 @@ private struct LidCloseFigure: View {
     private static func easeIn(_ t: Double) -> Double { t * t * t }
     private static func easeOut(_ t: Double) -> Double { 1 - pow(1 - t, 3) }
 
-    /// Standard cubic-bezier easing solve (Newton-Raphson on x, then y).
     private static func cubicBezier(_ t: Double, _ c1x: Double, _ c1y: Double, _ c2x: Double, _ c2y: Double) -> Double {
         var x = t
         for _ in 0..<8 {
@@ -277,7 +228,6 @@ private struct LidCloseFigure: View {
     }
 }
 
-/// The green awake LED, breathing on a 2.2s loop.
 private func ledOpacity(at time: TimeInterval) -> Double {
     1 - 0.65 * (0.5 - 0.5 * cos(time * 2 * .pi / 2.2))
 }
@@ -333,8 +283,6 @@ final class QuitSleepModal: NSObject, NSWindowDelegate {
             defer: false)
         window.title = ""
         window.isReleasedWhenClosed = false
-        // Above the rest without being a panel: a faceless agent app has no
-        // other window to sit in front of, and this must not get lost.
         window.level = .floating
         window.contentView = NSHostingView(rootView: view)
         if let fitting = window.contentView?.fittingSize {
@@ -347,23 +295,16 @@ final class QuitSleepModal: NSObject, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
     }
 
-    /// A second Cmd-Q while the question is up: re-focus it rather than
-    /// opening another or quitting behind it.
     func bringToFront() {
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
     }
 
-    /// The red close button means "don't quit". Answer, but leave the actual
-    /// teardown to ``finish(_:)`` so the window cannot be pulled apart from
-    /// two directions at once.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         finish(.cancel)
         return false
     }
 
-    /// Idempotent: a second press while the first is still unwinding (or a
-    /// close on top of a button) must not reply to termination twice.
     private func finish(_ decision: Decision) {
         guard let completion else { return }
         self.completion = nil

@@ -21,11 +21,8 @@ private func claude(_ key: String, _ cron: String, enabled: Bool = true) -> Sche
     let all = [claude("on", "0 9 * * *"), claude("off", "0 9 * * *", enabled: false), claude("muted", "0 9 * * *")]
     var config = AutomationSyncConfig(enabled: true, enabledSources: [.claudeDesktop], mutedIDs: ["claude:muted"])
     #expect(AutomationSync.active(all, config: config).map(\.key) == ["on"])
-    // Master switch off: nothing is active even though tasks exist.
     config.enabled = false
     #expect(AutomationSync.active(all, config: config).isEmpty)
-    // Source not turned on: its runs are discovered but never woken for, so no
-    // platform is forced on.
     config.enabled = true
     config.enabledSources = []
     #expect(AutomationSync.active(all, config: config).isEmpty)
@@ -36,7 +33,6 @@ private func claude(_ key: String, _ cron: String, enabled: Bool = true) -> Sche
     let morning = claude("morning", "0 9 * * *")
     let dawn = claude("dawn", "0 6 * * *")
     let config = AutomationSyncConfig(enabled: true, enabledSources: [.claudeDesktop], leadSeconds: 180)
-    // Earliest run is 06:00; wake is three minutes before it.
     #expect(AutomationSync.nextWake([morning, dawn], config: config, after: at(2026, 1, 1, 0, 0, cal), calendar: cal)
             == at(2026, 1, 1, 6, 0, cal).addingTimeInterval(-180))
 }
@@ -54,12 +50,10 @@ private func claude(_ key: String, _ cron: String, enabled: Bool = true) -> Sche
     let cal = utc()
     let morning = claude("morning", "0 9 * * *")
     let config = AutomationSyncConfig(enabled: true, enabledSources: [.claudeDesktop], leadSeconds: 180)
-    // We wake at 08:57 (three minutes before the 09:00 run).
     let match = AutomationSync.wakeMatch([morning], config: config,
                                          wokeAt: at(2026, 1, 1, 8, 57, cal), calendar: cal)
     #expect(match?.automationID == "claude:morning")
     #expect(match?.runTime == at(2026, 1, 1, 9, 0, cal))
-    // A wake at an unrelated hour is not ours.
     #expect(AutomationSync.wakeMatch([morning], config: config,
                                      wokeAt: at(2026, 1, 1, 3, 0, cal), calendar: cal) == nil)
 }
@@ -69,32 +63,23 @@ private func claude(_ key: String, _ cron: String, enabled: Bool = true) -> Sche
     let now = at(2026, 1, 1, 7, 0, cal)
     let manual = at(2026, 1, 1, 8, 0, cal)
     let auto = at(2026, 1, 1, 8, 57, cal)
-    // Both future: the earlier (manual) wins.
     #expect(AutomationSync.effectiveOneShot(manual: manual, automationWake: auto, now: now) == manual)
-    // The masking case: the manual wake has fired, so the automation wake it was
-    // hiding becomes the effective one (so the caller re-arms it).
     let after = at(2026, 1, 1, 8, 30, cal)
     #expect(AutomationSync.effectiveOneShot(manual: manual, automationWake: auto, now: after) == auto)
-    // One side only, and neither.
     #expect(AutomationSync.effectiveOneShot(manual: nil, automationWake: auto, now: now) == auto)
     #expect(AutomationSync.effectiveOneShot(manual: manual, automationWake: nil, now: now) == manual)
     #expect(AutomationSync.effectiveOneShot(manual: nil, automationWake: nil, now: now) == nil)
 }
 
 @Test func keepLastKnownRidesOutABriefEmptyReadThenGivesWay() {
-    // Held while we had automations and the empty streak is still short (a
-    // schedule file caught mid-rewrite).
     #expect(AutomationSync.shouldKeepLastKnown(newIsEmpty: true, hadAutomations: true, emptyStreak: 0, maxEmptyStreak: 2))
     #expect(AutomationSync.shouldKeepLastKnown(newIsEmpty: true, hadAutomations: true, emptyStreak: 1, maxEmptyStreak: 2))
-    // Gives way once the streak is exhausted (a genuine deletion).
     #expect(!AutomationSync.shouldKeepLastKnown(newIsEmpty: true, hadAutomations: true, emptyStreak: 2, maxEmptyStreak: 2))
-    // Never engages for a non-empty read, or when there was nothing to keep.
     #expect(!AutomationSync.shouldKeepLastKnown(newIsEmpty: false, hadAutomations: true, emptyStreak: 0, maxEmptyStreak: 2))
     #expect(!AutomationSync.shouldKeepLastKnown(newIsEmpty: true, hadAutomations: false, emptyStreak: 0, maxEmptyStreak: 2))
 }
 
 @Test func syncConfigDecodesForgivingly() throws {
-    // An empty object falls back to every default (off, 15 min hold, 3 min lead).
     let config = try JSONDecoder().decode(AutomationSyncConfig.self, from: Data("{}".utf8))
     #expect(config.enabled == false)
     #expect(config.enabledSources.isEmpty)
@@ -103,9 +88,6 @@ private func claude(_ key: String, _ cron: String, enabled: Bool = true) -> Sche
 }
 
 @Test func syncConfigDropsUnknownEnabledSourceInsteadOfThrowing() throws {
-    // A source a newer build wrote is dropped, not fatal: the known source
-    // survives and decoding does not throw. A throw here would propagate out of
-    // the settings decode and reset every setting via the store's try?.
     let json = #"{"enabled":true,"enabledSources":["claude","source-from-the-future"],"holdSeconds":900}"#
     let config = try JSONDecoder().decode(AutomationSyncConfig.self, from: Data(json.utf8))
     #expect(config.enabled == true)
@@ -117,10 +99,6 @@ private func claude(_ key: String, _ cron: String, enabled: Bool = true) -> Sche
     let cal = utc()
     let morning = claude("morning", "0 9 * * *")
     let config = AutomationSyncConfig(enabled: true, enabledSources: [.claudeDesktop], leadSeconds: 180)
-    // now sits inside the 3-minute lead before today's 09:00 run, so today's
-    // wake (08:57) is already past. The next installable wake is tomorrow's,
-    // never a past time (which would collapse to nil at effectiveOneShot and
-    // clear the wake that was just armed).
     let now = at(2026, 1, 1, 8, 58, cal)
     let next = AutomationSync.nextWake([morning], config: config, after: now, calendar: cal)
     #expect(next == at(2026, 1, 2, 9, 0, cal).addingTimeInterval(-180))

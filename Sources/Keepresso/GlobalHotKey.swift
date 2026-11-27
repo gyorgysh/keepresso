@@ -13,16 +13,8 @@ final class GlobalHotKeyManager {
     private var eventHandler: EventHandlerRef?
     private var onPress: (() -> Void)?
 
-    /// A four-char-code signature identifying our hotkey registration ('KPRS').
     private static let signature: OSType = 0x4B505253
 
-    /// Register `shortcut` (replacing any previous one), invoking `onPress` when
-    /// it fires. A `nil` shortcut, or one with no modifiers, just clears it: a
-    /// modifier-less system hotkey would swallow a bare key everywhere. Returns
-    /// false when the system refused the registration (usually another app owns
-    /// the combination); the caller can log or surface that.
-    /// The currently registered shortcut, so a refused replacement can put
-    /// the previous one back instead of leaving no hotkey at all.
     private var currentShortcut: HotKeyShortcut?
 
     @discardableResult
@@ -51,9 +43,6 @@ final class GlobalHotKeyManager {
         )
         guard status == noErr, let ref else {
             NSLog("Keepresso: could not register global shortcut (status %d)", status)
-            // The system refused the new combination (usually another app
-            // owns it): put the previous one back so the toggle keeps
-            // working instead of silently dying.
             if let previous = currentShortcut {
                 restore(previous)
             }
@@ -64,7 +53,6 @@ final class GlobalHotKeyManager {
         return true
     }
 
-    /// Best-effort re-registration of `shortcut`, logging when even that fails.
     private func restore(_ shortcut: HotKeyShortcut) {
         var ref: EventHotKeyRef?
         let status = RegisterEventHotKey(
@@ -133,15 +121,12 @@ extension HotKeyShortcut {
         return carbon
     }
 
-    /// A menu-style label like "⌃⌥⌘K" for the Preferences recorder row.
     var displayString: String {
         guard modifierFlags >= 0 else { return "?" }
         let flags = CGEventFlags(rawValue: UInt64(modifierFlags))
         return ActivityKeyModifiers(eventFlags: flags).symbols + (Self.keyName(for: keyCode) ?? "?")
     }
 
-    /// A readable name for the common virtual key codes. Letters and digits use
-    /// their character; a handful of named keys are spelled out.
     static func keyName(for keyCode: Int) -> String? {
         if let named = namedKeys[keyCode] { return named }
         return characters[keyCode]

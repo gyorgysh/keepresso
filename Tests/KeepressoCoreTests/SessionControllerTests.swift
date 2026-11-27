@@ -2,31 +2,26 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-/// In-memory power-assertion backend that records the last applied set.
 private final class FakeAssertions: PowerAsserting {
     private(set) var held: Set<PowerAssertionKind> = []
-    /// When set, those kinds are requested but never held (create failure).
     var refuse: Set<PowerAssertionKind> = []
     func apply(_ kinds: Set<PowerAssertionKind>, reason: String) {
         held = kinds.subtracting(refuse)
     }
 }
 
-/// A controllable clock shared with the controller under test.
 @MainActor
 private final class Clock {
     var now = Date(timeIntervalSince1970: 1_000_000)
     func advance(_ seconds: TimeInterval) { now.addTimeInterval(seconds) }
 }
 
-/// Records how often the keep-active poke fires, and which kind.
 private final class FakeActivity: ActivitySimulating {
     private(set) var pokes: [ActivityPokeKind] = []
     var pokeCount: Int { pokes.count }
     func poke(_ kind: ActivityPokeKind) { pokes.append(kind) }
 }
 
-/// Records brightness set calls and serves a controllable current level.
 private final class FakeBrightness: BrightnessControlling {
     var supported: Bool
     var keyboardSupported: Bool
@@ -57,14 +52,14 @@ private final class FakeBrightness: BrightnessControlling {
     let activity = FakeActivity()
     let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
     controller.start(options: SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true))
-    #expect(activity.pokeCount == 1) // start reconciles: pokes immediately
+    #expect(activity.pokeCount == 1)
 
-    controller.reconcile() // same second
-    #expect(activity.pokeCount == 1) // not again within the interval
+    controller.reconcile()
+    #expect(activity.pokeCount == 1)
 
     clock.advance(SessionController.activityPokeInterval)
     controller.reconcile()
-    #expect(activity.pokeCount == 2) // interval elapsed: pokes again
+    #expect(activity.pokeCount == 2)
     #expect(activity.pokes == [.powerWarp, .powerWarp])
 }
 
@@ -73,7 +68,7 @@ private final class FakeBrightness: BrightnessControlling {
     let clock = Clock()
     let activity = FakeActivity()
     let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
-    controller.start() // simulateUserActivity defaults off
+    controller.start()
     clock.advance(120)
     controller.reconcile()
     #expect(activity.pokeCount == 0)
@@ -85,16 +80,13 @@ private final class FakeBrightness: BrightnessControlling {
     let activity = FakeActivity()
     let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
     controller.start(options: SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true))
-    #expect(activity.pokeCount == 1) // initial poke (no idle info at start)
+    #expect(activity.pokeCount == 1)
 
-    // The user is actively providing input (low idle, e.g. gaming): no nudge,
-    // even across the poke interval.
     clock.advance(60)
     controller.reconcile(systemIdleSeconds: 2)
     controller.reconcile(systemIdleSeconds: 1)
     #expect(activity.pokeCount == 1)
 
-    // Once they step away past the threshold, it pokes promptly.
     controller.reconcile(systemIdleSeconds: 30)
     #expect(activity.pokeCount == 2)
 }
@@ -105,7 +97,6 @@ private final class FakeBrightness: BrightnessControlling {
     let activity = FakeActivity()
     let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
     controller.options = SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true)
-    // Only while brewing is the default: nothing running, nothing posted.
     clock.advance(120)
     controller.reconcile(systemIdleSeconds: 120)
     #expect(activity.pokeCount == 0)
@@ -115,7 +106,7 @@ private final class FakeBrightness: BrightnessControlling {
     controller.stop()
     clock.advance(120)
     controller.reconcile(systemIdleSeconds: 120)
-    #expect(activity.pokeCount == 1) // stopped: quiet again
+    #expect(activity.pokeCount == 1)
 }
 
 @MainActor
@@ -127,7 +118,6 @@ private final class FakeBrightness: BrightnessControlling {
     options.activityOnlyWhileBrewing = false
     controller.options = options
 
-    // Idle with no session: still pokes, on the usual cadence.
     clock.advance(30)
     controller.reconcile(systemIdleSeconds: 30)
     #expect(activity.pokeCount == 1)
@@ -136,9 +126,8 @@ private final class FakeBrightness: BrightnessControlling {
     clock.advance(SessionController.activityPokeInterval)
     controller.reconcile(systemIdleSeconds: 60)
     #expect(activity.pokeCount == 2)
-    #expect(!controller.isActive) // presence alone never starts a session
+    #expect(!controller.isActive)
 
-    // The user is at the keyboard: no nudge, same as during a session.
     clock.advance(120)
     controller.reconcile(systemIdleSeconds: 1)
     #expect(activity.pokeCount == 2)
@@ -154,8 +143,6 @@ private final class FakeBrightness: BrightnessControlling {
     controller.options = options
     controller.pauseBelowBatteryPercent = 20
 
-    // Below the cutoff: the pause owns sleep, so presence must not keep the
-    // Mac up by declaring activity.
     clock.advance(60)
     controller.reconcile(systemIdleSeconds: 60, battery: .discharging(10))
     clock.advance(60)
@@ -163,7 +150,6 @@ private final class FakeBrightness: BrightnessControlling {
     #expect(controller.pausedByBattery)
     #expect(activity.pokeCount == 0)
 
-    // Plugged in: the pause lifts and presence resumes.
     clock.advance(60)
     controller.reconcile(systemIdleSeconds: 180, battery: .onAC)
     #expect(activity.pokeCount == 1)
@@ -178,8 +164,6 @@ private final class FakeBrightness: BrightnessControlling {
     options.activityOnlyWhileBrewing = false
     controller.options = options
 
-    // An out-of-band reconcile (a lease doorbell) carries no idle reading
-    // and may land mid-typing: it must not tap a key.
     clock.advance(60)
     controller.reconcile()
     #expect(activity.pokeCount == 0)
@@ -208,12 +192,10 @@ private final class FakeBrightness: BrightnessControlling {
     #expect(endActor.performed == [.sleepDisplay])
     let afterAction = activity.pokeCount
 
-    // The display just slept: no poke may wake it while the user is away.
     clock.advance(600)
     controller.reconcile(systemIdleSeconds: 663)
     #expect(activity.pokeCount == afterAction)
 
-    // Real input lifts the hold, and presence resumes once idle again.
     controller.reconcile(systemIdleSeconds: 1)
     clock.advance(30)
     controller.reconcile(systemIdleSeconds: 30)
@@ -237,7 +219,6 @@ private final class FakeBrightness: BrightnessControlling {
     controller.reconcile(systemIdleSeconds: 60)
     #expect(!controller.isActive)
     let sessionPokes = activity.pokeCount
-    // Nothing is posted while the end action is pending.
     clock.advance(1)
     controller.reconcile(systemIdleSeconds: 61)
     #expect(activity.pokeCount == sessionPokes)
@@ -245,28 +226,21 @@ private final class FakeBrightness: BrightnessControlling {
     controller.reconcile(systemIdleSeconds: 4)
     #expect(endActor.performed == [.sleepDisplay])
 
-    // A key posted just before the action reset HID idle, so idle reads short
-    // after it. That is not the user coming back: idle only keeps rising.
     for idle in [5.0, 6, 30, 90] as [TimeInterval] {
         clock.advance(30)
         controller.reconcile(systemIdleSeconds: idle)
     }
     #expect(activity.pokeCount == sessionPokes)
 
-    // Real input drops idle below the last reading and lifts the hold.
     controller.reconcile(systemIdleSeconds: 1)
     clock.advance(30)
     controller.reconcile(systemIdleSeconds: 30)
     #expect(activity.pokeCount == sessionPokes + 1)
 }
 
-// MARK: - Idle-only keep-active mode
 
 @MainActor
 @Test func keepActiveNilIdleHoldsThePokeCadence() {
-    // An out-of-band reconcile with no idle reading (lease doorbell, start)
-    // must neither poke nor re-arm: re-arming would make the next tick poke
-    // immediately, bypassing the interval under a heartbeating agent.
     let clock = Clock()
     let activity = FakeActivity()
     let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
@@ -274,19 +248,16 @@ private final class FakeBrightness: BrightnessControlling {
     options.activityPokeIdleMinutes = 3
     controller.start(options: options)
 
-    // Idle past the wait: first poke, arming the interval.
     clock.advance(200)
     controller.reconcile(systemIdleSeconds: 200)
     #expect(activity.pokeCount == 1)
 
-    // A nil-idle reconcile halfway through the interval changes nothing.
     clock.advance(SessionController.activityPokeInterval / 2)
     controller.reconcile(systemIdleSeconds: nil)
     clock.advance(SessionController.activityPokeInterval / 2 - 1)
     controller.reconcile(systemIdleSeconds: 400)
-    #expect(activity.pokeCount == 1) // interval not yet elapsed: still held
+    #expect(activity.pokeCount == 1)
 
-    // Once the full interval elapses, the poke fires again.
     clock.advance(2)
     controller.reconcile(systemIdleSeconds: 402)
     #expect(activity.pokeCount == 2)
@@ -300,16 +271,12 @@ private final class FakeBrightness: BrightnessControlling {
     var options = SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true)
     options.activityPokeIdleMinutes = 3
     controller.start(options: options)
-    // Start's reconcile has no idle info: hold the poke until a real reading
-    // proves the user stepped away (a nil reading must not fake activity).
     #expect(activity.pokeCount == 0)
 
-    // Two idle minutes: still waiting, even across the poke interval.
     clock.advance(120)
     controller.reconcile(systemIdleSeconds: 120)
     #expect(activity.pokeCount == 0)
 
-    // Past three idle minutes: pokes promptly, then repeats on the interval.
     clock.advance(70)
     controller.reconcile(systemIdleSeconds: 190)
     #expect(activity.pokeCount == 1)
@@ -326,14 +293,12 @@ private final class FakeBrightness: BrightnessControlling {
     var options = SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true)
     options.activityPokeIdleMinutes = 3
     controller.start(options: options)
-    #expect(activity.pokeCount == 0) // nil idle at start: wait for a reading
+    #expect(activity.pokeCount == 0)
 
-    // Idle past the wait but gaming: suppressed, and re-armed.
     clock.advance(300)
     controller.reconcile(systemIdleSeconds: 300, gameFrontmost: true)
     #expect(activity.pokeCount == 0)
 
-    // Game quits: fires promptly instead of a full interval later.
     controller.reconcile(systemIdleSeconds: 301, gameFrontmost: false)
     #expect(activity.pokeCount == 1)
 }
@@ -346,14 +311,11 @@ private final class FakeBrightness: BrightnessControlling {
     controller.start(options: SleepPreventionOptions(preventSystemSleep: true, simulateUserActivity: true))
     #expect(activity.pokeCount == 1)
 
-    // Mode off: only the seconds-scale activity gate applies. A game in
-    // front with an otherwise idle machine still gets the poke.
     clock.advance(60)
     controller.reconcile(systemIdleSeconds: 60, gameFrontmost: true)
     #expect(activity.pokeCount == 2)
 }
 
-// MARK: - Dim, don't sleep
 
 @MainActor
 @Test func dimDropsBrightnessAfterIdleAndRestoresOnActivity() {
@@ -363,19 +325,15 @@ private final class FakeBrightness: BrightnessControlling {
     controller.start(options: SleepPreventionOptions(
         preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 300, dimFloor: 0))
 
-    // Still at the keyboard: no dim.
     controller.reconcile(systemIdleSeconds: 10)
     #expect(brightness.level == 0.8)
 
-    // Idle past the threshold: dim to the floor, remembering the 0.8.
     controller.reconcile(systemIdleSeconds: 300)
     #expect(brightness.level == 0)
-    // A second idle tick doesn't write again (idempotent).
     let writes = brightness.setLevels.count
     controller.reconcile(systemIdleSeconds: 360)
     #expect(brightness.setLevels.count == writes)
 
-    // The user returns: restore the pre-dim brightness.
     controller.reconcile(systemIdleSeconds: 1)
     #expect(brightness.level == 0.8)
 }
@@ -388,37 +346,30 @@ private final class FakeBrightness: BrightnessControlling {
     controller.start(options: SleepPreventionOptions(
         preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 60, dimFloor: 0.2))
     controller.reconcile(systemIdleSeconds: 90)
-    #expect(brightness.level == 0.2)    // idle dim while the lid is open
+    #expect(brightness.level == 0.2)
 
-    // Lid shuts with no external. ClosedDisplayController sleeps the panel;
-    // this is the layer underneath it, so a panel woken inside the shut lid is
-    // dark instead of sitting lit on the lock screen.
     controller.reconcile(systemIdleSeconds: 120, display: .lidShutNoExternal)
     #expect(brightness.level == 0)
 
-    // Still shut: held at 0 with no 1 Hz rewrite.
     let writes = brightness.setLevels.count
     controller.reconcile(systemIdleSeconds: 180, display: .lidShutNoExternal)
     #expect(brightness.level == 0)
     #expect(brightness.setLevels.count == writes)
 
-    // Lid reopens while still idle: back to the dim floor, not left dark.
     controller.reconcile(systemIdleSeconds: 200, display: .usable)
     #expect(brightness.level == 0.2)
 
-    // Activity: back to the level the user set.
     controller.reconcile(systemIdleSeconds: 0, display: .usable)
     #expect(brightness.level == 0.6)
 }
 
-/// The common path: no idle dim configured at all, the lid just shuts.
 @MainActor
 @Test func lidShutWithNoExternalDarkensThePanelAndKeyboard() {
     let clock = Clock()
     let brightness = FakeBrightness(level: 0.7, keyboardLevel: 0.4)
     let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
     controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
-    controller.reconcile(display: .usable)  // seed the open-lid restore targets
+    controller.reconcile(display: .usable)
 
     controller.reconcile(display: .lidShutNoExternal)
     #expect(brightness.level == 0)
@@ -437,16 +388,15 @@ private final class FakeBrightness: BrightnessControlling {
     controller.start(options: SleepPreventionOptions(
         preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 60, dimFloor: 0.05))
     controller.reconcile(systemIdleSeconds: 90)
-    #expect(brightness.level == 0.05)   // dimmed
+    #expect(brightness.level == 0.05)
 
     controller.stop()
-    #expect(brightness.level == 0.7)    // restored on stop
+    #expect(brightness.level == 0.7)
 }
 
 @MainActor
 @Test func dimStaysInertWhenUnsupportedOrUnconfigured() {
     let clock = Clock()
-    // Unsupported display: never touches brightness, even when idle.
     let unsupported = FakeBrightness(supported: false, level: 0.9)
     let a = SessionController(assertions: FakeAssertions(), brightness: unsupported, now: { clock.now })
     a.start(options: SleepPreventionOptions(
@@ -454,13 +404,12 @@ private final class FakeBrightness: BrightnessControlling {
     a.reconcile(systemIdleSeconds: 300)
     #expect(unsupported.setLevels.isEmpty)
 
-    // Dim not configured (dimDisplayAfter nil): idle never dims.
     let supported = FakeBrightness(level: 0.9)
     let b = SessionController(assertions: FakeAssertions(), brightness: supported, now: { clock.now })
     b.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
     b.reconcile(systemIdleSeconds: 300)
     #expect(supported.setLevels.isEmpty)
-    #expect(!b.consumesIdleReading)     // no idle read needed when nothing uses it
+    #expect(!b.consumesIdleReading)
 }
 
 @MainActor
@@ -480,9 +429,9 @@ private final class FakeBrightness: BrightnessControlling {
     controller.start(options: options)
     #expect(activity.pokeCount == 1)
     controller.stop()
-    clock.advance(5) // well within the interval
+    clock.advance(5)
     controller.start(options: options)
-    #expect(activity.pokeCount == 2) // the fresh session pokes right away
+    #expect(activity.pokeCount == 2)
 }
 
 @MainActor
@@ -497,7 +446,7 @@ private final class FakeBrightness: BrightnessControlling {
     ))
     #expect(activity.pokes == [.key(ActivitySimulationMethod.f15KeyCode)])
 
-    clock.advance(SessionController.activityPokeInterval) // 30s: warp cadence, not HID
+    clock.advance(SessionController.activityPokeInterval)
     controller.reconcile()
     #expect(activity.pokeCount == 1)
 
@@ -509,8 +458,6 @@ private final class FakeBrightness: BrightnessControlling {
     ])
 }
 
-/// Models HID idle time the way the real system reports it: a posted key or
-/// mouse event resets it, just like real input does.
 @MainActor
 private final class IdleResettingActivity: ActivitySimulating {
     let clock: Clock
@@ -560,14 +507,11 @@ private final class IdleResettingActivity: ActivitySimulating {
     #expect(activity.pokeTimes.count == 1)
     let start = clock.now
 
-    // The user types 30 s after the poke, then walks away.
     for second in 1...100 {
         clock.advance(1)
         if second == 30 { activity.lastInput = clock.now }
         controller.reconcile(systemIdleSeconds: activity.idle)
     }
-    // Real input re-arms, so the next poke lands once they have been idle
-    // past the threshold, not a full interval after the first poke.
     let offsets = activity.pokeTimes.map { $0.timeIntervalSince(start) }
     #expect(offsets.first == 0)
     #expect(offsets.dropFirst().first == 30 + SessionController.activityIdleThreshold)
@@ -575,8 +519,6 @@ private final class IdleResettingActivity: ActivitySimulating {
 
 @MainActor
 @Test func keepActiveIdleOnlyModeKeepsItsCadenceAfterAHIDPoke() {
-    // Once the idle wait has passed, the poke repeats on the method's
-    // interval. Its own idle reset must not restart the wait.
     let clock = Clock()
     let activity = IdleResettingActivity(clock: clock)
     let controller = SessionController(assertions: FakeAssertions(), activity: activity, now: { clock.now })
@@ -598,8 +540,6 @@ private final class IdleResettingActivity: ActivitySimulating {
 
 @MainActor
 @Test func keepActiveHIDPokeDoesNotBrightenADimmedPanel() {
-    // The poke's idle reset must not read as the user coming back to the
-    // dimmed display either, or the panel flashes to full every minute.
     let clock = Clock()
     let activity = IdleResettingActivity(clock: clock)
     let brightness = FakeBrightness(level: 0.6)
@@ -615,7 +555,6 @@ private final class IdleResettingActivity: ActivitySimulating {
     #expect(activity.pokeTimes.count == 3)
     #expect(brightness.setLevels == [0.2])
 
-    // Real input still restores it.
     activity.lastInput = clock.now
     clock.advance(1)
     controller.reconcile(systemIdleSeconds: activity.idle)
@@ -624,8 +563,6 @@ private final class IdleResettingActivity: ActivitySimulating {
 
 @MainActor
 @Test func keepActiveStartPokeDoesNotBringTheDimForward() {
-    // The start poke has no idle reading. The user just clicked Start, so
-    // their idle runs from zero, and the dim lands on time.
     let clock = Clock()
     let activity = IdleResettingActivity(clock: clock)
     let brightness = FakeBrightness(level: 0.6)
@@ -661,7 +598,6 @@ private final class IdleResettingActivity: ActivitySimulating {
     controller.options = options
     clock.advance(SessionController.activityPokeInterval)
     controller.reconcile()
-    // Still inside the 60s HID interval from the first poke.
     #expect(activity.pokeCount == 1)
 
     clock.advance(ActivitySimulationMethod.specifiedKey.pokeInterval - SessionController.activityPokeInterval)
@@ -718,12 +654,9 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
     controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
     #expect(fake.held == [.system, .display])
 
-    // Lid shut over nothing: no panel left worth holding awake.
     controller.reconcile(display: .lidShutNoExternal)
     #expect(fake.held == [.system])
 
-    // Opening it again puts the display back, with no restart and no change
-    // to the option itself.
     controller.reconcile(display: .usable)
     #expect(fake.held == [.system, .display])
 }
@@ -733,8 +666,6 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
     let (controller, fake, _) = makeController()
     controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
 
-    // A shut lid with an external monitor still has a screen somebody may be
-    // watching, so the host reports `.lidShutWithExternal` and the assertion stays.
     controller.reconcile(display: .lidShutWithExternal)
     #expect(fake.held == [.system, .display])
 }
@@ -754,8 +685,6 @@ private func makeController() -> (SessionController, FakeAssertions, Clock) {
     #expect(brightness.level == 0)
     #expect(brightness.keyboardLevel == 0)
 
-    // A closed-lid remote session still needs a live display after the
-    // system's idle timeout, including ticks without a fresh lid reading.
     clock.advance(601)
     controller.reconcile(systemIdleSeconds: 601, display: .unknown)
     #expect(fake.held == [.system, .display])
@@ -865,8 +794,6 @@ func zeroBrightnessReleasesDisplayProtectionDuringSafetyPause(thermal: Bool) {
     // restore when macOS has already zeroed keys before the clamshell tick).
     controller.reconcile(display: .usable)
 
-    // Clamshell: keep the display assertion for the external, zero the built-in
-    // panel and keyboard so they do not glow under the closed lid.
     controller.reconcile(display: .lidShutWithExternal)
     #expect(fake.held == [.system, .display])
     #expect(brightness.level == 0)
@@ -874,20 +801,17 @@ func zeroBrightnessReleasesDisplayProtectionDuringSafetyPause(thermal: Bool) {
     let panelWrites = brightness.setLevels.count
     let keyWrites = brightness.setKeyboardLevels.count
 
-    // Still clamshell: no 1 Hz rewrite spam while levels stay at 0.
     controller.reconcile(display: .lidShutWithExternal)
     #expect(brightness.level == 0)
     #expect(brightness.keyboardLevel == 0)
     #expect(brightness.setLevels.count == panelWrites)
     #expect(brightness.setKeyboardLevels.count == keyWrites)
 
-    // A nil lid sample keeps the latched clamshell dark force.
     controller.reconcile(display: .unknown)
     #expect(fake.held == [.system, .display])
     #expect(brightness.level == 0)
     #expect(brightness.keyboardLevel == 0)
 
-    // Lid opens: panel and keyboard go back to the captured levels.
     controller.reconcile(display: .usable)
     #expect(brightness.level == 0.7)
     #expect(brightness.keyboardLevel == 0.4)
@@ -898,8 +822,6 @@ func zeroBrightnessReleasesDisplayProtectionDuringSafetyPause(thermal: Bool) {
     let clock = Clock()
     let brightness = FakeBrightness(level: 0.7, keyboardLevel: 0.4)
     let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
-    // System keep-awake only: no prevent-display-sleep, so clamshell must not
-    // touch brightness.
     controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: false))
     controller.reconcile(display: .lidShutWithExternal)
     #expect(brightness.level == 0.7)
@@ -942,7 +864,6 @@ func zeroBrightnessReleasesDisplayProtectionDuringSafetyPause(thermal: Bool) {
     controller.reconcile(display: .lidShutWithExternal)
     #expect(brightness.keyboardLevel == 0)
 
-    // Lid open: restore the open-lid level, not the captured zero.
     controller.reconcile(display: .usable)
     #expect(brightness.keyboardLevel == 0.5)
     #expect(brightness.level == 0.7)
@@ -950,8 +871,6 @@ func zeroBrightnessReleasesDisplayProtectionDuringSafetyPause(thermal: Bool) {
 
 @MainActor
 @Test func clamshellSkipsKeyboardForceWhenNeverSampledOpenAndAlreadyDark() {
-    // Started already in clamshell with keys dark: no open sample, no live
-    // lit reading. Leave the keyboard to macOS instead of learning restore=0.
     let clock = Clock()
     let brightness = FakeBrightness(level: 0.7, keyboardLevel: 0)
     let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
@@ -977,10 +896,8 @@ func zeroBrightnessReleasesDisplayProtectionDuringSafetyPause(thermal: Bool) {
     controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
     controller.reconcile(display: .usable)
 
-    brightness.supported = false // lists lost the built-in
+    brightness.supported = false
     controller.reconcile(display: .lidShutWithExternal)
-    // Fake setBrightness still records even when unsupported, mirroring a
-    // backend that keeps a last-known display id.
     #expect(brightness.setLevels.last == 0)
     #expect(brightness.keyboardLevel == 0)
 
@@ -999,25 +916,18 @@ func zeroBrightnessReleasesDisplayProtectionDuringSafetyPause(thermal: Bool) {
         preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 60, dimFloor: 0.05))
 
     controller.reconcile(systemIdleSeconds: 10, display: .usable)
-    // Clamshell zeros the panel while using the open-lid level as restore target.
     controller.reconcile(systemIdleSeconds: 120, display: .lidShutWithExternal)
     #expect(brightness.level == 0)
 
-    // Lid opens while still idle: hand off to idle-dim at the configured floor,
-    // not leave the panel stuck at clamshell zero.
     controller.reconcile(systemIdleSeconds: 130, display: .usable)
     #expect(brightness.level == 0.05)
 
-    // User returns: restore the pre-clamshell capture.
     controller.reconcile(systemIdleSeconds: 1, display: .usable)
     #expect(brightness.level == 0.7)
 }
 
 @MainActor
 @Test func idleDimDoesNotPoisonClamshellPanelRestoreAfterActivity() {
-    // Idle dim holds the panel at dimFloor (0). An activity usable tick must
-    // not learn that floor as the open-lid cache; clamshell with a missing
-    // live panel then open again must restore the real pre-dim level.
     let clock = Clock()
     let brightness = FakeBrightness(level: 0.8)
     let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
@@ -1028,13 +938,11 @@ func zeroBrightnessReleasesDisplayProtectionDuringSafetyPause(thermal: Bool) {
     #expect(brightness.level == 0.8)
 
     controller.reconcile(systemIdleSeconds: 120, display: .usable)
-    #expect(brightness.level == 0) // idle dim
+    #expect(brightness.level == 0)
 
-    // Brief activity: restore hardware; open-lid cache must stay at 0.8.
     controller.reconcile(systemIdleSeconds: 1, display: .usable)
     #expect(brightness.level == 0.8)
 
-    // Clamshell with no live panel (lists dropped the built-in).
     brightness.supported = false
     controller.reconcile(systemIdleSeconds: 5, display: .lidShutWithExternal)
     #expect(brightness.setLevels.last == 0)
@@ -1046,8 +954,6 @@ func zeroBrightnessReleasesDisplayProtectionDuringSafetyPause(thermal: Bool) {
 
 @MainActor
 @Test func stopWhileIdleDimmedStillSeedsNextClamshellRestore() {
-    // stop restores hardware and must refresh lastOpenPanelLevel so a later
-    // start already in clamshell (no open sample) still restores correctly.
     let clock = Clock()
     let brightness = FakeBrightness(level: 0.75)
     let controller = SessionController(assertions: FakeAssertions(), brightness: brightness, now: { clock.now })
@@ -1061,7 +967,6 @@ func zeroBrightnessReleasesDisplayProtectionDuringSafetyPause(thermal: Bool) {
     controller.stop()
     #expect(brightness.level == 0.75)
 
-    // Fresh session already in clamshell; live panel unreadable.
     controller.start(options: SleepPreventionOptions(
         preventSystemSleep: true, preventDisplaySleep: true, dimDisplayAfter: 60, dimFloor: 0))
     brightness.supported = false
@@ -1081,7 +986,6 @@ func zeroBrightnessReleasesDisplayProtectionDuringSafetyPause(thermal: Bool) {
     #expect(fake.held == [.system])
 
     controller.stop()
-    // Fresh start without a display sample must not keep the shut latch.
     controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
     #expect(fake.held == [.system, .display])
 }
@@ -1091,8 +995,6 @@ func zeroBrightnessReleasesDisplayProtectionDuringSafetyPause(thermal: Bool) {
     let (controller, fake, _) = makeController()
     controller.start(options: SleepPreventionOptions(preventSystemSleep: true, preventDisplaySleep: true))
 
-    // First-ever `.unknown` fails open as usable: treating it as shut would
-    // let the display sleep in front of someone using the Mac.
     controller.reconcile(display: .unknown)
     #expect(fake.held == [.system, .display])
 }
@@ -1110,16 +1012,12 @@ func zeroBrightnessReleasesDisplayProtectionDuringSafetyPause(thermal: Bool) {
     controller.reconcile(display: .unknown)
     #expect(fake.held == [.system])
 
-    // An out-of-band reconcile (start/stop/URL command) omits a display
-    // sample the same way; same latch applies.
     controller.reconcile()
     #expect(fake.held == [.system])
 
-    // A real open reading clears the latch.
     controller.reconcile(display: .usable)
     #expect(fake.held == [.system, .display])
 
-    // And a nil after open keeps the display held, not the old shut verdict.
     controller.reconcile(display: .unknown)
     #expect(fake.held == [.system, .display])
 }
@@ -1135,7 +1033,6 @@ func zeroBrightnessReleasesDisplayProtectionDuringSafetyPause(thermal: Bool) {
     #expect(fake.held.isEmpty)
     #expect(controller.lastAssertionError != nil)
 
-    // A later successful apply clears the error.
     fake.refuse = []
     controller.reconcile()
     #expect(fake.held == [.system])
@@ -1168,11 +1065,11 @@ func zeroBrightnessReleasesDisplayProtectionDuringSafetyPause(thermal: Bool) {
 
     clock.advance(59)
     controller.reconcile()
-    #expect(controller.isActive) // before the deadline
+    #expect(controller.isActive)
 
-    clock.advance(2) // 61s elapsed
+    clock.advance(2)
     controller.reconcile()
-    #expect(controller.isActive == false) // auto-stopped
+    #expect(controller.isActive == false)
     #expect(fake.held.isEmpty)
 }
 
@@ -1185,7 +1082,6 @@ func zeroBrightnessReleasesDisplayProtectionDuringSafetyPause(thermal: Bool) {
     #expect(abs((controller.remaining ?? -1) - 90) < 0.001)
 }
 
-/// A gate whose decision the test flips directly.
 private final class StubGate: TriggerEvaluating {
     var satisfied: Bool
     private(set) var ticks = 0
@@ -1201,17 +1097,17 @@ private final class StubGate: TriggerEvaluating {
     controller.triggerGate = gate
 
     controller.reconcile()
-    #expect(controller.isActive == false) // gate off → idle
+    #expect(controller.isActive == false)
     #expect(fake.held.isEmpty)
 
     gate.satisfied = true
     controller.reconcile()
-    #expect(controller.isActive) // gate on → activates
+    #expect(controller.isActive)
     #expect(fake.held == [.system])
 
     gate.satisfied = false
     controller.reconcile()
-    #expect(controller.isActive == false) // gate off → releases
+    #expect(controller.isActive == false)
     #expect(fake.held.isEmpty)
 }
 
@@ -1226,22 +1122,22 @@ private final class StubGate: TriggerEvaluating {
     #expect(started != nil)
 
     clock.advance(30)
-    controller.reconcile() // still satisfied
-    #expect(controller.startedAt == started) // not restarted
+    controller.reconcile()
+    #expect(controller.startedAt == started)
     #expect(abs(controller.elapsed - 30) < 0.001)
 }
 
 @MainActor
 @Test func gatedSessionHasNoRemainingEvenWithLeftoverTimedMode() {
     let (controller, _, clock) = makeController()
-    controller.start(mode: .timed(duration: 3600)) // a 1h manual session
+    controller.start(mode: .timed(duration: 3600))
     clock.advance(10)
-    #expect(controller.remaining != nil) // counting down while manual
+    #expect(controller.remaining != nil)
 
-    controller.triggerGate = StubGate(true) // triggers take over mid-session
+    controller.triggerGate = StubGate(true)
     controller.reconcile()
-    #expect(controller.isActive) // gate holds it on
-    #expect(controller.remaining == nil) // but no countdown: gating isn't time-boxed
+    #expect(controller.isActive)
+    #expect(controller.remaining == nil)
 }
 
 @MainActor
@@ -1251,9 +1147,9 @@ private final class StubGate: TriggerEvaluating {
     controller.triggerGate = gate
     controller.start(mode: .timed(duration: 60))
 
-    clock.advance(120) // well past the timed cap
+    clock.advance(120)
     controller.reconcile()
-    #expect(controller.isActive) // gate still owns activation
+    #expect(controller.isActive)
     #expect(fake.held == [.system])
 }
 
@@ -1267,10 +1163,10 @@ private final class StubGate: TriggerEvaluating {
     ))
     #expect(fake.held == [.system, .display])
 
-    controller.reconcile(systemIdleSeconds: 100) // below threshold
+    controller.reconcile(systemIdleSeconds: 100)
     #expect(fake.held == [.system, .display])
 
-    controller.reconcile(systemIdleSeconds: 301) // past threshold → yield display
+    controller.reconcile(systemIdleSeconds: 301)
     #expect(fake.held == [.system])
 }
 
@@ -1293,11 +1189,11 @@ private final class StubGate: TriggerEvaluating {
     let gate = StubGate(true)
     controller.triggerGate = gate
 
-    controller.reconcile(battery: .discharging(10)) // low: stays idle even though gate wants on
+    controller.reconcile(battery: .discharging(10))
     #expect(controller.isActive == false)
     #expect(fake.held.isEmpty)
 
-    controller.reconcile(battery: .discharging(50)) // recovered: gate resumes control
+    controller.reconcile(battery: .discharging(50))
     #expect(controller.isActive)
     #expect(fake.held == [.system])
 }
@@ -1308,18 +1204,16 @@ private final class StubGate: TriggerEvaluating {
     controller.pauseBelowBatteryPercent = 20
     controller.triggerGate = StubGate(true)
 
-    controller.reconcile(battery: .discharging(19)) // below cutoff: pause
+    controller.reconcile(battery: .discharging(19))
     #expect(controller.isActive == false)
-    #expect(controller.pausedByBattery) // exposed so the UI can explain the hold
+    #expect(controller.pausedByBattery)
 
-    // A reading back at (or just above) the cutoff must NOT reactivate: without
-    // a dead-band a value bouncing 19/20/19/20 would flap on and off each tick.
     controller.reconcile(battery: .discharging(20))
     #expect(controller.isActive == false)
-    controller.reconcile(battery: .discharging(22)) // still inside the resume margin
+    controller.reconcile(battery: .discharging(22))
     #expect(controller.isActive == false)
 
-    controller.reconcile(battery: .discharging(23)) // clears cutoff + margin: resume
+    controller.reconcile(battery: .discharging(23))
     #expect(controller.isActive)
     #expect(controller.pausedByBattery == false)
     #expect(fake.held == [.system])
@@ -1337,8 +1231,6 @@ private final class StubGate: TriggerEvaluating {
     #expect(controller.pausedByBattery)
     #expect(fake.held.isEmpty)
 
-    // Plugging in lifts the pause, and the paused manual session comes back
-    // on its own: the menu promises this, and nothing else restarts it.
     controller.reconcile(battery: .onAC)
     #expect(controller.pausedByBattery == false)
     #expect(controller.isActive)
@@ -1353,8 +1245,6 @@ private final class StubGate: TriggerEvaluating {
     controller.reconcile(battery: .discharging(15))
     #expect(controller.isActive == false)
 
-    // The user changes a setting while paused: the resumed session uses it
-    // rather than the options it had when the pause began.
     controller.options.preventDisplaySleep = true
     controller.options.activityOnlyWhileBrewing = false
     controller.reconcile(battery: .onAC)
@@ -1373,10 +1263,10 @@ private final class StubGate: TriggerEvaluating {
     controller.reconcile(battery: .discharging(15))
     #expect(controller.isActive == false)
 
-    controller.reconcile(battery: .discharging(22)) // inside the margin: still held
+    controller.reconcile(battery: .discharging(22))
     #expect(controller.isActive == false)
 
-    controller.reconcile(battery: .discharging(23)) // clears cutoff + margin: resume
+    controller.reconcile(battery: .discharging(23))
     #expect(controller.isActive)
     #expect(fake.held == [.system])
 }
@@ -1390,8 +1280,6 @@ private final class StubGate: TriggerEvaluating {
     controller.reconcile(battery: .discharging(15))
     #expect(controller.pausedByBattery)
 
-    // The user stopped it while paused: that explicit stop wins, plugging in
-    // must not restart brewing behind their back.
     controller.stop()
     controller.reconcile(battery: .onAC)
     #expect(controller.pausedByBattery == false)
@@ -1408,8 +1296,6 @@ private final class StubGate: TriggerEvaluating {
     controller.reconcile(battery: .discharging(15))
     #expect(controller.isActive == false)
 
-    // The deadline passes while paused: lifting the pause must end the
-    // session on that same tick, never hold assertions one tick past it.
     clock.advance(120)
     controller.reconcile(battery: .onAC)
     #expect(controller.isActive == false)
@@ -1425,13 +1311,10 @@ private final class StubGate: TriggerEvaluating {
     controller.reconcile(battery: .discharging(15))
     #expect(controller.pausedByBattery)
 
-    // Triggers take ownership mid-pause but stay unsatisfied: nothing runs.
     controller.triggerGate = StubGate(false)
     controller.reconcile(battery: .onAC)
     #expect(controller.isActive == false)
 
-    // Triggers go away again: the manual session remembered from before the
-    // trigger era must not resume underneath the user's back.
     controller.triggerGate = nil
     controller.reconcile(battery: .onAC)
     #expect(controller.isActive == false)
@@ -1444,7 +1327,7 @@ private final class StubGate: TriggerEvaluating {
     controller.pauseBelowBatteryPercent = 20
     controller.start()
 
-    controller.reconcile() // no battery reading (e.g. desktop Mac) → no override
+    controller.reconcile()
     #expect(controller.isActive)
     #expect(fake.held == [.system])
 }
@@ -1457,15 +1340,12 @@ private final class StubGate: TriggerEvaluating {
     controller.reconcile(battery: .discharging(15))
     #expect(controller.pausedByBattery)
 
-    // A hotkey/menu/widget start must not activate for one tick and then be
-    // re-paused with natural-end effects: it stays paused, and the internal
-    // no-reading reconcile inside any start path must not clear the latch.
     controller.start()
     #expect(controller.isActive == false)
     #expect(controller.pausedByBattery)
     #expect(fake.held.isEmpty)
 
-    controller.reconcile() // internal-style reconcile: latch still holds
+    controller.reconcile()
     #expect(controller.pausedByBattery)
     #expect(controller.isActive == false)
 }
@@ -1478,21 +1358,17 @@ private final class StubGate: TriggerEvaluating {
     #expect(controller.pausedByBattery)
     #expect(controller.batteryRefusedStarts == 0)
 
-    // Each refused user attempt bumps the counter, so the UI can nudge its
-    // "paused on low battery" explanation exactly when the user pokes it.
     controller.start()
     #expect(controller.batteryRefusedStarts == 1)
     controller.start()
     #expect(controller.batteryRefusedStarts == 2)
 
-    // A start that actually begins doesn't count as a refusal.
     controller.reconcile(battery: .onAC)
     controller.start()
     #expect(controller.isActive)
     #expect(controller.batteryRefusedStarts == 2)
 }
 
-// MARK: - Thermal pause
 
 @MainActor
 @Test func hotReadingForceStopsAnActiveSession() {
@@ -1506,8 +1382,6 @@ private final class StubGate: TriggerEvaluating {
     #expect(controller.pausedByThermal)
     #expect(fake.held.isEmpty)
 
-    // Recovery releases the latch and the paused manual session resumes on
-    // its own, mirroring the battery pause (the menu promises this).
     controller.reconcile(thermal: .clear)
     #expect(controller.pausedByThermal == false)
     #expect(controller.isActive)
@@ -1523,12 +1397,10 @@ private final class StubGate: TriggerEvaluating {
     #expect(controller.pausedByThermal)
     #expect(controller.isActive == false)
 
-    // The gate stays satisfied, but the pause outranks it every tick.
     controller.reconcile(thermal: .hot)
     #expect(controller.isActive == false)
     #expect(fake.held.isEmpty)
 
-    // On all-clear the very same reconcile lets the gate reactivate.
     controller.reconcile(thermal: .clear)
     #expect(controller.isActive)
 }
@@ -1540,14 +1412,12 @@ private final class StubGate: TriggerEvaluating {
     controller.reconcile(thermal: .hot)
     #expect(controller.pausedByThermal)
 
-    // A manual start must not activate for one tick: start()'s internal
-    // reconcile passes .unknown, which leaves the latch alone.
     controller.start()
     #expect(controller.isActive == false)
     #expect(controller.pausedByThermal)
     #expect(fake.held.isEmpty)
 
-    controller.reconcile() // internal-style reconcile: still latched
+    controller.reconcile()
     #expect(controller.pausedByThermal)
 }
 
@@ -1561,7 +1431,6 @@ private final class StubGate: TriggerEvaluating {
     #expect(controller.thermalRefusedStarts == 2)
     #expect(controller.refusedStarts == 2)
 
-    // Battery refusals land in the same combined counter.
     controller.reconcile(thermal: .clear)
     controller.pauseBelowBatteryPercent = 20
     controller.reconcile(battery: .discharging(15))
@@ -1578,7 +1447,7 @@ private final class StubGate: TriggerEvaluating {
     #expect(controller.pausedByThermal)
 
     controller.pauseWhenHot = false
-    controller.reconcile() // no reading needed; feature off clears the latch
+    controller.reconcile()
     #expect(controller.pausedByThermal == false)
     controller.start()
     #expect(controller.isActive)
@@ -1590,21 +1459,16 @@ private final class StubGate: TriggerEvaluating {
     controller.pauseWhenHot = true
     controller.pauseBelowBatteryPercent = 20
 
-    // The battery block runs first and holds while latched, so a simultaneous
-    // hot reading defers: everything is stopped anyway, one latch suffices.
     controller.reconcile(battery: .discharging(15), thermal: .hot)
     #expect(controller.pausedByBattery)
     #expect(controller.pausedByThermal == false)
 
-    // Plugging in lifts the battery pause; the still-hot reading latches the
-    // thermal pause on the very same reconcile, so there is no unprotected gap.
     controller.reconcile(battery: .onAC, thermal: .hot)
     #expect(controller.pausedByBattery == false)
     #expect(controller.pausedByThermal)
     controller.start()
     #expect(controller.isActive == false)
 
-    // Cooling releases the last hold; now a start works.
     controller.reconcile(battery: .onAC, thermal: .clear)
     controller.start()
     #expect(controller.isActive)
@@ -1618,7 +1482,7 @@ private final class StubGate: TriggerEvaluating {
     controller.reconcile(battery: .discharging(15))
     #expect(controller.pausedByBattery)
 
-    controller.reconcile(battery: .onAC) // on AC the pause is moot
+    controller.reconcile(battery: .onAC)
     #expect(controller.pausedByBattery == false)
     #expect(controller.isActive)
     #expect(fake.held == [.system])
@@ -1633,12 +1497,11 @@ private final class StubGate: TriggerEvaluating {
     controller.reconcile(battery: .discharging(10))
     let before = gate.ticks
 
-    controller.reconcile(battery: .discharging(10)) // still paused
-    controller.reconcile()                          // paused, no reading
-    #expect(gate.ticks == before + 2) // rule state keeps advancing while paused
+    controller.reconcile(battery: .discharging(10))
+    controller.reconcile()
+    #expect(gate.ticks == before + 2)
 }
 
-/// Records posted notifications, for the battery-pause notice tests.
 private final class FakeReminder: ReminderNotifying {
     private(set) var notices: [(title: String, body: String, sound: Bool)] = []
     func notify(title: String, body: String, sound: Bool) { notices.append((title, body, sound)) }
@@ -1651,7 +1514,7 @@ private final class FakeReminder: ReminderNotifying {
     let clock = Clock()
     let controller = SessionController(assertions: FakeAssertions(), reminder: reminder, now: { clock.now })
     controller.pauseBelowBatteryPercent = 20
-    controller.notifyOnEnd = true // must not add a second, generic notification
+    controller.notifyOnEnd = true
     controller.start()
 
     controller.reconcile(battery: .discharging(15))
@@ -1659,11 +1522,8 @@ private final class FakeReminder: ReminderNotifying {
     #expect(reminder.notices.count == 1)
     #expect(reminder.notices.first?.title == "Paused on low battery")
     #expect(reminder.notices.first?.body.contains("15%") == true)
-    // Resuming is tied to charging, not to a charge level: on battery the
-    // percentage only ever falls, so the notice tells the user to plug in.
     #expect(reminder.notices.first?.body.contains("plug in") == true)
 
-    // Staying below the cutoff must not repeat the notice every tick.
     controller.reconcile(battery: .discharging(14))
     #expect(reminder.notices.count == 1)
 }
@@ -1674,7 +1534,7 @@ private final class FakeReminder: ReminderNotifying {
     let clock = Clock()
     let controller = SessionController(assertions: FakeAssertions(), reminder: reminder, now: { clock.now })
     controller.pauseBelowBatteryPercent = 20
-    controller.start() // notifyOnEnd stays false
+    controller.start()
 
     controller.reconcile(battery: .discharging(15))
     #expect(reminder.notices.count == 1)
@@ -1688,33 +1548,30 @@ private final class FakeReminder: ReminderNotifying {
     let controller = SessionController(assertions: FakeAssertions(), reminder: reminder, now: { clock.now })
     controller.pauseBelowBatteryPercent = 20
 
-    // No session running: the latch engages, but nothing visibly changed for
-    // the user, so there is nothing to announce.
     controller.reconcile(battery: .discharging(15))
     #expect(controller.pausedByBattery)
     #expect(reminder.notices.isEmpty)
 }
 
-// MARK: - Stop in N
 
 @MainActor
 @Test func stopInConvertsIndefiniteSessionKeepingStartedAt() {
     let (controller, fake, clock) = makeController()
-    controller.start() // indefinite
+    controller.start()
     let started = controller.startedAt
     clock.advance(10 * 60)
 
     controller.stopIn(15 * 60)
-    #expect(controller.startedAt == started) // continues, not restarted
+    #expect(controller.startedAt == started)
     #expect(abs((controller.remaining ?? -1) - 15 * 60) < 0.001)
 
     clock.advance(15 * 60 - 1)
     controller.reconcile()
-    #expect(controller.isActive) // just before the deadline
+    #expect(controller.isActive)
 
     clock.advance(2)
     controller.reconcile()
-    #expect(controller.isActive == false) // ended on its own
+    #expect(controller.isActive == false)
     #expect(fake.held.isEmpty)
 }
 
@@ -1724,33 +1581,31 @@ private final class FakeReminder: ReminderNotifying {
     controller.start(mode: .timed(duration: 60 * 60))
     clock.advance(60)
 
-    controller.stopIn(5 * 60) // shorten
+    controller.stopIn(5 * 60)
     #expect(abs((controller.remaining ?? -1) - 5 * 60) < 0.001)
 
-    controller.stopIn(30 * 60) // extend, replacing the countdown
+    controller.stopIn(30 * 60)
     #expect(abs((controller.remaining ?? -1) - 30 * 60) < 0.001)
 }
 
 @MainActor
 @Test func stopInIsIgnoredWhileIdleGatedOrNonPositive() {
     let (controller, _, _) = makeController()
-    controller.stopIn(15 * 60) // idle: nothing to convert
+    controller.stopIn(15 * 60)
     #expect(controller.isActive == false)
     #expect(controller.mode == .indefinite)
 
     controller.start()
-    controller.stopIn(0) // non-positive: ignored
+    controller.stopIn(0)
     #expect(controller.remaining == nil)
 
     controller.triggerGate = StubGate(true)
     controller.reconcile()
-    controller.stopIn(15 * 60) // gated sessions aren't time-boxed
+    controller.stopIn(15 * 60)
     #expect(controller.mode == .indefinite)
 }
 
-// MARK: - Automation leases
 
-/// A lease provider whose demand the test scripts directly.
 @MainActor
 private final class FakeLeaseProvider: LeaseProviding {
     var summaries: [LeaseSummary] = []
@@ -1798,7 +1653,6 @@ private func leaseSummary(
     #expect(fake.held == [.system])
     #expect(controller.liveLeases.count == 1)
     #expect(controller.log.events.last?.kind == .leaseAcquired)
-    // Lease sessions never count down.
     #expect(controller.remaining == nil)
 }
 
@@ -1814,7 +1668,6 @@ private func leaseSummary(
     controller.reconcile(display: .lidShutNoExternal)
     #expect(fake.held == [.system])
 
-    // A manual session with the same options still gets the display.
     controller.start()
     controller.reconcile()
     #expect(fake.held == [.system, .display])
@@ -1839,7 +1692,7 @@ private func leaseSummary(
     #expect(controller.isActive == false)
     #expect(controller.log.events.last?.kind == .leaseReleased)
     #expect(fake.held.isEmpty)
-    #expect(endActor.performed.isEmpty) // debounce pending
+    #expect(endActor.performed.isEmpty)
 
     clock.advance(SessionController.endActionDebounce)
     controller.reconcile()
@@ -1857,7 +1710,6 @@ private func leaseSummary(
     controller.reconcile()
     #expect(controller.isActive)
 
-    // The lease vanishing changes nothing: the manual demand persists.
     provider.summaries = []
     controller.reconcile()
     #expect(controller.isActive)
@@ -1877,7 +1729,6 @@ private func leaseSummary(
     controller.start()
     provider.summaries = []
     controller.reconcile()
-    // The session is manual now; lease expiry no longer ends it.
     #expect(controller.isActive)
 }
 
@@ -1896,18 +1747,15 @@ private func leaseSummary(
     clock.advance(61)
     controller.reconcile()
 
-    // The timed session ended and a lease session took over in the same tick.
     #expect(controller.isActive)
     #expect(controller.log.events.last?.kind == .leaseAcquired)
     #expect(controller.remaining == nil)
     #expect(fake.held == [.system])
 
-    // The converted session must not fire the timed session's end action.
     clock.advance(SessionController.endActionDebounce + 1)
     controller.reconcile()
     #expect(endActor.performed.isEmpty)
 
-    // The lease ending later is a natural end: now the action fires.
     provider.summaries = []
     controller.reconcile()
     clock.advance(SessionController.endActionDebounce)
@@ -1927,13 +1775,11 @@ private func leaseSummary(
     #expect(controller.isActive)
     #expect(controller.log.events.last?.kind == .triggerFired)
 
-    // The gate drops but a lease sustains the session.
     provider.summaries = [leaseSummary()]
     gate.satisfied = false
     controller.reconcile()
     #expect(controller.isActive)
 
-    // The lease ending is attributed to the lease, not the trigger.
     provider.summaries = []
     controller.reconcile()
     #expect(controller.isActive == false)
@@ -1954,8 +1800,6 @@ private func leaseSummary(
     #expect(controller.isActive)
     #expect(controller.log.events.last?.kind == .leaseAcquired)
 
-    // The gate turning on hands ownership to the triggers; the lease
-    // vanishing then leaves the session up.
     gate.satisfied = true
     controller.reconcile()
     provider.summaries = []
@@ -1978,12 +1822,10 @@ private func leaseSummary(
     #expect(controller.isActive == false)
     #expect(fake.held.isEmpty)
 
-    // Still paused: lease demand cannot reactivate.
     clock.advance(1)
     controller.reconcile(battery: .discharging(10))
     #expect(controller.isActive == false)
 
-    // Power is back: the surviving lease resumes the session.
     controller.reconcile(battery: .onAC)
     #expect(controller.isActive)
     #expect(fake.held == [.system])
@@ -2002,7 +1844,7 @@ private func leaseSummary(
 
     clock.advance(120)
     controller.reconcile()
-    #expect(controller.isActive) // no timed cap crept in
+    #expect(controller.isActive)
 }
 
 @MainActor
@@ -2020,15 +1862,12 @@ private func leaseSummary(
     #expect(controller.isActive == false)
     #expect(fake.held.isEmpty)
 
-    // Still hot, and an internal reconcile with no reading: lease demand
-    // cannot reactivate through either path.
     clock.advance(1)
     controller.reconcile(thermal: .hot)
     #expect(controller.isActive == false)
     controller.reconcile()
     #expect(controller.isActive == false)
 
-    // Cooled down: the surviving lease resumes the session.
     controller.reconcile(thermal: .clear)
     #expect(controller.isActive)
     #expect(fake.held == [.system])
@@ -2048,8 +1887,6 @@ private func leaseSummary(
     controller.reconcile()
     #expect(controller.isActive)
 
-    // The Mac slept across the lease's expiry: the end is noticed hours
-    // late and must not re-sleep the Mac someone just woke.
     clock.advance(3_600)
     provider.summaries = []
     controller.reconcile()
@@ -2077,8 +1914,6 @@ private func leaseSummary(
     let begun = controller.startedAt
     let logged = controller.log.events.count
 
-    // The app pauses triggers: the gate detaches and the session hands
-    // over to the live lease with no stop/restart pair in the log.
     controller.triggerGate = nil
     controller.handOffToLeases()
     clock.advance(1)
@@ -2087,9 +1922,8 @@ private func leaseSummary(
     #expect(controller.isLeaseHeld)
     #expect(controller.startedAt == begun)
     #expect(controller.log.events.count == logged)
-    #expect(fake.held == [.system]) // lease sessions never hold the display
+    #expect(fake.held == [.system])
 
-    // The lease ending promptly afterwards is a natural lease end.
     clock.advance(1)
     provider.summaries = []
     controller.reconcile()

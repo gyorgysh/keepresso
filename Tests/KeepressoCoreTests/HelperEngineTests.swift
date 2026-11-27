@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-// MARK: - Fakes
 
 private final class FakeRunner: HelperCommandRunning, @unchecked Sendable {
     private let lock = NSLock()
@@ -23,8 +22,6 @@ private final class FakeRunner: HelperCommandRunning, @unchecked Sendable {
 
 private final class FakeRestoreState: HelperRestoreStatePersisting, @unchecked Sendable {
     private let lock = NSLock()
-    /// Marker to stored value; empty string is a presence-only marker, the
-    /// same shape a legacy empty marker file has on disk.
     private var stored: [HelperRestoreMarker: String] = [:]
     var rejectRemovals = false
 
@@ -61,7 +58,6 @@ private final class FakeFanControl: FanControlling, @unchecked Sendable {
     private(set) var forcedPercents: [Int] = []
     private(set) var restoreCalls = 0
     private(set) var unlockCalls = 0
-    /// Scripted results for successive setForced calls; empty = keep .ok.
     var results: [FanWriteResult] = []
     var unlockSucceeds = true
     var restoreSucceeds = true
@@ -95,7 +91,6 @@ private let sleepOff = "/usr/bin/pmset -a disablesleep 0"
 private let awdlDown = "/sbin/ifconfig awdl0 down"
 private let awdlUp = "/sbin/ifconfig awdl0 up"
 
-// MARK: - Holds
 
 @Test func sleepHoldWritesOnlyOnUnionEdges() {
     let runner = FakeRunner()
@@ -106,12 +101,10 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     #expect(runner.commands == [sleepOn])
     #expect(state.markers() == [.sleepDisabled])
 
-    // A second holder joins and leaves: no extra writes.
     #expect(engine.setSleepHold(client: 2, holding: true))
     #expect(engine.setSleepHold(client: 2, holding: false))
     #expect(runner.commands == [sleepOn])
 
-    // The last holder leaving restores sleep and clears the marker.
     #expect(engine.setSleepHold(client: 1, holding: false))
     #expect(runner.commands == [sleepOn, sleepOff])
     #expect(state.markers().isEmpty)
@@ -121,7 +114,6 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     let runner = FakeRunner()
     let engine = HelperEngine(runner: runner, state: FakeRestoreState())
 
-    // Idle ticks are no-ops.
     engine.awdlTick()
     #expect(runner.commands.isEmpty)
 
@@ -146,7 +138,6 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     _ = engine.setSleepHold(client: 2, holding: true)
     #expect(!engine.isIdle)
 
-    // Client 1 dies: its AWDL hold ends, but client 2 still holds sleep.
     engine.clientDisconnected(1)
     #expect(runner.commands.contains(awdlUp))
     #expect(!runner.commands.contains(sleepOff))
@@ -165,13 +156,9 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 
     runner.failNext = true
     #expect(!engine.setSleepHold(client: 1, holding: true))
-    // The pmset write failed and the holder was rolled back, so there is
-    // nothing to restore at next launch and a retry is a real engage.
     #expect(state.markers().isEmpty)
     #expect(engine.isIdle)
 
-    // A second attempt must try the write again, not return a false success
-    // from `before == after` with a leftover holder.
     #expect(engine.setSleepHold(client: 1, holding: true))
     #expect(runner.commands == [sleepOn, sleepOn])
     #expect(state.markers() == [.sleepDisabled])
@@ -180,13 +167,11 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 @Test func sleepHoldRestoresThePriorDisableSleepValue() {
     let runner = FakeRunner()
     let state = FakeRestoreState()
-    // The user (or another tool) already had disablesleep 1 before the hold.
     let engine = HelperEngine(runner: runner, state: state, sleepDisabledReader: { true })
 
     #expect(engine.setSleepHold(client: 1, holding: true))
     #expect(state.value(for: .sleepDisabled) == "1")
 
-    // Release restores the recorded 1, never a hardcoded 0.
     #expect(engine.setSleepHold(client: 1, holding: false))
     #expect(runner.commands == [sleepOn, sleepOn])
     #expect(state.markers().isEmpty)
@@ -222,8 +207,6 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     #expect(engine.setSleepHold(client: 1, holding: true))
     runner.failNext = true
     #expect(!engine.setSleepHold(client: 1, holding: false))
-    // The restore did not land: the marker and its recorded value survive so
-    // the next daemon launch can settle it.
     #expect(state.value(for: .sleepDisabled) == "1")
 
     engine.restoreAtLaunch()
@@ -232,9 +215,6 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 }
 
 @Test func reengageAfterFailedSleepRestorePreservesThePriorDebt() {
-    // After a failed release, disablesleep is still 1. Re-engaging must not
-    // snapshot that sticky 1 as the new "prior", or the eventual restore
-    // would leave sleep disabled forever.
     var liveDisabled = false
     let runner = FakeRunner()
     let state = FakeRestoreState()
@@ -245,13 +225,12 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 
     #expect(engine.setSleepHold(client: 1, holding: true))
     #expect(state.value(for: .sleepDisabled) == "0")
-    liveDisabled = true // system now has the hold's 1
+    liveDisabled = true
 
     runner.failNext = true
     #expect(!engine.setSleepHold(client: 1, holding: false))
     #expect(state.value(for: .sleepDisabled) == "0")
 
-    // Re-engage while the sticky 1 is still live: prior debt stays "0".
     #expect(engine.setSleepHold(client: 1, holding: true))
     #expect(state.value(for: .sleepDisabled) == "0")
 
@@ -283,7 +262,6 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 
     runner.failNext = true
     engine.restoreAtLaunch()
-    // Sleep restore failed first; AWDL then succeeds; fan restore refused.
     #expect(state.markers().contains(.sleepDisabled))
     #expect(!state.markers().contains(.awdlDown))
     #expect(state.markers().contains(.fanForced))
@@ -301,7 +279,6 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 
 @Test func restoreAtLaunchTreatsALegacyEmptyMarkerAsZero() {
     let runner = FakeRunner()
-    // A pre-value daemon left an empty marker file behind.
     let state = FakeRestoreState(values: [.sleepDisabled: ""])
     let engine = HelperEngine(runner: runner, state: state)
 
@@ -310,7 +287,6 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     #expect(state.markers().isEmpty)
 }
 
-// MARK: - Manual set and restore
 
 @Test func manualSetIsPlainAndNeverMarked() {
     let runner = FakeRunner()
@@ -319,7 +295,6 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
 
     #expect(engine.setSleepDisabled(true))
     #expect(runner.commands == [sleepOn])
-    // The manual toggle is meant to outlive the app; no restore marker.
     #expect(state.markers().isEmpty)
 
     #expect(engine.setSleepDisabled(false))
@@ -332,7 +307,6 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     let engine = HelperEngine(runner: runner, state: state)
     #expect(engine.sleepNow())
     #expect(runner.commands == ["/usr/bin/pmset sleepnow"])
-    // Not a hold: nothing to restore if the daemon dies after.
     #expect(state.markers().isEmpty)
 }
 
@@ -348,10 +322,7 @@ private let awdlUp = "/sbin/ifconfig awdl0 up"
     #expect(state.markers().isEmpty)
 }
 
-// MARK: - CLI symlink
 
-/// A scratch directory standing in for /usr/local/bin plus a fake app bundle,
-/// so the link logic runs against the real filesystem without touching it.
 private struct CLILinkFixture {
     let engine = HelperEngine(runner: FakeRunner(), state: FakeRestoreState())
     let base: URL
@@ -378,15 +349,12 @@ private struct CLILinkFixture {
 @Test func cliLinkIsCreatedWhenMissingAndHealedWhenStale() throws {
     let fixture = try CLILinkFixture()
 
-    // No link yet (the DMG-install case): created, intermediate dir included.
     fixture.engine.ensureCLILink(cliPath: fixture.cliPath, linkPath: fixture.linkPath)
     #expect(fixture.linkDestination == fixture.cliPath)
 
-    // Up to date: idempotent.
     fixture.engine.ensureCLILink(cliPath: fixture.cliPath, linkPath: fixture.linkPath)
     #expect(fixture.linkDestination == fixture.cliPath)
 
-    // Stale (points into some other Keepresso.app, e.g. pre-move): replaced.
     try FileManager.default.removeItem(atPath: fixture.linkPath)
     try FileManager.default.createSymbolicLink(
         atPath: fixture.linkPath,
@@ -403,13 +371,11 @@ private struct CLILinkFixture {
         withIntermediateDirectories: true
     )
 
-    // A user's own regular file at the link path: left alone.
     try Data("mine".utf8).write(to: URL(fileURLWithPath: fixture.linkPath))
     fixture.engine.ensureCLILink(cliPath: fixture.cliPath, linkPath: fixture.linkPath)
     #expect(fixture.linkDestination == nil)
     #expect(try Data(contentsOf: URL(fileURLWithPath: fixture.linkPath)) == Data("mine".utf8))
 
-    // An unrelated symlink: also left alone.
     try FileManager.default.removeItem(atPath: fixture.linkPath)
     try FileManager.default.createSymbolicLink(
         atPath: fixture.linkPath, withDestinationPath: "/usr/bin/true"
@@ -417,7 +383,6 @@ private struct CLILinkFixture {
     fixture.engine.ensureCLILink(cliPath: fixture.cliPath, linkPath: fixture.linkPath)
     #expect(fixture.linkDestination == "/usr/bin/true")
 
-    // And a missing CLI target creates nothing.
     try FileManager.default.removeItem(atPath: fixture.linkPath)
     fixture.engine.ensureCLILink(cliPath: fixture.cliPath + "-gone", linkPath: fixture.linkPath)
     #expect(fixture.linkDestination == nil)
@@ -433,13 +398,11 @@ private struct CLILinkFixture {
     #expect(runner.commands.contains(awdlUp))
     #expect(state.markers().isEmpty)
 
-    // A clean launch restores nothing.
     let cleanRunner = FakeRunner()
     HelperEngine(runner: cleanRunner, state: FakeRestoreState()).restoreAtLaunch()
     #expect(cleanRunner.commands.isEmpty)
 }
 
-// MARK: - Fan holds
 
 @Test func fanHoldWritesOnUnionEdgesWithMaxPercentWinning() {
     let fans = FakeFanControl()
@@ -450,14 +413,11 @@ private struct CLILinkFixture {
     #expect(fans.forcedPercents == [60])
     #expect(state.markers() == [.fanForced])
 
-    // A hotter holder raises the target; the same target writes nothing new.
     #expect(engine.setFanHold(client: 2, holding: true, percent: 90))
     #expect(fans.forcedPercents == [60, 90])
     #expect(engine.setFanHold(client: 3, holding: true, percent: 50))
     #expect(fans.forcedPercents == [60, 90])
 
-    // The hottest leaving steps the target back down; the last one out
-    // restores auto and clears the marker.
     #expect(engine.setFanHold(client: 2, holding: false, percent: 0))
     #expect(fans.forcedPercents == [60, 90, 60])
     _ = engine.setFanHold(client: 1, holding: false, percent: 0)
@@ -485,13 +445,10 @@ private struct CLILinkFixture {
     let state = FakeRestoreState()
     let engine = HelperEngine(runner: FakeRunner(), state: state, fans: fans)
 
-    // The write failed, but it can partially land (per-fan mode writes) and
-    // the tick retries it into success, so the debt exists from the first
-    // attempt: a crash between here and the retry must still restore auto.
     #expect(!engine.setFanHold(client: 1, holding: true, percent: 80))
     #expect(state.markers() == [.fanForced])
 
-    engine.fanTick() // retry succeeds; the debt naturally stays
+    engine.fanTick()
     #expect(state.markers() == [.fanForced])
     #expect(fans.forcedPercents == [80, 80])
 }
@@ -502,9 +459,6 @@ private struct CLILinkFixture {
     let engine = HelperEngine(runner: FakeRunner(), state: state, fans: fans)
     _ = engine.setFanHold(client: 1, holding: true, percent: 80)
 
-    // The release's restore write failed: the fans are still forced, so the
-    // marker must survive for restoreAtLaunch to settle after the daemon
-    // exits or crashes.
     fans.restoreSucceeds = false
     #expect(!engine.setFanHold(client: 1, holding: false, percent: 0))
     #expect(state.markers() == [.fanForced])
@@ -514,7 +468,7 @@ private struct CLILinkFixture {
     let fans = FakeFanControl()
     let engine = HelperEngine(runner: FakeRunner(), state: FakeRestoreState(), fans: fans)
 
-    engine.fanTick() // idle: no writes
+    engine.fanTick()
     #expect(fans.forcedPercents.isEmpty)
 
     _ = engine.setFanHold(client: 1, holding: true, percent: 70)
@@ -530,9 +484,8 @@ private struct CLILinkFixture {
 
     #expect(engine.setFanHold(client: 1, holding: true, percent: 80))
     #expect(fans.unlockCalls == 1)
-    #expect(fans.forcedPercents == [80, 80]) // rejected, unlocked, retried
+    #expect(fans.forcedPercents == [80, 80])
 
-    // When the unlock itself fails, there is no second retry.
     let stubborn = FakeFanControl()
     stubborn.results = [.needsUnlock]
     stubborn.unlockSucceeds = false
@@ -548,8 +501,6 @@ private struct CLILinkFixture {
     _ = engine.setFanHold(client: 1, holding: true, percent: 80)
     #expect(state.markers() == [.fanForced])
 
-    // Every re-assert fails from here on; the engine gives up after the cap,
-    // restores auto, clears the marker, and records the drop.
     fans.results = Array(repeating: .failed, count: 20)
     for _ in 0..<HelperEngine.maxFanFailures { engine.fanTick() }
     #expect(engine.fanHoldDropped)
@@ -557,12 +508,10 @@ private struct CLILinkFixture {
     #expect(fans.restoreCalls == 1)
     #expect(state.markers().isEmpty)
 
-    // Ticks after the surrender write nothing further.
     let writesAfterDrop = fans.forcedPercents.count
     engine.fanTick()
     #expect(fans.forcedPercents.count == writesAfterDrop)
 
-    // A fresh hold gets a fresh chance and clears the dropped flag.
     _ = engine.setFanHold(client: 2, holding: true, percent: 50)
     #expect(!engine.fanHoldDropped)
 }
@@ -576,7 +525,6 @@ private struct CLILinkFixture {
     #expect(state.markers().isEmpty)
 }
 
-// MARK: - Priority holds
 
 private let boostPid = "/usr/bin/renice -10 -p 4242"
 private let restorePid = "/usr/bin/renice 0 -p 4242"
@@ -589,11 +537,9 @@ private let restorePid = "/usr/bin/renice 0 -p 4242"
     #expect(runner.commands == [boostPid])
     #expect(!engine.isIdle)
 
-    // A second client holding the same pid: no extra write.
     #expect(engine.setPriorityHold(client: 2, holding: true, pid: 4242))
     #expect(runner.commands == [boostPid])
 
-    // Last holder leaving restores nice 0.
     #expect(engine.setPriorityHold(client: 2, holding: false, pid: 4242))
     #expect(runner.commands == [boostPid])
     #expect(engine.setPriorityHold(client: 1, holding: false, pid: 4242))
@@ -606,8 +552,6 @@ private let restorePid = "/usr/bin/renice 0 -p 4242"
     let engine = HelperEngine(runner: runner, state: FakeRestoreState())
 
     _ = engine.setPriorityHold(client: 1, holding: true, pid: 4242)
-    // The same client re-holding a different pid boosts the new one and
-    // restores the old one.
     _ = engine.setPriorityHold(client: 1, holding: true, pid: 5555)
     #expect(runner.commands.contains("/usr/bin/renice -10 -p 5555"))
     #expect(runner.commands.contains(restorePid))
@@ -628,7 +572,6 @@ private let restorePid = "/usr/bin/renice 0 -p 4242"
     #expect(engine.isIdle)
 }
 
-// MARK: - Keyboard Cleaner hold
 
 private final class FakeEngineKeyboard: KeyboardRemapping, @unchecked Sendable {
     var current = KeyboardKeyMapping(entries: [.init(src: 9, dst: 8)])
@@ -762,14 +705,11 @@ private final class FakeEngineKeyboard: KeyboardRemapping, @unchecked Sendable {
 }
 
 @Test func staleMarkerAloneNeverTriggersAnInLifeWrite() {
-    // A leftover marker with no holders (a previous life, settled at the
-    // next launch) must not turn an unrelated connection teardown into a
-    // privileged write.
     let runner = FakeRunner()
     let fans = FakeFanControl()
     let state = FakeRestoreState(values: [.sleepDisabled: "1", .awdlDown: "", .fanForced: ""])
     let engine = HelperEngine(runner: runner, state: state, fans: fans)
-    engine.clientDisconnected(99) // held nothing
+    engine.clientDisconnected(99)
     #expect(runner.commands.isEmpty)
     #expect(fans.restoreCalls == 0)
     #expect(state.markers() == [.sleepDisabled, .awdlDown, .fanForced])
@@ -782,15 +722,13 @@ private final class FakeEngineKeyboard: KeyboardRemapping, @unchecked Sendable {
 
     #expect(engine.setSleepHold(client: 1, holding: true))
     runner.failNext = true
-    #expect(!engine.setSleepHold(client: 1, holding: false)) // restore fails, debt kept
+    #expect(!engine.setSleepHold(client: 1, holding: false))
     #expect(state.value(for: .sleepDisabled) == "0")
 
-    // An unrelated teardown retries the known-fresh debt and settles it.
     engine.clientDisconnected(99)
     #expect(runner.commands == [sleepOn, sleepOff, sleepOff])
     #expect(state.markers().isEmpty)
 
-    // Settled: further teardowns are quiet again.
     engine.clientDisconnected(100)
     #expect(runner.commands == [sleepOn, sleepOff, sleepOff])
 }
@@ -811,9 +749,6 @@ private final class FakeEngineKeyboard: KeyboardRemapping, @unchecked Sendable {
 }
 
 @Test func explicitSetSleepDisabledSupersedesARestoreDebt() {
-    // A stale marker recording prior "1", then the user turns the toggle
-    // off: the next no-op release must not re-enable disablesleep behind
-    // their back. The marker is re-based to the chosen value instead.
     let runner = FakeRunner()
     let state = FakeRestoreState(values: [.sleepDisabled: "1"])
     let engine = HelperEngine(runner: runner, state: state)
@@ -822,7 +757,7 @@ private final class FakeEngineKeyboard: KeyboardRemapping, @unchecked Sendable {
     #expect(state.value(for: .sleepDisabled) == "0")
 
     engine.clientDisconnected(99)
-    #expect(runner.commands == [sleepOff]) // only the explicit set, no retry write
+    #expect(runner.commands == [sleepOff])
 }
 
 @Test func restoreAtLaunchLeavesCorruptKeyboardMarkerUntouched() {
@@ -838,8 +773,6 @@ private final class FakeEngineKeyboard: KeyboardRemapping, @unchecked Sendable {
     )
 
     engine.restoreAtLaunch()
-    // Applying `.empty` would wipe the user's own remaps. Leave the mapping
-    // and keep the marker so a later launch can retry.
     #expect(keyboard.applied.isEmpty)
     #expect(keyboard.current == original)
     #expect(state.markers().contains(.keyboardLock))
@@ -898,7 +831,7 @@ private final class FakeBatteryLowPower: BatteryLowPowerControlling, @unchecked 
     #expect(!engine.setLowPowerHold(client: 1, holding: true)); #expect(control.writes.isEmpty)
     control.mode = 0
     #expect(engine.setLowPowerHold(client: 1, holding: true))
-    control.mode = 0 // changed in System Settings while held
+    control.mode = 0
     #expect(engine.setLowPowerHold(client: 1, holding: false)); #expect(control.writes == [1])
     #expect(state.markers().isEmpty)
 }
@@ -919,7 +852,6 @@ private final class FakeBatteryLowPower: BatteryLowPowerControlling, @unchecked 
         #expect(!hold(false))
         #expect(control.mode(for: profile) == 0)
         #expect(state.value(for: marker) == "0")
-        // The user picks High Power while the old marker still exists.
         if profile == .battery { control.mode = 2 } else { control.adapter = 2 }
         #expect(!hold(true))
         #expect(control.mode(for: profile) == 2)
@@ -963,7 +895,6 @@ private final class FakeBatteryLowPower: BatteryLowPowerControlling, @unchecked 
     #expect(engine.fanHoldWasDropped(client: 1))
     #expect(engine.fanHoldWasDropped(client: 2))
     #expect(!engine.fanHoldWasDropped(client: 3))
-    // The floor can retry without hiding the heat controller's lost hold.
     #expect(engine.setFanHold(client: 1, holding: true, percent: 60))
     #expect(!engine.fanHoldWasDropped(client: 1))
     #expect(engine.fanHoldWasDropped(client: 2))
@@ -983,7 +914,6 @@ private final class FakeBatteryLowPower: BatteryLowPowerControlling, @unchecked 
     engine.clientDisconnected(1)
     #expect(control.mode == 0 && control.adapter == 1)
     #expect(!engine.isIdle)
-    // A daemon crash restores the remaining adapter debt separately.
     let restarted = HelperEngine(runner: FakeRunner(), state: state, lowPower: control)
     restarted.restoreAtLaunch()
     #expect(control.adapter == 2)
@@ -1036,7 +966,7 @@ private final class PowerModeCommandStub: HelperCommandRunning, @unchecked Senda
     #expect(state.value(for: .adapterLowPower) == nil)
     control.adapter = 2
     #expect(engine.setAdapterLowPowerHold(client: 1, holding: true))
-    control.adapter = 0 // changed in System Settings while held
+    control.adapter = 0
     engine.clientDisconnected(1)
     #expect(control.adapter == 0 && control.mode == 0)
     #expect(control.adapterWrites == [1])
@@ -1046,11 +976,8 @@ private final class PowerModeCommandStub: HelperCommandRunning, @unchecked Senda
 @Test func staleLowPowerMarkerIsNotRestoredByAnUnrelatedDisconnect() {
     let control = FakeBatteryLowPower(); control.mode = 1
     let state = FakeRestoreState()
-    // A marker left by an earlier daemon life, whose restore did not land.
     state.set(.batteryLowPower, value: "0")
     let engine = HelperEngine(runner: FakeRunner(), state: state, lowPower: control)
-    // A health-check connection that never held Low Power goes away. The
-    // user's current mode must not be rewritten from the stale marker.
     engine.clientDisconnected(7)
     #expect(control.writes.isEmpty)
     #expect(control.mode == 1)
@@ -1064,7 +991,6 @@ private final class PowerModeCommandStub: HelperCommandRunning, @unchecked Senda
     control.succeed = false
     #expect(!engine.setLowPowerHold(client: 1, holding: false))
     control.succeed = true
-    // Owed in this life: a release by anyone now settles it.
     #expect(engine.setLowPowerHold(client: 1, holding: false))
     #expect(control.mode == 0)
     #expect(state.markers().isEmpty)

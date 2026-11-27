@@ -18,7 +18,6 @@ private func reader(_ manifests: String...) -> ClaudeScheduledTasksReader {
 }
 
 @Test func claudeReaderParsesTheRealManifestShape() {
-    // The exact shape Claude Desktop writes for a Local scheduled task.
     let json = """
     { "scheduledTasks": [
         { "id": "daily-brief", "cronExpression": "0 9 * * *", "enabled": true,
@@ -31,10 +30,9 @@ private func reader(_ manifests: String...) -> ClaudeScheduledTasksReader {
     let a = all[0]
     #expect(a.source == .claudeDesktop)
     #expect(a.key == "daily-brief")
-    #expect(a.name == "Daily Brief")   // title-cased from the kebab id
+    #expect(a.name == "Daily Brief")
     #expect(a.enabled)
     #expect(a.id == "claude:daily-brief")
-    // The recurrence really is the 09:00 daily cron.
     let cal = utc()
     #expect(a.recurrence.nextOccurrences(after: at(2026, 1, 1, 0, 0, cal), count: 1, calendar: cal)
             == [at(2026, 1, 1, 9, 0, cal)])
@@ -48,7 +46,6 @@ private func reader(_ manifests: String...) -> ClaudeScheduledTasksReader {
 }
 
 @Test func claudeReaderSkipsManualTasksWithoutASchedule() {
-    // A "Manual" (run-on-demand) task carries no cron: nothing to wake for.
     let missing = #"{ "scheduledTasks": [ { "id": "on-demand", "enabled": true } ] }"#
     let empty = #"{ "scheduledTasks": [ { "id": "on-demand", "cronExpression": "", "enabled": true } ] }"#
     #expect(reader(missing).automations().isEmpty)
@@ -58,13 +55,11 @@ private func reader(_ manifests: String...) -> ClaudeScheduledTasksReader {
 @Test func claudeReaderUnionsAcrossManifestsPreferringEnabled() {
     let disabled = #"{ "scheduledTasks": [ { "id": "sync", "cronExpression": "0 2 * * *", "enabled": false } ] }"#
     let enabled = #"{ "scheduledTasks": [ { "id": "sync", "cronExpression": "0 2 * * *", "enabled": true } ] }"#
-    // Whichever order the two manifests are read, an enabled copy wins.
     #expect(reader(disabled, enabled).automations().first?.enabled == true)
     #expect(reader(enabled, disabled).automations().first?.enabled == true)
 }
 
 @Test func claudeReaderSkipsAMalformedTaskButKeepsTheRest() {
-    // A null id must not take the whole manifest, and every other task, down.
     let json = #"{ "scheduledTasks": [ { "id": null, "cronExpression": "0 9 * * *", "enabled": true }, { "id": "good", "cronExpression": "0 9 * * *", "enabled": true } ] }"#
     #expect(reader(json).automations().map(\.key) == ["good"])
 }

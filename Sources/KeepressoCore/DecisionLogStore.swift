@@ -37,11 +37,8 @@ public struct PersistedSessionEvent: Codable, Equatable, Sendable {
 /// File IO for the decision log. Core owns the pure codec; the host wires a
 /// real store under Application Support (or a fake in tests).
 public protocol LogPersisting: AnyObject, Sendable {
-    /// Append one JSONL line (already newline-terminated UTF-8).
     func append(_ line: Data)
-    /// Full file contents, or empty when the file is missing.
     func load() -> Data
-    /// Replace the whole file (used after rotation).
     func replace(_ data: Data)
 }
 
@@ -134,7 +131,6 @@ public enum DecisionLogCodec {
         guard data.count > maxBytes else { return data }
         let events = decode(data)
         guard !events.isEmpty else { return Data() }
-        // Keep a suffix of events that fit. Walk from the end.
         var kept: [PersistedSessionEvent] = []
         var size = 0
         for event in events.reversed() {
@@ -160,9 +156,6 @@ public final class DecisionLogPersister {
     /// How many events to rehydrate into the in-memory log on launch.
     public static let loadLimit = DecisionLog.capacity
 
-    /// Running size of the on-disk file, so the per-append rotation check
-    /// doesn't re-read the whole file. Seeded by the first load (or append)
-    /// and kept in step with every write from then on.
     private var knownFileBytes: Int?
 
     public init(store: LogPersisting = FileLogStore()) {
@@ -200,7 +193,6 @@ public final class DecisionLogPersister {
     }
 }
 
-// MARK: - Awake stats
 
 /// One calendar day's held-awake summary.
 public struct AwakeDayStats: Equatable, Identifiable, Sendable {
@@ -275,7 +267,6 @@ public enum AwakeStatsAggregator {
                 openStart = nil
             }
         }
-        // Still-open session counts through `now`.
         if let start = openStart {
             addDuration(from: start.date, to: now, into: &dayHeld, calendar: calendar)
         }

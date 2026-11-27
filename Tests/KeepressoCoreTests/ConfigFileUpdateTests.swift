@@ -2,8 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-/// A file whose successive reads return the given contents in turn (the
-/// last one repeats), recording what gets written.
 private final class FakeFile {
     var reads: [Data?]
     var written: [Data] = []
@@ -22,8 +20,6 @@ private func appendX(_ data: Data?) -> Data {
 }
 
 @Test func redoesTheTransformOnContentsChangedMidUpdate() throws {
-    // Read "a", the tool saves "b" before our write: the merge is redone on
-    // "b", so the tool's change survives.
     let file = FakeFile(["a", "b", "b", "b"])
     try ConfigFileUpdate.apply(read: file.read, write: { file.written.append($0) }, transform: appendX)
     #expect(file.written == [Data("bx".utf8)])

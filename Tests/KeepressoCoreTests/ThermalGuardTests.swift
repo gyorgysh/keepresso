@@ -2,9 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-// The guard is exercised through its pure step function with scripted 1 Hz
-// samples, the same style as CPULoadTriggerTests. A tiny driver keeps the
-// scripts readable.
 private func run(
     _ samples: [ThermalSample?],
     config: ThermalSafetyConfig,
@@ -36,11 +33,9 @@ private let pressureConfig = ThermalSafetyConfig(
 
 @Test func dwellFiresExactlyAtTheSustainWindow() {
     let hot = ThermalSample.celsius(max: 97)
-    // Four hot seconds: nothing yet.
     let early = run(Array(repeating: hot, count: 4), config: sensorConfig)
     #expect(early.effects.isEmpty)
     #expect(early.state.stage == .clear)
-    // The fifth crosses the dwell: fans boost.
     let fired = run([hot], config: sensorConfig, from: early.state)
     #expect(fired.effects == [.boostFans(percent: 80)])
     #expect(fired.state.stage == .fansBoosted)
@@ -50,7 +45,7 @@ private let pressureConfig = ThermalSafetyConfig(
     let hot = ThermalSample.celsius(max: 97)
     let (state, effects) = run(Array(repeating: hot, count: 10), config: sensorConfig)
     #expect(effects == [.boostFans(percent: 80), .pauseBrewing])
-    #expect(state.stage == .stopped) // no .restoreFans emitted: fans keep cooling
+    #expect(state.stage == .stopped)
 }
 
 @Test func fansOffGoesStraightToPause() {
@@ -83,14 +78,12 @@ private let pressureConfig = ThermalSafetyConfig(
 
 @Test func hysteresisBandNeverResumes() {
     let hot = ThermalSample.celsius(max: 97)
-    let hovering = ThermalSample.celsius(max: 92) // under 95, above 95 - 5 margin
+    let hovering = ThermalSample.celsius(max: 92)
     let paused = run(Array(repeating: hot, count: 10), config: sensorConfig)
     #expect(paused.state.stage == .stopped)
-    // A long hover inside the dead-band releases nothing.
     let still = run(Array(repeating: hovering, count: 120), config: sensorConfig, from: paused.state)
     #expect(still.effects.isEmpty)
     #expect(still.state.stage == .stopped)
-    // Clearly under (<= 90) sustained for the window releases everything.
     let cooled = run(
         Array(repeating: .celsius(max: 88), count: 5),
         config: sensorConfig, from: still.state
@@ -104,25 +97,20 @@ private let pressureConfig = ThermalSafetyConfig(
     let fair = ThermalSample.pressure(.fair)
     let paused = run(Array(repeating: serious, count: 5), config: pressureConfig)
     #expect(paused.state.stage == .stopped)
-    // Bouncing serious/fair never accumulates the release dwell.
     let bouncing = run(
         [fair, serious, fair, fair, serious, fair, fair, fair, serious],
         config: pressureConfig, from: paused.state
     )
     #expect(bouncing.effects.isEmpty)
     #expect(bouncing.state.stage == .stopped)
-    // Five straight fair seconds release.
     let recovered = run(Array(repeating: fair, count: 5), config: pressureConfig, from: bouncing.state)
     #expect(recovered.effects == [.restoreFans, .resumeBrewing])
 }
 
 @Test func nilSamplesFreezeCountersAndStage() {
     let hot = ThermalSample.celsius(max: 97)
-    // Mid-dwell: three hot, then a gap, then two more hot; the gap must not
-    // reset the counter (freeze, not zero), so the fifth hot sample fires.
     let midDwell = run([hot, hot, hot, nil, nil, hot, hot], config: sensorConfig)
     #expect(midDwell.effects == [.boostFans(percent: 80)])
-    // While stopped: reads failing forever never release the pause.
     let paused = run(Array(repeating: hot, count: 10), config: sensorConfig)
     let blind = run(Array(repeating: nil, count: 300), config: sensorConfig, from: paused.state)
     #expect(blind.effects.isEmpty)
@@ -133,14 +121,12 @@ private let pressureConfig = ThermalSafetyConfig(
     let hot = ThermalSample.celsius(max: 97)
     let cool = ThermalSample.celsius(max: 80)
     let (state, effects) = run([hot, hot, hot, hot, cool, hot, hot, hot, hot], config: sensorConfig)
-    #expect(effects.isEmpty) // the dip restarted the window
+    #expect(effects.isEmpty)
     #expect(state.stage == .clear)
     #expect(state.overSeconds == 4)
 }
 
 @Test func mismatchedSampleKindNeverFiresOrReleases() {
-    // A pressure sample against a sensors config is a plumbing error; it must
-    // count as neither over nor clearly-under.
     let (state, effects) = run(
         Array(repeating: .pressure(.critical), count: 60),
         config: sensorConfig
@@ -170,13 +156,11 @@ private let pressureConfig = ThermalSafetyConfig(
     #expect(effects == [.boostFans(percent: 80), .pauseBrewing])
     #expect(controller.readingForSession == .hot)
 
-    // Turning the feature off mid-emergency must not strand boosted fans or a
-    // paused session: the very next tick surfaces the releases, even while off.
     controller.config = nil
     #expect(controller.readingForSession == .unknown)
     let released = controller.tick(armed: true)
     #expect(released == [.restoreFans, .resumeBrewing])
-    #expect(controller.tick(armed: true).isEmpty) // released exactly once
+    #expect(controller.tick(armed: true).isEmpty)
 }
 
 @MainActor
@@ -191,11 +175,9 @@ private let pressureConfig = ThermalSafetyConfig(
         sustainSeconds: 5,
         fanBoostPercent: 80
     )
-    // Scorching readings with the lid open: the net stays out of the way.
     for _ in 0..<60 { #expect(controller.tick(armed: false).isEmpty) }
     #expect(controller.state.stage == .clear)
     #expect(controller.readingForSession == .clear)
-    // The live UI still gets its reading while disarmed.
     #expect(controller.currentCelsius == 105)
 }
 
@@ -215,27 +197,22 @@ private let pressureConfig = ThermalSafetyConfig(
     for _ in 0..<10 { effects.append(contentsOf: controller.tick(armed: true)) }
     #expect(effects == [.boostFans(percent: 80), .pauseBrewing])
 
-    // Opening the lid ends the emergency: fans and the session come back on
-    // that very tick, still hot, without waiting out the cool-down dwell.
     let released = controller.tick(armed: false)
     #expect(released == [.restoreFans, .resumeBrewing])
     #expect(controller.state.stage == .clear)
-    #expect(controller.tick(armed: false).isEmpty) // released exactly once
+    #expect(controller.tick(armed: false).isEmpty)
 
-    // Closing the lid again restarts the escalation from a fresh dwell.
     #expect(controller.tick(armed: true).isEmpty)
 }
 
 @Test func armingLatchesLastKnownReadsAcrossNilBlips() {
     var arming = ThermalArming()
-    // Nothing known yet, and a closed lid alone isn't enough.
     let unknown = arming.update(lidClosed: nil, sleepOverrideActive: nil)
     let lidOnly = arming.update(lidClosed: true, sleepOverrideActive: nil)
     let both = arming.update(lidClosed: true, sleepOverrideActive: true)
     // A transient failed read (AppleClamshellState flutter, pmset hiccup)
     // must not disarm a potentially latched safety measure.
     let blip = arming.update(lidClosed: nil, sleepOverrideActive: nil)
-    // An explicit lid-open read disarms; a later nil stays disarmed.
     let opened = arming.update(lidClosed: false, sleepOverrideActive: true)
     let stillOpen = arming.update(lidClosed: nil, sleepOverrideActive: nil)
     #expect(!unknown)
@@ -247,8 +224,6 @@ private let pressureConfig = ThermalSafetyConfig(
 }
 
 @Test func configDecodingClampsOutOfRangeValues() throws {
-    // liftSleepDisable is retired (the lift is unconditional now); the stale
-    // key in old exports must decode without complaint.
     let json = """
     {
       "mode": {"sensors": {"ids": ["Tp09"], "celsius": 20}},

@@ -79,8 +79,6 @@ SOURCE_COVERAGE = [
             r'\b(?:Menu|Window|TextField)\(\s*"((?:[^"\\]|\\.)*)"',
             r'\bsection(?:Header|Footer)\(\s*"((?:[^"\\]|\\.)*)"',
             r'\bswitchRow\(\s*"((?:[^"\\]|\\.)*)"',
-            # These call sites use a simple ternary to select two catalog keys
-            # (for example L(up ? "Move up" : "Move down")).
             r'\b(?:L|Text)\(\s*[^"\n?]+\?\s*"((?:[^"\\]|\\.)*)"\s*:\s*"((?:[^"\\]|\\.)*)"',
         ],
     ),
@@ -164,9 +162,6 @@ def check_generated_files(problems: list):
 
 
 def main() -> int:
-    # Overlay languages live in separate files; fold them in so every language
-    # is checked the same way. A malformed overlay raises here, which is the
-    # same failure gen_strings.py would hit.
     merge_extra_langs()
     problems: list = []
     check_translations(problems)

@@ -56,8 +56,6 @@ import Testing
 }
 
 @Test func ompHookFindsOMPRunningUnderBunOrNode() throws {
-    // A Bun or npm install runs as `bun …/omp` or `node …/omp`: the short
-    // command is the runtime, and only argv names OMP.
     for runtime in ["bun", "node"] {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("omp-runtime-\(UUID().uuidString)", isDirectory: true)
@@ -94,14 +92,12 @@ import Testing
     let source = OMPHooks.extensionSource(cliPath: "/Applications/Keepresso.app/Contents/Helpers/keepresso")
     #expect(source.contains("queue = queue.then("))
     #expect(source.contains(#"ctx.agent?.kind !== "sub""#))
-    // A bash background job (a dev server) never holds the session working.
     #expect(source.contains(#"job?.type !== "bash""#))
     #expect(source.contains("!!event.willContinue && !onlyBash"))
     #expect(source.contains(#"const keepresso = "/Applications/Keepresso.app/Contents/Helpers/keepresso";"#))
 }
 
 @Test func ompSessionEndRemovesTheRecordWithoutAnAncestor() {
-    // Session end runs at OMP's exit, when the ancestor may already be gone.
     let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent("omp-end-\(UUID().uuidString)", isDirectory: true)
     defer { try? FileManager.default.removeItem(at: directory) }

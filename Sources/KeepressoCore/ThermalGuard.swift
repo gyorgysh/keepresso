@@ -13,10 +13,7 @@ import Foundation
 public struct ThermalSafetyConfig: Codable, Equatable, Sendable {
     /// The watched signal.
     public enum Mode: Codable, Equatable, Sendable {
-        /// Simple: macOS's own thermal pressure at or above this level. Public
-        /// API, works on every Mac, the default.
         case pressure(atOrAbove: ThermalPressureLevel)
-        /// Advanced: any of the selected sensors at or above this many °C.
         case sensors(ids: [String], celsius: Double)
     }
 
@@ -95,7 +92,6 @@ public struct ThermalSafetyConfig: Codable, Equatable, Sendable {
 /// freezes the guard: an unknown reading never releases a safety measure.
 public enum ThermalSample: Equatable, Sendable {
     case pressure(ThermalPressureLevel)
-    /// The hottest currently-selected sensor, °C.
     case celsius(max: Double)
 }
 
@@ -155,14 +151,12 @@ public enum ThermalGuard {
         case .clear where next.overSeconds >= dwell:
             if let percent = config.fanBoostPercent {
                 next.stage = .fansBoosted
-                next.overSeconds = 0 // the stage-2 dwell starts fresh
+                next.overSeconds = 0
                 effects.append(.boostFans(percent: percent))
             } else if config.stopBrewing {
                 next.stage = .stopped
                 effects.append(.pauseBrewing)
             } else {
-                // Nothing enabled to escalate to; stay clear but keep counting,
-                // so enabling an action mid-heat reacts on the next dwell.
                 next.overSeconds = 0
             }
         case .fansBoosted where config.stopBrewing && next.overSeconds >= dwell:
@@ -173,7 +167,7 @@ public enum ThermalGuard {
             effects.append(.restoreFans)
         case .stopped where next.underSeconds >= dwell:
             next.stage = .clear
-            effects.append(.restoreFans) // no-op downstream if fans never boosted
+            effects.append(.restoreFans)
             effects.append(.resumeBrewing)
         default:
             break
@@ -188,7 +182,7 @@ public enum ThermalGuard {
         case (.celsius(let max), .sensors(_, let threshold)):
             return max >= threshold
         default:
-            return false // mismatched sample kind: treat as no verdict on "over"
+            return false
         }
     }
 
@@ -236,8 +230,6 @@ public final class ThermalGuardController {
     public var config: ThermalSafetyConfig? {
         didSet {
             guard config != oldValue else { return }
-            // Appended, not assigned: back-to-back config changes must not
-            // drop a release queued by the previous one.
             pendingReleases += releaseEffects(for: state.stage)
             state = ThermalGuardState()
             lastSampleFailed = false

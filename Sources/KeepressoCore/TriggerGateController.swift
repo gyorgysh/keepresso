@@ -17,15 +17,8 @@ public final class TriggerGateController {
     /// off. Exposed so the app can hand it to ``SessionController/triggerGate``.
     public private(set) var engine: TriggerEngine?
 
-    /// The rules ``engine``'s triggers were built from, index-aligned with
-    /// `engine.triggers`, so a rebuild can carry live triggers over for rules
-    /// that didn't change.
     private var engineRules: [TriggerRule] = []
 
-    /// Cached result of ``ruleStates()`` and when it was computed. Evaluating a
-    /// rule can shell out (a process trigger spawns `ps`), and the menu asks
-    /// several times per render and every second, so the result is cached
-    /// briefly. Cleared on every ``rebuild(rules:combine:enabled:)``.
     private var cachedStates: [RuleState]?
     private var cachedAt: Date?
     private static let ttl: TimeInterval = 0.9
@@ -68,14 +61,11 @@ public final class TriggerGateController {
             engine = nil
             engineRules = []
         }
-        // Skip transcript/hook walks when nothing in the engine can use them.
         let wantsAgentEvidence = enabled && engineRules.contains {
             if case .agentActivity = $0 { return true }
             return false
         }
         factory.setAgentEvidenceEnabled(wantsAgentEvidence)
-        // The rules (or the engine) just changed; drop the cached states so the
-        // next read re-evaluates against the new rule set immediately.
         cachedStates = nil
         cachedAt = nil
     }
@@ -95,12 +85,8 @@ public final class TriggerGateController {
             guard index < triggers.count else { return RuleState(rule: rule, satisfied: false, inGrace: false, graceRemaining: nil) }
             let trigger = triggers[index]
             let satisfied = trigger.isSatisfied()
-            // Amber "lingering" state: satisfied only because a GracePeriodTrigger
-            // is holding after its wrapped condition (e.g. a game) went away, plus
-            // how long is left so the UI can count it down and then go grey.
             let grace = trigger as? GracePeriodTrigger
             let inGrace = satisfied && grace?.wrappedIsSatisfied == false
-            // Per-instance rows (agent sessions) live on the wrapped trigger.
             let inner = grace?.wrappedTrigger ?? trigger
             let details = (inner as? TriggerDetailProviding)?.detailRows ?? []
             return RuleState(

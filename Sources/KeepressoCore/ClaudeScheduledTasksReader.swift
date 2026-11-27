@@ -17,8 +17,6 @@ import Foundation
 /// unions them. Only `id`, `cronExpression`, and `enabled` are read; the task's
 /// prompt (a sibling `SKILL.md`) is never touched.
 public struct ClaudeScheduledTasksReader: LocalAutomationReading {
-    /// Yields the raw bytes of each discovered manifest. Injected so tests feed
-    /// JSON directly and the real path globs the disk.
     private let loadManifests: @Sendable () -> [Data]
 
     public init(loadManifests: @escaping @Sendable () -> [Data]) {
@@ -31,8 +29,6 @@ public struct ClaudeScheduledTasksReader: LocalAutomationReading {
         for data in loadManifests() {
             guard let manifest = try? decoder.decode(Manifest.self, from: data) else { continue }
             for task in manifest.scheduledTasks {
-                // No parseable schedule means a "Manual" (run-on-demand) task or
-                // a form we don't model: there is nothing to wake for, so skip it.
                 guard let cronText = task.cronExpression, let cron = CronExpression(cronText) else { continue }
                 let automation = ScheduledAutomation(
                     source: .claudeDesktop,
@@ -41,8 +37,6 @@ public struct ClaudeScheduledTasksReader: LocalAutomationReading {
                     recurrence: .cron(cron),
                     enabled: task.enabled ?? true
                 )
-                // The same task can appear in more than one session's manifest;
-                // keep one, preferring an enabled copy over a disabled one.
                 if let existing = byID[automation.id], existing.enabled, !automation.enabled { continue }
                 byID[automation.id] = automation
             }
@@ -50,7 +44,6 @@ public struct ClaudeScheduledTasksReader: LocalAutomationReading {
         return byID.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    /// Title-case a kebab-case task id for display: `daily-brief` -> `Daily Brief`.
     static func displayName(from id: String) -> String {
         let words = id.split(whereSeparator: { $0 == "-" || $0 == "_" })
         guard !words.isEmpty else { return id }
@@ -61,9 +54,6 @@ public struct ClaudeScheduledTasksReader: LocalAutomationReading {
         let scheduledTasks: [Task]
         private enum CodingKeys: String, CodingKey { case scheduledTasks }
 
-        // Lossy on a malformed entry: a task with a null/absent `id` (or any
-        // shape we can't decode) is skipped, not allowed to fail the whole
-        // array and drop every other task in the manifest with it.
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             var tasks: [Task] = []
@@ -73,9 +63,9 @@ public struct ClaudeScheduledTasksReader: LocalAutomationReading {
                     if let task = try? array.decode(Task.self) {
                         tasks.append(task)
                     } else {
-                        _ = try? array.decode(DiscardedTask.self) // step past the bad entry
+                        _ = try? array.decode(DiscardedTask.self)
                     }
-                    if array.currentIndex == before { break } // never spin
+                    if array.currentIndex == before { break }
                 }
             }
             scheduledTasks = tasks
@@ -88,18 +78,12 @@ public struct ClaudeScheduledTasksReader: LocalAutomationReading {
         let enabled: Bool?
     }
 
-    /// Consumes one element of any shape so the lossy manifest decode can skip
-    /// a task it couldn't parse.
     private struct DiscardedTask: Decodable {
         init(from decoder: Decoder) throws {}
     }
 }
 
 public extension ClaudeScheduledTasksReader {
-    /// The real reader over Claude Desktop's on-disk manifests. Globs every
-    /// `claude-code-sessions/*/*/scheduled-tasks.json` under Application Support
-    /// and returns their bytes; failures (no Claude Desktop, no tasks) yield an
-    /// empty list rather than an error.
     static func real(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> ClaudeScheduledTasksReader {
         let base = home.appendingPathComponent(
             "Library/Application Support/Claude/claude-code-sessions", isDirectory: true)

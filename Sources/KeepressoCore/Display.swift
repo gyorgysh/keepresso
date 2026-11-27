@@ -51,9 +51,6 @@ public final class CoreGraphicsDisplayMonitor: DisplayMonitoring {
 /// panel can be attached, awake and lit inside a closed lid, which is exactly
 /// the state ``ClosedDisplayController`` exists to end.
 public protocol DisplayPowerReading: AnyObject, Sendable {
-    /// `true` when the built-in panel is asleep, `false` when it is lit, `nil`
-    /// when it can't be told (no built-in panel, or the list couldn't be read).
-    /// Callers treat `nil` as "don't act".
     func builtInIsAsleep() -> Bool?
 }
 
@@ -70,8 +67,6 @@ public final class CoreGraphicsDisplayPower: DisplayPowerReading {
         var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
         guard CGGetOnlineDisplayList(count, &ids, &count) == .success else { return nil }
         let builtIn = ids.prefix(Int(count)).filter { CGDisplayIsBuiltin($0) != 0 }
-        // No built-in panel at all (a desktop Mac): nothing here to put to
-        // sleep, which reads the same as already asleep.
         guard !builtIn.isEmpty else { return true }
         return builtIn.allSatisfy { CGDisplayIsAsleep($0) != 0 }
     }

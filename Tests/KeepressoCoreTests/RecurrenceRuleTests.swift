@@ -21,7 +21,6 @@ private func at(_ y: Int, _ mo: Int, _ d: Int, _ h: Int, _ mi: Int, _ cal: Calen
 
 @Test func rruleWeeklyOnFridayAcceptsThePrefix() {
     let cal = utc()
-    // The exact form Codex writes, RRULE: prefix and all.
     let rule = RecurrenceRule("RRULE:FREQ=WEEKLY;BYHOUR=16;BYMINUTE=0;BYDAY=FR")!
     #expect(rule.next(after: at(2026, 1, 1, 0, 0, cal), calendar: cal) == at(2026, 1, 2, 16, 0, cal))
     #expect(rule.next(after: at(2026, 1, 2, 16, 0, cal), calendar: cal) == at(2026, 1, 9, 16, 0, cal))

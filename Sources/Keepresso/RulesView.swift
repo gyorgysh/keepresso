@@ -1,33 +1,20 @@
 import SwiftUI
 import KeepressoCore
 
-/// The trigger rules editor, shown in Preferences ▸ Triggers when "Activate by
-/// triggers" is on.
-///
-/// Conditions are added from a menu rather than typed: power/display rules are
-/// fixed, and Wi-Fi / app rules are seeded from current system state (the joined
-/// SSID, the list of running apps) so there are no free-text fields to get
-/// wrong. App rules can be tuned in place (running/frontmost + grace period).
 struct RulesView: View {
     @Bindable var model: AppModel
     @State private var location = LocationAuthorizer()
     @State private var bluetooth = BluetoothAuthorizer()
     @State private var calendar = CalendarAuthorizer()
-    /// Free-text entry for a custom "process running" rule.
     @State private var processQuery = ""
-    /// Index of the time-window rule whose editor popover is open, if any.
     @State private var timeEditorIndex: Int?
 
-    /// Common processes offered as one-click presets for the process rule.
     private static let processPresets = ["claude", "codex", "node", "python", "ffmpeg"]
 
-    /// Threshold options for the CPU-load rule.
     private static let cpuThresholds = [25, 50, 75, 90]
 
-    /// Threshold options for the network-activity rule, in KB/s.
     private static let throughputThresholds = [100, 500, 1024, 5120]
 
-    /// Grace presets offered for app rules.
     private static let gracePresets: [(label: String, seconds: TimeInterval)] = [
         ("No grace", 0),
         ("30 seconds", 30),
@@ -35,8 +22,6 @@ struct RulesView: View {
         ("5 minutes", 300),
     ]
 
-    /// Idle-grace presets offered for the agent-activity rule: how long to keep
-    /// holding after every agent session goes idle.
     private static let agentGracePresets: [(label: String, seconds: TimeInterval)] = [
         ("Instantly", 0),
         ("1 minute", 60),
@@ -45,9 +30,6 @@ struct RulesView: View {
         ("10 minutes", 600),
     ]
 
-    /// The section header above the rules: "When [any/all] of these are
-    /// true:" with the combine-mode picker inline. A header, not a row: the
-    /// grouped Form's label/control row layout would tear the sentence apart.
     static func combineHeader(model: AppModel) -> some View {
         HStack(spacing: 6) {
             Text("When")
@@ -92,11 +74,6 @@ struct RulesView: View {
             addConditionMenus
             processField
 
-            // Heat deliberately isn't a condition here: a "too hot" rule that
-            // merely stops satisfying could be overridden by any other rule in
-            // "any" mode. Point the people who come looking to the real thing.
-            // Laptops only, like the Thermal section itself: a desktop has no
-            // lid, so there is no section to point at.
             if model.machineHasBattery {
                 Text("Looking for heat? \u{201C}Pause when running hot\u{201D} lives in General \u{25B8} Thermal: a safety net that overrides these rules when the Mac runs hot with the lid closed.")
                     .font(.caption)
@@ -105,9 +82,6 @@ struct RulesView: View {
             }
         }
         .onChange(of: model.rules.count) { _, _ in
-            // The rule rows use positional ids, so a removal elsewhere renumbers
-            // them. Dismiss any open schedule editor rather than let its captured
-            // index write its edit into whatever rule shifted into that slot.
             timeEditorIndex = nil
         }
     }
@@ -154,8 +128,6 @@ struct RulesView: View {
         }
     }
 
-    /// In-place editor for a schedule rule's times and days, in a popover
-    /// (menus can't host time pickers).
     private func timeOptionsButton(index: Int, windowRule: TimeWindowRule) -> some View {
         Button {
             timeEditorIndex = index
@@ -173,7 +145,6 @@ struct RulesView: View {
         }
     }
 
-    /// In-place editor for an app rule's match mode and grace period.
     private func appOptionsMenu(index: Int, appRule: AppRule) -> some View {
         Menu {
             Picker("Match", selection: Binding(
@@ -204,14 +175,9 @@ struct RulesView: View {
         .help("App match & grace period")
     }
 
-    /// In-place editor for a mic-scope rule: the apps it watches (click one to
-    /// stop watching it) and an "Add app" submenu. Removing the last app drops
-    /// the whole rule, since an empty scope would hold nothing awake.
     private func micOptionsMenu(index: Int, micRule: MicInUseRule) -> some View {
         Menu {
             Section("Keeping awake for calls in") {
-                // Group by display name so a multi-id app (e.g. Telegram's two
-                // builds) shows one row; removing it drops all of its ids.
                 ForEach(displayNames(of: micRule.apps), id: \.self) { name in
                     Button {
                         let remaining = micRule.apps.filter { ($0.name ?? $0.bundleID) != name }
@@ -221,7 +187,6 @@ struct RulesView: View {
                             model.updateRule(at: index, to: .micInUse(MicInUseRule(apps: remaining)))
                         }
                     } label: {
-                        // A checkmark reads "currently watched"; clicking removes it.
                         Label(name, systemImage: "checkmark")
                     }
                 }
@@ -242,8 +207,6 @@ struct RulesView: View {
         .help("Which apps count")
     }
 
-    /// Ordered, de-duplicated display names for a mic rule's apps, so a multi-id
-    /// app (variants sharing one name) collapses to a single editor row.
     private func displayNames(of apps: [ScopedApp]) -> [String] {
         var seen = Set<String>()
         return apps.compactMap { app in
@@ -252,11 +215,6 @@ struct RulesView: View {
         }
     }
 
-    /// Shared app chooser for the mic-scope rule, used both when adding the rule
-    /// and when adding apps to an existing one. Offers the apps using the mic
-    /// right now (foolproof: real bundle id, no guessing), a short list of
-    /// common call apps, and a "Choose app…" panel. Built lazily when the menu
-    /// opens, so the live list is fresh.
     @ViewBuilder
     private func micAppChoices(_ add: @escaping ([ScopedApp]) -> Void) -> some View {
         let live = model.micAppsInUse()
@@ -268,8 +226,6 @@ struct RulesView: View {
             }
         }
         Section("Common call apps") {
-            // A preset may carry several bundle ids (app variants) under one
-            // name; they're added together as one grouped entry.
             ForEach(AppModel.callAppPresets, id: \.name) { preset in
                 Button(preset.name) {
                     add(preset.bundleIDs.map { ScopedApp(bundleID: $0, name: preset.name) })
@@ -289,7 +245,6 @@ struct RulesView: View {
         return false
     }
 
-    /// In-place editor for an agent rule's idle grace and waiting policy.
     private func agentOptionsMenu(index: Int, agentRule: AgentRule) -> some View {
         Menu {
             Picker("Grace period", selection: Binding(
@@ -331,7 +286,6 @@ struct RulesView: View {
         .help("Agent rule options")
     }
 
-    /// In-place editor for a CPU rule's threshold.
     private func cpuOptionsMenu(index: Int, threshold: Int) -> some View {
         Menu {
             Picker("Threshold", selection: Binding(
@@ -350,7 +304,6 @@ struct RulesView: View {
         .help("CPU threshold")
     }
 
-    /// In-place editor for a network-activity rule's threshold.
     private func throughputOptionsMenu(index: Int, kilobytesPerSecond: Int) -> some View {
         Menu {
             Picker("Threshold", selection: Binding(
@@ -369,9 +322,6 @@ struct RulesView: View {
         .help("Network threshold")
     }
 
-    /// Conditions are added from three menus grouped by what the user is
-    /// thinking about, not by API. One flat menu held eleven scrolling
-    /// sections by v1.6, which had become a chore to navigate.
     private var addConditionMenus: some View {
         // The three menu titles run long in some languages (Hungarian roughly
         // doubles them), and .fixedSize() means an overflowing row widens the
@@ -413,10 +363,6 @@ struct RulesView: View {
         }
     }
 
-    /// One "Add" category: the menu of conditions, with an ``InfoButton``
-    /// alongside explaining what the category covers and what it costs in
-    /// permissions. The button sits outside the menu label, since a menu label
-    /// can't hold a second control of its own.
     private func addMenu<Items: View>(
         _ title: LocalizedStringKey,
         info: String,
@@ -432,7 +378,6 @@ struct RulesView: View {
     private var powerDisplayItems: some View {
         Section("Power") {
             Button("On AC power") { model.addRule(.powerSource(.onACPower)) }
-            // Desktops are always on AC: a battery rule could never fire.
             if model.machineHasBattery {
                 Button("On battery") { model.addRule(.powerSource(.onBattery)) }
                 Button("Charging") { model.addRule(.powerSource(.charging)) }
@@ -454,8 +399,6 @@ struct RulesView: View {
                     Text("No Wi-Fi network joined").foregroundStyle(.secondary)
                 }
             } else if location.canRequest || location.isPending {
-                // Disabled while Core Location's first answer is pending,
-                // rather than claiming access was denied.
                 Button("Allow Wi-Fi access\u{2026}") { location.request() }
                     .disabled(location.isPending)
             } else {
@@ -545,7 +488,6 @@ struct RulesView: View {
             }
         }
         Section("Schedule") {
-            // Starting points; the row's slider button tunes times and days.
             Button("Work hours (weekdays 9:00-18:00)") {
                 model.addRule(.timeWindow(TimeWindowRule(
                     startMinutes: 9 * 60, endMinutes: 18 * 60, weekdays: [2, 3, 4, 5, 6])))
@@ -564,8 +506,6 @@ struct RulesView: View {
         }
     }
 
-    /// Free-text entry for any other process name (matched against the full
-    /// command line, so `node`, `ffmpeg server.js`, etc. all work).
     private var processField: some View {
         HStack(spacing: 6) {
             TextField("Other process, e.g. rsync", text: $processQuery)
@@ -624,15 +564,10 @@ struct RulesView: View {
     }
 }
 
-/// Popover editor for a schedule rule: start/end time pickers plus one toggle
-/// per weekday. Every change writes through immediately; there's no Save.
 private struct TimeWindowEditor: View {
     let rule: TimeWindowRule
     let update: (TimeWindowRule) -> Void
 
-    /// Day numbers in `Calendar` order (1 = Sunday) with the locale's own
-    /// one-letter initials, rotated so the row starts on the locale's first
-    /// weekday (Monday in most of Europe, Sunday in the US).
     private static let days: [(number: Int, initial: String)] = {
         let calendar = Calendar.current
         let initials = calendar.veryShortStandaloneWeekdaySymbols
@@ -673,8 +608,6 @@ private struct TimeWindowEditor: View {
         .frame(width: 240)
     }
 
-    /// Bridges minutes-from-midnight to the `DatePicker`'s `Date` (on an
-    /// arbitrary reference day; only the time of day is kept).
     private func timeBinding(_ keyPath: WritableKeyPath<TimeWindowRule, Int>) -> Binding<Date> {
         Binding(
             get: {

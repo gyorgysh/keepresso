@@ -8,26 +8,14 @@ import Foundation
 /// through an injected monitor protocol (mirroring ``PowerAsserting``), so the
 /// decision logic stays a pure, testable function of that state.
 public protocol Trigger: AnyObject {
-    /// A stable, human-readable description (for the rules UI and diagnostics).
     var label: String { get }
 
-    /// Advance any internal state by one tick. The host calls this exactly once
-    /// per reconcile on every registered trigger, unconditionally, so a stateful
-    /// trigger (grace window, smoothing average) steps at a fixed cadence
-    /// regardless of how the engine combines the results. Stateless triggers
-    /// leave this as the default no-op. See ``TriggerEngine`` for why decoupling
-    /// the state advance from the gating read matters.
     func tick()
 
-    /// Whether the condition currently holds. A pure, side-effect-free read of
-    /// already-advanced state, so the engine and the menu's live rule list can
-    /// both call it any number of times per tick without disturbing a stateful
-    /// trigger. Call ``tick()`` once per reconcile to move state forward.
     func isSatisfied() -> Bool
 }
 
 public extension Trigger {
-    /// Stateless triggers have nothing to advance.
     func tick() {}
 }
 
@@ -36,11 +24,8 @@ public extension Trigger {
 /// combining several is another. Kept separate from ``Trigger`` so the
 /// controller need not know how the decision is composed.
 public protocol TriggerEvaluating: AnyObject {
-    /// Advance internal state by one tick, once per reconcile. Default no-op for
-    /// stateless evaluators.
     func tick()
 
-    /// Whether the combined condition currently wants the session ON.
     func isSatisfied() -> Bool
 }
 
@@ -52,11 +37,8 @@ public extension TriggerEvaluating {
 public final class PowerSourceTrigger: Trigger {
     /// Which power situation should satisfy this trigger.
     public enum Match: String, Codable, Sendable, CaseIterable {
-        /// Plugged into AC / an external adapter.
         case onACPower
-        /// Running on the internal battery.
         case onBattery
-        /// Battery present and actively charging (a subset of ``onACPower``).
         case charging
 
         var label: String {
@@ -80,11 +62,12 @@ public final class PowerSourceTrigger: Trigger {
 
     public var label: String { match.label }
 
+    /// The combined decision, a pure read of the state ``tick()`` advanced. Safe
+    /// to short-circuit: every trigger already stepped in ``tick()``.
     public func isSatisfied() -> Bool {
         Self.evaluate(match, against: monitor.current)
     }
 
-    /// Pure decision function, exposed for direct unit testing.
     static func evaluate(_ match: Match, against snapshot: PowerSourceSnapshot) -> Bool {
         switch match {
         case .onACPower: return snapshot.provider == .ac
@@ -121,6 +104,8 @@ public final class WiFiSSIDTrigger: Trigger {
 
     public var label: String { L("On Wi-Fi \u{201C}%@\u{201D}", ssid) }
 
+    /// The combined decision, a pure read of the state ``tick()`` advanced. Safe
+    /// to short-circuit: every trigger already stepped in ``tick()``.
     public func isSatisfied() -> Bool {
         guard let current = monitor.current.ssid else { return false }
         return current == ssid
@@ -129,9 +114,7 @@ public final class WiFiSSIDTrigger: Trigger {
 
 /// How an ``AppTrigger`` matches a target app.
 public enum AppMatch: String, Codable, Sendable, CaseIterable {
-    /// The app is running anywhere (background included).
     case running
-    /// The app is the frontmost (active) app.
     case frontmost
 
     var label: String {
@@ -168,16 +151,13 @@ public final class AppTrigger: Trigger {
 
     public var label: String { "\(L("App %@", bundleID)) \(match.label)" }
 
+    /// The combined decision, a pure read of the state ``tick()`` advanced. Safe
+    /// to short-circuit: every trigger already stepped in ``tick()``.
     public func isSatisfied() -> Bool {
         let snapshot = monitor.current
-        // Empty path is treated as unset so hand-edited JSON cannot lock a rule
-        // to a path that never matches.
         let pathLock = bundlePath.flatMap { $0.isEmpty ? nil : $0 }
         switch match {
         case .running:
-            // Path pins one install: the same running app must carry both path
-            // and ID (independent set membership would let a replaced binary
-            // at the locked path match while another process holds the ID).
             if let pathLock {
                 return snapshot.runningInstalls[pathLock] == bundleID
             }
@@ -208,12 +188,12 @@ public final class ProcessTrigger: Trigger {
 
     public var label: String { L("Process \u{201C}%@\u{201D} running", query) }
 
+    /// The combined decision, a pure read of the state ``tick()`` advanced. Safe
+    /// to short-circuit: every trigger already stepped in ``tick()``.
     public func isSatisfied() -> Bool {
         Self.matches(query, in: monitor.current)
     }
 
-    /// Pure decision function, exposed for direct unit testing. An empty query
-    /// never matches (so a half-typed rule doesn't pin the Mac awake).
     static func matches(_ query: String, in processes: [String]) -> Bool {
         let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
         guard !needle.isEmpty else { return false }
@@ -247,11 +227,16 @@ public final class GracePeriodTrigger: Trigger {
 
     public var label: String { wrapped.label }
 
+    /// Advance every trigger once, unconditionally. Called once per reconcile
+    /// before ``isSatisfied()`` so a stateful trigger steps at a fixed cadence
+    /// even when the short-circuiting combine below wouldn't have read it.
     public func tick() {
         wrapped.tick()
         if wrapped.isSatisfied() { lastSatisfiedAt = now() }
     }
 
+    /// The combined decision, a pure read of the state ``tick()`` advanced. Safe
+    /// to short-circuit: every trigger already stepped in ``tick()``.
     public func isSatisfied() -> Bool {
         if wrapped.isSatisfied() { return true }
         guard grace > 0, let last = lastSatisfiedAt else { return false }
@@ -304,16 +289,12 @@ public struct RuleDetail: Equatable {
 /// A trigger that can break its verdict down into per-instance rows, so the
 /// menu can list what was detected ("claude (s003), working") under the rule.
 public protocol TriggerDetailProviding {
-    /// The instances behind the current verdict, in display order. A pure read
-    /// of already-ticked state, like ``Trigger/isSatisfied()``.
     var detailRows: [RuleDetail] { get }
 }
 
 /// How a rule set combines its triggers into a single on/off decision.
 public enum CombineMode: String, Codable, Sendable, CaseIterable {
-    /// OR: satisfied when *any* trigger fires. The default.
     case any
-    /// AND: satisfied only when *every* trigger fires.
     case all
 }
 

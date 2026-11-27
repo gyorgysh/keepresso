@@ -17,8 +17,6 @@ import Security
 }
 
 @Test func helperPeerPolicyAllowsNonRootWhenThereIsNoConsoleUser() {
-    // SSH-only or loginwindow: no GUI session uid to match against. Still
-    // refuse root; anyone else is the installing user talking over XPC.
     #expect(HelperPeerPolicy.shouldAccept(peerUID: 501, consoleUID: nil))
 }
 
@@ -34,7 +32,6 @@ import Security
     let app = "/Applications/Keepresso.app/Contents/MacOS/Keepresso"
     #expect(HelperPeerPolicy.bundledHelperExecutablePath(for: app)
         == "/Applications/Keepresso.app/Contents/MacOS/keepresso-helper")
-    // Outside an app bundle (a raw Xcode build) there is nothing to pin.
     #expect(HelperPeerPolicy.bundledAppExecutablePath(
         for: "/tmp/DerivedData/keepresso-helper") == nil)
     #expect(HelperPeerPolicy.bundledHelperExecutablePath(
@@ -42,17 +39,11 @@ import Security
 }
 
 @Test func pinnedRequirementPinsIdentifierToOnDiskCode() throws {
-    // /bin/ls is always signed with a designated requirement, so it
-    // exercises the Security-framework machinery end to end. (A platform
-    // binary designates by anchor; the cdhash shape is covered below with
-    // an ad-hoc signature.)
     let req = HelperPeerPolicy.pinnedPeerRequirement(
         identifier: "sh.gyorgy.keepresso.helper", executablePath: "/bin/ls")
     let pinned = try #require(req)
     #expect(pinned.contains("identifier \"sh.gyorgy.keepresso.helper\""))
 
-    // The produced text must compile as a requirement (guards the string
-    // assembly against a fail-closed-always typo).
     var requirement: SecRequirement?
     #expect(SecRequirementCreateWithString(pinned as CFString, SecCSFlags(rawValue: 0), &requirement)
         == errSecSuccess)
@@ -60,8 +51,6 @@ import Security
 }
 
 @Test func pinnedRequirementUsesCdhashForAdHocCode() throws {
-    // Ad-hoc builds (the dev path this pinning exists for) designate by
-    // cdhash: sign a scratch copy and check the pin carries it.
     let dir = FileManager.default.temporaryDirectory
         .appendingPathComponent("keepresso-adhoc-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

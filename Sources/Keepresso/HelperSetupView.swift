@@ -1,11 +1,6 @@
 import SwiftUI
 import ServiceManagement
 
-/// Status and actions for the privileged helper, shared by Preferences
-/// (General ▸ Administrator helper) and the Gaming & Streaming window. Three
-/// states: not installed (offer the install), waiting for the one-time
-/// approval in System Settings (point there), installed (say so, offer
-/// removal).
 struct HelperStatusRows: View {
     @Bindable var model: AppModel
 
@@ -20,10 +15,6 @@ struct HelperStatusRows: View {
                 Spacer(minLength: 8)
                 Button("Remove") { model.removeHelper() }.disabled(model.helperOperationInFlight)
             }
-            // The helper ships inside the app, so an app update replaces it
-            // on disk automatically; this shows only while the pre-update
-            // service is still winding down (it can't while it holds a
-            // switch, e.g. closed-display mode mid-session).
             if let hint = model.helperRecoveryHint {
                 Label(hint, systemImage: "arrow.triangle.2.circlepath")
                     .font(.caption).foregroundStyle(.secondary)

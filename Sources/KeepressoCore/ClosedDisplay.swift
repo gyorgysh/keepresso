@@ -3,11 +3,8 @@ import Observation
 
 /// Outcome of trying to change the system-wide sleep setting.
 public enum SleepSettingResult: Equatable, Sendable {
-    /// The change was applied.
     case applied
-    /// The user dismissed the administrator-password prompt.
     case cancelled
-    /// The command ran but failed, with a message to surface.
     case failed(String)
 }
 
@@ -20,12 +17,8 @@ public enum SleepSettingResult: Equatable, Sendable {
 /// change and is **not** scoped to AC vs battery, so it lives behind its own
 /// seam. ``PMSetSleepControl`` is the real backend; tests inject a fake.
 public protocol SleepSettingControlling: AnyObject, Sendable {
-    /// Whether system sleep is currently disabled. `nil` if it couldn't be read
-    /// (e.g. `pmset` failed to run).
     func isSleepDisabled() -> Bool?
 
-    /// Set the global `disablesleep` flag, prompting for administrator rights.
-    /// Blocking: it waits for the user to answer the prompt.
     func setSleepDisabled(_ disabled: Bool) -> SleepSettingResult
 }
 
@@ -67,13 +60,7 @@ public final class ClosedDisplayController {
     /// caption already says what it does.
     public private(set) var lastDecisionReason: String?
 
-    /// Whether the last ``tick()`` already wanted the panel asleep (lid closed
-    /// with no external display), so the sleep command fires once per
-    /// transition into that state.
     private var wantedPanelAsleep = false
-    /// When the last `displaysleepnow` was issued, so a panel that gets lit
-    /// again inside the closed lid is put back to sleep without firing `pmset`
-    /// every second while the panel is on its way down.
     private var lastPanelSleepAt: Date?
     /// The brightness saved when the lid shut under the zero-brightness
     /// policy, restored when the lid reopens. `nil` outside that stretch.
@@ -84,15 +71,8 @@ public final class ClosedDisplayController {
     /// a live read would capture 0 and a restore would leave it dark after
     /// reopening (see GitHub #13).
     private var lastOpenBrightness: Double?
-    /// When the panel was last zeroed, so a brightness raised from outside is
-    /// put back to zero without writing the private API every second.
     private var lastDimAt: Date?
-    /// When ``isEnabled`` was last read from the system. Menu opens reuse a
-    /// fresh-enough cache instead of shelling `pmset -g` every time.
     private var lastRefreshedAt: Date?
-    /// Bumped by every write so an in-flight refresh that started before the
-    /// write cannot land its pre-write reading after it (the `isBusy` check
-    /// alone only covers a refresh that starts while the write is running).
     private var readGeneration = 0
     private let now: () -> Date
     /// How long a successful read may be trusted for menu-driven refreshes.
@@ -147,8 +127,6 @@ public final class ClosedDisplayController {
             lastDecisionReason = nil
             return
         }
-        // A policy switch away from zero-brightness must not leak a saved
-        // level: hand it back the first tick under the new policy.
         if policy != .zeroBrightness { restoreBrightness() }
         guard let closed = lid.isClosed() else { return }
         switch DisplayPolicyDecision.decide(
@@ -159,10 +137,6 @@ public final class ClosedDisplayController {
         case .hold:
             wantedPanelAsleep = false
             lastPanelSleepAt = nil
-            // Lid open: keep a restore target for the next shut stretch (see
-            // ``lastOpenBrightness``). Reopened or external attached under
-            // zero-brightness: hand back the saved level, a no-op when
-            // nothing is saved.
             if !closed { noteOpenBrightnessLevel() }
             restoreBrightness()
             lastDecisionReason = nil
@@ -176,19 +150,12 @@ public final class ClosedDisplayController {
         }
     }
 
-    /// One tick of the display-off policy (the decision already gated that
-    /// the lid is shut with no external display). The latch keeps the sleep
-    /// command to once per transition plus re-sleeps of outside wakes.
     private func tickSleep() {
         defer { wantedPanelAsleep = true }
         guard wantedPanelAsleep else {
             sleepPanel()
             return
         }
-        // Already inside the closed-lid stretch. Re-sleep a panel that was lit
-        // from outside, but only on a reading that actually says so: an
-        // unreadable panel state falls back to the old fire-once behavior
-        // rather than shelling out to `pmset` on a guess.
         guard let lastPanelSleepAt,
               now().timeIntervalSince(lastPanelSleepAt) >= Self.resleepGrace,
               displayPower.builtInIsAsleep() == false else { return }
@@ -200,12 +167,8 @@ public final class ClosedDisplayController {
         lastPanelSleepAt = now()
     }
 
-    /// One tick of the zero-brightness policy, with the lid shut and no
-    /// external display (the decision already gated that).
     private func tickDim() {
         guard brightness.isSupported else {
-            // No brightness control on this Mac: fall back to sleeping the
-            // panel rather than leaving it lit inside the shut lid, and say so.
             lastDecisionReason = L("Brightness control is unavailable, turning the display off instead.")
             tickSleep()
             return
@@ -222,9 +185,6 @@ public final class ClosedDisplayController {
             lastDimAt = now()
             return
         }
-        // Already inside the shut stretch. Re-zero a level raised from
-        // outside, but only past the grace period and only on a reading that
-        // actually says so.
         guard let current = brightness.currentBrightness(),
               current > Self.litThreshold,
               let lastDimAt,
@@ -237,17 +197,12 @@ public final class ClosedDisplayController {
     /// panel reads as dark (macOS's own post-close zero included).
     private static let litThreshold = 0.02
 
-    /// Remember the open-lid panel level for the next shut stretch. Skips a
-    /// dark reading: only a lit level is a real user preference. Called on
-    /// lid-open ticks, before any force can darken the panel.
     private func noteOpenBrightnessLevel() {
         guard let current = brightness.currentBrightness(),
               current > Self.litThreshold else { return }
         lastOpenBrightness = current
     }
 
-    /// The level to save as the restore target: a live lit reading first,
-    /// else the last open-lid sample. `nil` when neither exists.
     private func litBrightnessTarget() -> Double? {
         if let current = brightness.currentBrightness(), current > Self.litThreshold {
             return current
@@ -255,12 +210,6 @@ public final class ClosedDisplayController {
         return lastOpenBrightness
     }
 
-    /// Hand back a saved brightness when the zero-brightness stretch ends
-    /// (lid reopened, external attached, policy switched, mode off, quit).
-    /// Only restores when the panel still reads dark: anything else is a live
-    /// value somebody else set on purpose, and clobbering it would fight
-    /// them. An unreadable panel keeps its target for a retry next tick
-    /// rather than dropping it and stranding the panel.
     private func restoreBrightness() {
         guard let saved = savedBrightness else {
             lastDimAt = nil
@@ -287,16 +236,7 @@ public final class ClosedDisplayController {
     /// spins the main run loop, and with a virtual display active a re-entrant
     /// display-driver callback can crash (EXC_BAD_ACCESS). So the read hops to a
     /// detached task and the result lands back on the main actor.
-    ///
-    /// When `force` is false and a recent successful read is still fresh, this
-    /// is a no-op so menu open does not pay for another `pmset -g`. Launch,
-    /// post-toggle, and only-while-brewing enforcement pass `force: true` (or
-    /// hit a nil cache) so correctness stays intact.
     public func refresh(force: Bool = false) async {
-        // Defer to an in-flight ``set(_:)``: it writes the authoritative state
-        // after its prompt. A refresh landing its (pre-write) read last would
-        // otherwise briefly show the stale toggle. Checked on both sides of the
-        // await, since a write can start mid-read.
         guard !isBusy else { return }
         if !force,
            isEnabled != nil,
@@ -307,8 +247,6 @@ public final class ClosedDisplayController {
         let control = self.control
         let generation = readGeneration
         let value = await Task.detached { control.isSleepDisabled() }.value
-        // Drop a read that a concurrent ``set(_:)`` superseded: its pre-write
-        // value must never clobber the state the write just established.
         guard !isBusy, generation == readGeneration else { return }
         isEnabled = value
         lastRefreshedAt = now()
@@ -332,13 +270,8 @@ public final class ClosedDisplayController {
         lastRefreshedAt = now()
     }
 
-    /// Request the new state. Shows the administrator prompt off the main actor
-    /// so the UI doesn't freeze while the user answers, then re-reads the actual
-    /// resulting state.
     @discardableResult
     public func set(_ enabled: Bool) async -> SleepSettingResult {
-        // Ignore a second toggle while a prompt is already up, so we never stack
-        // two authorization dialogs.
         guard !isBusy else { return .cancelled }
         isBusy = true
         readGeneration += 1
@@ -351,7 +284,6 @@ public final class ClosedDisplayController {
         case .failed(let message):
             lastError = message
         }
-        // Re-read off the main thread too (same reason as ``refresh()``).
         isEnabled = await Task.detached { control.isSleepDisabled() }.value
         lastRefreshedAt = now()
         return result
@@ -369,10 +301,8 @@ public final class PMSetSleepControl: SleepSettingControlling {
         Self.parseSleepDisabled(from: run("/usr/bin/pmset", ["-g"]))
     }
 
-    /// Pure parse of `pmset -g` output, factored out so it can be unit-tested
-    /// without shelling out. `pmset -g` prints a `SleepDisabled 1` line only
+    /// `pmset -g` prints a `SleepDisabled 1` line only
     /// when the flag is on; its absence means sleep is enabled (the default).
-    /// Returns `nil` only when there was no output at all to read.
     public static func parseSleepDisabled(from output: String?) -> Bool? {
         guard let output else { return nil }
         return PMSet.value(forKey: "SleepDisabled", in: output) == 1
@@ -396,10 +326,7 @@ public final class PMSetSleepControl: SleepSettingControlling {
         return .failed(message.isEmpty ? L("The sleep setting couldn't be changed.") : message)
     }
 
-    // MARK: - Shelling out
 
-    /// Run a command and return trimmed stdout, or `nil` on any failure. Mirrors
-    /// ``ShellSystemProbe``'s helper.
     private func run(_ path: String, _ arguments: [String]) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
@@ -419,8 +346,6 @@ public final class PMSetSleepControl: SleepSettingControlling {
         }
     }
 
-    /// Run a command and return its exit status plus stderr, or `nil` if it
-    /// couldn't be launched. Used for the write, where the failure reason matters.
     private func runForResult(_ path: String, _ arguments: [String]) -> (status: Int32, stderr: String)? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)

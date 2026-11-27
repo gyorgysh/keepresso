@@ -66,7 +66,6 @@ public enum CompatHooks {
                 marker: marker,
                 events: events,
                 matcherEvents: self == .devin ? ["PreToolUse", "PostToolUse"] : [],
-                // Qwen counts milliseconds, Devin and Kimi seconds.
                 timeout: self == .qwen ? 5000 : 5)
         }
 
@@ -116,7 +115,6 @@ public enum CompatHooks {
         Tool.allCases.contains { $0.ownsRecord(record) }
     }
 
-    // MARK: - Payload
 
     public struct HookPayload: Decodable, Equatable, Sendable {
         public var sessionId: String?
@@ -149,13 +147,9 @@ public enum CompatHooks {
         }
     }
 
-    // MARK: - Reduction
 
     static let turnEndEvents: Set<String> = ["Stop", "StopFailure", "Interrupt"]
 
-    /// Maps one event to its effect. Unknown events write nothing. A
-    /// turn-ending event from inside a subagent is ignored so it can't idle
-    /// the parent session, which is still working.
     static func reduce(
         event: String,
         toolName: String?,
@@ -173,9 +167,6 @@ public enum CompatHooks {
         case "PermissionRequest":
             return .set(.waiting, detail: "waiting-approval")
         case "Notification":
-            // Only notifications about the user count. Qwen also sends
-            // `auth_success` at startup, and a plain `waiting` record from it
-            // would read as working under "count waiting as working".
             switch notificationType {
             case "permission_prompt": return .set(.waiting, detail: "waiting-approval")
             case "idle_prompt": return .set(.waiting, detail: nil)
@@ -193,12 +184,7 @@ public enum CompatHooks {
         }
     }
 
-    // MARK: - Ancestor walk
 
-    /// The tool's own process above the hook. Only that tool's name counts:
-    /// a Qwen session started from a Claude Code terminal must not be pinned
-    /// to the Claude process. Qwen runs as a generic `node`, so its process
-    /// is recognized from argv the way the `ps` scan recognizes it.
     static func findAgent(
         _ tool: Tool,
         startingAt pid: Int32,
@@ -227,7 +213,6 @@ public enum CompatHooks {
         )
     }
 
-    // MARK: - Handling one invocation
 
     public static func handle(
         tool: Tool,
@@ -243,9 +228,6 @@ public enum CompatHooks {
     ) {
         let payload = (try? JSONDecoder().decode(HookPayload.self, from: payloadData)) ?? HookPayload()
         guard let sessionId = AgentHooks.nonEmpty(payload.sessionId) else { return }
-        // Records share one folder with every other tool's. A session id is
-        // the tool's own, so prefix it: Devin's are short words
-        // ("sparkly-fluorine") that could otherwise collide.
         let id = "\(tool.rawValue)-\(sessionId)"
         switch reduce(
             event: event,
@@ -260,8 +242,6 @@ public enum CompatHooks {
             let match = findAgent(
                 tool, startingAt: parentPid, parentOf: parentOf, commandOf: commandOf,
                 pathOf: pathOf, argumentsOf: argumentsOf)
-            // Devin's payload carries no cwd; the agent's own working
-            // directory is the fallback join key.
             let cwd = AgentHooks.nonEmpty(payload.cwd)
                 ?? match.flatMap { PSAgentActivityMonitor.processCwd($0.agentPid) }
             AgentHooks.write(
@@ -297,7 +277,6 @@ public enum KimiHooksFile {
 
     static let tool = CompatHooks.Tool.kimi
 
-    /// One `[[hooks]]` table: its line range and the values Keepresso reads.
     struct Block: Equatable {
         var lines: Range<Int>
         var event: String?
@@ -315,8 +294,6 @@ public enum KimiHooksFile {
         return name.trimmingCharacters(in: .whitespaces) == "hooks"
     }
 
-    /// Splits the file into `[[hooks]]` tables. Throws when the file holds a
-    /// top-level `hooks = ...` key, which would conflict with any table.
     static func blocks(in lines: [Substring]) throws -> [Block] {
         var blocks: [Block] = []
         var current: Block?
@@ -350,7 +327,6 @@ public enum KimiHooksFile {
         return blocks
     }
 
-    /// The string value of `key = "..."` or `key = '...'` on one line.
     static func value(of key: String, in line: String) -> String? {
         guard line.hasPrefix(key) else { return nil }
         let rest = line.dropFirst(key.count).trimmingCharacters(in: .whitespaces)
@@ -381,7 +357,6 @@ public enum KimiHooksFile {
         return nil
     }
 
-    /// A TOML basic string.
     static func quoted(_ value: String) -> String {
         var result = "\""
         for character in value {
@@ -404,24 +379,16 @@ public enum KimiHooksFile {
         AgentHooks.hookCommand(event: event, cliPath: cliPath, format: tool.settingsFormat)
     }
 
-    /// The file with Keepresso's tables removed, plus one blank line of
-    /// separation each of them had, so install then remove round-trips.
     static func stripped(_ text: String) throws -> [Substring] {
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
         let owned = try blocks(in: lines).filter(ours)
         var drop = IndexSet()
         for block in owned {
-            // Only the lines Keepresso writes: the header, its keys, and
-            // blanks. A table runs to the next header, so a comment the user
-            // put after ours (above their own next table) is theirs to keep.
-            // Blank lines go only when the whole table goes, so a comment
-            // kept after it stays separated from what precedes it.
             let keepsUserLines = block.lines.contains { !ownedLine(lines[$0]) }
             for index in block.lines where ownedLine(lines[index]) {
                 if keepsUserLines, lines[index].trimmingCharacters(in: .whitespaces).isEmpty { continue }
                 drop.insert(index)
             }
-            // Take one blank separator line before the table with it.
             if block.lines.lowerBound > 0,
                lines[block.lines.lowerBound - 1].trimmingCharacters(in: .whitespaces).isEmpty {
                 drop.insert(block.lines.lowerBound - 1)
@@ -442,7 +409,6 @@ public enum KimiHooksFile {
     public static func installHooks(into data: Data?, cliPath: String) throws -> Data {
         let text = data.map { String(decoding: $0, as: UTF8.self) } ?? ""
         var lines = try stripped(text)
-        // Trim trailing blank lines, then append our tables after one.
         while let last = lines.last, last.trimmingCharacters(in: .whitespaces).isEmpty {
             lines.removeLast()
         }
@@ -462,7 +428,6 @@ public enum KimiHooksFile {
     public static func removeHooks(from data: Data?) throws -> Data {
         guard let data else { return Data() }
         let text = String(decoding: data, as: UTF8.self)
-        // Nothing of ours: leave the user's file byte for byte.
         let all = text.split(separator: "\n", omittingEmptySubsequences: false)
         guard try blocks(in: all).contains(where: ours) else { return data }
         var lines = try stripped(text)

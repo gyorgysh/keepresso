@@ -21,7 +21,6 @@ public struct DiskKeepAliveConfig: Codable, Equatable, Sendable {
     /// A sensible first-enable cadence (most drives idle out at 10 min).
     public static let defaultInterval: TimeInterval = 5 * 60
 
-    /// The hidden marker file rewritten on each touch.
     static let markerName = ".keepresso-keepalive"
 
     /// Full path of the marker file inside ``directory``.
@@ -34,7 +33,6 @@ public struct DiskKeepAliveConfig: Codable, Equatable, Sendable {
 /// throttling logic is unit-testable without touching a real disk. Mirrors the
 /// other system seams (``PowerAsserting``, ``ReminderNotifying``).
 public protocol DiskTouching: AnyObject {
-    /// Perform one no-op write at `url`. Returns whether it succeeded.
     @discardableResult
     func touch(at url: URL) -> Bool
 }

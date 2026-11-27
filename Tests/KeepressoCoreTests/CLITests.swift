@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-// MARK: - App commands
 
 @Test func bareInvocationShowsHelp() throws {
     #expect(try CLIRequest.parse([]) == .help)
@@ -73,7 +72,6 @@ import Foundation
     #expect(throws: CLIUsageError.self) { try CLIRequest.parse(["omp-hook", "agent-start", "session", "/repo", "yes", "0"]) }
 }
 
-// MARK: - URL building round-trips through the app-side parser
 
 @Test func startURLRoundTripsThroughURLCommand() {
     let plain = CLIRequest.RemoteCommand.start(durationMinutes: nil, untilTime: nil)
@@ -100,7 +98,6 @@ import Foundation
     #expect(URLCommand.parse(URL(string: CLIRequest.RemoteCommand.toggle.urlString)!) == .toggle)
 }
 
-// MARK: - Holds
 
 @Test func parsesTimedHold() throws {
     #expect(try CLIRequest.parse(["-t", "300"])
@@ -142,7 +139,6 @@ import Foundation
     #expect(throws: CLIUsageError.self) { try CLIRequest.parse(["-dt", "60"]) }
 }
 
-// MARK: - Status file
 
 @Test func statusSnapshotRoundTripsThroughDisk() {
     let url = FileManager.default.temporaryDirectory
@@ -180,18 +176,16 @@ import Foundation
     )
     let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
     #expect(object?["isActive"] as? Bool == false)
-    // ISO 8601, not a raw interval, so `jq` users can read it.
     #expect((object?["writtenAt"] as? String)?.hasSuffix("Z") == true)
 }
 
-// MARK: - Lease commands
 
 private let leaseId = "aaaaaaaa-1111-2222-3333-444444444444"
 
 @Test func leaseAcquireParsesItsFlags() throws {
     let parsed = try CLIRequest.parse([
         "lease", "acquire",
-        "--id", leaseId.uppercased(), // canonicalized to lowercase
+        "--id", leaseId.uppercased(),
         "--tool", "claude-code",
         "--task", "overnight refactor",
         "--ttl", "300",
@@ -257,7 +251,6 @@ private let leaseId = "aaaaaaaa-1111-2222-3333-444444444444"
         .appendingPathComponent("keepresso-tests-\(UUID().uuidString).json")
     defer { try? FileManager.default.removeItem(at: url) }
 
-    // New writer, new reader.
     StatusFile.write(
         StatusSnapshot(
             isActive: true, pid: 1, writtenAt: Date(timeIntervalSince1970: 1_800_000_000),
@@ -267,8 +260,6 @@ private let leaseId = "aaaaaaaa-1111-2222-3333-444444444444"
     )
     #expect(StatusFile.read(from: url)?.leaseIDs == [leaseId])
 
-    // A file from an app that predates leases still decodes; the lease
-    // fields read as unknown.
     StatusFile.write(
         StatusSnapshot(isActive: true, pid: 1, writtenAt: Date(timeIntervalSince1970: 1_800_000_000)),
         to: url

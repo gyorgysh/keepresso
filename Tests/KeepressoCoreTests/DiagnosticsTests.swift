@@ -2,9 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-// The controller (and its log) are @MainActor; these tests mirror
-// SessionControllerTests' setup with a fake assertion backend and a movable
-// clock.
 
 private final class LogFakeAssertions: PowerAsserting {
     var held: Set<PowerAssertionKind> = []
@@ -35,7 +32,7 @@ private func makeController(now: @escaping () -> Date) -> SessionController {
     let session = makeController(now: { Date(timeIntervalSinceReferenceDate: 0) })
 
     session.start(mode: .indefinite, cause: .command)
-    session.start(mode: .timed(duration: 60), cause: .manual) // restart while active
+    session.start(mode: .timed(duration: 60), cause: .manual)
     session.stop(cause: .command)
 
     let reasons = session.log.events.map(\.reason)
@@ -102,7 +99,7 @@ private func makeController(now: @escaping () -> Date) -> SessionController {
         log.record(began: index.isMultiple(of: 2), reason: "event \(index)", at: epoch)
     }
     #expect(log.events.count == DecisionLog.capacity)
-    #expect(log.events.first?.reason == "event 25") // oldest fell off
+    #expect(log.events.first?.reason == "event 25")
     #expect(log.events.last?.reason == "event \(DecisionLog.capacity + 24)")
 }
 
@@ -117,8 +114,6 @@ private func makeController(now: @escaping () -> Date) -> SessionController {
 }
 
 @Test func realAssertionListerReadsWithoutCrashing() {
-    // Read-only sweep of powerd's live assertion list: contents vary by
-    // machine, so just prove the plumbing returns and every row is coherent.
     let list = IOPMAssertionLister().current()
     for info in list {
         #expect(!info.processName.isEmpty)

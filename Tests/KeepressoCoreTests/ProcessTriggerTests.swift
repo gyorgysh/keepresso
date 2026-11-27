@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-/// Fake process lister returning a canned command-line list.
 private final class FakeProcessLister: ProcessListing {
     var lines: [String]
     init(_ lines: [String]) { self.lines = lines }

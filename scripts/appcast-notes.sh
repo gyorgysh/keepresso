@@ -1,20 +1,6 @@
 #!/usr/bin/env bash
-#
-# appcast-notes.sh — embed the changelog in a release's appcast.
-#
-# 1. Extracts this version's section from CHANGELOG.md into
-#    build/RELEASE_NOTES.md, which becomes the GitHub release body.
-# 2. Renders that section to HTML (GitHub's markdown API) and embeds it as
-#    the appcast item's <description>, which Sparkle displays directly in
-#    the update dialog. A link to the GitHub release page is appended.
-#
 # A releaseNotesLink is deliberately not used: Sparkle would load the full
 # GitHub release page, header and navigation included, into the dialog.
-#
-# Run after generate_appcast has written dist/appcast.xml. Requires gh.
-#
-# Usage: appcast-notes.sh <version> [owner/repo] [tag]
-# Env: APPCAST overrides the appcast path (default dist/appcast.xml).
 
 set -euo pipefail
 
@@ -80,8 +66,6 @@ path = pathlib.Path(sys.argv[1])
 html = pathlib.Path(sys.argv[2]).read_text()
 xml = path.read_text()
 
-# Drop notes elements from any earlier run so this stays idempotent. The
-# appcast holds a single item in this setup.
 xml = re.sub(r"[ \t]*<sparkle:releaseNotesLink>.*?</sparkle:releaseNotesLink>\n", "", xml, flags=re.S)
 xml = re.sub(r"[ \t]*<description><!\[CDATA\[.*?\]\]></description>\n", "", xml, flags=re.S)
 

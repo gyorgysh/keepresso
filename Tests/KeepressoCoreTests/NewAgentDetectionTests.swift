@@ -39,13 +39,11 @@ private typealias Sample = PSAgentActivityMonitor.ProcessSample
     #expect(AgentHooks.agentMatch(
         comm: nil, path: "/Users/kilo/bin/unrelated", agents: agents) == nil)
     #expect(AgentHooks.agentMatch(comm: "kilo", path: nil, agents: agents) == "kilo")
-    // Long enough names still path-match.
     #expect(AgentHooks.agentMatch(
         comm: nil, path: "/Users/x/.local/share/hermes/versions/1.0.0", agents: agents) == "hermes")
 }
 
 @Test func dshNeverPathMatches() {
-    // Three letters: basename only, like pi.
     let agents = PSAgentActivityMonitor.agentCommands
     #expect(AgentHooks.agentMatch(
         comm: nil, path: "/Users/dsh/bin/unrelated", agents: agents) == nil)
@@ -53,8 +51,6 @@ private typealias Sample = PSAgentActivityMonitor.ProcessSample
 }
 
 @Test func museDoesNotMatchAPathComponent() {
-    // Four letters, same /Users/muse/... trap as kilo. The live binary is
-    // `muse-bin-<version>`, matched by prefix on the command basename.
     let agents = PSAgentActivityMonitor.agentCommands
     #expect(AgentHooks.agentMatch(
         comm: nil, path: "/Users/muse/bin/unrelated", agents: agents) == nil)
@@ -64,8 +60,6 @@ private typealias Sample = PSAgentActivityMonitor.ProcessSample
 }
 
 @Test func devinDoesNotMatchAPathComponent() {
-    // Five letters, same /Users/devin/... trap as kilo. The live command
-    // basename is `devin` or `devin-cli`.
     let agents = PSAgentActivityMonitor.agentCommands
     #expect(AgentHooks.agentMatch(
         comm: nil, path: "/Users/devin/bin/unrelated", agents: agents) == nil)
@@ -221,7 +215,7 @@ private typealias Sample = PSAgentActivityMonitor.ProcessSample
 @Test func museSessionJsonlCountsAndSiblingsDoNot() throws {
     let root = FileManager.default.temporaryDirectory
         .appendingPathComponent("keepresso-muse-\(UUID().uuidString)", isDirectory: true)
-    let now = Date(timeIntervalSince1970: 1_788_258_000) // 2026-09-01 10:20 UTC
+    let now = Date(timeIntervalSince1970: 1_788_258_000)
     let day = DateFormatter()
     day.locale = Locale(identifier: "en_US_POSIX")
     day.calendar = Calendar(identifier: .gregorian)

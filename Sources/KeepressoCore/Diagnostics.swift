@@ -2,13 +2,10 @@ import Foundation
 import Observation
 import IOKit.pwr_mgt
 
-// MARK: - Decision log
 
 /// What initiated a session start or stop, for the decision log.
 public enum SessionCause: Equatable, Sendable {
-    /// The menu toggle or another in-app control.
     case manual
-    /// A `keepresso://` URL or a Shortcuts action.
     case command
 }
 
@@ -119,7 +116,6 @@ public final class DecisionLog {
     }
 }
 
-// MARK: - System power assertions
 
 /// One live power assertion held by some process, answering "why is my Mac
 /// not sleeping right now?" even when it isn't Keepresso's doing.
@@ -161,7 +157,6 @@ public struct PowerAssertionInfo: Equatable, Identifiable, Sendable {
 /// Abstraction over the system-wide assertion list so the UI layer and tests
 /// don't touch IOKit directly. Mirrors the other system seams.
 public protocol AssertionListing: AnyObject {
-    /// Every assertion currently registered with powerd, across all processes.
     func current() -> [PowerAssertionInfo]
 }
 
@@ -183,8 +178,6 @@ public final class IOPMAssertionLister: AssertionListing {
             for (index, assertion) in assertions.enumerated() {
                 let type = assertion[kIOPMAssertionTypeKey as String] as? String ?? "Unknown"
                 let name = assertion[kIOPMAssertionNameKey as String] as? String ?? ""
-                // "Process Name" is in the assertion details on current macOS;
-                // fall back to a libproc lookup when absent.
                 let process = assertion["Process Name"] as? String ?? Self.processName(for: pid)
                 infos.append(PowerAssertionInfo(
                     id: "\(pid)-\(index)-\(type)",

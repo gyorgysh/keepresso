@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-// MARK: - Fakes
 
 private final class FakeHookRunner: HookRunning {
     private(set) var ran: [HookAction] = []
@@ -14,7 +13,6 @@ private final class Clock {
     func advance(_ seconds: TimeInterval) { now = now.addingTimeInterval(seconds) }
 }
 
-// MARK: - Classification
 
 @Test func decisionKindsMapOntoHookEvents() {
     #expect(EventHookPolicy.hookEvents(for: .sessionStarted) == [.sessionStarted])
@@ -27,7 +25,6 @@ private final class Clock {
     #expect(EventHookPolicy.hookEvents(for: nil).isEmpty)
 }
 
-// MARK: - Dispatch
 
 @MainActor
 @Test func matchingHooksRunAndRespectDebounce() {
@@ -42,14 +39,12 @@ private final class Clock {
     ))
     #expect(runner.ran == [.runShortcut(name: "Ping")])
 
-    // Same hook inside the debounce window is dropped.
     clock.advance(1)
     dispatcher.handle(sessionEvent: SessionEvent(
         id: 1, date: clock.now, began: false, reason: "again", kind: .sessionEnded
     ))
     #expect(runner.ran.count == 1)
 
-    // After the window, it fires again.
     clock.advance(EventHookDispatcher.debounce)
     dispatcher.handle(sessionEvent: SessionEvent(
         id: 2, date: clock.now, began: false, reason: "later", kind: .sessionEnded
@@ -81,7 +76,6 @@ private final class Clock {
     #expect(runner.ran == [.shell(command: "a"), .shell(command: "b")])
 }
 
-// MARK: - Persistence
 
 @Test func eventHooksRoundTripThroughSettings() throws {
     var settings = KeepressoSettings.default

@@ -2,33 +2,23 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-// MARK: - Watchdog command shape
 
 @Test func sleepWatchdogCommandIsFlagFollowingPidScopedAndSelfRestoring() {
     let command = OsascriptSleepWatchdog.watchdogCommand(
         flagPath: "/Users/g/Library/Application Support/Keepresso/sleep-watchdog.flag",
         appPID: 4242
     )
-    // The helper must live with the app's pid (so a crash restores normal
-    // sleep), follow the flag file, and background itself so the admin prompt
-    // returns. Unlike the AWDL loop it must be edge-triggered: it writes
-    // `disablesleep` only on a flag transition, so it never fights the user's
-    // own manual toggle, and on exit restores sleep only if it disabled it.
     #expect(command.contains("kill -0 4242"))
-    // The flag path is single-quoted so it stays one literal word to /bin/sh.
     #expect(command.contains("if [ -f '/Users/g/Library/Application Support/Keepresso/sleep-watchdog.flag' ]"))
     #expect(command.contains("if [ -z \"$SET\" ]; then /usr/bin/pmset -a disablesleep 1"))
     #expect(command.contains("elif [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0"))
     #expect(command.hasSuffix("&"))
-    // Exit cleanup removes the flag only when this app run stamped it.
     #expect(command.contains(
         "if [ \"$(cat '/Users/g/Library/Application Support/Keepresso/sleep-watchdog.flag' 2>/dev/null)\" = \"4242\" ]; "
             + "then rm -f '/Users/g/Library/Application Support/Keepresso/sleep-watchdog.flag'; fi; "))
     #expect(command.contains("if [ -n \"$SET\" ]; then /usr/bin/pmset -a disablesleep 0; fi )"))
 }
 
-/// Runs the real watchdog loop under `/bin/sh` with `pmset` swapped for a
-/// logger and the cycle shortened, against a stand-in app process.
 private struct WatchdogHarness {
     let dir: URL
     let flagURL: URL
@@ -61,7 +51,6 @@ private struct WatchdogHarness {
         shell.waitUntilExit()
     }
 
-    /// The values the loop "wrote" to `disablesleep`, in order.
     var writes: [String] {
         ((try? String(contentsOf: logURL, encoding: .utf8)) ?? "")
             .split(separator: "\n").map(String.init)
@@ -94,14 +83,10 @@ private struct WatchdogHarness {
     try harness.startLoop()
     #expect(await harness.waitForWrites(["1"]))
 
-    // The app quits mid-hold and is relaunched at once: the new run stamps a
-    // flag of its own before the old loop has noticed its app is gone.
     harness.quitApp()
     let newRun = OsascriptSleepWatchdog(flagURL: harness.flagURL, ownerPID: harness.appPID + 1)
     #expect(newRun.createFlag())
 
-    // The old loop still gives back what it took, but the new run's flag
-    // survives for the new run's loop to act on.
     #expect(await harness.waitForWrites(["1", "0"]))
     #expect(newRun.isFlagPresent())
 }
@@ -123,10 +108,9 @@ private struct WatchdogHarness {
     let hostile = #"/tmp/$(touch /tmp/pwned)/".flag"#
     let command = OsascriptSleepWatchdog.watchdogCommand(flagPath: hostile, appPID: 1)
     #expect(command.contains(OsascriptAWDLWatchdog.shellSingleQuoted(hostile)))
-    #expect(!command.contains("[ -f \"")) // never double-quoted around the path
+    #expect(!command.contains("[ -f \""))
 }
 
-// MARK: - Controller
 
 private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecked Sendable {
     var flagPresent = false
@@ -134,7 +118,6 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     var createFlagSucceeds = true
     var removeClearsFlag = true
     var engageFailureMessage = "backend says no"
-    /// Helper spawns, i.e. how often the user was asked for a password.
     var startCalls = 0
 
     func isFlagPresent() -> Bool { flagPresent }
@@ -160,9 +143,6 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     await controller.autoTick(brewing: true)
     #expect(controller.isHolding)
 
-    // Something removed the flag behind the controller's back: the helper has
-    // let sleep back on, so the next tick must take the hold again, without
-    // another password prompt.
     launcher.flagPresent = false
     await controller.autoTick(brewing: true)
     #expect(controller.isHolding)
@@ -181,7 +161,6 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     #expect(launcher.flagPresent)
     #expect(launcher.startCalls == 1)
 
-    // Further brewing ticks don't re-prompt.
     await controller.autoTick(brewing: true)
     #expect(launcher.startCalls == 1)
 
@@ -202,16 +181,12 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     #expect(launcher.flagPresent)
 
     await controller.autoTick(brewing: false)
-    // A failed XPC/osascript release still has the flag; dropping the latch
-    // would skip retries and leave disablesleep stuck.
     #expect(controller.isHolding)
     #expect(launcher.flagPresent)
 }
 
 @MainActor
 @Test func closedDisplayAutoPromptsOnlyOncePerAppRun() async {
-    // The first engage spawns the helper (the password prompt); every later
-    // session start and stop is flag-file-only.
     let launcher = FakeSleepWatchdogLauncher()
     let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
     controller.onlyWhileBrewing = true
@@ -225,9 +200,6 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
 
 @MainActor
 @Test func primeAuthorizesWithoutDisablingSleep() async {
-    // Priming (from the Preferences toggle) spawns the helper but leaves the
-    // sleep setting alone, so the engage at the next session start is a
-    // prompt-free flag write.
     let launcher = FakeSleepWatchdogLauncher()
     let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
     controller.onlyWhileBrewing = true
@@ -236,15 +208,14 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     let result = await controller.prime()
     #expect(result == .applied)
     #expect(controller.isAuthorized)
-    #expect(controller.isHolding == false)   // sleep setting left untouched
+    #expect(controller.isHolding == false)
     #expect(launcher.flagPresent == false)
-    #expect(launcher.startCalls == 1)         // one prompt
+    #expect(launcher.startCalls == 1)
 
     await controller.autoTick(brewing: true)
     #expect(controller.isHolding)
     #expect(launcher.startCalls == 1)
 
-    // Priming again is a no-op (already authorized): still no extra prompt.
     _ = await controller.prime()
     #expect(launcher.startCalls == 1)
 }
@@ -258,10 +229,9 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
 
     await controller.autoTick(brewing: true)
     await controller.autoTick(brewing: true)
-    #expect(launcher.startCalls == 1) // cancelled once, not nagged again
-    #expect(!launcher.flagPresent)    // no flag left for a later helper to obey
+    #expect(launcher.startCalls == 1)
+    #expect(!launcher.flagPresent)
 
-    // A new session may ask once more.
     await controller.autoTick(brewing: false)
     launcher.result = .applied
     await controller.autoTick(brewing: true)
@@ -289,8 +259,6 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
 
 @MainActor
 @Test func aFailedEngageSurfacesTheLaunchersOwnMessage() async {
-    // The daemon-backed launcher fails in XPC, not on a file write; the
-    // controller must not claim a flag file was the problem.
     let launcher = FakeSleepWatchdogLauncher()
     launcher.createFlagSucceeds = false
     let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
@@ -303,8 +271,6 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
 
 @MainActor
 @Test func retryEngageLeavesACancelledPromptAlone() async {
-    // The user dismissed the password dialog. A helper check that later comes
-    // back healthy must not turn that "no" into a fresh prompt mid-session.
     let launcher = FakeSleepWatchdogLauncher()
     launcher.result = .cancelled
     let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
@@ -318,9 +284,8 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     controller.retryEngage()
     await controller.autoTick(brewing: true)
     #expect(!controller.isHolding)
-    #expect(launcher.startCalls == 1) // no second prompt
+    #expect(launcher.startCalls == 1)
 
-    // The session ending clears it, as it always did.
     await controller.autoTick(brewing: false)
     await controller.autoTick(brewing: true)
     #expect(controller.isHolding)
@@ -328,9 +293,6 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
 
 @MainActor
 @Test func retryEngageLetsAFailedEngageTryAgainMidSession() async {
-    // A failed engage normally holds off until the session ends; after an
-    // external fix (the helper daemon was repaired) retryEngage lets the next
-    // tick try again within the same session.
     let launcher = FakeSleepWatchdogLauncher()
     launcher.createFlagSucceeds = false
     let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
@@ -341,7 +303,7 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     #expect(!controller.isHolding)
 
     launcher.createFlagSucceeds = true
-    await controller.autoTick(brewing: true) // still held off, no engage
+    await controller.autoTick(brewing: true)
     #expect(!controller.isHolding)
 
     controller.retryEngage()
@@ -356,12 +318,12 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     let controller = ClosedDisplayAutoController(launcher: launcher, appPID: 1)
     controller.onlyWhileBrewing = true
 
-    await controller.stopIfHolding() // nothing held: a no-op
+    await controller.stopIfHolding()
     #expect(launcher.startCalls == 0)
 
     await controller.autoTick(brewing: true)
     #expect(controller.isHolding)
-    await controller.stopIfHolding() // the feature was switched off mid-session
+    await controller.stopIfHolding()
     #expect(!controller.isHolding)
     #expect(!launcher.flagPresent)
 }
@@ -384,11 +346,8 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     #expect(!launcher.flagPresent)
 }
 
-// MARK: - Authority over a hold the automation didn't take
 
 @Test func idleClearsAHoldTheAutomationDidntTake() {
-    // The setting is on with no automation hold and no session: "only while
-    // brewing" owns it, so idle must mean off.
     #expect(ClosedDisplayAuthority.shouldClearForeignHold(
         onlyWhileBrewing: true, brewing: false, automationHolding: false,
         settingIsOn: true, canApply: true
@@ -396,12 +355,10 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
 }
 
 @Test func nothingIsClearedWhileTheAutomationOwnsTheHold() {
-    // Mid-session the automation's own hold is released the normal way.
     #expect(!ClosedDisplayAuthority.shouldClearForeignHold(
         onlyWhileBrewing: true, brewing: true, automationHolding: true,
         settingIsOn: true, canApply: true
     ))
-    // Idle with our own hold still up: the release is what drops it.
     #expect(!ClosedDisplayAuthority.shouldClearForeignHold(
         onlyWhileBrewing: true, brewing: false, automationHolding: true,
         settingIsOn: true, canApply: true
@@ -409,8 +366,6 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
 }
 
 @Test func aForeignHoldSurvivesUntilTheSessionEnds() {
-    // During a session a foreign hold is doing the same job; clearing it there
-    // would drop clamshell protection mid-brew. The next idle tick gets it.
     #expect(!ClosedDisplayAuthority.shouldClearForeignHold(
         onlyWhileBrewing: true, brewing: true, automationHolding: false,
         settingIsOn: true, canApply: true
@@ -429,15 +384,12 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
 }
 
 @Test func noWayToWriteMeansNoClear() {
-    // The host has already spent its one password prompt for this app run and
-    // has no helper daemon to write silently: nothing to do until it can.
     #expect(!ClosedDisplayAuthority.shouldClearForeignHold(
         onlyWhileBrewing: true, brewing: false, automationHolding: false,
         settingIsOn: true, canApply: false
     ))
 }
 
-// MARK: - Battery pause lifts sticky closed-display
 
 @Test func batteryPauseLiftsStickyClosedDisplay() {
     #expect(BatteryPauseClosedDisplay.decide(
@@ -447,7 +399,6 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
 }
 
 @Test func batteryPauseLeavesOnlyWhileBrewingAlone() {
-    // Session-tied closed-display already releases with the pause.
     #expect(BatteryPauseClosedDisplay.decide(
         paused: true, onlyWhileBrewing: true, settingIsOn: true,
         alreadyLifted: false, helperInstalled: true
@@ -462,8 +413,6 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
 }
 
 @Test func batteryPauseReassertsLiftIfClosedDisplayComesBackOn() {
-    // A failed write or another feature restoring the setting mid-pause must
-    // not leave disablesleep on for the rest of the battery pause.
     #expect(BatteryPauseClosedDisplay.decide(
         paused: true, onlyWhileBrewing: false, settingIsOn: true,
         alreadyLifted: true, helperInstalled: true
@@ -475,7 +424,6 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
         paused: true, onlyWhileBrewing: false, settingIsOn: true,
         alreadyLifted: false, helperInstalled: false
     ) == .skipLiftNeedsHelper)
-    // Once the host has explained, don't nag every tick.
     #expect(BatteryPauseClosedDisplay.decide(
         paused: true, onlyWhileBrewing: false, settingIsOn: true,
         alreadyLifted: true, helperInstalled: false
@@ -500,7 +448,6 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     ) == .idle)
 }
 
-// MARK: - Settings
 
 @Test func closedDisplayOnlyWhileBrewingDefaultsOffAndRoundTrips() throws {
     let empty = try JSONDecoder().decode(KeepressoSettings.self, from: "{}".data(using: .utf8)!)
@@ -513,26 +460,17 @@ private final class FakeSleepWatchdogLauncher: SleepWatchdogLaunching, @unchecke
     #expect(decoded.closedDisplayOnlyWhileBrewing)
 }
 
-// MARK: - Quit modal coverage
 
 @Test func quitModalCoversWhatQuittingWouldOrphan() {
     typealias Q = QuitSleepCheck
     #expect(Q.coverage(brewing: false, overrideLive: false) == .none)
-    // Brewing with nothing persistent: the session ends, nothing survives.
     #expect(Q.coverage(brewing: true, overrideLive: false) == .session)
-    // A persistent override live: quitting would orphan it unmanaged. The
-    // run that set it does not matter, a setting left on days ago is
-    // exactly what gets forgotten.
     #expect(Q.coverage(brewing: false, overrideLive: true) == .overrideLive)
     #expect(Q.coverage(brewing: true, overrideLive: true) == .sessionAndOverride)
 }
 
 @Test func quitModalTreatsAScopedHoldAsNothingToAskAbout() {
     typealias Q = QuitSleepCheck
-    // "Only while brewing" holds `disablesleep` too, but it self-cleans on
-    // exit, so the host passes `overrideLive: false` for it: the session
-    // variant shows, with no override line, and a quit with no session at
-    // all stays silent.
     #expect(Q.coverage(brewing: true, overrideLive: false) == .session)
     #expect(Q.coverage(brewing: false, overrideLive: false) == .none)
 }

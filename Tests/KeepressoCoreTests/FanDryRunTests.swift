@@ -2,15 +2,11 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-// MARK: - Fakes
 
-/// Scripted helper: records fan-hold calls, optionally refuses them.
 private final class FakeFanHelper: PrivilegedHelperCalling, @unchecked Sendable {
     private let lock = NSLock()
     private(set) var calls: [String] = []
     var accepts = true
-    /// Holds to refuse before accepting, for firmware whose unlock takes a
-    /// moment to land.
     var refusalsBeforeAccepting = 0
     var answersPing = true
 
@@ -24,7 +20,7 @@ private final class FakeFanHelper: PrivilegedHelperCalling, @unchecked Sendable 
     func setFanHold(_ holding: Bool, percent: Int) -> Bool {
         lock.lock()
         calls.append(holding ? "hold(\(percent))" : "release")
-        var ok = accepts || !holding // releases always land
+        var ok = accepts || !holding
         if holding, ok, refusalsBeforeAccepting > 0 {
             refusalsBeforeAccepting -= 1
             ok = false
@@ -46,14 +42,10 @@ private final class FakeFanHelper: PrivilegedHelperCalling, @unchecked Sendable 
     }
 }
 
-/// Scripted fans: a fixed count and range, and an RPM that tracks whatever
-/// the helper was last asked to hold (responsive), or stays put (stuck).
 private final class FakeFans: FanInfoReading, @unchecked Sendable {
     var count: Int? = 2
     var idleRPM: Double = 1200
     var range: (min: Double, max: Double)? = (1000, 6000)
-    /// When set, `rpm(ofFan:)` follows the forced percent; otherwise it
-    /// stays at `idleRPM` (a fan that ignores the writes).
     var responsive = true
     var forcedPercent: Int?
 
@@ -68,8 +60,6 @@ private final class FakeFans: FanInfoReading, @unchecked Sendable {
     func rpmRange(ofFan index: Int) -> (min: Double, max: Double)? { range }
 }
 
-/// Wires the fake helper's holds into the fake fans, so a "responsive"
-/// machine spins up when the controller asks the helper to boost.
 private final class RigHelper: PrivilegedHelperCalling, @unchecked Sendable {
     let inner = FakeFanHelper()
     let fans: FakeFans
@@ -114,7 +104,6 @@ private func makeController(
     return (controller, helper)
 }
 
-// MARK: - Tests
 
 @MainActor
 @Test func dryRunStepsThroughTheLevelsAndReportsAllGood() async {
@@ -132,9 +121,7 @@ private func makeController(
     #expect(report.steps.map(\.percent) == FanDryRunController.levels)
     #expect(report.baselineRPM == [1200, 1200])
     #expect(report.hottestCelsius == 61)
-    // Three holds in rising order, then exactly one release at the end.
     #expect(helper.inner.recorded == ["hold(50)", "hold(70)", "hold(90)", "release"])
-    // The last reading tracked the 90% target.
     #expect(report.steps.last?.rpm.first == 1000 + 0.9 * 5000)
 }
 
@@ -169,7 +156,6 @@ private func makeController(
     }
     #expect(report.verdict == .helperUnavailable)
     #expect(report.steps.isEmpty)
-    // One refused hold, then the release. Never the next level.
     #expect(helper.inner.recorded == ["hold(50)", "release"])
 }
 
@@ -177,8 +163,6 @@ private func makeController(
 @Test func aSlowFirmwareUnlockStillPassesOnceTheBoostLands() async {
     let fans = FakeFans()
     let (controller, helper) = makeController(fans: fans)
-    // The first forced write is refused while the unlock settles. The hold
-    // must be kept, not released, so the later levels can land.
     helper.inner.refusalsBeforeAccepting = 1
     controller.start()
     await controller.activeRun?.value
@@ -204,7 +188,6 @@ private func makeController(
         Issue.record("expected a finished phase, got \(controller.phase)")
         return
     }
-    // The helper answers but never takes the fans, and they never moved.
     #expect(report.verdict == .helperUnavailable)
     #expect(helper.inner.recorded == ["hold(50)", "hold(70)", "hold(90)", "release"])
 }
@@ -233,7 +216,6 @@ private func makeController(
         await gate.pause()
     }
     controller.start()
-    // Let the run reach its first settle wait, then pull the plug.
     await Task.yield()
     await controller.cancelAndWait()
 
@@ -247,30 +229,21 @@ private func makeController(
     let fans = FakeFans()
     let (controller, helper) = makeController(fans: fans)
     controller.start()
-    controller.start() // ignored: one run only
+    controller.start()
     await controller.activeRun?.value
-    // A doubled run would have doubled the calls.
     #expect(helper.inner.recorded == ["hold(50)", "hold(70)", "hold(90)", "release"])
 }
 
 @Test func respondedJudgesDeltaAndNearTopFallback() {
-    // A clear rise over baseline responds.
     #expect(FanDryRunReport.fanResponded(baseline: 1200, final: 1700, range: (1000, 6000)))
-    // Flat at idle does not.
     #expect(!FanDryRunReport.fanResponded(baseline: 1200, final: 1250, range: (1000, 6000)))
-    // Already near the top with no headroom still counts (hot machine).
     #expect(FanDryRunReport.fanResponded(baseline: 5600, final: 5700, range: (1000, 6000)))
-    // No reading at all is a failure.
     #expect(!FanDryRunReport.fanResponded(baseline: 1200, final: nil, range: (1000, 6000)))
-    // No baseline and no range: nothing to judge against, fail safe.
     #expect(!FanDryRunReport.fanResponded(baseline: nil, final: 3000, range: nil))
 }
 
-/// A sleeper the test can hold open until cancellation arrives.
 private actor AsyncGate {
     func pause() async {
-        // Parks until the surrounding task is cancelled; cancellation makes
-        // the sleep throw and return immediately.
         try? await Task.sleep(for: .seconds(60))
     }
 }

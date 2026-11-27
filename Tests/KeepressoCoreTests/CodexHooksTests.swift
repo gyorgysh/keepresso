@@ -4,33 +4,22 @@ import Foundation
 
 private let cli = "/Applications/Keepresso.app/Contents/Helpers/keepresso"
 
-// MARK: - The file format Codex is strict about
 
 @Test func onlyTheTwoKeysCodexToleratesAreEverWritten() throws {
-    // Codex parses hooks.json with unknown fields denied and accepts only
-    // `description` and `hooks`. One stray key at the top level makes it
-    // reject the entire file and load none of the hooks in it, the user's
-    // included, so writing anything else back would be actively harmful.
     let messy = Data("""
     {"description":"my hooks","hooks":{},"state":{"x":1},"bogusTopLevel":42}
     """.utf8)
     let installed = try CodexHooks.installHooks(into: messy, cliPath: cli)
     let root = try #require(try JSONSerialization.jsonObject(with: installed) as? [String: Any])
     #expect(Set(root.keys) == ["description", "hooks"])
-    // The user's own description survives; the keys Codex would choke on don't.
     #expect(root["description"] as? String == "my hooks")
 }
 
 @Test func eventNamesAreSpelledExactlyAsCodexMatchesThem() {
-    // Codex does not validate these names. A lowercase letter parses cleanly,
-    // registers zero hooks, and warns nowhere, so the integration would look
-    // installed and do nothing at all. Pin the spelling.
     #expect(CodexHooks.installedEvents == [
         "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
         "PermissionRequest", "Stop", "SessionEnd",
     ])
-    // Every event we install must be one the shared reducer actually maps,
-    // or we would write a hook whose events go nowhere.
     for event in CodexHooks.installedEvents {
         #expect(AgentHooks.reduce(event: event, toolName: "Bash") != nil,
                 "\(event) is installed but not reduced")
@@ -38,14 +27,12 @@ private let cli = "/Applications/Keepresso.app/Contents/Helpers/keepresso"
 }
 
 @Test func codexMarkerIsDistinctFromTheOtherTools() {
-    // Removing one integration must never strip another's entries.
     #expect(!CodexHooks.hookMarker.contains(AgentHooks.hookMarker))
     #expect(!AgentHooks.hookMarker.contains(CodexHooks.hookMarker))
     #expect(CodexHooks.hookMarker != CursorHooks.hookMarker)
 }
 
 @Test func hooksURLFollowsCodexHome() {
-    // CODEX_HOME relocates the whole directory, and people do set it.
     #expect(CodexHooks.hooksURL(home: "/Users/x", environment: [:]).path
             == "/Users/x/.codex/hooks.json")
     #expect(CodexHooks.hooksURL(home: "/Users/x", environment: ["CODEX_HOME": "/tmp/ch"]).path
@@ -53,9 +40,6 @@ private let cli = "/Applications/Keepresso.app/Contents/Helpers/keepresso"
 }
 
 @Test func detectionReadsRolloutsUnderCodexHome() throws {
-    // Hooks install under CODEX_HOME, so detection must read the rollout
-    // files from the same root, or a set CODEX_HOME means hooks install
-    // correctly while detection watches an empty default directory.
     let root = FileManager.default.temporaryDirectory
         .appendingPathComponent("keepresso-codexhome-\(UUID().uuidString)")
     let day = DateFormatter()
@@ -72,12 +56,10 @@ private let cli = "/Applications/Keepresso.app/Contents/Helpers/keepresso"
     let written = PSAgentActivityMonitor.codexRolloutWrite(
         forSessionId: "abc123", home: "/Users/nobody", environment: env)
     #expect(written != nil)
-    // Without the env override the fixture is invisible.
     #expect(PSAgentActivityMonitor.codexRolloutWrite(
         forSessionId: "abc123", home: "/Users/nobody", environment: [:]) == nil)
 }
 
-// MARK: - Merging
 
 @Test func installMergesBesideTheUsersOwnHooksAndIsIdempotent() throws {
     let existing = Data("""
@@ -91,9 +73,7 @@ private let cli = "/Applications/Keepresso.app/Contents/Helpers/keepresso"
     let root = try #require(try JSONSerialization.jsonObject(with: twice) as? [String: Any])
     let hooks = try #require(root["hooks"] as? [String: Any])
     let pre = try #require(hooks["PreToolUse"] as? [Any])
-    // Theirs plus ours.
     #expect(pre.count == 2)
-    // The element we could not read is carried through untouched.
     let start = try #require(hooks["SessionStart"] as? [Any])
     #expect(start.contains { $0 is NSNull })
     #expect(start.contains {
@@ -115,7 +95,6 @@ private let cli = "/Applications/Keepresso.app/Contents/Helpers/keepresso"
     #expect(stop.count == 1)
 }
 
-// MARK: - Health
 
 @Test func codexHealthReportsDriftLikeTheOthers() throws {
     let moved = try CodexHooks.installHooks(
@@ -148,7 +127,6 @@ private let cli = "/Applications/Keepresso.app/Contents/Helpers/keepresso"
         var root = try #require(try JSONSerialization.jsonObject(with: fresh) as? [String: Any])
         var hooks = try #require(root["hooks"] as? [String: Any])
         let foreign: [String: Any] = ["type": "command", "command": "user-cleanup.sh", "timeout": 2]
-        // A foreign sibling and an unreadable entry must not hide our old timeout.
         hooks["SessionEnd"] = [["matcher": "other", "hooks": [
             NSNull(), foreign,
             ["type": "command", "command": CodexHooks.hookCommand(event: "SessionEnd", cliPath: cli),
@@ -218,7 +196,6 @@ private func codexTimeoutFixture(event: String, literal: String?) throws -> Data
     var entries = try #require(groups[0]["hooks"] as? [[String: Any]])
     // Insert the literal after serialization so Foundation cannot turn 3.0 into 3.
     entries[0]["timeout"] = literal == nil ? nil : "__keepresso_timeout_fixture__"
-    // A foreign timeout above our limit must never trigger repair on its own.
     entries.append(["type": "command", "command": "user-hook.sh", "timeout": 120])
     groups[0]["hooks"] = entries
     hooks[event] = groups
@@ -229,7 +206,6 @@ private func codexTimeoutFixture(event: String, literal: String?) throws -> Data
                                           with: literal ?? "null").utf8)
 }
 
-// MARK: - Records
 
 @Test func codexRecordsAreOwnedByCodexAndSparedByOtherRemovals() throws {
     let dir = FileManager.default.temporaryDirectory
@@ -237,7 +213,6 @@ private func codexTimeoutFixture(event: String, literal: String?) throws -> Data
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: dir) }
 
-    // A codex session: the ancestor walk finds the codex process by name.
     let rows: [(pid: Int32, ppid: Int32, comm: String)] = [
         (pid: 90, ppid: 80, comm: "keepresso"),
         (pid: 80, ppid: 70, comm: "sh"),
@@ -259,7 +234,6 @@ private func codexTimeoutFixture(event: String, literal: String?) throws -> Data
     #expect(records[0].agentPid == 70)
     #expect(records[0].detail == "running-command")
     #expect(CodexHooks.ownsRecord(records[0]))
-    // Not Cursor's, so a Cursor uninstall leaves it alone.
     #expect(!CursorHooks.ownsRecord(records[0]))
     AgentHooks.purgeRecords(in: dir, where: CursorHooks.ownsRecord)
     #expect(AgentHooks.readHookRecords(

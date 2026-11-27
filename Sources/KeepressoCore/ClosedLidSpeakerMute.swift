@@ -5,11 +5,7 @@ import Observation
 /// The Mac's built-in speakers, behind a seam so the closed-lid mute can be
 /// tested without touching real audio.
 public protocol BuiltInSpeakerMuting: AnyObject {
-    /// Whether the built-in speakers are muted, or `nil` when there are none,
-    /// they are not the active route (headphones in the jack), or mute can't
-    /// be read or set.
     func isMuted() -> Bool?
-    /// Mute or unmute the built-in speakers. Returns whether the change took.
     @discardableResult
     func setMuted(_ muted: Bool) -> Bool
 }
@@ -43,11 +39,6 @@ public final class CoreAudioBuiltInSpeakers: BuiltInSpeakerMuting {
         var value: UInt32 = muted ? 1 : 0
         let size = UInt32(MemoryLayout<UInt32>.size)
         guard AudioObjectSetPropertyData(device, &address, 0, nil, size, &value) == noErr else { return false }
-        // The HAL may apply a set asynchronously, so an immediate read-back can
-        // still show the old value. An accepted mute counts as landed: calling
-        // it failed would drop the marker and strand the speakers muted. An
-        // unmute is read back, since a stale read only makes the release retry
-        // a little later, which then finds the speakers unmuted.
         return muted || Self.isMuted(device) == false
     }
 
@@ -150,26 +141,15 @@ public final class ClosedLidSpeakerMuteController {
     /// True while Keepresso holds the built-in speakers muted.
     public private(set) var holding = false
 
-    /// How long to wait before probing again when no built-in speakers are
-    /// reachable (headphones on an Intel jack, or none at all). Each probe is
-    /// a full CoreAudio device scan, too much to repeat every second.
     static let unreachableRetry: TimeInterval = 10
 
     @ObservationIgnored private let speakers: BuiltInSpeakerMuting
     @ObservationIgnored private let marker: SpeakerMuteMarking
     @ObservationIgnored private var arming = ThermalArming()
-    /// Set once this lid-closed stretch has been handled (muted, or found
-    /// already muted), so it never re-mutes after the user unmutes with the
-    /// lid shut. Cleared when the stretch ends.
     @ObservationIgnored private var handledThisStretch = false
-    /// The last real readings. Either an open lid or an inactive override
-    /// releases a recovered mute, even before the other reading arrives.
     @ObservationIgnored private var lastLidClosed: Bool?
     @ObservationIgnored private var lastClosedDisplayActive: Bool?
-    /// An unmute may land after its read-back failed. Finish that release
-    /// before acquiring another hold, even if the lid has closed again.
     @ObservationIgnored private var releasePending = false
-    /// No speaker probe before this instant (see ``unreachableRetry``).
     @ObservationIgnored private var nextProbeAt: Date?
 
     public init(
@@ -192,9 +172,6 @@ public final class ClosedLidSpeakerMuteController {
         }
         guard enabled, armed else {
             handledThisStretch = false
-            // Keep a recovered mute while the readings could still mean a
-            // shut lid in closed-display mode. Either known-off input, or
-            // the feature off, releases without waiting for the rest.
             if enabled, lastLidClosed != false, lastClosedDisplayActive != false { return }
             release(now: now)
             return
@@ -238,8 +215,6 @@ public final class ClosedLidSpeakerMuteController {
         switch speakers.isMuted() {
         case true?:
             guard speakers.setMuted(false) else {
-                // Same backoff as unreachable speakers: each attempt is a
-                // full device scan, too much to repeat every second.
                 if let now { nextProbeAt = now.addingTimeInterval(Self.unreachableRetry) }
                 return
             }
@@ -247,7 +222,6 @@ public final class ClosedLidSpeakerMuteController {
             if let now { nextProbeAt = now.addingTimeInterval(Self.unreachableRetry) }
             return
         case false?:
-            // Unmuted by the user while the lid was shut: theirs to keep.
             break
         }
         nextProbeAt = nil

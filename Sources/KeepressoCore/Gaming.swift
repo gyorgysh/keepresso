@@ -48,7 +48,6 @@ public final class WorkspaceGamingMonitor: GamingMonitoring {
         self.init(probe: Self.probeSystem)
     }
 
-    /// The probe and clock are injectable so the cache can be unit-tested.
     init(
         ttl: TimeInterval = 3,
         now: @escaping () -> Date = Date.init,
@@ -59,7 +58,6 @@ public final class WorkspaceGamingMonitor: GamingMonitoring {
 
     public var current: GamingSnapshot { cache.current }
 
-    /// The real probe: the frontmost app and its declared category.
     static func probeSystem() -> GamingSnapshot {
         guard let app = NSWorkspace.shared.frontmostApplication else {
             return GamingSnapshot()
@@ -92,11 +90,11 @@ public final class GamingTrigger: Trigger {
     /// GeForce NOW web) have no app to match; the Setup screen points those
     /// users at the audio-playing condition instead.
     public static let cloudGamingBundleIDs: Set<String> = [
-        "com.nvidia.gfnpc.mall",          // GeForce NOW
-        "com.boosteroid.macclient",       // Boosteroid
-        "tv.parsec.www",                  // Parsec
-        "com.moonlight-stream.Moonlight", // Moonlight
-        "com.electron.shadow",            // Shadow PC
+        "com.nvidia.gfnpc.mall",
+        "com.boosteroid.macclient",
+        "tv.parsec.www",
+        "com.moonlight-stream.Moonlight",
+        "com.electron.shadow",
     ]
 
     private let monitor: GamingMonitoring
@@ -115,13 +113,6 @@ public final class GamingTrigger: Trigger {
     /// boolean (the priority boost wants the game's pid).
     public var currentSnapshot: GamingSnapshot { monitor.current }
 
-    /// Pure decision function, exposed for direct unit testing.
-    ///
-    /// Games declare `public.app-category.games` or a subcategory like
-    /// `public.app-category.action-games`; every subcategory ends in `-games`,
-    /// so both shapes are matched (and nothing outside the app-category
-    /// namespace is). Steam games frequently declare nothing, so an app
-    /// running from a Steam `steamapps` library folder counts too.
     static func isGame(_ snapshot: GamingSnapshot) -> Bool {
         if let id = snapshot.frontmostBundleID, cloudGamingBundleIDs.contains(id) {
             return true

@@ -19,8 +19,6 @@ private final class ReproAssert: PowerAsserting {
     func apply(_ kinds: Set<PowerAssertionKind>, reason: String) { held = kinds }
 }
 
-/// Mirrors the reported bug: combine .any, "On AC power" and Process "claude"
-/// satisfied, "Playing a game" not. The gate should activate the session.
 @MainActor
 @Test func gateActivatesWhenAnyConditionIsMet() {
     let factory = TriggerFactory(
@@ -35,16 +33,14 @@ private final class ReproAssert: PowerAsserting {
         enabled: true
     )
 
-    // Wire exactly like AppModel.applyTriggerGate.
     let session = SessionController(assertions: ReproAssert(), activity: NoopActivity(), endActor: NoopEnd())
     session.triggerGate = gate.engine
 
-    // What the menu shows.
     let states = gate.ruleStates()
     #expect(states?.filter(\.satisfied).count == 2)
 
     session.reconcile()
-    #expect(session.isActive) // <-- should be Brewing, not Idle
+    #expect(session.isActive)
 }
 
 private final class NoopActivity: ActivitySimulating { func poke(_: ActivityPokeKind) {} }

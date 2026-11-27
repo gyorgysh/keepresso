@@ -68,12 +68,6 @@ public enum OMPHooks {
         case .agentStart:
             return .set(.working, detail: nil)
         case .agentEnd where willContinue || awaitingAsyncWork:
-            // OMP has yielded from a turn but still has an automatic
-            // continuation or a background task, so Keepresso keeps holding
-            // awake. The extension never sets either flag for a bash job
-            // alone, which may run forever. OMP has no
-            // job-finished event, but a background result wakes the session,
-            // which starts a new agent loop.
             return .set(.working, detail: nil)
         case .agentEnd:
             return .set(.waiting, detail: "waiting")
@@ -100,7 +94,6 @@ public enum OMPHooks {
         argumentsOf: (Int32) -> String? = AgentHooks.defaultArgumentsOf
     ) {
         guard let event = Event(rawValue: rawEvent) else { return }
-        // The extension sends "" when OMP has no working directory.
         let cwd: String? = cwd.isEmpty ? nil : cwd
         if event == .sessionEnd {
             record(event: event, sessionId: sessionId, cwd: cwd, agentPid: nil, at: now, in: directory)
@@ -125,10 +118,6 @@ public enum OMPHooks {
         )
     }
 
-    /// The OMP process above the hook. The prebuilt binary (install script,
-    /// Homebrew, Nix, mise) runs as `omp`, but a Bun or npm install runs as
-    /// `bun …/omp` or `node …/omp`, where only argv names it. That is
-    /// recognized the way the `ps` scan does it.
     static func findAgent(
         startingAt pid: Int32,
         parentOf: (Int32) -> Int32?,

@@ -34,8 +34,6 @@ func keepressoAppIsRunning() -> Bool {
     !NSRunningApplication.runningApplications(withBundleIdentifier: mainAppBundleID).isEmpty
 }
 
-/// The session state the app last mirrored into the App Group, or `nil` when
-/// the group (or any state) is unavailable.
 func currentSharedState() -> SharedSessionState? {
     WidgetBridge.groupDefaults().flatMap { WidgetBridge.readState(from: $0) }
 }
@@ -46,7 +44,6 @@ private func send(_ command: WidgetCommand) {
     WidgetBridge.postCommandNotification()
 }
 
-/// Start/stop from a desktop widget button.
 struct ToggleKeepAwakeWidgetIntent: AppIntent {
     static let title: LocalizedStringResource = "Toggle Keep Awake"
     /// Launch the app if needed; see the header comment.
@@ -62,7 +59,6 @@ struct ToggleKeepAwakeWidgetIntent: AppIntent {
     }
 }
 
-/// Pause or resume trigger gating from the medium widget.
 struct SetTriggersPausedWidgetIntent: AppIntent {
     static let title: LocalizedStringResource = "Pause or Resume Triggers"
     static let openAppWhenRun = true
@@ -82,8 +78,6 @@ struct SetTriggersPausedWidgetIntent: AppIntent {
     }
 }
 
-/// The Control Center toggle's intent: the exact same bridge as the desktop
-/// widget buttons.
 @available(macOS 26.0, *)
 struct SetKeepAwakeControlIntent: SetValueIntent {
     static let title: LocalizedStringResource = "Set Keep Awake"

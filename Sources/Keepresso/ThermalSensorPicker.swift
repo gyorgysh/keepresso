@@ -1,17 +1,11 @@
 import SwiftUI
 import KeepressoCore
 
-/// The "pause above this temperature" control: a thermometer glyph, a slider
-/// over the clamped °C range in 1° steps, and a readout. Committed only when
-/// the drag ends, for the same reason as ``BatteryThresholdSlider``: writing
-/// through mid-drag would let the live guard latch a pause while the knob
-/// merely passes the current die temperature.
 struct TemperatureThresholdSlider: View {
     @Binding var celsius: Double
 
     @State private var dragValue: Double?
 
-    /// Mirrors the range Core clamps the config to.
     private static let range = ThermalSafetyConfig.celsiusRange
 
     private var clamped: Double {
@@ -58,10 +52,6 @@ struct TemperatureThresholdSlider: View {
     }
 }
 
-/// The fan boost strength: a fan glyph, a 30-100% slider in 5% steps, and a
-/// readout. Committed only on drag end: every config write resets the guard's
-/// dwell state (and mid-emergency would release the boost), so the knob must
-/// not write through while it moves.
 struct FanBoostSlider: View {
     @Binding var percent: Int
     var percentRange: ClosedRange<Int> = ThermalSafetyConfig.boostPercentRange
@@ -114,11 +104,6 @@ struct FanBoostSlider: View {
     }
 }
 
-/// A checklist of this machine's temperature sensors with a live °C column,
-/// bound to the selected sensor ids of the thermal safety config. Readings
-/// refresh once a second while mounted (through the backend's TTL cache, so
-/// the guard's own tick shares the same probe). Preferences unmounts the
-/// General tab while the window is hidden, which tears this picker down.
 struct ThermalSensorPicker: View {
     let model: AppModel
     @Binding var selectedIDs: [String]
@@ -156,9 +141,6 @@ struct ThermalSensorPicker: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                // A persisted sensor that no longer resolves stays selected
-                // (never silently substituted) but is flagged: unreadable
-                // sensors feed the guard no verdict, which holds, not cools.
                 if selectedIDs.contains(where: { id in !sensors.contains { $0.id == id } }) {
                     Label("Some selected sensors are unavailable on this Mac.",
                           systemImage: "exclamationmark.triangle")
@@ -171,8 +153,6 @@ struct ThermalSensorPicker: View {
             sensors = model.thermalGuard.discoverSensors()
             refresh()
         }
-        // Preferences unmounts the General tab while hidden; clear readings and
-        // drop the poll with the view so SMC is not read off screen.
         .onDisappear {
             sensors = []
             readings = [:]

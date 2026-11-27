@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-// MARK: - Parsers (fixtures captured from a real live download)
 
 @Test func acfStateFlagsParse() {
     let downloading = """
@@ -20,13 +19,11 @@ import Foundation
 }
 
 @Test func stateFlagBitsJudgeDownloadActivity() {
-    // The flag half only; a user-paused download KEEPS 1026 (observed live),
-    // which is why the probe also demands write recency.
-    #expect(SteamDownload.isActive(stateFlags: 1026))  // running (1024 | 2)
+    #expect(SteamDownload.isActive(stateFlags: 1026))
     #expect(SteamDownload.isActive(stateFlags: 1024))
-    #expect(!SteamDownload.isActive(stateFlags: 2))    // queued, not running
-    #expect(!SteamDownload.isActive(stateFlags: 4))    // fully installed
-    #expect(!SteamDownload.isActive(stateFlags: 6))    // installed + update required
+    #expect(!SteamDownload.isActive(stateFlags: 2))
+    #expect(!SteamDownload.isActive(stateFlags: 4))
+    #expect(!SteamDownload.isActive(stateFlags: 6))
 }
 
 @Test func recentWriteWalkJudgesLiveness() throws {
@@ -36,16 +33,13 @@ import Foundation
     try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: dir) }
 
-    // A missing or empty tree: no liveness.
     #expect(!SteamDownload.hasRecentWrite(under: dir.appendingPathComponent("absent")))
     #expect(!SteamDownload.hasRecentWrite(under: dir))
 
-    // A fresh chunk write counts.
     let chunk = nested.appendingPathComponent("chunk.bin")
     try Data("x".utf8).write(to: chunk)
     #expect(SteamDownload.hasRecentWrite(under: dir))
 
-    // The same file judged from a "now" past the window: stale, a pause.
     #expect(!SteamDownload.hasRecentWrite(
         under: dir,
         now: Date().addingTimeInterval(SteamDownload.writeRecencyWindow + 5)
@@ -74,7 +68,6 @@ import Foundation
     #expect(SteamDownload.libraryPaths(fromVDF: "").isEmpty)
 }
 
-// MARK: - Monitor cache and trigger
 
 private final class FakeSteam: SteamDownloadMonitoring {
     var isDownloading = false
@@ -89,7 +82,7 @@ private final class FakeSteam: SteamDownloadMonitoring {
     }
     #expect(monitor.isDownloading)
     #expect(monitor.isDownloading)
-    #expect(probes == 1) // within the TTL
+    #expect(probes == 1)
     now.addTimeInterval(6)
     #expect(monitor.isDownloading)
     #expect(probes == 2)
@@ -112,7 +105,6 @@ private final class FakeSteam: SteamDownloadMonitoring {
     #expect(rule.requiredPermission == nil)
     let gaming = Preset.builtIns.first { $0.id == "gaming" }
     #expect(gaming?.ruleSet.rules.contains(.steamDownload) == true)
-    // 1024 KB/s renders as the "1 MB/s" the preset promises.
     #expect(gaming?.ruleSet.rules.contains(.throughput(kilobytesPerSecond: 1024)) == true)
     #expect(NetworkThroughput.rateLabel(kilobytesPerSecond: 1024) == "1 MB/s")
 }

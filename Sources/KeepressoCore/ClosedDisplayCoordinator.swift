@@ -60,21 +60,10 @@ public final class ClosedDisplayCoordinator {
 
     /// A side effect for the host to run, in the order returned.
     public enum Action: Equatable, Sendable {
-        /// Session start with no authorization and no helper: the first engage
-        /// is about to prompt, so focus the app and say what the dialog is for.
         case announceEngagePrompt
-        /// An engage failed with the helper installed, which should not happen:
-        /// suspect a stale daemon registration and check it.
         case verifyHelper
-        /// Pulse the automation with the session's live state.
         case runAutoTick(brewing: Bool)
-        /// Re-read the system setting, then enforce on what comes back. `delay`
-        /// is in seconds and non-nil only where the helper needs a cycle to
-        /// apply a change first.
         case refreshThenEnforce(delay: Int?)
-        /// Clear a hold taken outside the automation. `announce` asks for the
-        /// notification that must precede an otherwise unexplained password
-        /// dialog.
         case clearForeignHold(announce: Bool)
     }
 
@@ -82,26 +71,14 @@ public final class ClosedDisplayCoordinator {
     /// live state, so the helper has had a cycle to apply it.
     public static let mirrorDelay = 3
 
-    /// Ticks between unattended re-reads while the automation owns the setting.
-    /// Each read shells out to `pmset -g`, so this stays slow: it is there to
-    /// notice a change made behind the app's back (`pmset` by hand, another
-    /// tool), not to drive the UI.
     nonisolated public static let defaultPollInterval = 30
 
     private let pollInterval: Int
     private var sawBrewing = false
     private var sawHolding = false
     private var sawAutomationFailure = false
-    /// Whether a foreign hold was already cleared, so a write that doesn't take
-    /// (a failing helper, a cancelled prompt) isn't retried every second.
     private var clearedForeignHold = false
-    /// Whether the password prompt for such a clear was already shown this app
-    /// run, so a cancelled one isn't re-offered every second.
     private var askedToClearForeignHold = false
-    /// Whether a re-read is still in flight. The setting's state is a cache, and
-    /// acting on it between an engage/release and its re-read would enforce
-    /// against a stale value (and without the helper, spend this run's one
-    /// password prompt on a no-op).
     private var refreshPending = false
     private var refreshGeneration = 0
     private var pollTicks = 0
@@ -125,25 +102,18 @@ public final class ClosedDisplayCoordinator {
             actions.append(.announceEngagePrompt)
         }
         sawBrewing = brewing
-        // A session hands the setting back to the automation: let the next idle
-        // stretch clear a foreign hold again (the release may restore one).
         if brewing { clearedForeignHold = false }
         if conditions.automationFailed, !sawAutomationFailure, conditions.helperInstalled {
             actions.append(.verifyHelper)
         }
         sawAutomationFailure = conditions.automationFailed
         actions.append(.runAutoTick(brewing: brewing))
-        // Mirror an engage or release into the setting's live state. Ticks in
-        // between stay out of the way, since the cached state is the pre-change
-        // one until that read lands.
         if conditions.automationHolding != sawHolding {
             sawHolding = conditions.automationHolding
             pollTicks = 0
             actions.append(.refreshThenEnforce(delay: Self.mirrorDelay))
             return actions
         }
-        // Nothing to mirror, so the cached setting only goes stale from the
-        // outside. Re-read it now and then, and enforce on what comes back.
         pollTicks += 1
         if !brewing, pollTicks >= pollInterval, !conditions.settingIsBusy, !refreshPending {
             pollTicks = 0
@@ -162,7 +132,6 @@ public final class ClosedDisplayCoordinator {
     /// run's one unattended prompt.
     public func enforce(_ conditions: Conditions, allowPrompt: Bool = false) -> Action? {
         guard !conditions.settingIsBusy, !clearedForeignHold else { return nil }
-        // Never act on a value a pending re-read is about to replace.
         guard !refreshPending else { return nil }
         let needsPassword = !conditions.helperInstalled
         guard ClosedDisplayAuthority.shouldClearForeignHold(
@@ -188,14 +157,10 @@ public final class ClosedDisplayCoordinator {
     /// clear the latch or enforce on a value a newer one is about to replace.
     public func refreshIsCurrent(_ token: Int) -> Bool { token == refreshGeneration }
 
-    /// Land a completed re-read. Returns false when superseded, in which case
-    /// the latch stays in place for the newer claim.
     @discardableResult
     public func endRefresh(_ token: Int, settingIsOn: Bool?) -> Bool {
         guard refreshIsCurrent(token) else { return false }
         refreshPending = false
-        // A confirmed-off setting means an earlier clear took: arm again, so a
-        // hold taken later in this idle stretch is still caught.
         if settingIsOn == false { clearedForeignHold = false }
         return true
     }

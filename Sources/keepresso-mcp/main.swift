@@ -1,25 +1,14 @@
 import Foundation
 import KeepressoCore
 
-// The `keepresso-mcp` MCP server. Ships inside the app bundle
-// (Contents/Helpers/keepresso-mcp); agents reference it by absolute path in
-// their MCP configuration:
-//
-//   command = "/Applications/Keepresso.app/Contents/Helpers/keepresso-mcp"
-//
-// Newline-delimited JSON-RPC on stdio, one response line per request line.
-// All protocol handling lives in KeepressoCore's MCPServer (unit-tested);
-// this file is just the read-eval-print loop. AppKit-free like the CLI so
-// `swift build` works with Command Line Tools only.
-
 /// The app's marketing version, read the same way the CLI does: relative to
 /// the real executable path, since Bundle.main is not the app bundle here.
 func appVersion() -> String {
     let executable = URL(fileURLWithPath: CommandLine.arguments[0])
         .resolvingSymlinksInPath()
     let plistURL = executable
-        .deletingLastPathComponent()               // Helpers
-        .deletingLastPathComponent()               // Contents
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
         .appendingPathComponent("Info.plist")
     guard let data = try? Data(contentsOf: plistURL),
           let plist = try? PropertyListSerialization.propertyList(from: data, format: nil),

@@ -5,7 +5,6 @@ Keys map to {lang: translation}. Main catalog langs: hu, es, fr, de, zh-Hans.
 EXTRA overlay langs: it, ja, ko, ru, pt-BR, tr, pl, uk, zh-Hant.
 """
 
-# Shared helpers for short UI words that appear in both trees.
 _SHORT = {
     "Cancel": {
         "hu": "Mégsem", "es": "Cancelar", "fr": "Annuler", "de": "Abbrechen", "zh-Hans": "取消",
@@ -526,7 +525,6 @@ NEW_APP = {
         "uk": "Чому кожен сеанс почався чи зупинився, найновіші зверху. На диску й відновлюється після перезапуску.",
         "zh-Hant": "每次工作階段為何開始或停止，最新在前。已存磁碟，重新啟動後還原。",
     },
-    # Long section info strings
     "When a keep-awake session ends on its own (a timer expiring, or trigger conditions dropping), Keepresso can put the display to sleep, lock the screen, start the screen saver, or sleep the Mac. Off by default so a timed session never surprises you. Manual stops, and the battery and thermal safety pauses, never run this action. A brief debounce cancels it if the session restarts right away.": {
         "hu": "Ha a tartás magától véget ér (lejár az időzítő, vagy a triggerek elengednek), a Keepresso altathatja a kijelzőt, zárolhatja a képernyőt, indíthatja a képernyővédőt, vagy altathatja a Macet. Alapból ki, hogy az időzített munkamenet ne lepjen meg. Kézi leállítás, akkumulátor- és hőszünet soha nem futtatja. Rövid debounce törli, ha a munkamenet azonnal újraindul.",
         "es": "Cuando una sesión de mantener despierto termina sola (timer o condiciones), Keepresso puede suspender la pantalla, bloquear, iniciar el salvapantallas o suspender el Mac. Desactivado por defecto para no sorprender. Las paradas manuales y las pausas de batería o térmica no lo ejecutan. Un breve retraso lo cancela si la sesión reinicia al momento.",
@@ -593,5 +591,4 @@ NEW_APP = {
     },
 }
 
-# Core already has hook event labels etc. from earlier session; nothing new required in CORE beyond what's there.
 NEW_CORE = {}

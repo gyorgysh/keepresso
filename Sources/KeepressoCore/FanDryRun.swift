@@ -19,15 +19,9 @@ public struct FanDryRunReport: Equatable, Sendable {
     }
 
     public enum Verdict: Equatable, Sendable {
-        /// Every fan followed the forced levels; the boost path works.
         case allGood
-        /// The helper accepted the writes but one or more fans never sped up
-        /// (typically firmware refusing manual control on this machine).
         case fansDidNotRespond
-        /// The helper never answered, or it refused a forced level and the
-        /// fans never sped up either.
         case helperUnavailable
-        /// No fans to test (fanless machine, or the SMC was unreadable).
         case noFans
     }
 
@@ -89,12 +83,8 @@ public struct FanDryRunReport: Equatable, Sendable {
 public final class FanDryRunController {
     public enum Phase: Equatable, Sendable {
         case idle
-        /// `percent` is the forced level in flight, `nil` while reading the
-        /// baseline.
         case running(percent: Int?)
         case finished(FanDryRunReport)
-        /// Stopped early (user, or a real thermal emergency taking the fans);
-        /// control was handed back.
         case cancelled
     }
 
@@ -167,13 +157,6 @@ public final class FanDryRunController {
             verdict: .allGood
         )
 
-        // A refused level is not the end of the test. Some firmware only
-        // accepts manual mode a few seconds after the unlock write, so the
-        // helper's first attempt fails and its own re-assert tick lands the
-        // boost shortly after. Giving up here would also release the hold,
-        // which undoes the unlock. So keep the hold through the settle window
-        // and let the fans' actual behavior decide. Only a helper that is not
-        // answering at all ends the run early.
         var holdRefused = false
         for percent in Self.levels {
             phase = .running(percent: percent)
@@ -218,15 +201,11 @@ public final class FanDryRunController {
         phase = .finished(report)
     }
 
-    /// Whether the helper is reachable at all, to tell a refused write from a
-    /// helper that is gone. Off the main actor like every helper call.
     private func helperAnswers() async -> Bool {
         let helper = self.helper
         return await Task.detached { helper.ping() }.value
     }
 
-    /// One helper call off the main actor (the XPC client blocks on a
-    /// semaphore, same rule as every other caller).
     private func callHelper(holding: Bool, percent: Int) async -> Bool {
         let helper = self.helper
         return await Task.detached { helper.setFanHold(holding, percent: percent) }.value

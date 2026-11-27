@@ -82,7 +82,6 @@ public struct PMSetBatteryLowPowerControl: BatteryLowPowerControlling {
         if settings.key == "powermode" {
             arguments = [powerFlag, "powermode", String(mode)]
         } else if settings.hasHighPower {
-            // Older systems expose the two mutually exclusive switches separately.
             arguments = [powerFlag, "lowpowermode", mode == 1 ? "1" : "0",
                          "highpowermode", mode == 2 ? "1" : "0"]
         } else {
@@ -158,9 +157,6 @@ public final class ClosedLidLowPowerController {
             defer { activeTask = nil }
             var attemptedReleases: Set<LowPowerProfile> = []
             await releaseUnwantedProfiles(attempted: &attemptedReleases)
-            // Conditions can change during an XPC round trip. Check the live
-            // target before each engage, then compensate any completed write
-            // that became unwanted instead of waiting for another timer tick.
             if wantedBattery && !batteryHolding {
                 requestedBattery = true
                 attemptedReleases.remove(.battery)

@@ -248,12 +248,6 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         Preset.builtIns.filter { built in !presets.contains { $0.id == built.id } }
     }
 
-    /// Re-add every built-in preset the user has deleted, in built-in order,
-    /// and mark them seeded so later seeding stays consistent. Unlike
-    /// ``seedNewBuiltInPresets()`` this deliberately resurrects deleted
-    /// built-ins: it's the manual "restore defaults" action, not the one-time
-    /// launch seed. User-created presets and renamed built-ins are untouched.
-    /// Returns the presets restored (empty if none were missing).
     @discardableResult
     public mutating func restoreMissingBuiltInPresets() -> [Preset] {
         let missing = missingBuiltInPresets
@@ -268,8 +262,6 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
     /// adding settings doesn't discard a user's older saved configuration.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        // Options decode per field and never throw on a bad value, but a
-        // non-object here (hand-edited import) must not cost the rest either.
         options = (try? c.decodeIfPresent(SleepPreventionOptions.self, forKey: .options)) ?? .default
         defaultMode = Self.sanitizedMode(
             try c.decodeIfPresent(SessionMode.self, forKey: .defaultMode) ?? .indefinite)
@@ -298,16 +290,11 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         automationSync = try c.decodeIfPresent(AutomationSyncConfig.self, forKey: .automationSync) ?? AutomationSyncConfig()
         diskKeepAlive = try c.decodeIfPresent(DiskKeepAliveConfig.self, forKey: .diskKeepAlive)
         virtualDisplay = try c.decodeIfPresent(VirtualDisplayConfig.self, forKey: .virtualDisplay)
-        // ThermalSafetyConfig's own decoder applies the clamps.
         thermalSafety = try c.decodeIfPresent(ThermalSafetyConfig.self, forKey: .thermalSafety)
         pauseBelowBatteryPercent = try c.decodeIfPresent(Int.self, forKey: .pauseBelowBatteryPercent)
             .map(Self.clampedBatteryPausePercent)
         showCountdownInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showCountdownInMenuBar) ?? false
         menuPanelExpanded = try c.decodeIfPresent(Bool.self, forKey: .menuPanelExpanded) ?? true
-        // Menu customization was introduced as an opt-in. A settings blob from
-        // an older release must continue to render the established layout.
-        // Invalid customization metadata falls back locally, so it cannot
-        // discard the user's unrelated settings, rules, or presets.
         menuCustomizationEnabled = (try? c.decodeIfPresent(
             Bool.self, forKey: .menuCustomizationEnabled)) ?? false
         menuLayout = try? c.decodeIfPresent(MenuLayout.self, forKey: .menuLayout)
@@ -317,24 +304,13 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         awdlGraceSeconds = Self.normalizedPositiveInterval(
             try c.decodeIfPresent(TimeInterval.self, forKey: .awdlGraceSeconds) ?? 60) ?? 60
         closedDisplayOnlyWhileBrewing = try c.decodeIfPresent(Bool.self, forKey: .closedDisplayOnlyWhileBrewing) ?? false
-        // Decoded as a raw string, not the enum: a value persisted by an older
-        // build (like the branch-only `keepDark`) must fall back to the
-        // default, never throw. A throw here discards the entire blob and the
-        // user loses every setting, not just this one.
         let policyRaw = try c.decodeIfPresent(String.self, forKey: .closedLidDisplayPolicy)
         closedLidDisplayPolicy = policyRaw.flatMap(ClosedLidDisplayPolicy.init(rawValue:)) ?? .displayOff
         hotKey = Self.sanitizedHotKey(try c.decodeIfPresent(HotKeyShortcut.self, forKey: .hotKey))
         startOnLaunch = try c.decodeIfPresent(Bool.self, forKey: .startOnLaunch) ?? false
         presets = try c.decodeIfPresent([Preset].self, forKey: .presets) ?? Preset.builtIns
-        // Settings saved before seeding was tracked (1.2.x and earlier) had
-        // exactly the original three built-ins seeded; assuming that set means
-        // only genuinely new built-ins get appended for those users.
         seededPresetIDs = try c.decodeIfPresent([String].self, forKey: .seededPresetIDs)
             ?? Preset.preSeedTrackingBuiltInIDs
-        // Absent means a blob saved before onboarding existed, i.e. an existing
-        // user: treat them as already onboarded so an update doesn't surprise
-        // them with the welcome window. Only a genuinely fresh install (the
-        // memberwise default) starts false and sees it.
         hasOnboarded = try c.decodeIfPresent(Bool.self, forKey: .hasOnboarded) ?? true
         automationLeasesEnabled = try c.decodeIfPresent(Bool.self, forKey: .automationLeasesEnabled) ?? true
         automationWakeControlEnabled = try c.decodeIfPresent(Bool.self, forKey: .automationWakeControlEnabled) ?? false
@@ -380,25 +356,14 @@ public struct KeepressoSettings: Codable, Equatable, Sendable {
         min(max(raw, batteryPausePercentRange.lowerBound), batteryPausePercentRange.upperBound)
     }
 
-    /// An ending-soon lead time from any source: positive and finite, or `nil`
-    /// (off). A zero or negative lead would show the feature enabled while the
-    /// notice can never fire, and an absurd one would be rounded to a `Double`
-    /// too large for the duration formatter.
     static func normalizedEndingSoonNotice(_ raw: TimeInterval?) -> TimeInterval? {
         normalizedPositiveInterval(raw).map { min($0, SessionMode.maxTimedMinutes * 60) }
     }
 
-    /// A positive, finite interval or `nil`: shared guard for decoded
-    /// durations that are later converted to `Int` for display. Capped at a
-    /// real session length (like every sibling sanitizer) and floored at one
-    /// second: the value is also a divisor (`elapsed / reminderAfter`), and a
-    /// denormal like `1e-300` would make that ratio trap `Int(_:)`.
     static func normalizedPositiveInterval(_ raw: TimeInterval?) -> TimeInterval? {
         raw.flatMap { $0.isFinite && $0 > 0 ? min(max($0, 1), SessionMode.maxTimedMinutes * 60) : nil }
     }
 
-    /// A decoded timed mode with its duration bounded to a real session
-    /// length; an unusable duration falls back to indefinite.
     static func sanitizedMode(_ mode: SessionMode) -> SessionMode {
         guard case .timed(let duration) = mode else { return mode }
         guard duration.isFinite, duration > 0 else { return .indefinite }
@@ -450,12 +415,8 @@ public struct HotKeyShortcut: Codable, Equatable, Sendable {
 /// Persistence seam for ``KeepressoSettings``, mirrors the other system seams
 /// so the app wires the real store and tests use an in-memory fake.
 public protocol SettingsStore: AnyObject {
-    /// Load saved settings, or ``KeepressoSettings/default`` if none/corrupt.
     func load() -> KeepressoSettings
-    /// Persist settings; failures are swallowed (a lost write is non-fatal).
     func save(_ settings: KeepressoSettings)
-    /// Whether a blob was ever persisted, so first launch (nothing saved
-    /// yet) can take different defaults without migrating anyone.
     var hasStoredSettings: Bool { get }
 }
 
@@ -491,7 +452,6 @@ public final class UserDefaultsSettingsStore: SettingsStore {
     }
 }
 
-// MARK: - Fresh-install defaults
 
 extension KeepressoSettings {
     /// Session-scoped closed-display for first launch only: nothing

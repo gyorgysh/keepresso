@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-/// Programmable fake virtual-display backend recording start/stop.
 private final class FakeVirtualDisplay: VirtualDisplaying {
     var supported: Bool
     var succeed: Bool

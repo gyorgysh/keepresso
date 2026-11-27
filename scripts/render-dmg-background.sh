@@ -1,16 +1,4 @@
 #!/usr/bin/env bash
-#
-# render-dmg-background.sh: render the disk image background at 1x and 2x.
-#
-#   ./scripts/render-dmg-background.sh
-#
-# Run it after editing tools/dmg/background.html and commit both PNGs. They are
-# committed rather than rendered at release time so the release runner needs no
-# browser, and so the image people download is the one that was reviewed.
-#
-# Needs Google Chrome, and the website's font files: Atkinson Hyperlegible Next
-# and JetBrains Mono as woff2. Set FONTS_DIR when they are not in ../www/fonts.
-#
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

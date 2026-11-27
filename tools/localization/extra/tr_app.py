@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# Turkish overlay for catalog_app.py: English source -> Turkish.
 APP = {
     "Add": "Ekle",
     "Add:": "Ekle:",
@@ -445,7 +444,6 @@ APP = {
 }
 
 
-# --- Agent hooks (Claude Code connection) ---
 APP.update({
     "Claude Code connected: sessions report working and waiting exactly.": "Claude Code bağlandı: oturumlar çalışma ve bekleme durumunu tam olarak bildirir.",
     "Connect Claude Code for exact session tracking (adds hooks to its settings).": "Tam oturum takibi için Claude Code'u bağlayın (ayarlarına kancalar ekler).",
@@ -497,7 +495,6 @@ APP.update({
     "Couldn't be read": "Okunamadı",
 })
 
-# --- Desktop "disable sleep" naming ---
 _DESKTOP_SLEEP_APP = {
     'Disable system sleep': 'Sistem uykusunu devre dışı bırak',
     'Disable sleep': 'Uykuyu devre dışı bırakma',
@@ -512,7 +509,6 @@ _DESKTOP_SLEEP_APP = {
 }
 APP.update(_DESKTOP_SLEEP_APP)
 
-# v1.15 thermal safety net, fan test, helper texts, glass slider.
 APP.update({
     "(max %@)": "(en fazla %@)",
     "15 seconds": "15 saniye",
@@ -573,7 +569,6 @@ APP.update({
     "Appearance": "Görünüm",
     "If the Mac runs hot with the lid closed, the session pauses so it can sleep and cool down.": "Kapak kapalıyken Mac aşırı ısınırsa, uyuyup soğuyabilmesi için oturum duraklatılır.",
     "The menu-bar dropdown's glass, from frosty to clear Liquid Glass.": "Menü çubuğu açılır menüsünün camı, buzludan berrak Liquid Glass'a.",
-    # 1.16.0
     'Cancel': 'Vazgeç',
     'Off': 'Kapalı',
     'Time': 'Saat',
@@ -622,7 +617,6 @@ APP.update({
     'When something happens in Keepresso, run a Shortcut, POST a webhook, or run a shell command. Useful for a push to your phone when an overnight agent finishes (ntfy, or a Shortcut that sends a notification). Hooks are suspended while you edit them, so a half-written command never runs. No administrator helper needed. User-authored shell commands are intentional in this unsandboxed app: only add commands you trust.': 'Keepresso’da bir şey olunca Kestirme, webhook veya shell çalıştırın. Gece ajanı bitince telefona push için (ntfy veya bildirim Kestirmesi). Düzenlerken kancalar durur. Yönetici yardımcısı gerekmez. Sandbox’suz bu uygulamada kullanıcı shell komutları bilerek var: yalnızca güvendiklerinizi ekleyin.',
     'These cover the times a session ends without you: a timer expiring, or trigger conditions dropping. Stopping it yourself stays silent, since you already know. The warning is a heads-up a few minutes before a timed session runs out, so you can extend it before the Mac drops off. Actions that put the Mac to sleep live under Automation.': 'Oturum sizin olmadan bittiğinde: süre veya tetikleyiciler. Kendiniz durdurursanız sessiz. Uyarı zamanlı bitişten birkaç dakika önce. Mac’i uyutan eylemler Otomasyon’da.',
 
-    # 1.16.0 fill (17)
     '/bin/sh -c …': '/bin/sh -c …',
     'Add Hook': 'Kanca ekle',
     'Add Hook…': 'Kanca ekle…',
@@ -643,7 +637,6 @@ APP.update({
 
 })
 
-# v1.17 automation leases
 APP.update({
     "Held awake by an automation lease": "Bir otomasyon kirası tarafından uyanık tutuluyor",
     "Held awake by %d automation leases": "%d otomasyon kirası tarafından uyanık tutuluyor",
@@ -654,8 +647,6 @@ APP.update({
     "A lease is a bounded keep-awake grant an outside tool asks for through the keepresso command line or the bundled MCP server: an AI agent working overnight, a render script, a backup job. Each lease has a time limit its owner must keep renewing, plus a hard seven day ceiling, so a crashed tool can never hold the Mac awake for good. The menu shows every live lease, Stop ends them all, and the Mac can sleep again after the last one finishes. Turning leases off ends any live lease. The wake schedule switch is separate and off by default because a scheduled wake is a system-wide change applied by the administrator helper: leave it off unless a tool you trust should plan wake-ups for you.": "Kira, dışarıdaki bir aracın keepresso komut satırı veya birlikte gelen MCP sunucusu üzerinden istediği, süreyle sınırlı bir uyanık tutma iznidir: gece boyu çalışan bir yapay zeka aracısı, bir işleme betiği, bir yedekleme işi. Her kiranın sahibinin yenilemesi gereken bir süre sınırı ve kesin bir yedi günlük tavanı vardır, böylece çöken bir araç Mac'i sonsuza kadar uyanık tutamaz. Menü her canlı kirayı gösterir, Durdur hepsini sona erdirir, son kira bittiğinde Mac yeniden uyuyabilir. Kiraları kapatmak canlı olan her kirayı sona erdirir. Uyandırma planı anahtarı ayrıdır ve varsayılan olarak kapalıdır, çünkü zamanlanmış bir uyandırma, yönetici yardımcısı tarafından uygulanan sistem genelinde bir değişikliktir: yalnızca güvendiğiniz bir aracın sizin için uyandırma planlaması gerekiyorsa açın.",
 })
 
-# Teach-your-agent actions, end-action wording, and gaming comfort,
-# new in the 1.17 cycle (second batch).
 APP.update({
     "Copy Agent Instructions": "Ajan Talimatlarını Kopyala",
     "Let AI agents and scripts keep the Mac awake while work is running. It cannot wake a sleeping Mac.": "Yapay zeka ajanlarının ve betiklerin çalışma sırasında Mac'i uyanık tutmasına izin verir. Uyuyan bir Mac'i uyandıramaz.",
@@ -691,7 +682,6 @@ APP.update({
     "Counts while Steam is actively downloading or updating a game in any of its libraries, and lets the Mac sleep once the download finishes or is paused. Reads Steam's own bookkeeping, no permission needed.": "Steam, kitaplıklarından herhangi birinde bir oyunu etkin olarak indirirken veya güncellerken sayar, indirme bitince veya duraklatılınca Mac'in uyumasına izin verir. Steam'in kendi kayıtlarını okur, izin gerekmez.",
 })
 
-# 1.18 strings
 APP.update({
     "%@ · next %@": "%@ · sıradaki %@",
     "%d automation leases are waiting (safety pause)": "%d otomasyon kirası bekliyor (güvenlik duraklatması)",
@@ -751,18 +741,15 @@ APP.update({
     "just now": "az önce",
 })
 
-# 1.23 strings
 APP.update({
     "If the lid shuts": "Kapak kapanırsa",
     "Normally a MacBook sleeps the moment you shut the lid unless a display is attached. This keeps it running with the lid shut and nothing plugged in, on power or battery. What the screen itself does when the lid closes is your choice below (“If the lid shuts”): turn it off, keep it powered at zero brightness so a remote session stays live, or leave it alone. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off: closed and on battery, the Mac can still drain over time, so don't leave it on in a bag. “Only while brewing” ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for “Only while brewing”.": "Normalde bir MacBook, bir ekran bağlı olmadığı sürece kapağı kapattığınız anda uykuya dalar. Bu, kapak kapalıyken ve hiçbir şey takılı değilken, elektrik veya pil gücüyle çalışmaya devam etmesini sağlar. Kapak kapandığında ekranın kendisinin ne yapacağı aşağıdaki seçime bağlıdır (“Kapak kapanırsa”): kapatmak, uzak oturumun etkin kalması için parlaklığı %0 düzeyinde açık tutmak veya olduğu gibi bırakmak. Bir sistem ayarını (pmset disablesleep) değiştirerek çalışır, bu nedenle siz kapatana kadar etkili kalır: kapak kapalıyken ve pil gücündeyken Mac yine de zamanla tükenebilir, bu yüzden bir çantada açık bırakmayın. “Yalnızca demlenirken” bunu bunun yerine oturuma bağlar: bir uyanık tutma oturumu başladığında açılır, oturum bittiğinde veya Keepresso çıkıldığında (bir çökmeden sonra bile) kapanır. İkisi de yönetici hakları gerektirir: yönetici yardımcısı yüklüyken sessizce (bu sekmenin üstüne bakın), aksi halde macOS parolanızı ister, “Yalnızca demlenirken” için uygulama çalıştırma başına bir kez.",
 })
 
-# Presence: "Only while brewing" off footer
 APP.update({
     "Also runs between sessions, which can keep the Mac from sleeping.": "Oturumlar arasında da çalışır, bu da Mac'in uykuya geçmesini engelleyebilir.",
 })
 
-# Closed-lid speaker mute
 APP.update({
     "Mute built-in speakers while the lid is closed": "Kapak kapalıyken yerleşik hoparlörleri sessize al",
     "Mutes the built-in speakers with the lid closed and closed-display mode active. Headphones and other outputs keep playing. Unmutes when the lid opens or the mode ends, unless you had muted them yourself.": "Kapak kapalıyken ve kapalı ekran modu etkinken yerleşik hoparlörleri sessize alır. Kulaklıklar ve diğer çıkışlar çalmaya devam eder. Kapak açıldığında veya mod sona erdiğinde, hoparlörleri kendiniz sessize almadıysanız sesi geri açar.",

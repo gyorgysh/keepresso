@@ -2,14 +2,8 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-// MARK: - Event safety
 
 @Test func installedEventsAreAllObservationSteps() {
-    // The load-bearing invariant of the whole integration. Cursor blocks an
-    // action when a hook on a permission step returns empty or unparseable
-    // output, and Keepresso's hook command is deliberately inert when the CLI
-    // is missing, so installing on one of those steps would deny every tool
-    // call in the session.
     for event in CursorHooks.installedEvents {
         #expect(!CursorHooks.permissionEvents.contains(event))
     }
@@ -18,17 +12,12 @@ import Foundation
 
 @Test func hookCommandAnswersBeforeItRisksAnything() {
     let command = CursorHooks.hookCommand(event: "stop", cliPath: "/Apps/K.app/Contents/Helpers/keepresso")
-    // The response is printed first, so it is on stdout even if the CLI is
-    // gone, wedged, or writes something unexpected.
     #expect(command.hasPrefix("printf '{}'"))
-    // Nothing the CLI emits can reach Cursor's parser.
     #expect(command.contains("cursor-hook stop >/dev/null 2>&1"))
     #expect(command.contains(CursorHooks.hookMarker))
-    // It must never vote on a permission, in either direction.
     #expect(!command.contains("permission"))
 }
 
-// MARK: - Event reduction
 
 @Test func reduceMapsCursorLifecycleEventsToStates() {
     #expect(CursorHooks.reduce(event: "sessionStart", toolName: nil) == .set(.idle, detail: nil))
@@ -38,10 +27,8 @@ import Foundation
     #expect(CursorHooks.reduce(event: "afterShellExecution", toolName: nil) == .set(.working, detail: "running-command"))
     #expect(CursorHooks.reduce(event: "afterFileEdit", toolName: nil) == .set(.working, detail: "editing"))
     #expect(CursorHooks.reduce(event: "subagentStop", toolName: nil) == .set(.working, detail: "subagent"))
-    // Between steps: still working, but no longer on the last tool.
     #expect(CursorHooks.reduce(event: "afterAgentThought", toolName: nil) == .set(.working, detail: nil))
     #expect(CursorHooks.reduce(event: "afterAgentResponse", toolName: nil) == .set(.working, detail: nil))
-    // Unmapped events, including every permission step, write nothing.
     #expect(CursorHooks.reduce(event: "preToolUse", toolName: "Shell") == nil)
     #expect(CursorHooks.reduce(event: "beforeShellExecution", toolName: nil) == nil)
     #expect(CursorHooks.reduce(event: "somethingNew", toolName: nil) == nil)
@@ -55,18 +42,15 @@ import Foundation
         }
         return detail
     }
-    // Cursor names its shell tool "Shell", not "Bash".
     #expect(token("Shell") == "running-command")
     #expect(token("Write") == "editing")
     #expect(token("Read") == "reading")
     #expect(token("Grep") == "searching")
     #expect(token("Task") == "subagent")
-    // MCP tools arrive prefixed and render under their own name.
     #expect(token("MCP:linear") == "tool:linear")
     #expect(token(nil) == nil)
 }
 
-// MARK: - Payload decoding
 
 @Test func cursorPayloadPrefersConversationIdAndFallsBackForCwd() throws {
     let full = Data("""
@@ -77,23 +61,17 @@ import Foundation
     #expect(decoded.identity == "conv-1")
     #expect(decoded.directory == "/tmp/x")
 
-    // sessionStart carries session_id and workspace_roots instead.
     let start = Data(#"{"session_id":"sess-2","workspace_roots":["/tmp/root"]}"#.utf8)
     let opened = try JSONDecoder().decode(CursorHooks.HookPayload.self, from: start)
     #expect(opened.identity == "sess-2")
     #expect(opened.directory == "/tmp/root")
 
-    // No identity at all: nothing to key a record on.
     let empty = try JSONDecoder().decode(CursorHooks.HookPayload.self, from: Data(#"{}"#.utf8))
     #expect(empty.identity == nil)
 }
 
-// MARK: - App host walk
 
 @Test func appHostWalkSkipsTheTransientHookShell() {
-    // Cursor spawns each hook through sh -c. That shell exits the moment the
-    // hook returns, so anchoring the session to it would drop the record
-    // immediately; the walk must climb to the editor itself.
     let rows: [(pid: Int32, ppid: Int32, comm: String)] = [
         (pid: 90, ppid: 80, comm: "keepresso"),
         (pid: 80, ppid: 70, comm: "sh"),
@@ -107,17 +85,13 @@ import Foundation
     #expect(host?.hostPid == 70)
     #expect(host?.origin == .ide)
 
-    // A plain terminal session has no app host: it has an agent process
-    // instead, which the agent walk finds.
     let shellOnly: [Int32: String] = [90: "keepresso", 80: "sh", 70: "zsh", 60: "login"]
     let shellParents: [Int32: Int32] = [90: 80, 80: 70, 70: 60, 60: 1]
     #expect(AgentHooks.findAppHost(
         startingAt: 90, parentOf: { shellParents[$0] }, commandOf: { shellOnly[$0] }) == nil)
 }
 
-// MARK: - Writing records
 
-/// A scripted process tree for the two shapes a Cursor hook runs under.
 private func tree(
     _ rows: [(pid: Int32, ppid: Int32, comm: String)], paths: [Int32: String] = [:]
 ) -> (parentOf: (Int32) -> Int32?, commandOf: (Int32) -> String?, pathOf: (Int32) -> String?) {
@@ -136,7 +110,6 @@ private func temporaryDirectory() -> URL {
 @Test func handleAnchorsAnIDESessionToItsEditor() throws {
     let dir = temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
-    // The Cursor app: no process anywhere in the tree names the agent.
     let ide = tree([
         (pid: 90, ppid: 80, comm: "keepresso"),
         (pid: 80, ppid: 70, comm: "sh"),
@@ -163,8 +136,6 @@ private func temporaryDirectory() -> URL {
 @Test func handleJoinsACLISessionOnItsAgentPid() throws {
     let dir = temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
-    // cursor-agent in a terminal: the real shape, where the agent process is
-    // a `node` whose executable path is the only thing naming the tool.
     let cli = tree(
         [
             (pid: 90, ppid: 80, comm: "keepresso"),
@@ -204,12 +175,8 @@ private func temporaryDirectory() -> URL {
         now: Date(), in: dir, isAlive: { _ in true }, isHostAlive: { _ in true }).isEmpty)
 }
 
-// MARK: - Liveness of hook-only sessions
 
 @Test func hookOnlyWorkingRecordAgesOutEvenWhileEditorLives() throws {
-    // Cursor IDE conversations are separate files under one long-lived Helper
-    // ownerPid. Forever-while-alive trust is reserved for CLI agentPid
-    // sessions; past staleAfter, ownerPid-only working must not hold.
     let dir = temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
     let start = Date()
@@ -218,15 +185,12 @@ private func temporaryDirectory() -> URL {
             sessionId: "conv-4", state: .working, ownerPid: 70, agent: "cursor",
             updatedAt: start),
         in: dir)
-    // Still fresh: trusted while the host is alive.
     var records = AgentHooks.readHookRecords(
         now: start.addingTimeInterval(30), in: dir,
         isAlive: { _ in false }, isHostAlive: { $0 == 70 })
     #expect(records.count == 1)
     #expect(records[0].state == .working)
 
-    // Past staleAfter with the Helper still up: drop and delete, or a missed
-    // Stop would leave phantom "cursor (IDE) · working" rows forever.
     let later = start.addingTimeInterval(AgentHooks.staleAfter + 60)
     records = AgentHooks.readHookRecords(
         now: later, in: dir, isAlive: { _ in false }, isHostAlive: { $0 == 70 })
@@ -236,8 +200,6 @@ private func temporaryDirectory() -> URL {
 }
 
 @Test func manyStaleOwnerPidWorkingRecordsDoNotHold() throws {
-    // Live machine: ~9 stuck working files under one Cursor Helper. All past
-    // staleAfter must leave the returned set so they cannot keep the Mac awake.
     let dir = temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
     let now = Date()
@@ -250,7 +212,6 @@ private func temporaryDirectory() -> URL {
                 updatedAt: now.addingTimeInterval(-AgentHooks.staleAfter - Double(i))),
             in: dir)
     }
-    // One fresh ownerPid record still counts; the nine stale ones do not.
     AgentHooks.write(
         AgentHooks.HookRecord(
             sessionId: "conv-fresh", state: .working, origin: .ide,
@@ -264,7 +225,6 @@ private func temporaryDirectory() -> URL {
     #expect(remaining == ["conv-fresh.json"])
 }
 
-// MARK: - Sessions with no process
 
 @Test func hookOnlyRecordBecomesASessionOnlyWhenItNamesAHost() {
     let hosted = AgentHooks.HookRecord(
@@ -276,12 +236,9 @@ private func temporaryDirectory() -> URL {
     #expect(session?.hookDetail == "editing")
     #expect(session?.origin == .ide)
     #expect(session?.cpuPercent == 0)
-    // A stand-in pid can never be mistaken for a real one.
     #expect((session?.pid ?? 0) < 0)
     #expect(session?.label == "cursor (IDE)")
 
-    // The ordinary unclaimed record, a CLI session racing the scan, must not
-    // invent a row: it has a process, we just missed it this tick.
     let racing = AgentHooks.HookRecord(
         sessionId: "conv-6", state: .working, cwd: "/proj", agentPid: 500,
         agent: "claude", updatedAt: Date())
@@ -314,14 +271,11 @@ private func temporaryDirectory() -> URL {
     #expect(result.unclaimed.count == 1)
     #expect(result.unclaimed[0].sessionId == "ide")
 
-    // With no detected process at all, every record is unclaimed: the Cursor
-    // app on its own is exactly this case.
     let noProcesses = PSAgentActivityMonitor.applyHookRecords(
         [hookOnly], to: [], cwdOf: { _ in nil })
     #expect(noProcesses.unclaimed.count == 1)
 }
 
-// MARK: - hooks.json editing
 
 @Test func installMergesIntoForeignHooksAndIsIdempotent() throws {
     let existing = Data("""
@@ -335,11 +289,9 @@ private func temporaryDirectory() -> URL {
     let root = try #require(try JSONSerialization.jsonObject(with: twice) as? [String: Any])
     #expect(root["somethingElse"] != nil)
     let hooks = try #require(root["hooks"] as? [String: Any])
-    // The user's own stop hook survives beside ours.
     let stop = try #require(hooks["stop"] as? [[String: Any]])
     #expect(stop.count == 2)
     #expect(stop.contains { ($0["command"] as? String) == "/usr/local/bin/mine" })
-    // Their permission hook is left exactly as it was: we add nothing there.
     let guarded = try #require(hooks["beforeShellExecution"] as? [[String: Any]])
     #expect(guarded.count == 1)
     #expect(CursorHooks.hookInstallState(of: twice, cliPath: "/Apps/K/keepresso") == .installed)
@@ -352,8 +304,6 @@ private func temporaryDirectory() -> URL {
         var original = try #require(try JSONSerialization.jsonObject(with: fresh) as? [String: Any])
         var hooks = try #require(original["hooks"] as? [String: Any])
         #expect(hooks["afterAgentThought"] == nil)
-        // A previous release installed this observation hook. Repair must
-        // retire our entry, including when a user's own hook shares the event.
         var thoughts: [[String: Any]] = [[
             "command": CursorHooks.hookCommand(event: "afterAgentThought", cliPath: cliPath),
             "timeout": 5,
@@ -423,28 +373,22 @@ private func temporaryDirectory() -> URL {
 @Test func installFromNothingWritesAVersionedConfig() throws {
     let fresh = try CursorHooks.installHooks(into: nil, cliPath: "/Apps/K/keepresso")
     let root = try #require(try JSONSerialization.jsonObject(with: fresh) as? [String: Any])
-    // Cursor rejects a config with no schema version.
     #expect(root["version"] as? Int == 1)
     let hooks = try #require(root["hooks"] as? [String: Any])
     #expect(Set(hooks.keys) == Set(CursorHooks.installedEvents))
 
-    // Removing everything we added leaves no empty scaffolding behind.
     let removed = try CursorHooks.removeHooks(from: fresh)
     let bare = try #require(try JSONSerialization.jsonObject(with: removed) as? [String: Any])
     #expect(bare["hooks"] == nil)
 }
 
 @Test func unreadableConfigIsNeverOverwritten() {
-    // A file that exists but isn't a JSON object must throw rather than be
-    // treated as absent: an install that mistook it for one would replace the
-    // user's whole hook config.
     #expect(throws: AgentHooks.SettingsUnreadableError.self) {
         _ = try CursorHooks.installHooks(into: Data("not json".utf8), cliPath: "/k")
     }
     #expect(CursorHooks.hookInstallState(of: Data("not json".utf8), cliPath: "/Apps/K/keepresso") == .unreadable)
 }
 
-// MARK: - Shared record folder
 
 @Test func purgingOneToolsRecordsLeavesTheOthersAlone() {
     let dir = temporaryDirectory()
@@ -466,15 +410,11 @@ private func temporaryDirectory() -> URL {
 }
 
 @Test func recordsWrittenBeforeTheAgentFieldCountAsClaudes() {
-    // Only Claude Code wrote records before the field existed, so a nameless
-    // record must not be swept by a Cursor uninstall.
     let legacy = AgentHooks.HookRecord(sessionId: "old", state: .working, updatedAt: Date())
     #expect(!CursorHooks.ownsRecord(legacy))
 }
 
 @Test func cursorInstallKeepsEntriesItCannotParse() throws {
-    // Same guarantee as Claude Code's: one unreadable element must not cost
-    // the user every hook they had on that event.
     let existing = Data(#"{"version":1,"hooks":{"stop":[{"command":"mine"},"oops",null]}}"#.utf8)
     let installed = try CursorHooks.installHooks(into: existing, cliPath: "/Apps/K/keepresso")
     let root = try #require(try JSONSerialization.jsonObject(with: installed) as? [String: Any])
@@ -484,7 +424,6 @@ private func temporaryDirectory() -> URL {
     #expect(stop.contains { ($0 as? [String: Any])?["command"] as? String == "mine" })
     #expect(stop.contains { ($0 as? String) == "oops" })
     #expect(stop.contains { $0 is NSNull })
-    // Ours is there exactly once, and a re-install keeps it that way.
     func ours(_ d: Data) throws -> Int {
         let r = try #require(try JSONSerialization.jsonObject(with: d) as? [String: Any])
         let h = try #require(r["hooks"] as? [String: Any])

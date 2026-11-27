@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# Ukrainian overlay for catalog_core.py: English source -> Ukrainian.
 CORE = {
     "On AC power": "Від мережі",
     "On battery": "Від акумулятора",
@@ -177,7 +176,6 @@ WIDGET = {
 }
 
 
-# --- Agent hooks (Claude Code connection) ---
 CORE.update({
     "run": "команда",
     "write": "пише",
@@ -194,7 +192,6 @@ CORE.update({
 })
 
 
-# v1.15 thermal safety net: pressure levels and heat-pause lines.
 CORE.update({
     "Critical": "Критичний",
     "Fair": "Помірний",
@@ -204,7 +201,6 @@ CORE.update({
     "Paused on high temperature": "Призупинено через високу температуру",
     "Paused, the Mac is running hot": "Призупинено, Mac перегрівається",
     "Serious": "Серйозний",
-    # 1.16.0 fill (16)
     'Lock the screen': 'Заблокувати екран',
     'Sleep the Mac': 'Приспати Mac',
     'Session started': 'Сеанс розпочато',
@@ -225,24 +221,20 @@ CORE.update({
 })
 
 
-# Automation leases (decision-log strings), new in the 1.17 cycle.
 CORE.update({
     "Automation lease: %@": "Оренда автоматизації: %@",
     "Automation lease acquired": "Оренду автоматизації отримано",
     "Automation lease ended": "Оренду автоматизації завершено",
 
-    # 1.17.0 controller trigger, second batch
     "Game controller connected": "Підключено ігровий контролер",
     "Steam is downloading": "Steam завантажує",
 })
 
-# 1.18 strings
 CORE.update({
     "Microphone in use by %@": "Мікрофон використовує %@",
     "Microphone in use by app": "Мікрофон використовується застосунком",
 })
 
-# 1.23 strings
 CORE.update({
     "Brightness control is unavailable, turning the display off instead.": "Керування яскравістю недоступне, тому дисплей вимикається.",
     "Keepresso never touches the display.": "Keepresso ніколи не чіпає дисплей.",

@@ -8,7 +8,6 @@ import Observation
 public enum CaptiveHTTPResult: Equatable, Sendable {
     /// Body contained Apple's "Success" token: the network has internet.
     case success
-    /// 3xx or an HTML login page. `location` is the portal URL when present.
     case portal(status: Int, location: String?)
     case timeout
     case failed
@@ -107,7 +106,6 @@ public protocol CaptiveProbing: AnyObject, Sendable {
 }
 
 public extension ReadinessCheck {
-    /// Interpret a ``CaptiveSnapshot`` into the Public Wi-Fi assistant rows.
     static func evaluateCaptive(_ snapshot: CaptiveSnapshot) -> [ReadinessCheck] {
         var rows = [
             wifiRadio(snapshot),
@@ -630,7 +628,6 @@ public final class SystemCaptiveProbe: CaptiveProbing, @unchecked Sendable {
     }
 }
 
-/// Catches a 3xx without following it, so a portal's Location header is kept.
 private final class RedirectCatcher: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     var location: String?
     var redirectStatus: Int?
@@ -647,7 +644,6 @@ private final class RedirectCatcher: NSObject, URLSessionTaskDelegate, @unchecke
     }
 }
 
-/// Once-settable probe result shared with the waiter.
 private final class LockedOutcome: @unchecked Sendable {
     private let lock = NSLock()
     private var settled = false

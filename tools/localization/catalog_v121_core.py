@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# Captive-network assistant strings added in v1.21.
 
 CORE = {
     "Wi-Fi radio": {"hu": "Wi-Fi rádió", "es": "Radio Wi-Fi", "fr": "Radio Wi-Fi", "de": "WLAN-Funk", "zh-Hans": "Wi-Fi 无线电", "it": "Radio Wi-Fi", "ja": "Wi-Fi 無線", "ko": "Wi-Fi 무선", "ru": "Модуль Wi-Fi", "pt-BR": "Rádio Wi-Fi", "tr": "Wi-Fi radyosu", "pl": "Moduł Wi-Fi", "uk": "Модуль Wi-Fi", "zh-Hant": "Wi-Fi 無線電"},

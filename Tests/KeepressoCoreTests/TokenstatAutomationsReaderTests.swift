@@ -17,7 +17,6 @@ private func reader(_ json: String) -> TokenstatAutomationsReader {
     return TokenstatAutomationsReader { data }
 }
 
-// The exact shape tokenstat-host writes for a daily job.
 private let dailyBriefJSON = """
 { "jobs": [
     { "id": "automation-1786386302990",
@@ -51,7 +50,6 @@ private let dailyBriefJSON = """
     #expect(a.name == "Daily brief")
     #expect(a.enabled)
     #expect(a.id == "tokenstat:automation-1786386302990")
-    // Daily at 08:00 local (UTC in this test calendar).
     let cal = utc()
     #expect(a.recurrence.nextOccurrences(after: at(2026, 1, 1, 0, 0, cal), count: 1, calendar: cal)
             == [at(2026, 1, 1, 8, 0, cal)])
@@ -80,7 +78,6 @@ private let dailyBriefJSON = """
 }
 
 @Test func tokenstatReaderMapsWeeklyMondayZeroToCron() {
-    // tokenstat weekday 0 = Monday → cron day-of-week 1.
     let json = """
     { "jobs": [
         { "id": "standup", "name": "Standup", "enabled": true,
@@ -89,13 +86,11 @@ private let dailyBriefJSON = """
     """
     let a = reader(json).automations()[0]
     let cal = utc()
-    // 2026-01-01 is Thursday; next Monday is 2026-01-05.
     #expect(a.recurrence.nextOccurrences(after: at(2026, 1, 1, 0, 0, cal), count: 1, calendar: cal)
             == [at(2026, 1, 5, 9, 30, cal)])
 }
 
 @Test func tokenstatReaderProjectsIntervalFromNextRun() {
-    // nextRunAtMs = 2026-01-01 10:00:00 UTC
     let anchorMs: Int64 = 1_767_261_600_000
     let json = """
     { "jobs": [
@@ -134,16 +129,13 @@ private let dailyBriefJSON = """
     let a = reader(json).automations()[0]
     #expect(a.source == .tokenstat)
     let cal = utc()
-    // 2026-01-01 is Thursday; next Mon-Fri at 09:00 is that same day.
     #expect(a.recurrence.nextOccurrences(after: at(2026, 1, 1, 0, 0, cal), count: 1, calendar: cal)
             == [at(2026, 1, 1, 9, 0, cal)])
-    // After Friday 09:00, the next is Monday.
     #expect(a.recurrence.nextOccurrences(after: at(2026, 1, 2, 10, 0, cal), count: 1, calendar: cal)
             == [at(2026, 1, 5, 9, 0, cal)])
 }
 
 @Test func tokenstatReaderMapsCustomDayBitset() {
-    // Tuesday (bit 1) and Thursday (bit 3) only → mask 10.
     let json = """
     { "jobs": [
         { "id": "pair", "name": "Pair", "enabled": true,
@@ -152,7 +144,6 @@ private let dailyBriefJSON = """
     """
     let a = reader(json).automations()[0]
     let cal = utc()
-    // 2026-01-01 Thursday → next is today 14:00, then Tuesday 6th.
     #expect(a.recurrence.nextOccurrences(after: at(2026, 1, 1, 0, 0, cal), count: 2, calendar: cal) == [
         at(2026, 1, 1, 14, 0, cal),
         at(2026, 1, 6, 14, 0, cal),
@@ -160,7 +151,6 @@ private let dailyBriefJSON = """
 }
 
 @Test func tokenstatReaderMapsWeeklySundayToCronZero() {
-    // tokenstat weekday 6 = Sunday → cron day-of-week 0.
     let json = """
     { "jobs": [
         { "id": "sunday", "name": "Sunday", "enabled": true,
@@ -169,13 +159,11 @@ private let dailyBriefJSON = """
     """
     let a = reader(json).automations()[0]
     let cal = utc()
-    // 2026-01-01 is Thursday; next Sunday is 2026-01-04.
     #expect(a.recurrence.nextOccurrences(after: at(2026, 1, 1, 0, 0, cal), count: 1, calendar: cal)
             == [at(2026, 1, 4, 10, 0, cal)])
 }
 
 @Test func tokenstatReaderMapsWeeklyMultiDayBitset() {
-    // Monday + Wednesday bits 0|2 = 5.
     let json = """
     { "jobs": [
         { "id": "mw", "name": "MW", "enabled": true,
@@ -184,7 +172,6 @@ private let dailyBriefJSON = """
     """
     let a = reader(json).automations()[0]
     let cal = utc()
-    // After Thursday 1 Jan: next is Monday 5th, then Wednesday 7th.
     #expect(a.recurrence.nextOccurrences(after: at(2026, 1, 1, 12, 0, cal), count: 2, calendar: cal) == [
         at(2026, 1, 5, 11, 0, cal),
         at(2026, 1, 7, 11, 0, cal),
@@ -229,7 +216,6 @@ private let dailyBriefJSON = """
     let cal = utc()
     let anchor = at(2026, 1, 1, 10, 0, cal)
     let recurrence = Recurrence.interval(every: 3600, anchor: anchor)
-    // After the first fire, the next two are still projected.
     #expect(recurrence.nextOccurrences(after: at(2026, 1, 1, 10, 30, cal), count: 2, calendar: cal) == [
         at(2026, 1, 1, 11, 0, cal),
         at(2026, 1, 1, 12, 0, cal),

@@ -29,7 +29,6 @@ private func claude(_ key: String, _ cron: String, enabled: Bool = true) -> Sche
         at(2026, 1, 1, 9, 0, cal), at(2026, 1, 1, 17, 0, cal),
         at(2026, 1, 2, 9, 0, cal), at(2026, 1, 2, 17, 0, cal),
     ])
-    // Wake is exactly the lead time before each run.
     #expect(occ.allSatisfy { $0.wakeTime == $0.runTime.addingTimeInterval(-300) })
 }
 
@@ -56,7 +55,6 @@ private func claude(_ key: String, _ cron: String, enabled: Bool = true) -> Sche
 @Test func wakePlanRespectsTheHorizon() {
     let cal = utc()
     let daily = claude("daily", "0 9 * * *")
-    // Only twelve hours ahead: the first run is inside it, the next day's isn't.
     let occ = AutomationWakePlan.upcomingOccurrences(
         [daily], after: at(2026, 1, 1, 0, 0, cal),
         within: 12 * 3600, leadTime: 0, perAutomation: 3, calendar: cal)

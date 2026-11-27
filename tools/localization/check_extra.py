@@ -21,7 +21,6 @@ from catalog_app import APP
 from catalog_core import CORE
 from catalog_widget import WIDGET
 
-# %@ / %d / %02d / %% and positional forms like %1$@.
 FMT = re.compile(r"%(?:\d+\$)?(?:0\d)?[@d]|%%")
 
 

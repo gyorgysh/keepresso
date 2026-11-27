@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# Japanese overlay for catalog_core.py: English source -> Japanese.
 CORE = {
     "On AC power": "電源接続時",
     "On battery": "バッテリー使用時",
@@ -177,7 +176,6 @@ WIDGET = {
 }
 
 
-# v1.15 thermal safety net: pressure levels and heat-pause lines.
 CORE.update({
     'Critical': '危機的',
     'Fair': 'やや高温',
@@ -190,7 +188,6 @@ CORE.update({
 })
 
 
-# --- Agent hooks (Claude Code connection) ---
 CORE.update({
     "run": "実行",
     "write": "書き込み",
@@ -204,7 +201,6 @@ CORE.update({
     "terminal": "ターミナル",
     "Claude app": "Claude アプリ",
     "IDE": "IDE",
-    # 1.16.0 fill (16)
     'Lock the screen': '画面をロック',
     'Sleep the Mac': 'Mac をスリープ',
     'Session started': 'セッション開始',
@@ -221,23 +217,19 @@ CORE.update({
     '+%ds': '+%d 秒',
     'waiting counts': '待機も作業扱い',
     '%@ (%@)': '%@（%@）',
-    # 1.17.0 leases (3)
     'Automation lease: %@': '自動化リース: %@',
     'Automation lease acquired': '自動化リース取得',
     'Automation lease ended': '自動化リース終了',
 
-    # 1.17.0 second batch: controller trigger, Steam trigger
     'Game controller connected': 'ゲームコントローラー接続中',
     'Steam is downloading': 'Steam がダウンロード中',
 })
 
-# 1.18 strings
 CORE.update({
     "Microphone in use by %@": "%@ がマイクを使用中",
     "Microphone in use by app": "App がマイクを使用中",
 })
 
-# 1.23 strings
 CORE.update({
     "Brightness control is unavailable, turning the display off instead.": "輝度の制御ができないため、代わりにディスプレイをオフにします。",
     "Keepresso never touches the display.": "Keepresso はディスプレイに何もしません。",

@@ -16,21 +16,16 @@ final class CalendarAuthorizer {
     /// live store instance.
     private let store = EKEventStore()
 
-    /// The current authorization status, refreshed when the prompt resolves.
     private(set) var status: EKAuthorizationStatus = EKEventStore.authorizationStatus(for: .event)
 
-    /// Whether events can be read.
     var isAuthorized: Bool {
         status == .fullAccess
     }
 
-    /// Whether we can still ask (vs. the user having denied or granted
-    /// write-only access).
     var canRequest: Bool {
         status == .notDetermined
     }
 
-    /// Show the system permission prompt (no-op if already decided).
     func request() {
         store.requestFullAccessToEvents { _, _ in
             DispatchQueue.main.async { [weak self] in

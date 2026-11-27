@@ -1,14 +1,7 @@
 # -*- coding: utf-8 -*-
-# Keepresso app UI localized strings: English source -> {lang: translation}.
-# Product/technical terms kept verbatim: Keepresso, Mac, macOS, Wi-Fi, VPN,
-# Bluetooth, SSH, VNC, AWDL, AirDrop, Handoff, Sidecar, HiDPI, Retina, 4K,
-# GeForce NOW, Teams, Slack, Homebrew, pmset, osascript, HDMI, DisplayPort, NAS.
 
 APP = {}
 
-# ---------------------------------------------------------------------------
-# Short labels, buttons, menu items, section headers, pickers
-# ---------------------------------------------------------------------------
 _SHORT = {
     "Add": {"hu": "Hozzáadás", "es": "Añadir", "fr": "Ajouter", "de": "Hinzufügen", "zh-Hans": "添加"},
     "Add:": {"hu": "Hozzáadás:", "es": "Añadir:", "fr": "Ajouter :", "de": "Hinzufügen:", "zh-Hans": "添加："},
@@ -97,9 +90,6 @@ _SHORT = {
 }
 APP.update(_SHORT)
 
-# ---------------------------------------------------------------------------
-# Medium labels, window titles, menu commands, rule names, status lines
-# ---------------------------------------------------------------------------
 _MED = {
     "Keepresso": {"hu": "Keepresso", "es": "Keepresso", "fr": "Keepresso", "de": "Keepresso", "zh-Hans": "Keepresso"},
     "About Keepresso": {"hu": "A Keepressóról", "es": "Acerca de Keepresso", "fr": "À propos de Keepresso", "de": "Über Keepresso", "zh-Hans": "关于 Keepresso"},
@@ -237,12 +227,7 @@ _MED = {
 }
 APP.update(_MED)
 
-# ---------------------------------------------------------------------------
-# Dynamic status lines, Welcome cards, AWDL/jitter verdicts, permission checks,
-# interpolated strings, admin-prompt purposes
-# ---------------------------------------------------------------------------
 _DYN = {
-    # Menu header status
     "Paused": {"hu": "Szüneteltetve", "es": "En pausa", "fr": "En pause", "de": "Pausiert", "zh-Hans": "已暂停"},
     "Brewing": {"hu": "Főzés", "es": "En marcha", "fr": "Infusion", "de": "Brüht", "zh-Hans": "运行中"},
     "Idle": {"hu": "Tétlen", "es": "Inactivo", "fr": "Inactif", "de": "Inaktiv", "zh-Hans": "空闲"},
@@ -257,17 +242,14 @@ _DYN = {
     "%d condition": {"hu": "%d feltétel", "es": "%d condición", "fr": "%d condition", "de": "%d Bedingung", "zh-Hans": "%d 个条件"},
     "%d conditions": {"hu": "%d feltétel", "es": "%d condiciones", "fr": "%d conditions", "de": "%d Bedingungen", "zh-Hans": "%d 个条件"},
 
-    # Helper attention
     "Approve Keepresso again in System Settings.": {"hu": "Hagyja jóvá újra a Keepressót a Rendszerbeállításokban.", "es": "Vuelve a aprobar Keepresso en Ajustes del Sistema.", "fr": "Approuvez de nouveau Keepresso dans Réglages Système.", "de": "Genehmige Keepresso erneut in den Systemeinstellungen.", "zh-Hans": "请在“系统设置”中再次批准 Keepresso。"},
     "The helper isn't responding; reinstall it.": {"hu": "A segéd nem válaszol; telepítse újra.", "es": "El asistente no responde; reinstálalo.", "fr": "L’assistant ne répond pas ; réinstallez-le.", "de": "Der Hilfsdienst antwortet nicht; installiere ihn neu.", "zh-Hans": "助理无响应；请重新安装。"},
 
-    # AWDL status style
     "Waiting for a game to come to the front": {"hu": "Várakozás, hogy egy játék előtérbe kerüljön", "es": "Esperando a que un juego pase a primer plano", "fr": "En attente qu’un jeu passe au premier plan", "de": "Warten, bis ein Spiel in den Vordergrund kommt", "zh-Hans": "等待游戏切换到最前"},
     "AWDL paused": {"hu": "AWDL szüneteltetve", "es": "AWDL en pausa", "fr": "AWDL suspendu", "de": "AWDL pausiert", "zh-Hans": "AWDL 已暂停"},
     "AWDL paused for gaming": {"hu": "AWDL szüneteltetve játékhoz", "es": "AWDL en pausa para jugar", "fr": "AWDL suspendu pour le jeu", "de": "AWDL fürs Gaming pausiert", "zh-Hans": "已为游戏暂停 AWDL"},
     "Game closed, AWDL back in %ds": {"hu": "Játék bezárva, AWDL visszatér %d mp múlva", "es": "Juego cerrado, AWDL vuelve en %d s", "fr": "Jeu fermé, AWDL revient dans %d s", "de": "Spiel geschlossen, AWDL kehrt in %d s zurück", "zh-Hans": "游戏已关闭，AWDL 将在 %d 秒后恢复"},
 
-    # Jitter verdict + interface state
     "Latency looks clean.": {"hu": "A késleltetés rendben van.", "es": "La latencia se ve limpia.", "fr": "La latence semble propre.", "de": "Die Latenz sieht sauber aus.", "zh-Hans": "延迟看起来很干净。"},
     "Once-a-second spikes: this looks like AWDL.": {"hu": "Másodpercenkénti kiugrások: ez AWDL-nek tűnik.", "es": "Picos cada segundo: esto parece AWDL.", "fr": "Pics chaque seconde : cela ressemble à AWDL.", "de": "Ausschläge im Sekundentakt: das sieht nach AWDL aus.", "zh-Hans": "每秒一次的尖峰：这看起来像 AWDL。"},
     "Spiky, but not on AWDL's cadence (congestion or a weak signal).": {"hu": "Kiugró, de nem AWDL-ütemben (torlódás vagy gyenge jel).", "es": "Con picos, pero no en la cadencia de AWDL (congestión o señal débil).", "fr": "En pics, mais pas au rythme d’AWDL (congestion ou signal faible).", "de": "Ausschläge, aber nicht im AWDL-Takt (Überlastung oder schwaches Signal).", "zh-Hans": "有尖峰，但不符合 AWDL 的节奏（拥塞或信号弱）。"},
@@ -276,7 +258,6 @@ _DYN = {
     "AWDL is off right now": {"hu": "Az AWDL jelenleg ki van kapcsolva", "es": "AWDL está desactivado ahora mismo", "fr": "AWDL est actuellement désactivé", "de": "AWDL ist gerade deaktiviert", "zh-Hans": "AWDL 当前已关闭"},
     "AWDL state unknown": {"hu": "Az AWDL állapota ismeretlen", "es": "Estado de AWDL desconocido", "fr": "État d’AWDL inconnu", "de": "AWDL-Status unbekannt", "zh-Hans": "AWDL 状态未知"},
 
-    # Welcome use-case cards
     "Agentic coding": {"hu": "Ügynöki kódolás", "es": "Programación con agentes", "fr": "Codage agentique", "de": "Agentisches Programmieren", "zh-Hans": "智能体编程"},
     "Stay awake while Claude Code, Cursor, Codex, or another agent is working.": {"hu": "Maradjon ébren, amíg a Claude Code, a Cursor, a Codex vagy egy másik ügynök dolgozik.", "es": "Permanece despierto mientras Claude Code, Cursor, Codex u otro agente esté trabajando.", "fr": "Restez éveillé pendant que Claude Code, Cursor, Codex ou un autre agent travaille.", "de": "Wach bleiben, während Claude Code, Cursor, Codex oder ein anderer Agent arbeitet.", "zh-Hans": "在 Claude Code、Cursor、Codex 或其他智能体工作时保持唤醒。"},
     "Gaming & streaming": {"hu": "Játék és streamelés", "es": "Juegos y streaming", "fr": "Jeu et streaming", "de": "Gaming und Streaming", "zh-Hans": "游戏与串流"},
@@ -288,14 +269,12 @@ _DYN = {
     "Keep it manual for now": {"hu": "Egyelőre maradjon kézi", "es": "Mantenerlo manual por ahora", "fr": "Garder le mode manuel pour l’instant", "de": "Vorerst manuell lassen", "zh-Hans": "暂时保持手动"},
     "Just toggle keep-awake yourself, and set up your own triggers later in Preferences.": {"hu": "Egyszerűen kapcsolja az ébrentartást saját maga, a saját triggereit pedig később állítsa be a Beállításokban.", "es": "Simplemente activa el mantenerse despierto tú mismo y configura tus disparadores más tarde en Ajustes.", "fr": "Activez le maintien en éveil vous-même et configurez vos déclencheurs plus tard dans Réglages.", "de": "Schalte das Wachhalten einfach selbst um und richte deine Auslöser später in den Einstellungen ein.", "zh-Hans": "自己切换保持唤醒，稍后在“偏好设置”中设置你自己的触发条件。"},
 
-    # Welcome permission rows
     "Launch at login": {"hu": "Indítás bejelentkezéskor", "es": "Abrir al iniciar sesión", "fr": "Ouvrir à la connexion", "de": "Beim Anmelden öffnen", "zh-Hans": "登录时启动"},
     "Start Keepresso automatically when you log in.": {"hu": "A Keepresso automatikus indítása bejelentkezéskor.", "es": "Inicia Keepresso automáticamente al iniciar sesión.", "fr": "Lancez Keepresso automatiquement à la connexion.", "de": "Keepresso automatisch beim Anmelden starten.", "zh-Hans": "登录时自动启动 Keepresso。"},
     "Notifications": {"hu": "Értesítések", "es": "Notificaciones", "fr": "Notifications", "de": "Mitteilungen", "zh-Hans": "通知"},
     "Let Keepresso remind you when a long session is still keeping the Mac awake.": {"hu": "Hagyja, hogy a Keepresso emlékeztesse, ha egy hosszú munkamenet még ébren tartja a Macet.", "es": "Deja que Keepresso te recuerde cuando una sesión larga sigue manteniendo el Mac despierto.", "fr": "Laissez Keepresso vous rappeler qu’une longue session garde encore le Mac éveillé.", "de": "Lass dich von Keepresso erinnern, wenn eine lange Sitzung den Mac noch wach hält.", "zh-Hans": "让 Keepresso 在长时间会话仍让 Mac 保持唤醒时提醒你。"},
     "Approve a small helper once and the privileged extras (lid-closed mode, AWDL pausing) never ask for your password again. Set and forget; removable in Preferences.": {"hu": "Hagyjon jóvá egyszer egy kis segédet, és a kiemelt jogú extrák (csukott fedél mód, AWDL-szüneteltetés) soha többé nem kérik a jelszavát. Állítsa be és felejtse el; a Beállításokban eltávolítható.", "es": "Aprueba una vez un pequeño asistente y los extras con privilegios (modo con la tapa cerrada, pausa de AWDL) no volverán a pedir tu contraseña. Configúralo y olvídate; se puede eliminar en Ajustes.", "fr": "Approuvez une fois un petit assistant et les extras privilégiés (mode capot fermé, pause AWDL) ne demanderont plus jamais votre mot de passe. Réglez et oubliez ; supprimable dans Réglages.", "de": "Genehmige einmal einen kleinen Hilfsdienst, und die privilegierten Extras (Modus bei geschlossenem Deckel, AWDL-Pause) fragen nie wieder nach deinem Passwort. Einrichten und vergessen; in den Einstellungen entfernbar.", "zh-Hans": "只需批准一次小型助理，特权附加功能（合盖模式、暂停 AWDL）便不会再向你索要密码。设置后即可放心；可在“偏好设置”中移除。"},
 
-    # Permission checks (Setup screen, app-owned)
     "Location access (Wi-Fi rules)": {"hu": "Helyhozzáférés (Wi-Fi-szabályok)", "es": "Acceso a la ubicación (reglas Wi-Fi)", "fr": "Accès à la localisation (règles Wi-Fi)", "de": "Standortzugriff (WLAN-Regeln)", "zh-Hans": "定位访问（Wi-Fi 规则）"},
     "Bluetooth access (device rules)": {"hu": "Bluetooth-hozzáférés (eszközszabályok)", "es": "Acceso a Bluetooth (reglas de dispositivo)", "fr": "Accès Bluetooth (règles d’appareil)", "de": "Bluetooth-Zugriff (Geräteregeln)", "zh-Hans": "蓝牙访问（设备规则）"},
     "Calendar access (event rule)": {"hu": "Naptár-hozzáférés (eseményszabály)", "es": "Acceso al calendario (regla de evento)", "fr": "Accès au calendrier (règle d’événement)", "de": "Kalenderzugriff (Ereignisregel)", "zh-Hans": "日历访问（事件规则）"},
@@ -315,14 +294,12 @@ _DYN = {
     "Notifications are off, so the “still brewing” reminder can't appear.": {"hu": "Az értesítések ki vannak kapcsolva, így a „még főz” emlékeztető nem jelenhet meg.", "es": "Las notificaciones están desactivadas, así que el recordatorio de «sigue en marcha» no puede aparecer.", "fr": "Les notifications sont désactivées, le rappel « toujours en cours » ne peut donc pas apparaître.", "de": "Mitteilungen sind aus, die Erinnerung „brüht noch“ kann daher nicht erscheinen.", "zh-Hans": "通知已关闭，因此“仍在运行”提醒无法显示。"},
     "Allow notifications for Keepresso.": {"hu": "Engedélyezze az értesítéseket a Keepressónak.", "es": "Permite las notificaciones para Keepresso.", "fr": "Autorisez les notifications pour Keepresso.", "de": "Erlaube Mitteilungen für Keepresso.", "zh-Hans": "为 Keepresso 允许通知。"},
 
-    # Interpolated
     "Above %d%%": {"hu": "%d%% felett", "es": "Por encima del %d%%", "fr": "Au-dessus de %d%%", "de": "Über %d%%", "zh-Hans": "高于 %d%%"},
     "Above %@": {"hu": "%@ felett", "es": "Por encima de %@", "fr": "Au-dessus de %@", "de": "Über %@", "zh-Hans": "高于 %@"},
     "Version %@": {"hu": "%@ verzió", "es": "Versión %@", "fr": "Version %@", "de": "Version %@", "zh-Hans": "版本 %@"},
     "Remove “%@”": {"hu": "„%@” eltávolítása", "es": "Eliminar «%@»", "fr": "Supprimer « %@ »", "de": "„%@“ entfernen", "zh-Hans": "移除 “%@”"},
     "On current Wi-Fi (%@)": {"hu": "A jelenlegi Wi-Fi hálózaton (%@)", "es": "En la Wi-Fi actual (%@)", "fr": "Sur le Wi-Fi actuel (%@)", "de": "Im aktuellen WLAN (%@)", "zh-Hans": "在当前 Wi-Fi (%@) 上"},
 
-    # Admin-prompt purposes (inserted into the AdminAuthNote sentence)
     "keep the Mac awake with the lid closed": {"hu": "csukott fedéllel ébren tartsa a Macet", "es": "mantener el Mac despierto con la tapa cerrada", "fr": "garder le Mac éveillé capot fermé", "de": "den Mac bei geschlossenem Deckel wach zu halten", "zh-Hans": "在合盖时让 Mac 保持唤醒"},
     "switch closed-display mode with the session": {"hu": "a munkamenettel váltsa a csukott fedél módot", "es": "cambiar el modo con pantalla cerrada según la sesión", "fr": "activer le mode écran fermé avec la session", "de": "den Modus bei geschlossenem Display mit der Sitzung umzuschalten", "zh-Hans": "随会话切换合盖模式"},
     "pause AWDL (turn off the Wi-Fi AirDrop/Handoff radio hops)": {"hu": "szüneteltesse az AWDL-t (kikapcsolja a Wi-Fi AirDrop/Handoff rádióugrásokat)", "es": "pausar AWDL (desactivar los saltos de radio Wi-Fi de AirDrop/Handoff)", "fr": "suspendre AWDL (désactiver les sauts radio Wi-Fi d’AirDrop/Handoff)", "de": "AWDL zu pausieren (die WLAN-Funksprünge von AirDrop/Handoff abzuschalten)", "zh-Hans": "暂停 AWDL（关闭 AirDrop/Handoff 的 Wi-Fi 无线跳频）"},
@@ -330,9 +307,6 @@ _DYN = {
 }
 APP.update(_DYN)
 
-# ---------------------------------------------------------------------------
-# Long help text and footers
-# ---------------------------------------------------------------------------
 _LONG = {
     "Keepresso keeps your Mac awake on your terms. It lives in the menu bar near the clock, with no Dock icon. Click its cup any time to start or stop.": {"hu": "A Keepresso a saját feltételei szerint tartja ébren a Macet. A menüsorban él az óra közelében, Dock-ikon nélkül. Kattintson a csészéjére bármikor az indításhoz vagy leállításhoz.", "es": "Keepresso mantiene tu Mac despierto según tus condiciones. Vive en la barra de menús, junto al reloj, sin icono en el Dock. Haz clic en su taza cuando quieras para iniciar o detener.", "fr": "Keepresso garde votre Mac éveillé selon vos règles. Il vit dans la barre des menus, près de l’horloge, sans icône dans le Dock. Cliquez sur sa tasse à tout moment pour démarrer ou arrêter.", "de": "Keepresso hält deinen Mac nach deinen Regeln wach. Es lebt in der Menüleiste neben der Uhr, ohne Dock-Symbol. Klicke jederzeit auf die Tasse, um zu starten oder zu stoppen.", "zh-Hans": "Keepresso 按你的规则让 Mac 保持唤醒。它位于菜单栏时钟旁，没有程序坞图标。随时点按它的杯子即可开始或停止。"},
     "Pick one to set up matching triggers, or keep it manual and add your own later. You can change this any time in Preferences.": {"hu": "Válasszon egyet a megfelelő triggerek beállításához, vagy tartsa kézi módban, és később adja hozzá a sajátjait. Ezt bármikor módosíthatja a Beállításokban.", "es": "Elige uno para configurar disparadores acordes, o mantenlo manual y añade los tuyos más tarde. Puedes cambiarlo cuando quieras en Ajustes.", "fr": "Choisissez-en un pour configurer des déclencheurs adaptés, ou restez en manuel et ajoutez les vôtres plus tard. Vous pouvez changer cela à tout moment dans Réglages.", "de": "Wähle eines, um passende Auslöser einzurichten, oder bleibe manuell und füge später eigene hinzu. Du kannst das jederzeit in den Einstellungen ändern.", "zh-Hans": "选择一项以设置相应的触发条件，或保持手动，稍后添加自己的。你可以随时在“偏好设置”中更改。"},
@@ -394,19 +368,13 @@ _LONG = {
 }
 APP.update(_LONG)
 
-# ---------------------------------------------------------------------------
-# Second pass: switch-expression returns, notifications, alerts, dialogs,
-# Preferences tabs and import/export, menu items
-# ---------------------------------------------------------------------------
 _EXTRA = {
-    # Preferences tabs
     "General": {"hu": "Általános", "es": "General", "fr": "Général", "de": "Allgemein", "zh-Hans": "通用"},
     "Triggers": {"hu": "Triggerek", "es": "Disparadores", "fr": "Déclencheurs", "de": "Auslöser", "zh-Hans": "触发条件"},
     "Reminder": {"hu": "Emlékeztető", "es": "Recordatorio", "fr": "Rappel", "de": "Erinnerung", "zh-Hans": "提醒"},
     "Disk": {"hu": "Lemez", "es": "Disco", "fr": "Disque", "de": "Festplatte", "zh-Hans": "磁盘"},
     "Activity": {"hu": "Tevékenység", "es": "Actividad", "fr": "Activité", "de": "Aktivität", "zh-Hans": "活动"},
 
-    # Duration menu / session button
     "Indefinitely": {"hu": "Határozatlan ideig", "es": "Indefinidamente", "fr": "Indéfiniment", "de": "Unbegrenzt", "zh-Hans": "无限期"},
     "Update Session": {"hu": "Munkamenet frissítése", "es": "Actualizar sesión", "fr": "Mettre à jour la session", "de": "Sitzung aktualisieren", "zh-Hans": "更新会话"},
     "Start": {"hu": "Indítás", "es": "Iniciar", "fr": "Démarrer", "de": "Starten", "zh-Hans": "开始"},
@@ -414,7 +382,6 @@ _EXTRA = {
     "Met": {"hu": "Teljesül", "es": "Cumplida", "fr": "Remplie", "de": "Erfüllt", "zh-Hans": "已满足"},
     "Not met": {"hu": "Nem teljesül", "es": "No cumplida", "fr": "Non remplie", "de": "Nicht erfüllt", "zh-Hans": "未满足"},
 
-    # CheckRow
     "Copied!": {"hu": "Másolva!", "es": "¡Copiado!", "fr": "Copié !", "de": "Kopiert!", "zh-Hans": "已复制！"},
     "Copy command": {"hu": "Parancs másolása", "es": "Copiar comando", "fr": "Copier la commande", "de": "Befehl kopieren", "zh-Hans": "复制命令"},
     "OK": {"hu": "Rendben", "es": "Correcto", "fr": "OK", "de": "OK", "zh-Hans": "正常"},
@@ -422,7 +389,6 @@ _EXTRA = {
     "Tip": {"hu": "Tipp", "es": "Consejo", "fr": "Astuce", "de": "Tipp", "zh-Hans": "提示"},
     "Unknown": {"hu": "Ismeretlen", "es": "Desconocido", "fr": "Inconnu", "de": "Unbekannt", "zh-Hans": "未知"},
 
-    # HelperAttentionView
     "Checking the helper": {"hu": "A segéd ellenőrzése", "es": "Comprobando el asistente", "fr": "Vérification de l’assistant", "de": "Hilfsdienst wird geprüft", "zh-Hans": "正在检查助理"},
     "One approval needed": {"hu": "Egy jóváhagyás szükséges", "es": "Se necesita una aprobación", "fr": "Une approbation requise", "de": "Eine Genehmigung nötig", "zh-Hans": "需要一次批准"},
     "The helper needs a reinstall": {"hu": "A segédet újra kell telepíteni", "es": "El asistente necesita reinstalarse", "fr": "L’assistant doit être réinstallé", "de": "Der Hilfsdienst muss neu installiert werden", "zh-Hans": "助理需要重新安装"},
@@ -433,12 +399,10 @@ _EXTRA = {
     "The helper is back. Closed-display mode and AWDL pausing work without password prompts again.": {"hu": "A segéd újra működik. A csukott fedél mód és az AWDL-szüneteltetés ismét jelszókérés nélkül működik.", "es": "El asistente ha vuelto. El modo con pantalla cerrada y la pausa de AWDL vuelven a funcionar sin peticiones de contraseña.", "fr": "L’assistant est de retour. Le mode écran fermé et la pause AWDL fonctionnent de nouveau sans demande de mot de passe.", "de": "Der Hilfsdienst ist zurück. Der Modus bei geschlossenem Display und die AWDL-Pause funktionieren wieder ohne Passwortabfragen.", "zh-Hans": "助理已恢复。合盖模式和暂停 AWDL 再次无需密码提示即可工作。"},
     "Waiting for the switch in System Settings; this updates by itself.": {"hu": "Várakozás a kapcsolóra a Rendszerbeállításokban; ez magától frissül.", "es": "Esperando el interruptor en Ajustes del Sistema; esto se actualiza solo.", "fr": "En attente de l’interrupteur dans Réglages Système ; cela se met à jour tout seul.", "de": "Warten auf den Schalter in den Systemeinstellungen; dies aktualisiert sich von selbst.", "zh-Hans": "正在等待“系统设置”中的开关；此项会自动更新。"},
 
-    # ShortcutRecorder / RulesView
     "Record": {"hu": "Rögzítés", "es": "Grabar", "fr": "Enregistrer", "de": "Aufzeichnen", "zh-Hans": "录制"},
     "Press keys…": {"hu": "Nyomjon meg billentyűket…", "es": "Pulsa teclas…", "fr": "Appuyez sur des touches…", "de": "Tasten drücken…", "zh-Hans": "请按键…"},
     "Other process, e.g. rsync": {"hu": "Más folyamat, pl. rsync", "es": "Otro proceso, p. ej. rsync", "fr": "Autre processus, p. ex. rsync", "de": "Anderer Prozess, z. B. rsync", "zh-Hans": "其他进程，例如 rsync"},
 
-    # Import / export
     "Export Keepresso Settings": {"hu": "Keepresso beállítások exportálása", "es": "Exportar ajustes de Keepresso", "fr": "Exporter les réglages de Keepresso", "de": "Keepresso-Einstellungen exportieren", "zh-Hans": "导出 Keepresso 设置"},
     "Import Keepresso Settings": {"hu": "Keepresso beállítások importálása", "es": "Importar ajustes de Keepresso", "fr": "Importer les réglages de Keepresso", "de": "Keepresso-Einstellungen importieren", "zh-Hans": "导入 Keepresso 设置"},
     "Exported to %@.": {"hu": "Exportálva ide: %@.", "es": "Exportado a %@.", "fr": "Exporté vers %@.", "de": "Nach %@ exportiert.", "zh-Hans": "已导出到 %@。"},
@@ -452,7 +416,6 @@ _EXTRA = {
     "A recurring notification every interval while a session runs, so a Mac left awake keeps reminding you.": {"hu": "Ismétlődő értesítés minden intervallumban, amíg egy munkamenet fut, így egy ébren hagyott Mac folyamatosan emlékezteti.", "es": "Una notificación recurrente en cada intervalo mientras hay una sesión, para que un Mac dejado despierto te siga recordando.", "fr": "Une notification récurrente à chaque intervalle pendant une session, pour qu’un Mac laissé éveillé continue de vous le rappeler.", "de": "Eine wiederkehrende Mitteilung in jedem Intervall während einer Sitzung, damit ein wach gelassener Mac dich weiter erinnert.", "zh-Hans": "会话运行期间每隔一段时间发送一次重复通知，让被保持唤醒的 Mac 持续提醒你。"},
     "A one-time notification once a session has run this long, in case you forget the Mac is awake.": {"hu": "Egyszeri értesítés, ha egy munkamenet már ennyi ideje fut, arra az esetre, ha elfelejtené, hogy a Mac ébren van.", "es": "Una notificación única cuando una sesión ha durado este tiempo, por si olvidas que el Mac está despierto.", "fr": "Une notification unique lorsqu’une session a duré ce temps, au cas où vous oublieriez que le Mac est éveillé.", "de": "Eine einmalige Mitteilung, sobald eine Sitzung so lange gelaufen ist, falls du vergisst, dass der Mac wach ist.", "zh-Hans": "当会话运行达到此时长时发送一次性通知，以防你忘记 Mac 仍处于唤醒状态。"},
 
-    # AppModel dialogs + notifications
     "Wait": {"hu": "Várakozás", "es": "Espera", "fr": "Attente", "de": "Wartezeit", "zh-Hans": "等待"},
     "Watch": {"hu": "Figyelés", "es": "Vigilar", "fr": "Surveiller", "de": "Überwachen", "zh-Hans": "监视"},
     "Keep awake while downloads are in progress in this folder.": {"hu": "Ébren tartás, amíg letöltések vannak folyamatban ebben a mappában.", "es": "Mantener despierto mientras haya descargas en curso en esta carpeta.", "fr": "Garder éveillé tant que des téléchargements sont en cours dans ce dossier.", "de": "Wach halten, solange in diesem Ordner Downloads laufen.", "zh-Hans": "在此文件夹有下载进行时保持唤醒。"},
@@ -468,7 +431,6 @@ _EXTRA = {
     "AWDL resumed": {"hu": "AWDL folytatva", "es": "AWDL reanudado", "fr": "AWDL repris", "de": "AWDL fortgesetzt", "zh-Hans": "AWDL 已恢复"},
     "The game closed; AirDrop, Handoff and Continuity are back.": {"hu": "A játék bezárult; az AirDrop, a Handoff és a Folytonosság újra elérhető.", "es": "El juego se cerró; AirDrop, Handoff y Continuidad han vuelto.", "fr": "Le jeu s’est fermé ; AirDrop, Handoff et Continuité sont de retour.", "de": "Das Spiel wurde geschlossen; AirDrop, Handoff und Continuity sind wieder da.", "zh-Hans": "游戏已关闭；AirDrop、Handoff 和连续互通已恢复。"},
 
-    # HelperManager alerts
     "This copy of Keepresso isn't in the Applications folder, so it leaves the helper alone. Install from /Applications.": {"hu": "A Keepresso ezen példánya nincs az Alkalmazások mappában, ezért nem nyúl a segédhez. Telepítse az /Applications mappából.", "es": "Esta copia de Keepresso no está en la carpeta Aplicaciones, así que deja el asistente en paz. Instálala desde /Applications.", "fr": "Cette copie de Keepresso n’est pas dans le dossier Applications, elle laisse donc l’assistant tranquille. Installez depuis /Applications.", "de": "Diese Keepresso-Kopie liegt nicht im Ordner „Programme“, daher wird der Hilfsdienst in Ruhe gelassen. Installiere aus /Applications.", "zh-Hans": "此 Keepresso 副本不在“应用程序”文件夹中，因此不会改动助理。请从 /Applications 安装。"},
     "The helper wasn't found inside the app. Reinstall Keepresso and try again.": {"hu": "A segéd nem található az alkalmazáson belül. Telepítse újra a Keepressót, és próbálja újra.", "es": "No se encontró el asistente dentro de la app. Reinstala Keepresso e inténtalo de nuevo.", "fr": "L’assistant est introuvable dans l’app. Réinstallez Keepresso et réessayez.", "de": "Der Hilfsdienst wurde in der App nicht gefunden. Installiere Keepresso neu und versuche es erneut.", "zh-Hans": "在 App 内未找到助理。请重新安装 Keepresso 后重试。"},
     "The helper couldn't be registered.": {"hu": "A segédet nem sikerült regisztrálni.", "es": "No se pudo registrar el asistente.", "fr": "L’assistant n’a pas pu être enregistré.", "de": "Der Hilfsdienst konnte nicht registriert werden.", "zh-Hans": "无法注册助理。"},
@@ -478,15 +440,11 @@ _EXTRA = {
     "macOS is refusing the helper's registration outright. Reinstall the helper; if that doesn't take, restart the Mac and try once more.": {"hu": "A macOS teljesen elutasítja a segéd regisztrációját. Telepítse újra a segédet; ha ez nem sikerül, indítsa újra a Macet, és próbálja meg még egyszer.", "es": "macOS rechaza por completo el registro del asistente. Reinstala el asistente; si no surte efecto, reinicia el Mac e inténtalo una vez más.", "fr": "macOS refuse catégoriquement l’enregistrement de l’assistant. Réinstallez l’assistant ; si cela ne fonctionne pas, redémarrez le Mac et réessayez.", "de": "macOS verweigert die Registrierung des Hilfsdienstes vollständig. Installiere den Hilfsdienst neu; wenn das nicht greift, starte den Mac neu und versuche es noch einmal.", "zh-Hans": "macOS 直接拒绝了助理的注册。请重新安装助理；若仍无效，请重新启动 Mac 后再试一次。"},
     "The helper isn't responding. If an old copy of Keepresso is in the Trash, empty the Trash first: macOS keeps disabling the helper while one is there. Then reinstall the helper.": {"hu": "A segéd nem válaszol. Ha egy régi Keepresso-példány van a Kukában, előbb ürítse a Kukát: a macOS folyamatosan letiltja a segédet, amíg van ott egy. Utána telepítse újra a segédet.", "es": "El asistente no responde. Si hay una copia antigua de Keepresso en la Papelera, vacíala primero: macOS sigue desactivando el asistente mientras haya una. Luego reinstala el asistente.", "fr": "L’assistant ne répond pas. Si une ancienne copie de Keepresso est dans la Corbeille, videz-la d’abord : macOS continue de désactiver l’assistant tant qu’il y en a une. Réinstallez ensuite l’assistant.", "de": "Der Hilfsdienst antwortet nicht. Wenn eine alte Keepresso-Kopie im Papierkorb liegt, leere ihn zuerst: macOS deaktiviert den Hilfsdienst weiter, solange eine vorhanden ist. Installiere den Hilfsdienst dann neu.", "zh-Hans": "助理无响应。如果废纸篓中有旧的 Keepresso 副本，请先清倒废纸篓：只要还有一个，macOS 就会持续停用助理。然后重新安装助理。"},
 
-    # StaleBundleCleaner notification
     "Old copy stuck in the Trash": {"hu": "Régi példány ragadt a Kukában", "es": "Copia antigua atascada en la Papelera", "fr": "Ancienne copie coincée dans la Corbeille", "de": "Alte Kopie steckt im Papierkorb", "zh-Hans": "废纸篓中卡着旧副本"},
     "An old copy of Keepresso in the Trash keeps the background helper from working. Please delete it from the Trash, or empty the Trash.": {"hu": "A Kukában lévő régi Keepresso-példány megakadályozza a háttérsegéd működését. Törölje a Kukából, vagy ürítse a Kukát.", "es": "Una copia antigua de Keepresso en la Papelera impide que el asistente en segundo plano funcione. Elimínala de la Papelera o vacía la Papelera.", "fr": "Une ancienne copie de Keepresso dans la Corbeille empêche l’assistant d’arrière-plan de fonctionner. Supprimez-la de la Corbeille ou videz la Corbeille.", "de": "Eine alte Keepresso-Kopie im Papierkorb verhindert, dass der Hintergrund-Hilfsdienst funktioniert. Lösche sie aus dem Papierkorb oder leere den Papierkorb.", "zh-Hans": "废纸篓中的旧 Keepresso 副本会导致后台助理无法工作。请从废纸篓中删除它，或清倒废纸篓。"},
 }
 APP.update(_EXTRA)
 
-# ---------------------------------------------------------------------------
-# Language switcher (Preferences > General, Welcome)
-# ---------------------------------------------------------------------------
 _LANGUAGE = {
     "Language": {"hu": "Nyelv", "es": "Idioma", "fr": "Langue", "de": "Sprache", "zh-Hans": "语言"},
     "App language": {"hu": "Az app nyelve", "es": "Idioma de la app", "fr": "Langue de l’app", "de": "App-Sprache", "zh-Hans": "App 语言"},
@@ -494,11 +452,6 @@ _LANGUAGE = {
 }
 APP.update(_LANGUAGE)
 
-# ---------------------------------------------------------------------------
-# Menu-bar duration / countdown labels and grace-period counters.
-# Compact patterns stay compact; only unit words are localized where a
-# native menu-bar reader would expect them. "%d:%02d" style stays identity.
-# ---------------------------------------------------------------------------
 _DURATIONS = {
     "%d h %d min": {"hu": "%d ó %d p", "es": "%d h %d min", "fr": "%d h %d min", "de": "%d Std. %d Min.", "zh-Hans": "%d 小时 %d 分钟"},
     "%d h": {"hu": "%d ó", "es": "%d h", "fr": "%d h", "de": "%d Std.", "zh-Hans": "%d 小时"},
@@ -509,10 +462,6 @@ _DURATIONS = {
 }
 APP.update(_DURATIONS)
 
-# ---------------------------------------------------------------------------
-# VoiceOver accessibility labels for the menu-bar icon. Reuse the coffee
-# "brewing"/"idle"/"paused" wording from the menu header status keys.
-# ---------------------------------------------------------------------------
 _VOICEOVER = {
     "Keepresso: paused, battery low": {"hu": "Keepresso: szüneteltetve, alacsony töltöttség", "es": "Keepresso: en pausa, batería baja", "fr": "Keepresso : en pause, batterie faible", "de": "Keepresso: pausiert, Akku niedrig", "zh-Hans": "Keepresso：已暂停，电量低"},
     "Keepresso: brewing": {"hu": "Keepresso: főzés", "es": "Keepresso: en marcha", "fr": "Keepresso : infusion", "de": "Keepresso: brüht", "zh-Hans": "Keepresso：运行中"},
@@ -520,10 +469,6 @@ _VOICEOVER = {
 }
 APP.update(_VOICEOVER)
 
-# ---------------------------------------------------------------------------
-# Headless virtual-display resolution picker options (Preferences > Display).
-# Effectively identity in every locale; "(4K)" kept as-is.
-# ---------------------------------------------------------------------------
 _RESOLUTIONS = {
     "1920 × 1080": {"hu": "1920 × 1080", "es": "1920 × 1080", "fr": "1920 × 1080", "de": "1920 × 1080", "zh-Hans": "1920 × 1080"},
     "2560 × 1440": {"hu": "2560 × 1440", "es": "2560 × 1440", "fr": "2560 × 1440", "de": "2560 × 1440", "zh-Hans": "2560 × 1440"},
@@ -532,10 +477,6 @@ _RESOLUTIONS = {
 }
 APP.update(_RESOLUTIONS)
 
-# ---------------------------------------------------------------------------
-# Quick "Stop in N" shortcuts + the ending-soon warning (menu row, Preferences
-# General editor, Preferences Reminder toggle).
-# ---------------------------------------------------------------------------
 _QUICK_STOP = {
     "Stop in": {"hu": "Leállítás ennyi múlva", "es": "Detener en", "fr": "Arrêter dans", "de": "Stoppen in", "zh-Hans": "多久后停止"},
     "Quick stop shortcuts": {"hu": "Gyorsleállító gombok", "es": "Atajos de detención rápida", "fr": "Raccourcis d’arrêt rapide", "de": "Schnellstopp-Kurzbefehle", "zh-Hans": "快速停止按钮"},
@@ -551,9 +492,6 @@ _QUICK_STOP = {
 }
 APP.update(_QUICK_STOP)
 
-# ---------------------------------------------------------------------------
-# Agent-activity trigger (rules editor entry + the menu's per-session rows).
-# ---------------------------------------------------------------------------
 _AGENT_TRIGGER = {
     "AI agents": {"hu": "AI-ügynökök", "es": "Agentes de IA", "fr": "Agents IA", "de": "KI-Agenten", "zh-Hans": "AI 智能体"},
     "AI agent is working": {"hu": "AI-ügynök dolgozik", "es": "Un agente de IA está trabajando", "fr": "Un agent IA travaille", "de": "KI-Agent arbeitet", "zh-Hans": "AI 智能体正在工作"},
@@ -568,7 +506,6 @@ _AGENT_TRIGGER = {
 APP.update(_AGENT_TRIGGER)
 
 
-# --- Agent hooks (Claude Code connection) ---
 _AGENT_HOOKS_APP = {
     "Claude Code connected: sessions report working and waiting exactly.": {"hu": "Claude Code csatlakoztatva: a munkamenetek pontosan jelzik a munkát és a várakozást.", "es": "Claude Code conectado: las sesiones informan con exactitud cuándo trabajan y cuándo esperan.", "fr": "Claude Code connecté : les sessions signalent précisément le travail et l’attente.", "de": "Claude Code verbunden: Sitzungen melden Arbeiten und Warten exakt.", "zh-Hans": "已连接 Claude Code：会话可精确报告工作与等待状态。"},
     "Connect Claude Code for exact session tracking (adds hooks to its settings).": {"hu": "Csatlakoztassa a Claude Code-ot a munkamenetek pontos követéséhez (hookokat ad a beállításaihoz).", "es": "Conecta Claude Code para un seguimiento exacto de las sesiones (añade hooks a su configuración).", "fr": "Connectez Claude Code pour un suivi exact des sessions (ajoute des hooks à ses réglages).", "de": "Verbinde Claude Code für exaktes Sitzungs-Tracking (fügt Hooks zu dessen Einstellungen hinzu).", "zh-Hans": "连接 Claude Code 以精确跟踪会话（将在其设置中添加钩子）。"},
@@ -579,7 +516,6 @@ _AGENT_HOOKS_APP = {
 APP.update(_AGENT_HOOKS_APP)
 
 
-# --- Cursor hooks (covers both the cursor-agent CLI and the Cursor app) ---
 _CURSOR_HOOKS_APP = {
     "Cursor connected: the app's agent and the CLI both report exactly.": {"hu": "Cursor csatlakoztatva: az alkalmazás ágense és a CLI is pontosan jelez.", "es": "Cursor conectado: tanto el agente de la app como la CLI informan con exactitud.", "fr": "Cursor connecté : l’agent de l’application et la CLI signalent tous deux précisément.", "de": "Cursor verbunden: Der App-Agent und die CLI melden beide exakt.", "zh-Hans": "已连接 Cursor：应用内智能体与 CLI 均可精确报告状态。"},
     "Connect Cursor to track its app agent too (adds hooks to its config).": {"hu": "Csatlakoztassa a Cursort az alkalmazás ágensének követéséhez is (hookokat ad a konfigurációjához).", "es": "Conecta Cursor para seguir también su agente de la app (añade hooks a su configuración).", "fr": "Connectez Cursor pour aussi suivre l’agent de l’application (ajoute des hooks à sa config).", "de": "Verbinde Cursor, um auch dessen App-Agent zu erfassen (fügt Hooks zu dessen Konfiguration hinzu).", "zh-Hans": "连接 Cursor 以同时跟踪其应用内智能体（将在其配置中添加钩子）。"},
@@ -590,7 +526,6 @@ _CURSOR_HOOKS_APP = {
 APP.update(_CURSOR_HOOKS_APP)
 
 
-# --- Antigravity hooks (covers both the app's editor agent and its CLI) ---
 _ANTIGRAVITY_HOOKS_APP = {
     "Antigravity connected: the app's agent and the CLI both report exactly.": {"hu": "Antigravity csatlakoztatva: az alkalmazás ágense és a CLI is pontosan jelez.", "es": "Antigravity conectado: tanto el agente de la app como la CLI informan con exactitud.", "fr": "Antigravity connecté : l’agent de l’application et la CLI signalent tous deux précisément.", "de": "Antigravity verbunden: Der App-Agent und die CLI melden beide exakt.", "zh-Hans": "已连接 Antigravity：应用内智能体与 CLI 均可精确报告状态。"},
     "Connect Antigravity to track its editor agent too (adds hooks to its config).": {"hu": "Csatlakoztassa az Antigravityt a szerkesztő ágensének követéséhez is (hookokat ad a konfigurációjához).", "es": "Conecta Antigravity para seguir también su agente del editor (añade hooks a su configuración).", "fr": "Connectez Antigravity pour aussi suivre l’agent de l’éditeur (ajoute des hooks à sa config).", "de": "Verbinde Antigravity, um auch dessen Editor-Agent zu erfassen (fügt Hooks zu dessen Konfiguration hinzu).", "zh-Hans": "连接 Antigravity 以同时跟踪其编辑器智能体（将在其配置中添加钩子）。"},
@@ -602,7 +537,6 @@ _ANTIGRAVITY_HOOKS_APP = {
 APP.update(_ANTIGRAVITY_HOOKS_APP)
 
 
-# --- Hook health (an install that drifted and can be repaired) ---
 _HOOK_HEALTH_APP = {
     "Claude Code's hooks need repairing, so sessions may not report correctly.": {"hu": "A Claude Code hookjait meg kell javítani, ezért előfordulhat, hogy a munkamenetek nem jeleznek pontosan.", "es": "Los hooks de Claude Code necesitan reparación, así que es posible que las sesiones no informen correctamente.", "fr": "Les hooks de Claude Code doivent être réparés, il est donc possible que les sessions ne signalent pas correctement.", "de": "Die Hooks von Claude Code müssen repariert werden, daher melden Sitzungen möglicherweise nicht korrekt.", "zh-Hans": "Claude Code 的钩子需要修复，因此会话可能无法正确报告状态。"},
     "Cursor's hooks need repairing, so sessions may not report correctly.": {"hu": "A Cursor hookjait meg kell javítani, ezért előfordulhat, hogy a munkamenetek nem jeleznek pontosan.", "es": "Los hooks de Cursor necesitan reparación, así que es posible que las sesiones no informen correctamente.", "fr": "Les hooks de Cursor doivent être réparés, il est donc possible que les sessions ne signalent pas correctement.", "de": "Die Hooks von Cursor müssen repariert werden, daher melden Sitzungen möglicherweise nicht korrekt.", "zh-Hans": "Cursor 的钩子需要修复，因此会话可能无法正确报告状态。"},
@@ -648,7 +582,6 @@ _GROK_HOOKS_APP = {
 APP.update(_GROK_HOOKS_APP)
 
 
-# --- Agentic onboarding step (offers to connect the tools you have) ---
 _AGENT_SETUP_APP = {
     "Know exactly when an agent is working": {"hu": "Pontosan tudja, mikor dolgozik egy ügynök", "es": "Sabe exactamente cuándo está trabajando un agente", "fr": "Sachez exactement quand un agent travaille", "de": "Genau wissen, wann ein Agent arbeitet", "zh-Hans": "准确知道智能体何时在工作"},
     "Connect the coding tools you use and their sessions report for themselves, instead of Keepresso judging them by how busy they look.": {"hu": "Csatlakoztassa a használt kódolóeszközöket, és a munkameneteik önmaguktól jeleznek, ahelyett hogy a Keepresso aszerint ítélné meg őket, mennyire elfoglaltnak tűnnek.", "es": "Conecta las herramientas de código que usas y sus sesiones informan por sí mismas, en lugar de que Keepresso las juzgue por lo ocupadas que parecen.", "fr": "Connectez les outils de code que vous utilisez et leurs sessions se signalent elles-mêmes, au lieu que Keepresso les juge à leur air occupé.", "de": "Verbinde die Programmiertools, die du nutzt, und ihre Sitzungen melden sich selbst, statt dass Keepresso sie danach beurteilt, wie beschäftigt sie wirken.", "zh-Hans": "连接你使用的编程工具，让它们的会话自行报告状态，而不是让 Keepresso 通过它们看起来有多忙来判断。"},
@@ -658,11 +591,6 @@ _AGENT_SETUP_APP = {
 APP.update(_AGENT_SETUP_APP)
 
 
-# ---------------------------------------------------------------------------
-# Desktop "disable sleep" naming: the pmset disablesleep switch shown on
-# battery-less Macs (mini, Studio, Pro), where "closed-display mode" and lid
-# wording make no sense. Same feature, desktop labels.
-# ---------------------------------------------------------------------------
 _DESKTOP_SLEEP = {
     "Disable system sleep": {"hu": "Rendszer elalvásának letiltása", "es": "Desactivar la suspensión del sistema", "fr": "Désactiver la veille du système", "de": "System-Ruhezustand deaktivieren", "zh-Hans": "禁用系统睡眠"},
     "Disable sleep": {"hu": "Alvás letiltása", "es": "Desactivar la suspensión", "fr": "Désactiver la veille", "de": "Ruhezustand deaktivieren", "zh-Hans": "禁用睡眠"},
@@ -678,11 +606,6 @@ _DESKTOP_SLEEP = {
 APP.update(_DESKTOP_SLEEP)
 
 
-# ---------------------------------------------------------------------------
-# v1.15 thermal safety net, fan test, helper self-update, and the glass
-# slider, plus the lid-closed scoping that followed. The reworded helper
-# texts replace the retired pre-1.15 variants.
-# ---------------------------------------------------------------------------
 _THERMAL_V115 = {
     "(max %@)": {"hu": "(max. %@)", "es": "(máx. %@)", "fr": "(max %@)", "de": "(max. %@)", "zh-Hans": "（最高 %@）"},
     "15 seconds": {"hu": "15 másodperc", "es": "15 segundos", "fr": "15 secondes", "de": "15 Sekunden", "zh-Hans": "15 秒"},
@@ -742,8 +665,6 @@ _THERMAL_V115 = {
 APP.update(_THERMAL_V115)
 
 
-# Second sweep: section headers and footers passed through the Theme.swift
-# wrappers (LocalizedStringKey params), which the first extraction missed.
 _THERMAL_V115_LATE = {
     "Thermal": {"hu": "Hővédelem", "es": "Térmico", "fr": "Thermique", "de": "Temperatur", "zh-Hans": "温控"},
     "Appearance": {"hu": "Megjelenés", "es": "Aspecto", "fr": "Apparence", "de": "Erscheinungsbild", "zh-Hans": "外观"},
@@ -753,7 +674,6 @@ _THERMAL_V115_LATE = {
 APP.update(_THERMAL_V115_LATE)
 
 
-# 1.16.0 automation, wake schedules, activity stats
 _V116 = {
     '%dh %dm': {'hu': '%dó %d p', 'es': '%dh %dm', 'fr': '%d\xa0h %d\xa0min', 'de': '%d\xa0Std. %d\xa0Min.', 'zh-Hans': '%d小时 %d分'},
     '%dm': {'hu': '%d p', 'es': '%dm', 'fr': '%d\xa0min', 'de': '%d\xa0Min.', 'zh-Hans': '%d分'},
@@ -823,7 +743,6 @@ _V116 = {
 }
 APP.update(_V116)
 
-# Automation leases and wake control (menu + Preferences), new in the 1.17 cycle.
 _LEASES_V117 = {
     'Held awake by an automation lease': {'hu': 'Egy automatizálási bérlet tartja ébren', 'es': 'Mantenido despierto por una concesión de automatización', 'fr': 'Maintenu éveillé par un bail d’automatisation', 'de': 'Durch einen Automatisierungs-Lease wach gehalten', 'zh-Hans': '由一个自动化租约保持唤醒'},
     'Held awake by %d automation leases': {'hu': '%d automatizálási bérlet tartja ébren', 'es': 'Mantenido despierto por %d concesiones de automatización', 'fr': 'Maintenu éveillé par %d baux d’automatisation', 'de': 'Durch %d Automatisierungs-Leases wach gehalten', 'zh-Hans': '由 %d 个自动化租约保持唤醒'},
@@ -835,8 +754,6 @@ _LEASES_V117 = {
 }
 APP.update(_LEASES_V117)
 
-# Teach-your-agent actions, end-action wording, and gaming comfort,
-# new in the 1.17 cycle (second batch).
 _V117B = {
     "Copy Agent Instructions": {"hu": "Ügynökutasítások másolása", "es": "Copiar instrucciones para el agente", "fr": "Copier les instructions pour l’agent", "de": "Agentenanweisungen kopieren", "zh-Hans": "复制智能体说明"},
     "Copy MCP Setup": {"hu": "MCP-beállítás másolása", "es": "Copiar configuración de MCP", "fr": "Copier la configuration MCP", "de": "MCP-Einrichtung kopieren", "zh-Hans": "复制 MCP 设置"},
@@ -871,7 +788,6 @@ _V117B = {
 }
 APP.update(_V117B)
 
-# 1.18: Scheduled AI runs, dim-when-idle, mic call trigger, welcome flow
 _V118_APP = {
     "%@ · next %@": {"hu": "%@ · következő: %@", "es": "%@ · próxima %@", "fr": "%@ · prochain %@", "de": "%@ · nächste %@", "zh-Hans": "%@ · 下次 %@"},
     "%d automation leases are waiting (safety pause)": {"hu": "%d automatizálási bérlet vár (biztonsági szünet)", "es": "%d concesiones de automatización están esperando (pausa de seguridad)", "fr": "%d baux d’automatisation sont en attente (pause de sécurité)", "de": "%d Automatisierungs-Leases warten (Sicherheitspause)", "zh-Hans": "%d 个自动化租约正在等待（安全暂停）"},
@@ -932,29 +848,23 @@ _V118_APP = {
 }
 APP.update(_V118_APP)
 
-# Helper text under the two Automation access switches, so the difference
-# between holding the Mac awake during work and scheduling a future wake is
-# visible without opening the section tooltip.
 _AUTOMATION_HELP = {
     'Let AI agents and scripts keep the Mac awake while work is running. It cannot wake a sleeping Mac.': {'hu': 'Engedélyezi, hogy az AI-ügynökök és szkriptek munka közben ébren tartsák a Macet. Nem tud felébreszteni egy alvó Macet.', 'es': 'Permite que agentes de IA y scripts mantengan el Mac despierto mientras trabajan. No puede despertar un Mac que está dormido.', 'fr': 'Permet aux agents IA et aux scripts de garder le Mac éveillé pendant le travail. Il ne peut pas réveiller un Mac en veille.', 'de': 'Erlaubt KI-Agenten und Skripten, den Mac während der Arbeit wach zu halten. Ein schlafender Mac kann damit nicht aufgeweckt werden.', 'zh-Hans': '供 AI 智能体和脚本在任务期间让 Mac 保持唤醒，不能唤醒已睡眠的 Mac。'},
     'Let trusted tools set or clear the Mac\'s scheduled wake. It needs the administrator helper and does not keep the Mac awake after it wakes.': {'hu': 'Engedélyezi megbízható eszközöknek a Mac ütemezett ébresztésének beállítását vagy törlését. Rendszergazdai segéd kell hozzá, és ébresztés után nem tartja ébren a Macet.', 'es': 'Permite que herramientas de confianza configuren o borren el despertar programado del Mac. Requiere el asistente de administrador y no mantiene despierto el Mac después de despertarlo.', 'fr': 'Permet aux outils de confiance de régler ou d’effacer le réveil programmé du Mac. Nécessite l’assistant administrateur et ne garde pas le Mac éveillé après son réveil.', 'de': 'Erlaubt vertrauenswürdigen Tools, das geplante Aufwecken des Mac festzulegen oder zu löschen. Dafür ist der Administrator-Hilfsdienst nötig, und der Mac bleibt danach nicht wach.', 'zh-Hans': '允许受信任的工具设置或清除 Mac 的定时唤醒。需要管理员助理，且不会让 Mac 在唤醒后持续保持唤醒。'},
 }
 APP.update(_AUTOMATION_HELP)
 
-# 1.23: lid-shut display policy picker
 _V123_APP = {
     "If the lid shuts": {"hu": "Ha a fedél becsukódik", "es": "Si la tapa se cierra", "fr": "Si le capot se ferme", "de": "Wenn der Deckel schließt", "zh-Hans": "合盖时"},
     "Normally a MacBook sleeps the moment you shut the lid unless a display is attached. This keeps it running with the lid shut and nothing plugged in, on power or battery. What the screen itself does when the lid closes is your choice below (“If the lid shuts”): turn it off, keep it powered at zero brightness so a remote session stays live, or leave it alone. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off: closed and on battery, the Mac can still drain over time, so don't leave it on in a bag. “Only while brewing” ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for “Only while brewing”.": {"hu": "Egy MacBook rendszerint elalszik, amint becsukja a fedelét, hacsak nincs kijelző csatlakoztatva. Ez csukott fedéllel és semmi csatlakoztatva is működésben tartja, hálózati tápon vagy akkumulátorról. Hogy a kijelző maga mit csinál a fedél becsukódásakor, azt alább választhatja ki („Ha a fedél becsukódik”): kapcsolja ki, tartsa bekapcsolva nulla fényerőn, hogy a távoli munkamenet aktív maradjon, vagy hagyja békén. Egy rendszerbeállítás átállításával működik (pmset disablesleep), így addig marad érvényben, amíg ki nem kapcsolja: csukva és akkumulátorról a Mac idővel még mindig lemerülhet, ezért ne hagyja bekapcsolva egy táskában. A „Csak főzés közben” ehelyett a munkamenethez köti: bekapcsol, amikor egy ébrentartási munkamenet elindul, kikapcsol, amikor véget ér, vagy a Keepresso kilép (akár összeomlás után is). Mindkettőhöz rendszergazdai jogok kellenek: telepített rendszergazdai segéddel csendes (lásd e lap tetején), egyébként a macOS bekéri a jelszavát, a „Csak főzés közben” esetén alkalmazásindításonként egyszer.", "es": "Normalmente un MacBook se suspende en cuanto cierras la tapa, a menos que haya una pantalla conectada. Esto lo mantiene funcionando con la tapa cerrada y nada enchufado, con corriente o batería. Lo que hace la pantalla en sí al cerrarse la tapa lo eliges abajo («Si la tapa se cierra»): apagarla, mantenerla encendida con brillo cero para que una sesión remota siga activa, o no tocarla. Funciona modificando un ajuste del sistema (pmset disablesleep), por lo que sigue en efecto hasta que lo desactives: cerrado y con batería, el Mac puede seguir agotándola con el tiempo, así que no lo dejes activado en una bolsa. «Solo mientras está en marcha» lo vincula a la sesión en su lugar, activándolo cuando comienza una sesión, desactivándolo cuando termina o Keepresso se cierra (incluso tras un bloqueo). Ambos requieren permisos de administrador: silencioso con el asistente de administrador instalado (mira arriba en esta pestaña), de lo contrario macOS pide tu contraseña, una vez por ejecución de la app para «Solo mientras está en marcha».", "fr": "Normalement, un MacBook s'endort dès que vous fermez le capot, sauf si un écran est connecté. Ceci le garde actif capot fermé et sans rien de branché, sur secteur ou sur batterie. Ce que fait l'écran lui-même à la fermeture du capot, c'est votre choix ci-dessous (« Si le capot se ferme ») : l'éteindre, le garder alimenté à luminosité zéro pour qu'une session distante reste active, ou ne pas y toucher. Cela fonctionne en modifiant un réglage système (pmset disablesleep), qui reste donc actif jusqu'à ce que vous le désactiviez : fermé et sur batterie, le Mac peut quand même se décharger avec le temps, ne le laissez donc pas activé dans un sac. « Uniquement pendant l'infusion » le relie plutôt à la session : activé au début d'une session de maintien en éveil, désactivé à la fin ou quand Keepresso se ferme (même après un plantage). Les deux nécessitent des droits d'administrateur : silencieux avec l'assistant administrateur installé (voir en haut de cet onglet), sinon macOS demande votre mot de passe, une fois par exécution de l'app pour « Uniquement pendant l'infusion ».", "de": "Normalerweise schläft ein MacBook in dem Moment ein, in dem du den Deckel schließt, sofern kein Display angeschlossen ist. Dies hält ihn bei geschlossenem Deckel und ohne angeschlossenes Gerät am Laufen, im Netz- oder Akkubetrieb. Was das Display selbst beim Schließen des Deckels tut, bestimmst du unten („Wenn der Deckel schließt“): ausschalten, bei null Helligkeit mit Strom versorgt lassen, damit eine Remote-Sitzung aktiv bleibt, oder unverändert lassen. Es funktioniert, indem es eine Systemeinstellung umschaltet (pmset disablesleep), die daher wirksam bleibt, bis du sie ausschaltest: geschlossen und im Akkubetrieb kann der Mac mit der Zeit trotzdem leerlaufen, lass ihn also nicht aktiviert in einer Tasche. „Nur während des Brühens“ koppelt es stattdessen an die Sitzung: an, wenn eine Wachhalte-Sitzung startet, aus, wenn sie endet oder Keepresso beendet wird (auch nach einem Absturz). Beides braucht Administratorrechte: lautlos mit installiertem Administrator-Hilfsdienst (siehe oben in diesem Tab), sonst fragt macOS nach deinem Passwort, einmal pro App-Start für „Nur während des Brühens“.", "zh-Hans": "通常，MacBook 一合上盖子就会睡眠，除非连接了显示器。此选项能让它在合盖且未插接任何设备时继续运行，无论使用电源还是电池。合盖时显示器本身的具体行为由你在下方（“合盖时”）选择：将其关闭，以 0% 亮度保持通电以让远程会话保持活跃，或不改动显示器。它的原理是切换一项系统设置（pmset disablesleep），因此在你将其关闭前会一直生效：合盖且使用电池时，Mac 仍可能随时间耗尽电量，所以不要在装入包中时保持开启。“仅在保持唤醒会话期间”则改为将其与会话绑定：在保持唤醒会话开始时打开，在会话结束或 Keepresso 退出时关闭（即使是崩溃之后）。两者都需要管理员权限：安装了管理员助理时为静默执行（见本标签页顶部），否则 macOS 会索要你的密码，“仅在保持唤醒会话期间”为每次 App 运行一次。"},
 }
 APP.update(_V123_APP)
 
-# Presence: "Only while brewing" off footer
 _PRESENCE_SCOPE_APP = {
     "Also runs between sessions, which can keep the Mac from sleeping.": {"hu": "Munkamenetek között is fut, így előfordulhat, hogy a Mac nem alszik el.", "es": "También se ejecuta entre sesiones, lo que puede evitar que el Mac se suspenda.", "fr": "Fonctionne aussi entre les sessions, ce qui peut empêcher le Mac de se mettre en veille.", "de": "Läuft auch zwischen Sitzungen, was den Mac am Einschlafen hindern kann.", "zh-Hans": "会话之间也会运行，这可能会让 Mac 无法进入睡眠。"},
 }
 APP.update(_PRESENCE_SCOPE_APP)
 
-# Closed-lid speaker mute
 _SPEAKER_MUTE_APP = {
     "Mute built-in speakers while the lid is closed": {"hu": "Beépített hangszórók némítása csukott fedélnél", "es": "Silenciar los altavoces integrados con la tapa cerrada", "fr": "Couper le son des haut-parleurs intégrés capot fermé", "de": "Integrierte Lautsprecher bei geschlossenem Deckel stummschalten", "zh-Hans": "合盖时将内建扬声器静音"},
     "Mutes the built-in speakers with the lid closed and closed-display mode active. Headphones and other outputs keep playing. Unmutes when the lid opens or the mode ends, unless you had muted them yourself.": {"hu": "Némítja a beépített hangszórókat, ha a fedél csukva van, és a csukott fedél mód aktív. A fejhallgató és más kimenetek tovább szólnak. Újra megszólaltatja őket, amikor a fedél kinyílik vagy a mód véget ér, kivéve ha Ön némította el őket.", "es": "Silencia los altavoces integrados con la tapa cerrada y el modo con pantalla cerrada activo. Los auriculares y otras salidas siguen sonando. Reactiva el sonido al abrir la tapa o al terminar el modo, salvo que los hayas silenciado tú.", "fr": "Coupe le son des haut-parleurs intégrés quand le capot est fermé et que le mode écran fermé est actif. Les écouteurs et les autres sorties continuent de jouer. Rétablit le son à l’ouverture du capot ou à la fin du mode, sauf si vous l’aviez coupé vous-même.", "de": "Schaltet die integrierten Lautsprecher stumm, solange der Deckel geschlossen und der Modus bei geschlossenem Display aktiv ist. Kopfhörer und andere Ausgaben spielen weiter. Hebt die Stummschaltung auf, wenn du den Deckel öffnest oder der Modus endet, außer du hattest sie selbst stummgeschaltet.", "zh-Hans": "在合盖且合盖模式生效时，将内建扬声器静音。耳机和其他输出设备会继续播放。打开盖子或模式结束时恢复声音，除非你之前已自行将其静音。"},

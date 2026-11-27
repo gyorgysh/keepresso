@@ -1,6 +1,5 @@
 import Foundation
 
-// MARK: - Request record
 
 /// One wake-schedule change asked for by an outside tool through the CLI or
 /// the MCP server. Same transport as leases: the request travels as a
@@ -46,7 +45,6 @@ public enum AutomationWakeOutcome: String, Codable, Sendable {
     case helperUnavailable
 }
 
-// MARK: - Policy
 
 /// Pure validation and mapping for wake requests. The file is untrusted
 /// input, so everything is checked again app-side no matter what the writing
@@ -58,8 +56,6 @@ public enum AutomationWakeControl {
     public static let maxLead: TimeInterval = 366 * 24 * 3600
 
     public enum Verdict: Equatable, Sendable {
-        /// Install this config, or clear when nil. Session-on-wake behavior
-        /// is merged from the user's existing schedule by the caller.
         case apply(WakeScheduleConfig?)
         case invalid(String)
     }
@@ -77,7 +73,6 @@ public enum AutomationWakeControl {
                 return .invalid("the wake time is more than a year away")
             }
         }
-        // Repeating parts come together or not at all.
         let wantsRepeat = request.repeatDays != nil || request.repeatTime != nil
         if wantsRepeat {
             guard let days = request.repeatDays, let time = request.repeatTime else {
@@ -115,7 +110,6 @@ public enum AutomationWakeControl {
     }
 }
 
-// MARK: - Request file
 
 /// The single pending request file under Application Support, next to the
 /// lease directory. Same IO contract: atomic, best-effort, errors swallowed.
@@ -147,10 +141,6 @@ public enum AutomationWakeRequestFile {
         }
     }
 
-    /// Delete the pending request only when it is still `requestId`. Used by
-    /// the client on ack timeout so a late app read of a replaced or already
-    /// claimed file cannot be wiped, and by the app to claim a request
-    /// before applying it (apply only if the claim succeeds).
     @discardableResult
     public static func claim(requestId: String, at url: URL = defaultURL()) -> Bool {
         FileExclusiveLock.withLock(directory: url.deletingLastPathComponent(), name: ".wake.lock") {
@@ -163,7 +153,6 @@ public enum AutomationWakeRequestFile {
     }
 }
 
-// MARK: - Client
 
 /// Client-side wake operations, shared by the CLI and the MCP server like
 /// ``LeaseClient``. `status` is a direct unprivileged `pmset -g sched` read;
@@ -244,8 +233,6 @@ public struct WakeClient {
             repeatTime: repeatTime,
             requestedAt: instant
         )
-        // Reject client-side what the app would reject anyway, without a
-        // round trip.
         if case .invalid(let reason) = AutomationWakeControl.adjudicate(request, now: instant) {
             return failure(64, reason)
         }
@@ -263,9 +250,6 @@ public struct WakeClient {
                    .flatMap(AutomationWakeOutcome.init(rawValue:)) {
                 return render(outcome, request: request)
             }
-            // Bound the loop by iterations, not just the wall clock: a
-            // backwards clock jump landing mid-wait would otherwise keep
-            // `now() < deadline` true for hours.
             guard now() < deadline, polls < LeaseClient.maxAckPolls else { break }
             polls += 1
             sleep(LeaseClient.ackInterval)
@@ -306,7 +290,6 @@ public struct WakeClient {
 }
 
 public extension WakeClient {
-    /// The production client, sharing the lease doorbell.
     static func real() -> WakeClient {
         WakeClient(nudgeApp: AppDoorbell.ring)
     }

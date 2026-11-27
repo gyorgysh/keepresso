@@ -7,18 +7,12 @@ import Foundation
 /// and the virtual display arrive later and fold into ``DisplayPolicyDecision``
 /// rather than growing a second watchdog.
 public enum ClosedLidDisplayPolicy: String, Codable, CaseIterable, Hashable, Sendable {
-    /// Sleep the panel when the lid shuts (no external display attached) and
-    /// re-sleep it when something lights it back up inside the shut lid.
     case displayOff
-    /// Keep the display powered at 0% brightness: the panel looks off, but the
-    /// framebuffer stays live so a remote session keeps working.
     case zeroBrightness
-    /// Never touch the display: no sleep command, no brightness change.
     case leaveAlone
 }
 
 public extension ClosedLidDisplayPolicy {
-    /// Menu and Preferences label for the policy picker.
     var label: String {
         switch self {
         case .displayOff: L("Turn off the display")
@@ -27,7 +21,6 @@ public extension ClosedLidDisplayPolicy {
         }
     }
 
-    /// One-line caption under the picker naming what the choice means.
     var explanation: String {
         switch self {
         case .displayOff:
@@ -43,11 +36,8 @@ public extension ClosedLidDisplayPolicy {
 /// What the watchdog should do on this tick, before edge latches and grace
 /// periods (those stay in the controller).
 public enum DisplayPolicyAction: Equatable, Sendable {
-    /// Put the panel to sleep (and re-sleep it if it wakes inside the lid).
     case sleepPanel
-    /// Hold the panel at 0% brightness (and re-zero it if raised).
     case holdDim
-    /// Do nothing to the display.
     case hold
 }
 

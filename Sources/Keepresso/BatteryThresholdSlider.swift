@@ -1,23 +1,11 @@
 import SwiftUI
 import KeepressoCore
 
-/// The "pause below this charge" control shared by the menu panel and
-/// Preferences: a battery glyph that tracks the chosen level, a 10-90% slider
-/// in 5% steps, and a percent readout.
-///
-/// The bound value is only committed when a drag ends. Writing through on
-/// every change would let the live session controller latch the battery pause
-/// (stopping the session and posting a notification) while the knob merely
-/// passes the current charge mid-drag.
 struct BatteryThresholdSlider: View {
     @Binding var percent: Int
 
-    /// The value while a drag is in flight; nil means no drag, so changes
-    /// (e.g. from keyboard adjustment) commit immediately.
     @State private var dragValue: Double?
 
-    /// Mirrors the range Core clamps the persisted value to, so the slider
-    /// can never display a value the setting can't hold.
     private static let range = Double(KeepressoSettings.batteryPausePercentRange.lowerBound)
         ... Double(KeepressoSettings.batteryPausePercentRange.upperBound)
 

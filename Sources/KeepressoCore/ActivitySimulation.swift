@@ -37,8 +37,6 @@ public enum ActivitySimulationMethod: String, Codable, CaseIterable, Sendable {
 /// (nothing is held down for other input). Chromium skips its focus-ring
 /// heuristic for a key pressed with Control, Option, or Command, so a combo
 /// like Control+F18 keeps browsers and Electron apps from drawing focus rings.
-/// Only F13 to F20 carry modifiers (see ``combinableKeyCodes``).
-/// Raw values are this app's own, stable for persistence.
 public struct ActivityKeyModifiers: OptionSet, Hashable, Codable, Sendable {
     public let rawValue: Int
     public init(rawValue: Int) { self.rawValue = rawValue }
@@ -85,8 +83,6 @@ public struct ActivityKeyModifiers: OptionSet, Hashable, Codable, Sendable {
         combinableKeyCodes.contains(keyCode)
     }
 
-    /// Each modifier with its Core Graphics flag and menu glyph, in menu
-    /// order (⌃⌥⇧⌘). The one table every conversion reads.
     private static let table: [(ActivityKeyModifiers, CGEventFlags, String)] = [
         (.control, .maskControl, "⌃"),
         (.option, .maskAlternate, "⌥"),
@@ -117,7 +113,6 @@ public struct ActivityKeyModifiers: OptionSet, Hashable, Codable, Sendable {
 
 /// The concrete poke the simulator performs for one tick.
 public enum ActivityPokeKind: Equatable, Sendable {
-    /// Prompt-free: declare user activity and warp the cursor 1px.
     case powerWarp
     /// Key down/up of this Carbon virtual key code, with these modifiers set
     /// on the key-down event. Needs Accessibility.
@@ -136,8 +131,6 @@ public enum AccessibilityTrust {
         string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
     )
 
-    /// Prompt if the process is not already trusted. Returns the post-prompt
-    /// state (still false if the user declined or the dialog is showing).
     @discardableResult
     public static func requestIfNeeded() -> Bool {
         if AXIsProcessTrusted() { return true }
@@ -146,27 +139,16 @@ public enum AccessibilityTrust {
     }
 }
 
-/// Abstraction over "report user activity so other software keeps you
-/// present", mirroring ``PowerAsserting``.
-///
 /// ``PowerAsserting`` keeps the Mac awake, but an `IOPMAssertion` does **not**
 /// reset app-level idle timeouts: meetings and chat, remote desktop and VDI,
 /// cloud gaming, and many other tools still treat a quiet keyboard as idle.
-/// This seam is the input those apps watch. Injected like every other system
-/// seam. Tests use a recording fake.
 public protocol ActivitySimulating: AnyObject {
-    /// Report user activity now. Called on a slow cadence while a keep-active
-    /// session runs (and between sessions with the brewing scope off), never
-    /// every tick.
     func poke(_ kind: ActivityPokeKind)
 }
 
-/// Real backend.
-///
 /// `.powerWarp` is the documented, prompt-free path: `IOPMAssertionDeclareUserActivity`
 /// plus a 1px `CGWarpMouseCursorPosition` nudge. Warp does not generate HID
 /// events, so a lot of software ignores it.
-///
 /// HID kinds post a real key or mouse event through `CGEventPost`. That is
 /// what those apps watch, and it needs Accessibility. If the process is not
 /// trusted the post is a no-op and the warp still runs so the OS idle timer
@@ -198,18 +180,12 @@ public final class IOKitActivitySimulator: ActivitySimulating {
         )
     }
 
-    /// Nudge the pointer 1px and back. A warp, not a synthesized event, so it
-    /// stays prompt-free. Skip when the location cannot be read, rather than
-    /// jumping to the origin.
     private func warpCursor() {
         guard let location = CGEvent(source: nil)?.location else { return }
         CGWarpMouseCursorPosition(CGPoint(x: location.x + 1, y: location.y))
         CGWarpMouseCursorPosition(location)
     }
 
-    /// The modifiers ride on the key-down only. No modifier key events are
-    /// posted and the key-up carries no flags, so nothing stays held for
-    /// real or automated input.
     private func tapKey(_ code: CGKeyCode, modifiers: ActivityKeyModifiers) {
         let source = CGEventSource(stateID: .hidSystemState)
             ?? CGEventSource(stateID: .combinedSessionState)
@@ -246,8 +222,6 @@ public final class IOKitActivitySimulator: ActivitySimulating {
         }
     }
 
-    /// Modifier virtual keys need their flag bit set on key-down so the event
-    /// looks like a real tap rather than a bare code.
     private static func flags(for code: CGKeyCode) -> CGEventFlags {
         if Int(code) == ActivityKeyModifiers.capsLockKeyCode { return .maskAlphaShift }
         return ActivityKeyModifiers.modifier(forKeyCode: Int(code))?.eventFlags ?? []

@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-// MARK: - Pure policy gate
 
 @Test func displayOffSleepsWhenLidShutWithNoExternalDisplay() {
     #expect(DisplayPolicyDecision.decide(
@@ -48,7 +47,6 @@ import Foundation
     }
 }
 
-// MARK: - Controller wiring
 
 private final class PolicyFakeSleepControl: SleepSettingControlling, @unchecked Sendable {
     var disabled = true
@@ -132,7 +130,6 @@ private final class FakeClock: @unchecked Sendable {
     h.controller.tick()
     #expect(h.sleeper.sleepNowCallCount == 0)
     #expect(h.panel.setCalls.isEmpty)
-    // No reason line: the picker's own caption already says what it does.
     #expect(h.controller.lastDecisionReason == nil)
 }
 
@@ -141,14 +138,14 @@ private final class FakeClock: @unchecked Sendable {
     let h = makeHarness()
     await h.controller.refresh()
     h.controller.policy = .zeroBrightness
-    h.controller.tick() // the shut edge
+    h.controller.tick()
     #expect(h.panel.setCalls == [0])
-    h.controller.tick() // still shut: no repeat write
+    h.controller.tick()
     #expect(h.panel.setCalls == [0])
     #expect(h.controller.lastDecisionReason == nil)
 
     h.lid.closed = false
-    h.controller.tick() // reopened: the saved 0.8 comes back
+    h.controller.tick()
     #expect(h.panel.setCalls == [0, 0.8])
 }
 
@@ -160,8 +157,8 @@ private final class FakeClock: @unchecked Sendable {
     h.controller.tick()
     #expect(h.panel.setCalls == [0])
 
-    h.panel.current = 0.5 // raised from outside while shut
-    h.controller.tick() // within grace: left alone
+    h.panel.current = 0.5
+    h.controller.tick()
     #expect(h.panel.setCalls == [0])
     h.clock.advance(ClosedDisplayController.resleepGrace)
     h.controller.tick()
@@ -186,9 +183,9 @@ private final class FakeClock: @unchecked Sendable {
     h.controller.tick()
     #expect(h.panel.setCalls == [0])
 
-    h.panel.current = 0.5 // somebody else took over while shut
+    h.panel.current = 0.5
     h.lid.closed = false
-    h.controller.tick() // must not clobber their live value
+    h.controller.tick()
     #expect(h.panel.setCalls == [0])
 }
 
@@ -200,8 +197,8 @@ private final class FakeClock: @unchecked Sendable {
     h.controller.tick()
     #expect(h.panel.setCalls == [0])
 
-    h.controller.policy = .displayOff // switch mid-shut restores first
-    h.lid.closed = false // ...and the lid is open, so no sleep fires
+    h.controller.policy = .displayOff
+    h.lid.closed = false
     h.controller.tick()
     #expect(h.panel.setCalls == [0, 0.8])
 }
@@ -224,8 +221,8 @@ private final class FakeClock: @unchecked Sendable {
     controller.tick()
     #expect(panel.setCalls == [0])
 
-    control.disabled = false // the mode goes off with the lid still shut
-    await controller.refresh(force: true) // bypass the pmset read cache
+    control.disabled = false
+    await controller.refresh(force: true)
     controller.tick()
     #expect(panel.setCalls == [0, 0.8])
 }
@@ -235,13 +232,13 @@ private final class FakeClock: @unchecked Sendable {
     let h = makeHarness(lidClosed: false, brightness: 0.7)
     await h.controller.refresh()
     h.controller.policy = .zeroBrightness
-    h.controller.tick() // lid open: samples 0.7, touches nothing
+    h.controller.tick()
     h.controller.tick()
     #expect(h.panel.setCalls.isEmpty)
 
     h.lid.closed = true
     h.panel.current = 0 // macOS darkened the panel on close (see GitHub #13)
-    h.controller.tick() // must save 0.7, not the post-close 0
+    h.controller.tick()
     #expect(h.panel.setCalls == [0])
     h.lid.closed = false
     h.controller.tick()
@@ -250,12 +247,11 @@ private final class FakeClock: @unchecked Sendable {
 
 @MainActor
 @Test func noRestoreTargetMeansNoZeroing() async {
-    let h = makeHarness(brightness: nil) // unreadable, never sampled open
+    let h = makeHarness(brightness: nil)
     await h.controller.refresh()
     h.controller.policy = .zeroBrightness
     h.controller.tick()
     h.controller.tick()
-    // Zeroing a level that could never be handed back would strand the panel.
     #expect(h.panel.setCalls.isEmpty)
 }
 
@@ -268,9 +264,9 @@ private final class FakeClock: @unchecked Sendable {
     #expect(h.panel.setCalls == [0])
 
     h.lid.closed = false
-    h.panel.current = nil // unreadable exactly on the reopen tick
+    h.panel.current = nil
     h.controller.tick()
-    #expect(h.panel.setCalls == [0]) // target kept, not dropped
+    #expect(h.panel.setCalls == [0])
     h.panel.current = 0
     h.controller.tick()
     #expect(h.panel.setCalls == [0, 0.8])
@@ -287,9 +283,6 @@ private final class FakeClock: @unchecked Sendable {
 }
 
 @Test func renamedPolicyValueFallsBackWithoutResettingSettings() throws {
-    // The branch-only `keepDark` raw value no longer exists. A blob carrying
-    // it (persisted by the earlier revision) must decode to the default
-    // policy with every other setting intact, never throw and wipe the blob.
     let data = Data("""
         {"closedLidDisplayPolicy": "keepDark", "quickStopDurations": [900]}
         """.utf8)

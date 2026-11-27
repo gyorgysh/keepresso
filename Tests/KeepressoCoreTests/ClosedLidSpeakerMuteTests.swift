@@ -2,8 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-/// Built-in speakers with a controllable mute state. `muted == nil` models
-/// no reachable speakers (headphones on the jack, or none at all).
 private final class FakeSpeakers: BuiltInSpeakerMuting {
     var muted: Bool?
     var refuseSets = false
@@ -40,7 +38,7 @@ private func makeController(muted: Bool? = false) -> (ClosedLidSpeakerMuteContro
 @Test func speakerMuteMutesWhileLidClosedInClosedDisplayModeAndRestores() {
     let (controller, speakers, marker) = makeController()
     controller.tick(enabled: true, lidClosed: false, closedDisplayActive: true)
-    #expect(speakers.muted == false) // lid open: untouched
+    #expect(speakers.muted == false)
 
     controller.tick(enabled: true, lidClosed: true, closedDisplayActive: true)
     #expect(speakers.muted == true)
@@ -48,7 +46,7 @@ private func makeController(muted: Bool? = false) -> (ClosedLidSpeakerMuteContro
     #expect(marker.isSet)
 
     controller.tick(enabled: true, lidClosed: true, closedDisplayActive: true)
-    #expect(speakers.sets == [true]) // held, not re-applied every tick
+    #expect(speakers.sets == [true])
 
     controller.tick(enabled: true, lidClosed: false, closedDisplayActive: true)
     #expect(speakers.muted == false)
@@ -59,9 +57,7 @@ private func makeController(muted: Bool? = false) -> (ClosedLidSpeakerMuteContro
 @MainActor
 @Test func speakerMuteNeedsClosedDisplayModeAndTheSetting() {
     let (controller, speakers, _) = makeController()
-    // Lid closed, but closed-display mode off: the Mac is about to sleep anyway.
     controller.tick(enabled: true, lidClosed: true, closedDisplayActive: false)
-    // Setting off: never touches the speakers.
     controller.tick(enabled: false, lidClosed: true, closedDisplayActive: true)
     #expect(speakers.sets.isEmpty)
 }
@@ -87,7 +83,7 @@ private func makeController(muted: Bool? = false) -> (ClosedLidSpeakerMuteContro
     #expect(!controller.holding)
     #expect(!marker.isSet)
     controller.tick(enabled: true, lidClosed: false, closedDisplayActive: true)
-    #expect(speakers.muted == true) // still the user's mute
+    #expect(speakers.muted == true)
     #expect(speakers.sets.isEmpty)
 }
 
@@ -95,14 +91,13 @@ private func makeController(muted: Bool? = false) -> (ClosedLidSpeakerMuteContro
 @Test func speakerMuteKeepsAnUnmuteMadeWithTheLidShut() {
     let (controller, speakers, marker) = makeController()
     controller.tick(enabled: true, lidClosed: true, closedDisplayActive: true)
-    speakers.muted = false // the user unmuted (remote session, keyboard)
+    speakers.muted = false
     controller.tick(enabled: true, lidClosed: true, closedDisplayActive: true)
-    #expect(speakers.muted == false) // not re-muted in the same stretch
+    #expect(speakers.muted == false)
     controller.tick(enabled: true, lidClosed: false, closedDisplayActive: true)
     #expect(speakers.sets == [true])
     #expect(!marker.isSet)
 
-    // The next lid-closed stretch mutes again.
     controller.tick(enabled: true, lidClosed: true, closedDisplayActive: true)
     #expect(speakers.muted == true)
 }
@@ -111,10 +106,8 @@ private func makeController(muted: Bool? = false) -> (ClosedLidSpeakerMuteContro
 @Test func speakerMuteReEnableWithTheLidShutMutesAgain() {
     let (controller, speakers, _) = makeController(muted: true)
     controller.tick(enabled: true, lidClosed: true, closedDisplayActive: true)
-    #expect(speakers.sets.isEmpty) // the user's own mute: stretch handled
+    #expect(speakers.sets.isEmpty)
 
-    // Turned off (the host ticks with no lid reading), then the user
-    // unmutes and turns it back on with the lid still shut.
     controller.tick(enabled: false, lidClosed: nil, closedDisplayActive: true)
     speakers.muted = false
     controller.tick(enabled: true, lidClosed: true, closedDisplayActive: true)
@@ -130,11 +123,9 @@ private func makeController(muted: Bool? = false) -> (ClosedLidSpeakerMuteContro
     #expect(!controller.holding)
     #expect(!marker.isSet)
 
-    // Headphones unplugged with the lid still shut: the speakers are now the
-    // route. The device scan backs off, so they get muted on the next probe.
     speakers.muted = false
     controller.tick(enabled: true, lidClosed: true, closedDisplayActive: true, now: start.addingTimeInterval(1))
-    #expect(speakers.muted == false) // inside the backoff: no probe
+    #expect(speakers.muted == false)
     controller.tick(enabled: true, lidClosed: true, closedDisplayActive: true,
                     now: start.addingTimeInterval(ClosedLidSpeakerMuteController.unreachableRetry))
     #expect(speakers.muted == true)
@@ -151,8 +142,6 @@ private func makeController(muted: Bool? = false) -> (ClosedLidSpeakerMuteContro
     #expect(controller.holding)
     #expect(marker.isSet)
 
-    // A failed unmute backs off like unreachable speakers, so the device scan
-    // does not run every tick.
     speakers.refuseSets = false
     controller.tick(enabled: true, lidClosed: false, closedDisplayActive: true, now: start.addingTimeInterval(2))
     #expect(speakers.muted == true)
@@ -212,8 +201,6 @@ private func makeController(muted: Bool? = false) -> (ClosedLidSpeakerMuteContro
     controller.tick(enabled: true, lidClosed: false, closedDisplayActive: true, now: start.addingTimeInterval(1))
     #expect(controller.holding)
 
-    // CoreAudio accepted an unmute but its immediate read-back was stale.
-    // It lands after the lid closes again, while release is still pending.
     controller.tick(enabled: true, lidClosed: true, closedDisplayActive: true, now: start.addingTimeInterval(2))
     speakers.refuseSets = false
     speakers.muted = false
@@ -233,13 +220,13 @@ private func makeController(muted: Bool? = false) -> (ClosedLidSpeakerMuteContro
 @MainActor
 @Test func speakerMuteRestoresAfterACrash() {
     let (controller, speakers, marker) = makeController(muted: true)
-    marker.isSet = true // a previous run muted and never got to unmute
+    marker.isSet = true
     controller.restoreIfNeeded()
     #expect(controller.holding)
-    #expect(speakers.muted == true) // nothing read yet: lid may still be shut
+    #expect(speakers.muted == true)
 
     controller.tick(enabled: true, lidClosed: nil, closedDisplayActive: nil)
-    #expect(speakers.muted == true) // still no reading: keep holding
+    #expect(speakers.muted == true)
 
     controller.tick(enabled: true, lidClosed: false, closedDisplayActive: false)
     #expect(speakers.muted == false)
@@ -253,7 +240,7 @@ private func makeController(muted: Bool? = false) -> (ClosedLidSpeakerMuteContro
     marker.isSet = true
     controller.restoreIfNeeded()
     controller.tick(enabled: true, lidClosed: true, closedDisplayActive: true)
-    #expect(speakers.sets.isEmpty) // no unmute blip, no re-mute
+    #expect(speakers.sets.isEmpty)
     #expect(controller.holding)
 
     controller.tick(enabled: true, lidClosed: false, closedDisplayActive: true)
@@ -266,8 +253,6 @@ private func makeController(muted: Bool? = false) -> (ClosedLidSpeakerMuteContro
     let (controller, speakers, marker) = makeController(muted: true)
     marker.isSet = true
     controller.restoreIfNeeded()
-    // The lid reads open; closed-display mode hasn't been read yet. An open
-    // lid can't be closed-display mode, so the sound comes back now.
     controller.tick(enabled: true, lidClosed: false, closedDisplayActive: nil)
     #expect(speakers.muted == false)
     #expect(!marker.isSet)
@@ -302,7 +287,6 @@ private func makeController(muted: Bool? = false) -> (ClosedLidSpeakerMuteContro
     controller.tick(enabled: true, lidClosed: true, closedDisplayActive: true, now: start)
     #expect(speakers.muted == true)
 
-    // Lid opens while the speakers can't be reached: hold and retry later.
     let saved = speakers.muted
     speakers.muted = nil
     controller.tick(enabled: true, lidClosed: false, closedDisplayActive: true, now: start.addingTimeInterval(1))
@@ -311,7 +295,7 @@ private func makeController(muted: Bool? = false) -> (ClosedLidSpeakerMuteContro
 
     speakers.muted = saved
     controller.tick(enabled: true, lidClosed: false, closedDisplayActive: true, now: start.addingTimeInterval(2))
-    #expect(speakers.muted == true) // inside the backoff
+    #expect(speakers.muted == true)
     controller.tick(enabled: true, lidClosed: false, closedDisplayActive: true,
                     now: start.addingTimeInterval(1 + ClosedLidSpeakerMuteController.unreachableRetry))
     #expect(speakers.muted == false)
@@ -381,14 +365,13 @@ private final class FakeMonotonic: @unchecked Sendable {
     let lid = CachedLidState(source, ttl: 0.5, clock: { clock.nanos })
     #expect(lid.isClosed() == true)
     #expect(lid.isClosed() == true)
-    #expect(source.reads == 1) // ticker and features share the reading
+    #expect(source.reads == 1)
 
     source.closed = false
-    clock.nanos += 600_000_000 // next tick
+    clock.nanos += 600_000_000
     #expect(lid.isClosed() == false)
     #expect(source.reads == 2)
 
-    // A clock that somehow runs backwards never pins a stale reading.
     clock.nanos -= 10_000_000_000
     source.closed = true
     #expect(lid.isClosed() == true)

@@ -15,9 +15,6 @@ final class StatusItemBridge: NSObject {
     /// alive menu-bar label view, because `openWindow` only exists in SwiftUI.
     var openWindow: ((String) -> Void)?
 
-    /// The `.window`-style panel, registered by ``PanelWindowRegistrar`` each
-    /// time it opens, so a right-click can dismiss it before the menu shows
-    /// (the two must never stack).
     weak var panelWindow: NSWindow?
 
     private let updater: any Updating
@@ -54,8 +51,6 @@ final class StatusItemBridge: NSObject {
         }
     }
 
-    /// Returns the event for AppKit to deliver as usual, or `nil` to consume
-    /// it (a context click on our icon: the panel must not also toggle).
     private func handle(_ event: NSEvent) -> NSEvent? {
         // Consume the complete gesture. A mouse-up delivered without its
         // mouse-down can still toggle MenuBarExtra on macOS 27. Show the menu
@@ -63,8 +58,6 @@ final class StatusItemBridge: NSObject {
         if event.type == contextMouseUp {
             contextMouseUp = nil
             guard let item = resolveStatusItem(), event.window === item.button?.window else {
-                // Press on the icon, release elsewhere (or a stray mouse-up
-                // while armed): let the other window have its release.
                 return event
             }
             showContextMenu(from: item)

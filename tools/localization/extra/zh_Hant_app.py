@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# Traditional Chinese (Taiwan) overlay for catalog_app.py: English source -> zh-Hant.
 APP = {
     'Add': '新增',
     'Add:': '新增：',
@@ -444,7 +443,6 @@ APP = {
 }
 
 
-# v1.15 thermal safety net, fan test, helper texts, glass slider.
 APP.update({
     "(max %@)": "（最高 %@）",
     "15 seconds": "15 秒",
@@ -509,7 +507,6 @@ APP.update({
 })
 
 
-# --- Agent hooks (Claude Code connection) ---
 APP.update({
     "Claude Code connected: sessions report working and waiting exactly.": "已連接 Claude Code：工作階段可精確回報工作與等待狀態。",
     "Connect Claude Code for exact session tracking (adds hooks to its settings).": "連接 Claude Code 以精確追蹤工作階段（將在其設定中加入掛鉤）。",
@@ -562,7 +559,6 @@ APP.update({
 })
 
 
-# --- Desktop "disable sleep" naming ---
 APP.update({
     'Disable system sleep': '停用系統睡眠',
     'Disable sleep': '停用睡眠',
@@ -574,7 +570,6 @@ APP.update({
     'Stops the Mac from sleeping at all, even with no session running. This flips a system setting that needs administrator rights: silent with the administrator helper installed (Preferences ▸ General), otherwise macOS asks for your password.': '即使沒有工作階段正在執行，也會讓 Mac 完全不會進入睡眠。這會切換一項需要系統管理員權限的系統設定：已安裝系統管理員輔助程式時會靜默執行（偏好設定 ▸ 一般），否則 macOS 會要求輸入密碼。',
     'Stops the Mac from sleeping at all, even with no session running. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off, even if Keepresso quits. The display still sleeps as usual. “Only while brewing” ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for “Only while brewing”.': '即使沒有工作階段正在執行，也會讓 Mac 完全不會進入睡眠。其運作方式是切換一項系統設定（pmset disablesleep），因此在您將其關閉前都會持續生效，即使 Keepresso 結束也一樣。螢幕仍會照常進入睡眠。「僅在保持喚醒工作階段期間」則改為將其與工作階段綁定：於保持喚醒工作階段開始時開啟，於工作階段結束或 Keepresso 結束時關閉（即使是當機之後）。兩者皆需要系統管理員權限：已安裝系統管理員輔助程式時會靜默執行（請參閱此分頁頂端），否則 macOS 會要求輸入密碼，「僅在保持喚醒工作階段期間」為每次執行 App 時要求一次。',
     '%@ before': '提前 %@',
-    # 1.16.0
     'Cancel': '取消',
     'Off': '關',
     'Time': '時間',
@@ -623,7 +618,6 @@ APP.update({
     'When something happens in Keepresso, run a Shortcut, POST a webhook, or run a shell command. Useful for a push to your phone when an overnight agent finishes (ntfy, or a Shortcut that sends a notification). Hooks are suspended while you edit them, so a half-written command never runs. No administrator helper needed. User-authored shell commands are intentional in this unsandboxed app: only add commands you trust.': 'Keepresso 中發生事件時，執行捷徑、POST Webhook 或 shell 指令。適合通宵智能體結束後推送到手機（ntfy 或發通知的捷徑）。編輯時鉤子暫停。不需要管理員輔助程式。在此未沙盒應用中允許使用者 shell 指令：只新增你信任的指令。',
     'These cover the times a session ends without you: a timer expiring, or trigger conditions dropping. Stopping it yourself stays silent, since you already know. The warning is a heads-up a few minutes before a timed session runs out, so you can extend it before the Mac drops off. Actions that put the Mac to sleep live under Automation.': '涵蓋你不在場時工作階段結束的情況：計時到期或觸發條件消失。自己停止則保持安靜。警告在定時結束前幾分鐘發出，便於延長。讓 Mac 睡眠的操作在「自動化」中。',
 
-    # 1.16.0 fill (17)
     '/bin/sh -c …': '/bin/sh -c …',
     'Add Hook': '新增鉤子',
     'Add Hook…': '新增鉤子…',
@@ -645,7 +639,6 @@ APP.update({
 })
 
 
-# v1.17 automation leases (keepresso CLI / MCP server)
 APP.update({
     'Held awake by an automation lease': '由一個自動化租約保持喚醒',
     'Held awake by %d automation leases': '由 %d 個自動化租約保持喚醒',
@@ -658,8 +651,6 @@ APP.update({
 })
 
 
-# v1.18: agent instructions/MCP setup, game priority boost, controller poke,
-# AWDL watchdog blurb, Steam download trigger.
 APP.update({
     'Copy Agent Instructions': '複製智能體指示',
     'Let AI agents and scripts keep the Mac awake while work is running. It cannot wake a sleeping Mac.': '允許 AI 智能體和指令碼在工作期間保持 Mac 喚醒。無法喚醒已進入睡眠的 Mac。',
@@ -701,7 +692,6 @@ APP.update({
         '只要 Steam 在任一個遊戲庫中持續下載或更新遊戲，就會計入；下載完成或暫停後即可讓 Mac 進入睡眠。讀取的是 Steam 自身的記錄，不需要任何權限。',
 })
 
-# 1.18 strings
 APP.update({
     "%@ · next %@": "%@ · 下一次 %@",
     "%d automation leases are waiting (safety pause)": "%d 個自動化租約正在等待（安全暫停）",
@@ -761,18 +751,15 @@ APP.update({
     "just now": "剛剛",
 })
 
-# 1.23 strings
 APP.update({
     "If the lid shuts": "闔蓋時",
     "Normally a MacBook sleeps the moment you shut the lid unless a display is attached. This keeps it running with the lid shut and nothing plugged in, on power or battery. What the screen itself does when the lid closes is your choice below (“If the lid shuts”): turn it off, keep it powered at zero brightness so a remote session stays live, or leave it alone. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off: closed and on battery, the Mac can still drain over time, so don't leave it on in a bag. “Only while brewing” ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for “Only while brewing”.": "一般而言，只要未連接螢幕，MacBook 在闔蓋的瞬間就會進入睡眠。此選項可讓它在闔蓋且未連接任何裝置時繼續運作，無論使用電源或電池皆然。闔蓋時螢幕本身的行為由您在下方選擇（「闔蓋時」）：將其關閉、以 0% 亮度保持供電以讓遠端工作階段保持連線，或讓螢幕維持原狀。其運作方式是切換一項系統設定（pmset disablesleep），因此在您將其關閉前都會持續生效：闔蓋且使用電池時，Mac 仍可能隨時間耗盡電量，請勿讓其在背包中保持開啟。「僅在保持喚醒工作階段期間」則改為將其與工作階段綁定：於保持喚醒工作階段開始時開啟，於工作階段結束或 Keepresso 結束時關閉（即使是當機之後）。兩者皆需要系統管理員權限：已安裝系統管理員輔助程式時會靜默執行（請參閱此分頁頂端），否則 macOS 會要求輸入密碼，「僅在保持喚醒工作階段期間」為每次執行 App 時要求一次。",
 })
 
-# Presence: "Only while brewing" off footer
 APP.update({
     "Also runs between sessions, which can keep the Mac from sleeping.": "在工作階段之間也會執行，因此可能讓 Mac 無法進入睡眠。",
 })
 
-# Closed-lid speaker mute
 APP.update({
     "Mute built-in speakers while the lid is closed": "闔蓋時將內建揚聲器靜音",
     "Mutes the built-in speakers with the lid closed and closed-display mode active. Headphones and other outputs keep playing. Unmutes when the lid opens or the mode ends, unless you had muted them yourself.": "在闔蓋且闔蓋模式啟用時，將內建揚聲器靜音。耳機及其他輸出裝置仍會繼續播放。開蓋或模式結束時會取消靜音，除非您原本就已自行將其靜音。",

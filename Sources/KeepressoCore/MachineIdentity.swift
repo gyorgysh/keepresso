@@ -32,7 +32,6 @@ public enum MachineIdentity {
         return L("on battery")
     }
 
-    /// Model family proper noun, or "Mac" for unknown identifiers.
     static func familyName(modelIdentifier: String?) -> String {
         guard let modelIdentifier else { return "Mac" }
         if modelIdentifier.hasPrefix("MacBookPro") { return "MacBook Pro" }

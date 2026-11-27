@@ -4,15 +4,13 @@ import Foundation
 
 @Test func settingsRoundTripCarriesTheHotKey() throws {
     var settings = KeepressoSettings.default
-    settings.hotKey = HotKeyShortcut(keyCode: 40, modifierFlags: 1_048_576) // ⌘K-ish
+    settings.hotKey = HotKeyShortcut(keyCode: 40, modifierFlags: 1_048_576)
     let data = try JSONEncoder().encode(settings)
     let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: data)
     #expect(decoded.hotKey == settings.hotKey)
 }
 
 @Test func settingsWithoutAHotKeyDecodeToNilWithoutThrowing() throws {
-    // A blob saved before the hotKey field existed must still decode, keeping
-    // the user's other settings rather than resetting to defaults.
     let json = """
     { "triggersEnabled": true, "showCountdownInMenuBar": true }
     """
@@ -23,16 +21,12 @@ import Foundation
 }
 
 @Test func onboardingDefaultsOffForFreshInstallButOnForExistingSettings() throws {
-    // A fresh install sees the welcome window once...
     #expect(KeepressoSettings.default.hasOnboarded == false)
-    // ...but a blob saved before the field existed is an existing user, who
-    // should not be shown it on upgrade, so it decodes to true.
     let json = """
     { "triggersEnabled": true }
     """
     let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: Data(json.utf8))
     #expect(decoded.hasOnboarded == true)
-    // And it round-trips once actually set.
     var settings = KeepressoSettings.default
     settings.hasOnboarded = true
     let data = try JSONEncoder().encode(settings)
@@ -40,13 +34,11 @@ import Foundation
 }
 
 @Test func thermalSafetyRoundTripsAndDefaultsOff() throws {
-    // Absent key (any pre-thermal blob) decodes to off.
     let json = """
     { "triggersEnabled": true }
     """
     let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: Data(json.utf8))
     #expect(decoded.thermalSafety == nil)
-    // A full config survives the settings round-trip.
     var settings = KeepressoSettings.default
     settings.thermalSafety = ThermalSafetyConfig(
         mode: .sensors(ids: ["Tp09"], celsius: 98),
@@ -59,13 +51,11 @@ import Foundation
 }
 
 @Test func menuPanelExpandedDefaultsOnAndRoundTripsCollapsed() throws {
-    // A blob saved before the field existed keeps today's full panel.
     let json = """
     { "triggersEnabled": true }
     """
     let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: Data(json.utf8))
     #expect(decoded.menuPanelExpanded == true)
-    // And a collapsed panel stays collapsed across a save/load.
     var settings = KeepressoSettings.default
     settings.menuPanelExpanded = false
     let data = try JSONEncoder().encode(settings)
@@ -73,7 +63,6 @@ import Foundation
 }
 
 @Test func menuCustomizationIsOptInAndRoundTrips() throws {
-    // A settings blob from before menu customization keeps the standard menu.
     let json = """
     { "triggersEnabled": true }
     """
@@ -99,7 +88,6 @@ import Foundation
     settings.menuCustomizationEnabled = false
     let data = try JSONEncoder().encode(settings)
     let restored = try JSONDecoder().decode(KeepressoSettings.self, from: data)
-    // Nil selects the original adaptive panel, even with a saved layout.
     #expect(restored.customizedMenuLayout == nil)
     #expect(restored == settings)
 
@@ -109,8 +97,6 @@ import Foundation
 
 @Test(arguments: [true, false])
 func unknownMenuKeysDoNotOptUsersIn(expanded: Bool) throws {
-    // Keys this version doesn't know (from a development build or a newer
-    // release) must not change which layout is chosen.
     let json = """
     {
       "triggersEnabled": true,
@@ -149,8 +135,6 @@ func unknownMenuKeysDoNotOptUsersIn(expanded: Bool) throws {
 }
 
 @Test func optionsWithoutSimulateActivityDecodeToItsDefault() throws {
-    // Same guarantee one level down: an options blob from before keep-active
-    // existed still decodes (simulateUserActivity defaults off).
     let json = """
     { "preventSystemSleep": true, "preventDisplaySleep": true }
     """
@@ -196,7 +180,6 @@ func unknownMenuKeysDoNotOptUsersIn(expanded: Bool) throws {
     #expect(decoded.quickStopDurations == custom)
     #expect(decoded.endingSoonNoticeSeconds == 120)
 
-    // A blob from before the fields existed decodes to the defaults.
     let json = """
     { "triggersEnabled": true }
     """
@@ -206,13 +189,11 @@ func unknownMenuKeysDoNotOptUsersIn(expanded: Bool) throws {
 }
 
 @Test func quickStopDurationsAreNormalizedFromAnySource() throws {
-    // Drops non-positive entries, dedupes, sorts, and caps at the maximum.
     let raw: [TimeInterval] = [1800, -60, 900, 0, 1800, 7200, 3600, 5400]
     let normalized = KeepressoSettings.normalizedQuickStopDurations(raw)
     let expected: [TimeInterval] = [900, 1800, 3600, 5400]
     #expect(normalized == expected)
 
-    // The decoder applies the same cleanup to hand-edited or imported blobs.
     let json = """
     { "quickStopDurations": [1800, 900, -5, 900] }
     """
@@ -222,9 +203,6 @@ func unknownMenuKeysDoNotOptUsersIn(expanded: Bool) throws {
 }
 
 @Test func outOfRangeImportsAreNormalizedOnDecode() throws {
-    // A non-positive ending-soon lead would show the feature enabled while
-    // the notice can never fire; an out-of-range battery threshold would be
-    // live while the slider displays its clamp. Both are cleaned on decode.
     let json = """
     { "endingSoonNoticeSeconds": -30, "pauseBelowBatteryPercent": 95 }
     """
@@ -237,7 +215,6 @@ func unknownMenuKeysDoNotOptUsersIn(expanded: Bool) throws {
         from: Data(#"{ "pauseBelowBatteryPercent": 3 }"#.utf8))
     #expect(low.pauseBelowBatteryPercent == 10)
 
-    // In-range values pass through untouched.
     let fine = try JSONDecoder().decode(
         KeepressoSettings.self,
         from: Data(#"{ "endingSoonNoticeSeconds": 120, "pauseBelowBatteryPercent": 40 }"#.utf8))
@@ -247,7 +224,6 @@ func unknownMenuKeysDoNotOptUsersIn(expanded: Bool) throws {
 
 @Test func automationLeasesDefaultOnAndDecodeForgivingly() throws {
     #expect(KeepressoSettings().automationLeasesEnabled)
-    // A blob saved before the field existed keeps the default.
     let decoded = try JSONDecoder().decode(KeepressoSettings.self, from: Data("{}".utf8))
     #expect(decoded.automationLeasesEnabled)
     let off = try JSONDecoder().decode(
@@ -258,9 +234,6 @@ func unknownMenuKeysDoNotOptUsersIn(expanded: Bool) throws {
 }
 
 @Test func positiveIntervalHasACapAndAFloor() throws {
-    // `reminderAfter` is also a divisor (`elapsed / reminderAfter`): a
-    // denormal like 1e-300 would trap `Int(_:)` on the 1 Hz reconcile path,
-    // and an absurd value would never fire. Both are cleaned on decode.
     let tiny = try JSONDecoder().decode(
         KeepressoSettings.self,
         from: Data(#"{ "reminderAfter": 1e-300 }"#.utf8))
@@ -273,11 +246,9 @@ func unknownMenuKeysDoNotOptUsersIn(expanded: Bool) throws {
     #expect(huge.reminderAfter == cap)
     #expect(huge.awdlGraceSeconds == cap)
 
-    // The programmatic init applies the same cleanup as the decoder.
     #expect(KeepressoSettings(reminderAfter: 0.001).reminderAfter == 1)
     #expect(KeepressoSettings(awdlGraceSeconds: -5).awdlGraceSeconds == 60)
 
-    // Sane values pass through untouched.
     let fine = try JSONDecoder().decode(
         KeepressoSettings.self,
         from: Data(#"{ "reminderAfter": 1800, "awdlGraceSeconds": 90 }"#.utf8))
@@ -286,15 +257,12 @@ func unknownMenuKeysDoNotOptUsersIn(expanded: Bool) throws {
 }
 
 @Test func hotKeySanitizedOnBothInitPaths() throws {
-    // A corrupt imported shortcut is dropped rather than trapping the
-    // Carbon conversion later, on decode and on programmatic init alike.
     let bad = try JSONDecoder().decode(
         KeepressoSettings.self,
         from: Data(#"{ "hotKey": { "keyCode": -1, "modifierFlags": 1048576 } }"#.utf8))
     #expect(bad.hotKey == nil)
     #expect(KeepressoSettings(hotKey: HotKeyShortcut(keyCode: -1, modifierFlags: 0)).hotKey == nil)
 
-    // The bound is the RegisterEventHotKey parameter width (UInt32).
     let wide = HotKeyShortcut(keyCode: Int(UInt32.max), modifierFlags: 1_048_576)
     #expect(KeepressoSettings(hotKey: wide).hotKey == wide)
     let fine = HotKeyShortcut(keyCode: 40, modifierFlags: 1_048_576)
@@ -302,8 +270,6 @@ func unknownMenuKeysDoNotOptUsersIn(expanded: Bool) throws {
 }
 
 @Test func freshInstallDefaultsOnlyTouchUnsaved() {
-    // A first launch (nothing persisted) starts session-scoped; anything
-    // saved, including an explicit off, passes through untouched.
     let fresh = KeepressoSettings.default.withFreshInstallDefaults(hasStoredSettings: false)
     #expect(fresh.closedDisplayOnlyWhileBrewing)
 
@@ -311,7 +277,6 @@ func unknownMenuKeysDoNotOptUsersIn(expanded: Bool) throws {
     savedOff.closedDisplayOnlyWhileBrewing = false
     #expect(savedOff.withFreshInstallDefaults(hasStoredSettings: true) == savedOff)
 
-    // Everything else passes through on a fresh install too.
     #expect(fresh.reminderAfter == KeepressoSettings.default.reminderAfter)
     #expect(fresh.options == KeepressoSettings.default.options)
 }
@@ -335,9 +300,6 @@ func unknownMenuKeysDoNotOptUsersIn(expanded: Bool) throws {
 
 @Test(arguments: [true, false])
 func customizationUpgradePreservesAComplete125SettingsBlob(expanded: Bool) throws {
-    // Produced by the settings encoder at f231b07 (1.25.0), before menu
-    // customization existed. Keep the serialized representation here so an
-    // upgrade exercises the previous release's data, including its enum shape.
     let fixture = """
     {
       "options": {
@@ -396,8 +358,6 @@ func customizationUpgradePreservesAComplete125SettingsBlob(expanded: Bool) throw
     #expect(!upgraded.closedDisplayOnlyWhileBrewing)
     #expect(upgraded.withFreshInstallDefaults(hasStoredSettings: true) == upgraded)
 
-    // Fields added since 1.25 are dropped at both levels (top level and the
-    // nested options), so this checks every old field survives unchanged.
     let oldOptionKeys = Set((oldFields["options"] as? [String: Any])?.keys ?? [:].keys)
     func previousReleaseFields(_ settings: KeepressoSettings) throws -> NSDictionary {
         var encoded = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(settings)) as? [String: Any])
@@ -438,11 +398,8 @@ func customizationUpgradePreservesAComplete125SettingsBlob(expanded: Bool) throw
     #expect(try previousReleaseFields(restored) == oldFields as NSDictionary)
 }
 
-// MARK: - Presence scope compatibility
 
 @Test func presenceFromBeforeTheBrewingScopeKeepsSessionOnlyBehavior() throws {
-    // A 1.27 options blob has no scope key. Presence was session-only then,
-    // so it must decode as "Only while brewing" on and keep every other field.
     let json = """
     { "preventSystemSleep": true, "simulateUserActivity": true,
       "activitySimulationMethod": "f15", "activityPokeIdleMinutes": 5 }
@@ -455,8 +412,6 @@ func customizationUpgradePreservesAComplete125SettingsBlob(expanded: Bool) throw
 }
 
 @Test func unreadableOptionFieldsFallBackWithoutLosingTheRest() throws {
-    // A method only a newer build knows (read after a downgrade) and wrong
-    // types from a hand-edited import: each field falls back on its own.
     let json = """
     { "preventDisplaySleep": true, "simulateUserActivity": true,
       "activitySimulationMethod": "someFutureMethod",

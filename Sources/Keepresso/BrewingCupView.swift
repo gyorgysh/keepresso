@@ -8,33 +8,17 @@ import SwiftUI
 /// of the same mark: a `MenuBarExtra` label is snapshotted, so nothing
 /// animates there (see `MenuBarLabel`).
 struct BrewingCupView: View {
-    /// Whether a session is running: steam rises and the cup fills with the
-    /// brew accent. Idle shows a quiet outline cup and reserves the steam space
-    /// so the layout doesn't jump.
     var isActive: Bool
 
-    /// Whether the battery pause is holding the session: the idle cup keeps a
-    /// last sip of low-power yellow at the bottom, matching the menu bar icon.
     var pausedLowBattery: Bool = false
 
-    /// Size multiplier over the menu-header size (22 pt wide). Everything
-    /// scales together (paths, stroke widths, drift), so a window header can
-    /// show the same mark large and still crisp.
     var scale: CGFloat = 1
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// The animated pour level (0 empty, 1 full). Appears in the current
-    /// state; only a live `isActive` change plays the pour or the drain.
     @State private var fill: CGFloat
-    /// Steam waits for the pour to finish, so the sequence reads pour first,
-    /// then steam, rather than everything at once.
     @State private var steaming: Bool
 
-    /// Seeded from `isActive` rather than defaulted to empty. `onAppear` also
-    /// sets both, but it runs a frame late, and anything that renders only
-    /// one frame (a window snapshot, a modal opening) caught the empty
-    /// outline cup instead of the brewing one.
     init(isActive: Bool, pausedLowBattery: Bool = false, scale: CGFloat = 1) {
         self.isActive = isActive
         self.pausedLowBattery = pausedLowBattery
@@ -49,7 +33,6 @@ struct BrewingCupView: View {
     /// ``WindowVisibilityReader``; the steam only ticks while true.
     @State private var windowVisible = true
 
-    /// One full rise-and-dissolve cycle per wisp, staggered thirds apart.
     static let loopDuration: TimeInterval = 3.4
     static let wispDelays: [TimeInterval] = [0, 1.15, 2.3]
 
@@ -62,7 +45,7 @@ struct BrewingCupView: View {
                 .frame(width: 22 * scale, height: 16.6 * scale)
         }
         .background(WindowVisibilityReader(isVisible: $windowVisible))
-        .accessibilityHidden(true) // the header text next to it carries the status
+        .accessibilityHidden(true)
         .onAppear {
             fill = isActive ? 1 : 0
             steaming = isActive
@@ -78,7 +61,6 @@ struct BrewingCupView: View {
                 withAnimation(.easeOut(duration: 0.55)) {
                     fill = 1
                 } completion: {
-                    // Only steam if nothing drained the cup mid-pour.
                     if fill == 1 { steaming = true }
                 }
             } else {
@@ -120,9 +102,6 @@ struct BrewingCupView: View {
     }
 }
 
-/// The three wisps as shape layers, each on the website mark's keyframed loop
-/// (fade in while rising from below, thin out past the midpoint, gone by the
-/// top), staggered by its delay.
 private struct CupSteamLayer: NSViewRepresentable {
     var scale: CGFloat
 
@@ -168,9 +147,6 @@ private final class CupSteamView: NSView {
 
     override func layout() {
         super.layout()
-        // The SwiftUI layout: three wisps 4 pt wide, 3.5 pt apart, bottom
-        // aligned and centered in the 22 x 9 pt steam area; the middle one
-        // taller.
         let width = 4 * scale
         let spacing = 3.5 * scale
         let total = width * 3 + spacing * 2
@@ -231,7 +207,6 @@ private final class CupSteamView: NSView {
     }
 }
 
-/// A single S-curved steam wisp, the same stroke the website mark uses.
 private struct SteamWisp: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()

@@ -1,9 +1,5 @@
 import Foundation
 
-/// A decoded linger window in seconds: finite, non-negative, and capped at a
-/// real session length, so a corrupt imported blob can neither trap the
-/// `Int(_:)` in a rule label nor linger effectively forever. Zero means no
-/// grace.
 fileprivate func sanitizedGrace(_ raw: TimeInterval) -> TimeInterval {
     guard raw.isFinite, raw > 0 else { return 0 }
     return min(raw, SessionMode.maxTimedMinutes * 60)
@@ -15,56 +11,26 @@ fileprivate func sanitizedGrace(_ raw: TimeInterval) -> TimeInterval {
 /// be persisted directly. A `TriggerRule` is the saved, value-typed form; the
 /// ``TriggerFactory`` rebuilds live ``Trigger``s from rules at launch.
 public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
-    /// On AC / on battery / charging (see ``PowerSourceTrigger/Match``).
     case powerSource(PowerSourceTrigger.Match)
-    /// At least one external display connected.
     case externalDisplay
-    /// Joined to this exact Wi-Fi SSID.
     case wifiSSID(String)
-    /// An app is running / frontmost, optionally with a deactivation grace.
     case app(AppRule)
-    /// Any process whose command line contains this string is running
-    /// (matches command-line tools and background jobs, not just GUI apps).
     case process(String)
-    /// The current time falls inside a recurring daily window.
     case timeWindow(TimeWindowRule)
-    /// A volume with this name is mounted (external drive, SD card, NAS share).
     case volumeMounted(String)
-    /// Smoothed overall CPU usage is above this percentage.
     case cpuLoad(thresholdPercent: Int)
-    /// Any process is using the camera or the microphone (a call, a recording).
     case mediaInUse(MediaInUseTrigger.Device)
-    /// The microphone is in use by one of a chosen set of apps (Discord, Slack,
-    /// Zoom, ...), matched by bundle id. A sibling of ``mediaInUse`` rather than
-    /// a parameter on it, so existing saved rules and presets decode unchanged;
-    /// the camera has no per-process API, so scoping is microphone-only.
+    /// The camera has no per-process API, so scoping is microphone-only.
     case micInUse(MicInUseRule)
-    /// Sound is playing through any output device (with a release grace).
     case audioPlaying
-    /// Any VPN configuration is connected.
     case vpnConnected
-    /// A paired Bluetooth device with this name is connected (with a release
-    /// grace, so a brief drop while switching hosts doesn't flap the session).
     case bluetoothDevice(String)
-    /// A timed (non-all-day) calendar event is in progress.
     case calendarEvent
-    /// A game (by declared app category) or a cloud-gaming client is frontmost
-    /// (with a generous release grace, so alt-tabbing doesn't drop the session).
     case gaming
-    /// Smoothed overall network throughput (in + out) is above this many KB/s.
     case throughput(kilobytesPerSecond: Int)
-    /// An in-progress download exists in this folder (a partial-download file,
-    /// with a release grace bridging the gap between files in a batch).
     case downloadInFolder(URL)
-    /// Any detected AI-agent session (claude, codex, ...) is actively working,
-    /// judged by its process subtree's smoothed CPU, with a release grace once
-    /// every session goes idle.
     case agentActivity(AgentRule)
-    /// At least one game controller is connected (with a short release grace,
-    /// so a controller briefly rebonding doesn't flap the session).
     case controllerConnected
-    /// Steam is actively downloading or updating a game in any library
-    /// (with a generous release grace bridging between-depot verification).
     case steamDownload
 
     /// A human-readable summary for the rules UI.
@@ -98,11 +64,8 @@ public enum TriggerRule: Codable, Equatable, Hashable, Sendable {
 
     /// A system privacy permission a rule needs before it can evaluate.
     public enum Permission: String, Sendable, CaseIterable {
-        /// Location access, needed to read the current Wi-Fi network name.
         case location
-        /// Bluetooth access, needed to see which paired devices are connected.
         case bluetooth
-        /// Full calendar access, needed to see events in progress.
         case calendar
     }
 
@@ -168,13 +131,10 @@ public struct AppRule: Codable, Equatable, Hashable, Sendable {
         grace = sanitizedGrace(try c.decodeIfPresent(TimeInterval.self, forKey: .grace) ?? 0)
     }
 
+    /// A human-readable summary for the rules UI.
     public var label: String {
-        // A bundle id reads as machine noise in the UI, so prefer the friendly
-        // name when we have it; keep the "App " prefix only as the bare-id fallback.
         let subject = name ?? L("App %@", bundleID)
         let base = "\(subject) \(match.label)"
-        // Omit the suffix when the grace rounds to zero whole seconds: a
-        // fractional imported grace would otherwise render a nonsense "+0s".
         let graceSeconds = KeepressoSettings.displaySeconds(grace)
         return graceSeconds > 0 ? L("%@ (+%ds)", base, graceSeconds) : base
     }
@@ -183,9 +143,7 @@ public struct AppRule: Codable, Equatable, Hashable, Sendable {
 /// A persisted "AI agent working" rule: keep awake while any detected agent
 /// session is actively working, lingering ``grace`` seconds once all go idle.
 public struct AgentRule: Codable, Equatable, Hashable, Sendable {
-    /// Seconds to stay active after every agent session goes idle (0 = none).
-    /// Three minutes by default: a genuinely zero-CPU stretch (a long network
-    /// wait, a slow model turn) reads as idle, and the grace is what bridges it.
+    /// Seconds to stay active after the app stops matching (0 = no grace).
     public var grace: TimeInterval
     /// When true, a hook `waiting` state (idle nudge after a prompt went
     /// unanswered) still counts as working. Off by default: overnight
@@ -203,9 +161,8 @@ public struct AgentRule: Codable, Equatable, Hashable, Sendable {
         self.countWaitingAsWorking = countWaitingAsWorking
     }
 
-    /// Forgiving decoder: older saves without the waiting flag keep the
-    /// default (false), and a corrupt imported grace is sanitized rather
-    /// than trapping the `Int(_:)` in ``label``.
+    /// Forgiving decoder: a corrupt or absurd imported grace must never trap
+    /// the `Int(_:)` in ``label`` or linger effectively forever.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         grace = sanitizedGrace(
@@ -214,6 +171,7 @@ public struct AgentRule: Codable, Equatable, Hashable, Sendable {
         countWaitingAsWorking = try c.decodeIfPresent(Bool.self, forKey: .countWaitingAsWorking) ?? false
     }
 
+    /// A human-readable summary for the rules UI.
     public var label: String {
         let base = L("AI agent working")
         var parts: [String] = []
@@ -229,10 +187,13 @@ public struct AgentRule: Codable, Equatable, Hashable, Sendable {
 /// is always by ``bundleID`` (by prefix, so an app's Electron helper
 /// subprocess counts), so a stale or missing name never changes behavior.
 public struct ScopedApp: Codable, Equatable, Hashable, Sendable {
-    /// Bundle identifier of the app to watch, e.g. `com.hnc.Discord`.
+    /// Bundle identifier, e.g. `com.apple.FaceTime`.
     public var bundleID: String
-    /// Friendly display name (e.g. "Discord"), set when the rule is built from
-    /// a known app (the "using the mic now" list, a preset, or the app picker).
+    /// A friendly display name (e.g. "NVIDIA GeForce NOW") shown instead of the
+    /// bundle id in the menu and rules editor. Optional (older rules and hand-made
+    /// ones may lack it); set when the rule is built from a known app, i.e. a
+    /// preset or the running-apps menu, which already have the name. A stale or
+    /// missing name never affects matching.
     public var name: String?
 
     public init(bundleID: String, name: String? = nil) {
@@ -241,8 +202,6 @@ public struct ScopedApp: Codable, Equatable, Hashable, Sendable {
     }
 }
 
-/// A persisted "microphone in use by specific apps" rule: keep awake only while
-/// one of ``apps`` is capturing the microphone, i.e. that app is on a call.
 /// Reads the macOS 14 per-process CoreAudio API, unprivileged and prompt-free.
 /// Microphone only: the camera has no equivalent per-process API to scope by.
 public struct MicInUseRule: Codable, Equatable, Hashable, Sendable {
@@ -255,10 +214,9 @@ public struct MicInUseRule: Codable, Equatable, Hashable, Sendable {
         self.apps = apps
     }
 
+    /// A human-readable summary for the rules UI.
     public var label: String {
         guard !apps.isEmpty else { return L("Microphone in use by app") }
-        // De-duplicate display names so a multi-id app (several bundle ids under
-        // one name) reads as "Telegram", not "Telegram, Telegram".
         var seen = Set<String>()
         let names = apps.compactMap { app -> String? in
             let name = app.name ?? app.bundleID
@@ -281,13 +239,8 @@ public struct RuleSet: Codable, Equatable, Sendable {
         self.rules = rules
     }
 
-    /// Forgiving decoder, mirroring the pattern used across the settings types.
-    /// A rule case added by a newer build (reached via a version downgrade, or
-    /// a set exported from a newer version and imported) is dropped rather than
-    /// throwing. A synthesized `[TriggerRule]` decode fails the whole array on
-    /// one unknown element, and because ``KeepressoSettings`` loads through
-    /// `try?` that would silently reset every setting to defaults; dropping only
-    /// the unreadable rules keeps the rest of the configuration intact.
+    /// Forgiving decoder: a corrupt or absurd imported grace must never trap
+    /// the `Int(_:)` in ``label`` or linger effectively forever.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         combine = try c.decodeIfPresent(CombineMode.self, forKey: .combine) ?? .any
@@ -298,11 +251,9 @@ public struct RuleSet: Codable, Equatable, Sendable {
                 if let rule = try? array.decode(TriggerRule.self) {
                     decoded.append(rule)
                 } else {
-                    // A failed decode above doesn't consume the element, so
-                    // read a value of any shape to step the cursor past it.
                     _ = try? array.decode(DiscardedRule.self)
                 }
-                if array.currentIndex == before { break } // never spin
+                if array.currentIndex == before { break }
             }
         }
         rules = decoded
@@ -312,8 +263,6 @@ public struct RuleSet: Codable, Equatable, Sendable {
     public static let empty = RuleSet()
 }
 
-/// Consumes one element of any shape from an unkeyed container, so the lossy
-/// ``RuleSet`` decoder can skip a rule case it doesn't recognize.
 private struct DiscardedRule: Decodable {
     init(from decoder: Decoder) throws {}
 }
@@ -343,8 +292,6 @@ public struct TriggerFactory {
     private let controllers: ControllerMonitoring
     private let steam: SteamDownloadMonitoring
     private let now: () -> Date
-    /// Real agent backend when the factory owns one, so evidence work can be
-    /// gated off when no agent rule is live. Nil when tests inject a fake.
     private let agentMonitor: PSAgentActivityMonitor?
 
     public init(
@@ -367,8 +314,6 @@ public struct TriggerFactory {
         steam: SteamDownloadMonitoring = FileSteamDownloadMonitor(),
         now: @escaping () -> Date = Date.init
     ) {
-        // One shared `ps` snapshot for process matching and agent detection
-        // unless the caller injects its own backends (tests).
         let sharedPS = SharedPSSnapshot(now: now)
         let resolvedProcesses = processes ?? PSProcessLister(
             now: now, fetch: sharedPS.fetchCommandListing)

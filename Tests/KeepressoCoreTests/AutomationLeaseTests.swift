@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-// MARK: - Fixtures
 
 private let base = Date(timeIntervalSince1970: 1_000_000)
 private let idA = "aaaaaaaa-1111-2222-3333-444444444444"
@@ -44,7 +43,6 @@ private final class FakeLeaseStore: LeaseRecordStoring {
     }
 }
 
-// MARK: - Policy
 
 @Test func canonicalIdAcceptsOnlyUUIDsAndLowercases() {
     #expect(AutomationLease.canonicalId("AAAAAAAA-1111-2222-3333-444444444444") == idA)
@@ -66,28 +64,22 @@ private final class FakeLeaseStore: LeaseRecordStoring {
     #expect(AutomationLease.clampedTTL(-5) == 10)
     #expect(AutomationLease.clampedTTL(1_000_000_000) == 86_400)
     #expect(AutomationLease.clampedTTL(300) == 300)
-    // Lifetime: capped at 7 days, never below the TTL, defaulted when nil.
     #expect(AutomationLease.clampedMaxLifetime(nil, ttl: 300) == 604_800)
     #expect(AutomationLease.clampedMaxLifetime(10_000_000, ttl: 300) == 604_800)
     #expect(AutomationLease.clampedMaxLifetime(60, ttl: 300) == 300)
 }
 
 @Test func adjudicationJudgesTTLAndLifetime() {
-    // Fresh: live.
     #expect(AutomationLease.adjudicate(record(), now: base) == .live)
     #expect(AutomationLease.adjudicate(record(), now: base.addingTimeInterval(299)) == .live)
-    // Past the heartbeat horizon: lapsed by TTL.
     #expect(AutomationLease.adjudicate(record(), now: base.addingTimeInterval(300))
         == .lapsed(reason: "ttl-expired"))
-    // Heartbeats kept it fresh, but the lifetime ceiling passed anyway.
     let longLived = record(updatedAt: base.addingTimeInterval(3_500), ttl: 300, maxLifetime: 3_600)
     #expect(AutomationLease.adjudicate(longLived, now: base.addingTimeInterval(3_650))
         == .lapsed(reason: "lifetime-cap"))
 }
 
 @Test func adjudicationClampsHostileRecordValues() {
-    // A tampered file claiming a year-long TTL still expires after the
-    // clamped day.
     let hostile = record(ttl: 31_536_000, maxLifetime: 31_536_000)
     #expect(AutomationLease.adjudicate(hostile, now: base.addingTimeInterval(86_399)) == .live)
     #expect(AutomationLease.adjudicate(hostile, now: base.addingTimeInterval(86_400))
@@ -100,7 +92,6 @@ private final class FakeLeaseStore: LeaseRecordStoring {
         == .terminal(prune: false))
     #expect(AutomationLease.adjudicate(fresh, now: base.addingTimeInterval(61))
         == .terminal(prune: true))
-    // A terminal record missing its endedAt can never prove it is fresh.
     let stampless = record(state: .revoked)
     #expect(AutomationLease.adjudicate(stampless, now: base) == .terminal(prune: true))
 }
@@ -111,7 +102,6 @@ private final class FakeLeaseStore: LeaseRecordStoring {
     #expect(FileLeaseStore.fileName(forId: "") == "lease.json")
 }
 
-// MARK: - Engine
 
 @MainActor
 @Test func engineReportsLiveLeasesSortedByExpiry() {
@@ -146,8 +136,6 @@ private final class FakeLeaseStore: LeaseRecordStoring {
     let engine = LeaseEngine(store: store)
 
     #expect(engine.tick(now: base.addingTimeInterval(120)).isEmpty)
-    // idA is 120 s past its end: pruned. idB ended 20 s ago: retained for
-    // ack polls and lease list.
     #expect(store.deleted == [idA])
     #expect(store.records[idB] != nil)
 }
@@ -164,10 +152,6 @@ private final class FakeLeaseStore: LeaseRecordStoring {
 
 @MainActor
 @Test func engineClampsFutureDatedRecordsAfterClockRollback() {
-    // A clock set backwards leaves updatedAt in the future, which would
-    // silently extend the lease by the size of the jump. The engine pulls
-    // the timestamps back to now, healing the on-disk record too, so the
-    // horizon is one TTL from the present and clients read the same view.
     let store = FakeLeaseStore([
         record(updatedAt: base.addingTimeInterval(7_200), ttl: 300)
     ])
@@ -178,7 +162,6 @@ private final class FakeLeaseStore: LeaseRecordStoring {
     #expect(live.first?.expiresAt == base.addingTimeInterval(300))
     #expect(store.records[idA]?.updatedAt == base)
 
-    // One TTL later the healed record expires on schedule.
     #expect(engine.tick(now: base.addingTimeInterval(301)).isEmpty)
     #expect(store.records[idA]?.state == .expired)
 }
@@ -199,7 +182,6 @@ private final class FakeLeaseStore: LeaseRecordStoring {
     #expect(engine.tick(now: base.addingTimeInterval(6)).isEmpty)
 }
 
-// MARK: - File store round trip
 
 @Test func fileStoreRoundTripsAndDiscardsJunk() throws {
     let dir = FileManager.default.temporaryDirectory
@@ -208,14 +190,10 @@ private final class FakeLeaseStore: LeaseRecordStoring {
     let store = FileLeaseStore(directory: dir)
 
     store.write(record())
-    // Junk that can never become a lease: dropped on the next scan.
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     try Data("not json".utf8).write(to: dir.appendingPathComponent("junk.json"))
-    // A record whose id is not canonical: also dropped.
     try Data(#"{"id":"nope"}"#.utf8).write(to: dir.appendingPathComponent("nope.json"))
 
-    // write() warms the in-memory map; force a directory rescan so junk is
-    // noticed and discarded the way a doorbell / TTL miss would.
     store.invalidateCache()
     let loaded = store.loadAll()
     #expect(loaded.count == 1)
@@ -235,32 +213,24 @@ private final class FakeLeaseStore: LeaseRecordStoring {
 
     store.write(record())
     #expect(store.loadAll().count == 1)
-    // Unchanged directory: cache hit (still one record).
     #expect(store.loadAll().count == 1)
 
-    // Out-of-band acquire: new file mtime/name must be visible without a
-    // doorbell or TTL wait (CLI/MCP from another process).
     let writer = FileLeaseStore(directory: dir, cacheTTL: 30, now: { clock })
     writer.write(record(id: idB, tool: "foreign"))
     let afterAcquire = store.loadAll()
     #expect(afterAcquire.count == 2)
     #expect(Set(afterAcquire.map(\.id)) == [idA, idB])
 
-    // Out-of-band heartbeat: same file, fresher updatedAt. Cache TTL would
-    // otherwise keep the stale updatedAt and let the engine expire a live lease.
     let heartbeatAt = base.addingTimeInterval(200)
     writer.write(record(id: idA, tool: "test-tool", updatedAt: heartbeatAt))
     #expect(store.loadAll().first { $0.id == idA }?.updatedAt == heartbeatAt)
 
-    // Out-of-band release: terminal state must land on the next loadAll.
     writer.write(record(id: idB, tool: "foreign", state: .released, endedAt: heartbeatAt))
     #expect(store.loadAll().first { $0.id == idB }?.state == .released)
 
-    // Explicit invalidate still forces a clean rescan.
     store.invalidateCache()
     #expect(store.loadAll().count == 2)
 
-    // Safety TTL also forces a rescan when the stamp is unchanged.
     store.write(record(id: idA, tool: "updated"))
     clock = clock.addingTimeInterval(31)
     #expect(store.loadAll().first { $0.id == idA }?.tool == "updated")
@@ -268,9 +238,6 @@ private final class FakeLeaseStore: LeaseRecordStoring {
 
 @MainActor
 @Test func engineSeesForeignHeartbeatWithinCacheTTL() throws {
-    // App store cacheTTL is longer than the adjudication window so a stale
-    // listing would survive past the original TTL; only the on-disk stamp
-    // check (not the safety TTL) can keep the lease live.
     let dir = FileManager.default.temporaryDirectory
         .appendingPathComponent("keepresso-lease-hb-\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: dir) }
@@ -281,8 +248,6 @@ private final class FakeLeaseStore: LeaseRecordStoring {
     appStore.write(record(ttl: 30))
     #expect(engine.tick(now: clock).map(\.id) == [idA])
 
-    // CLI heartbeat at +25s: new horizon is +55s. Without a rescan, the app
-    // would still hold updatedAt=base and expire at +30.
     clock = base.addingTimeInterval(25)
     FileLeaseStore(directory: dir, cacheTTL: 60, now: { clock })
         .write(record(updatedAt: clock, ttl: 30))
@@ -316,8 +281,6 @@ private final class FakeLeaseStore: LeaseRecordStoring {
 
 @MainActor
 @Test func engineExpiryLosesToAConcurrentHeartbeat() {
-    // loadAll returns a lapsed record; compareAndSwap then sees a heartbeat
-    // that landed underneath. Demand must stay up in the same tick.
     let inner = FakeLeaseStore([record(ttl: 30)])
     final class RacingStore: LeaseRecordStoring {
         let inner: FakeLeaseStore

@@ -2,8 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-/// A scratch suite per test, cleaned before use so runs don't leak into each
-/// other (`UserDefaults` persists between test invocations).
 private func scratchDefaults(_ name: String) -> UserDefaults {
     let suite = "keepresso-tests.\(name)"
     let defaults = UserDefaults(suiteName: suite)!
@@ -34,8 +32,6 @@ private func scratchDefaults(_ name: String) -> UserDefaults {
     WidgetBridge.writeCommand(.start, at: now, to: defaults)
 
     #expect(WidgetBridge.consumeCommand(from: defaults, now: now) == .start)
-    // Consumed: a second read (say, Darwin delivery plus the launch path both
-    // arriving) must not fire again.
     #expect(WidgetBridge.consumeCommand(from: defaults, now: now) == nil)
 }
 
@@ -46,7 +42,6 @@ private func scratchDefaults(_ name: String) -> UserDefaults {
 
     let late = written.addingTimeInterval(WidgetBridge.commandFreshness + 1)
     #expect(WidgetBridge.consumeCommand(from: defaults, now: late) == nil)
-    // The stale command is gone, not lingering for the next read.
     #expect(defaults.object(forKey: "widget.desiredActive") == nil)
 }
 

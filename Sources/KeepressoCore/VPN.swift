@@ -3,7 +3,6 @@ import Foundation
 /// Abstraction over "is a VPN connected?" so the VPN trigger can be tested
 /// without a real tunnel. Mirrors the other monitor seams.
 public protocol VPNMonitoring: AnyObject {
-    /// Whether any VPN connection is currently established.
     var isConnected: Bool { get }
 }
 
@@ -12,7 +11,6 @@ public protocol VPNMonitoring: AnyObject {
 /// tunnels: WireGuard, Tailscale, OpenVPN Connect, most corporate clients) and
 /// whether each is connected. Purely CLI tunnels that bypass Network Extension
 /// (e.g. `wg-quick`) don't appear here; a process rule covers those.
-///
 /// Spawning `scutil` is not free and ``isConnected`` is read from the menu's
 /// `body` on the main thread, so this reuses ``PSProcessLister``'s
 /// stale-while-revalidate shape: return the cached verdict immediately and
@@ -21,8 +19,6 @@ public protocol VPNMonitoring: AnyObject {
 public final class SCUtilVPNMonitor: VPNMonitoring {
     private let ttl: TimeInterval
     private let now: () -> Date
-    /// Produces the raw `scutil --nc list` output (`nil` on failure).
-    /// Injectable so the cache and parser can be unit-tested.
     private let fetch: @Sendable () -> String?
     private let lock = NSLock()
     private var cached = false

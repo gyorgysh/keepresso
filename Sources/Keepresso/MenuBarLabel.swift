@@ -14,10 +14,7 @@ import KeepressoCore
 /// updates via a plain `Timer.publish` tick for the same reason.
 struct MenuBarLabel: View {
     @Bindable var session: SessionController
-    /// Whether to show remaining time next to the icon for a timed session
-    /// (Preferences ▸ General). Off by default.
     var showCountdown: Bool = false
-    /// Applied only when customization is explicitly enabled.
     var presentation: MenuLayout? = nil
 
     /// Drives the countdown text once a second. `remaining` is a computed
@@ -100,7 +97,6 @@ struct MenuBarLabel: View {
         return session.isActive ? L("Keepresso: brewing") : L("Keepresso: idle")
     }
 
-    /// "12:03" for under an hour, "1:02:03" once it reaches an hour.
     static func format(_ interval: TimeInterval?) -> String {
         let raw = interval ?? 0
         // Saturate rather than trap: `Int(_:)` faults on a value past Int.max,

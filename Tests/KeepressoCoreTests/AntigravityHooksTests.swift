@@ -12,12 +12,8 @@ private func object(_ data: Data) -> [String: Any] {
     try! JSONSerialization.jsonObject(with: data) as! [String: Any]
 }
 
-// MARK: - Safety
 
 @Test func antigravityNeverInstallsOnTheBlockingEvent() {
-    // PreToolUse decides whether a tool call may run, and Keepresso's hook is
-    // built to be a silent no-op when the CLI is gone. A no-op there could deny
-    // every tool call in the session.
     #expect(AntigravityHooks.blockingEvents == ["PreToolUse"])
     for event in AntigravityHooks.installedEvents {
         #expect(!AntigravityHooks.blockingEvents.contains(event))
@@ -26,8 +22,6 @@ private func object(_ data: Data) -> [String: Any] {
 
 @Test func antigravityHookCommandAnswersBeforeItCanFail() {
     let command = AntigravityHooks.hookCommand(event: "Stop", cliPath: cli)
-    // The inert response is printed first, so a missing or wedged binary still
-    // leaves valid, opinion-free output on stdout.
     #expect(command.hasPrefix("printf '{}';"))
     #expect(!command.contains("allow"))
     #expect(!command.contains("force_continue"))
@@ -35,7 +29,6 @@ private func object(_ data: Data) -> [String: Any] {
     #expect(command.contains(AntigravityHooks.hookMarker))
 }
 
-// MARK: - Event reduction
 
 @Test func antigravityEventsMapToSessionStates() {
     func reduce(_ event: String, tool: String? = nil, fullyIdle: Bool? = nil) -> AgentHooks.HookEventEffect? {
@@ -45,9 +38,7 @@ private func object(_ data: Data) -> [String: Any] {
     #expect(reduce("PostInvocation") == .set(.working, detail: nil))
     #expect(reduce("PostToolUse", tool: "run_command") == .set(.working, detail: "running-command"))
     #expect(reduce("PostToolUse", tool: "edit_file") == .set(.working, detail: "editing"))
-    // An unknown tool still reads as work, named generically.
     #expect(reduce("PostToolUse", tool: "wobble") == .set(.working, detail: "tool:wobble"))
-    // An unknown event writes nothing at all.
     #expect(reduce("SomethingNew") == nil)
 }
 
@@ -56,14 +47,10 @@ private func object(_ data: Data) -> [String: Any] {
         AntigravityHooks.reduce(event: "Stop", toolName: nil, fullyIdle: fullyIdle)
     }
     #expect(stop(true) == .set(.idle, detail: nil))
-    // More execution follows: ending the session here would drop the Mac
-    // mid-task, which is the whole failure this trigger exists to prevent.
     #expect(stop(false) == .set(.working, detail: nil))
-    // A payload without the field is the plain stop it looks like.
     #expect(stop(nil) == .set(.idle, detail: nil))
 }
 
-// MARK: - Payload
 
 @Test func antigravityPayloadDecodesTheDocumentedShape() {
     let data = Data("""
@@ -75,13 +62,10 @@ private func object(_ data: Data) -> [String: Any] {
     let payload = try! JSONDecoder().decode(AntigravityHooks.HookPayload.self, from: data)
     #expect(payload.identity == "ed6b90f5")
     #expect(payload.toolCall?.name == "run_command")
-    // No cwd field in this payload: the first workspace root stands in.
     #expect(payload.directory == "/Users/x/site")
 }
 
 @Test func aPayloadWithoutAConversationIsIgnored() {
-    // No identity means no record to write or delete: handling must be inert
-    // rather than inventing a session.
     let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent("ag-hooks-\(UUID().uuidString)", isDirectory: true)
     try! FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -91,10 +75,8 @@ private func object(_ data: Data) -> [String: Any] {
     #expect((try? FileManager.default.contentsOfDirectory(atPath: directory.path))?.isEmpty ?? false)
 }
 
-// MARK: - Host resolution
 
 @Test func theEditorHostIsMatchedByItsBundleNotItsBinaryName() {
-    // Several editors ship a "language_server"; only the bundle says whose.
     #expect(AntigravityHooks.isEditorHostPath(
         "/Applications/Antigravity.app/Contents/Resources/bin/language_server"))
     #expect(!AntigravityHooks.isEditorHostPath(
@@ -104,7 +86,6 @@ private func object(_ data: Data) -> [String: Any] {
 }
 
 @Test func hookRecordsJoinTheEditorHostByPid() {
-    // hook shell (7) -> language_server (5) -> the app (3).
     let parents: [Int32: Int32] = [7: 5, 5: 3, 3: 1]
     let paths: [Int32: String] = [
         7: "/bin/zsh",
@@ -117,10 +98,6 @@ private func object(_ data: Data) -> [String: Any] {
 }
 
 @Test func aRecordFromTheEditorHostSurvivesTheAgentLivenessProbe() {
-    // The trust probe demands that a record's pid still *be* an agent, which
-    // an editor binary never is. Without the host exemption every record these
-    // hooks write is read back as belonging to a dead agent and dropped, and
-    // the whole integration silently does nothing.
     let host = "/Applications/Antigravity.app/Contents/Resources/bin/language_server"
     #expect(AgentHooks.agentMatch(
         comm: "language_server", path: host,
@@ -129,8 +106,6 @@ private func object(_ data: Data) -> [String: Any] {
 }
 
 @Test func aStaleWorkingRecordFromAnEditorHostAgesOut() {
-    // Antigravity IDE is ownerPid-only, same as Cursor: past staleAfter the
-    // record must not stay trusted just because the editor host still runs.
     let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent("ag-live-\(UUID().uuidString)", isDirectory: true)
     try! FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -149,8 +124,6 @@ private func object(_ data: Data) -> [String: Any] {
 }
 
 @Test func aCLIAgyWorkingRecordOutlivesStalenessWhileAgentLives() {
-    // CLI `agy` sessions carry agentPid; long silent turns must keep trusting
-    // working while that process is alive (IDE ownerPid-only does not).
     let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent("ag-cli-\(UUID().uuidString)", isDirectory: true)
     try! FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -173,8 +146,6 @@ private func object(_ data: Data) -> [String: Any] {
         .appendingPathComponent("ag-handle-\(UUID().uuidString)", isDirectory: true)
     try! FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
-    // hook shell (7) -> language_server (5) -> the app (3). No `agy` in the
-    // tree, so this is an in-editor turn.
     let parents: [Int32: Int32] = [7: 5, 5: 3, 3: 1]
     let paths: [Int32: String] = [
         7: "/bin/zsh",
@@ -190,8 +161,6 @@ private func object(_ data: Data) -> [String: Any] {
         now: Date(), in: directory, isAlive: { _ in true }, isHostAlive: { _ in true })
     #expect(records.count == 1)
     #expect(records[0].state == .working)
-    // Owner, not agent: the language_server is shared across conversations, so
-    // joining on it would let one chat's Stop idle another still-working chat.
     #expect(records[0].agentPid == nil)
     #expect(records[0].ownerPid == 5)
     #expect(records[0].agent == "antigravity")
@@ -200,10 +169,6 @@ private func object(_ data: Data) -> [String: Any] {
 }
 
 @Test func twoIDEConversationsStayIndependentSessions() {
-    // The failure this guards: both chats write records for the same host, the
-    // newer Stop would stamp the shared pid idle, and the Mac would sleep while
-    // the older chat was still mid-tool. Owner-anchored records each become
-    // their own hook-only row instead.
     let now = Date()
     let records = [
         AgentHooks.HookRecord(
@@ -215,7 +180,6 @@ private func object(_ data: Data) -> [String: Any] {
             cwd: "/Users/x/site", origin: .ide, ownerPid: 5, agent: "antigravity",
             updatedAt: now),
     ]
-    // No process to join: both fall through as hook-only sessions.
     let join = PSAgentActivityMonitor.applyHookRecords(records, to: [], cwdOf: { _ in nil })
     let sessions = join.unclaimed.compactMap(PSAgentActivityMonitor.hookOnlySession(from:))
     #expect(sessions.count == 2)
@@ -229,8 +193,6 @@ private func object(_ data: Data) -> [String: Any] {
 }
 
 @Test func ideHooksSuppressTheEvidenceOnlyHostAfterStop() {
-    // language_server evidence-only row + idle hook-only chat: after Stop the
-    // host must not keep the trigger on via conversation DB freshness.
     let host = AgentSession(
         pid: 5, agent: "antigravity", tty: nil, cpuPercent: 0,
         hasFreshEvidence: true, origin: .ide, evidenceOnly: true)
@@ -241,11 +203,9 @@ private func object(_ data: Data) -> [String: Any] {
         [host], hookRecords: [idleHook])
     #expect(remaining.isEmpty)
 
-    // Without IDE hooks the evidence-only host still stands (hooks not installed).
     #expect(PSAgentActivityMonitor.suppressingHookCoveredEvidenceHosts(
         [host], hookRecords: []) == [host])
 
-    // A Stop'd chat with hooks: trigger reads only the idle hook-only row.
     let join = PSAgentActivityMonitor.applyHookRecords(
         [idleHook], to: [host], cwdOf: { _ in "/Users/x/site" })
     var sessions = PSAgentActivityMonitor.suppressingHookCoveredEvidenceHosts(
@@ -261,7 +221,6 @@ private func object(_ data: Data) -> [String: Any] {
     #expect(!state.isWorking)
 }
 
-// MARK: - hooks.json install and remove
 
 @Test func installWritesOneGroupPerObservedEvent() {
     let data = try! AntigravityHooks.installHooks(into: nil, cliPath: cli)
@@ -311,8 +270,6 @@ private func object(_ data: Data) -> [String: Any] {
     var ours = root[AntigravityHooks.hookName] as! [String: Any]
     ours["enabled"] = false
     root[AntigravityHooks.hookName] = ours
-    // Toggled off in the file, the hooks never fire; reporting "installed"
-    // would promise tracking that isn't happening.
     #expect(AntigravityHooks.hookInstallState(of: json(root), cliPath: cli) != .installed)
 }
 
@@ -335,8 +292,6 @@ private func object(_ data: Data) -> [String: Any] {
 }
 
 @Test func aStrayEntryInsideAnotherObjectIsSweptOut() {
-    // What an older install could have left behind: ours nested in a foreign
-    // hook object, still firing, invisible to a plain key removal.
     let stray = json([
         "theirs": [
             "enabled": true,

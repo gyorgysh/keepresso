@@ -52,7 +52,6 @@ struct HotspotPreferencesSection: View {
                                 do {
                                     try await model.saveHotspotPassword(value, ssid: ssid)
                                     if model.hotspotConfig.ssid == ssid {
-                                        // Invalidate lookups started while the Keychain write was pending.
                                         credentialRevision &+= 1
                                         saved = true; password = ""; error = nil
                                     }

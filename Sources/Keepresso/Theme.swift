@@ -2,36 +2,24 @@ import SwiftUI
 import AppKit
 
 extension Color {
-    /// The brewing/active accent, matching the website's burnt-copper palette:
-    /// burnt copper (#A64B23) in light mode, soft copper (#D98F52) in dark.
     static let keepressoBrew = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.isDarkAppearance
             ? NSColor(srgbRed: 217 / 255, green: 143 / 255, blue: 82 / 255, alpha: 1)
             : NSColor(srgbRed: 166 / 255, green: 75 / 255, blue: 35 / 255, alpha: 1)
     })
 
-    /// The secondary copper tone, used for the steam in ``BrewingCupView``:
-    /// a deeper, redder companion to the accent. #8F3F1C in light mode
-    /// (the website's hover/strong copper), #D0824A in dark.
     static let keepressoSteam = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.isDarkAppearance
             ? NSColor(srgbRed: 208 / 255, green: 130 / 255, blue: 74 / 255, alpha: 1)
             : NSColor(srgbRed: 143 / 255, green: 63 / 255, blue: 28 / 255, alpha: 1)
     })
 
-    /// Claude's terracotta, used to tint claude session rows: #D97757 in dark
-    /// mode (the Claude Code console spinner), the deeper #C15F3C in light.
     static let claudeAccent = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.isDarkAppearance
             ? NSColor(srgbRed: 217 / 255, green: 119 / 255, blue: 87 / 255, alpha: 1)
             : NSColor(srgbRed: 193 / 255, green: 95 / 255, blue: 60 / 255, alpha: 1)
     })
 
-    /// For tools whose mark is monochrome (Grok, Codex, Cursor, Antigravity):
-    /// tint their rows with the menu's own ink rather than a hue, near-black
-    /// on light and near-white on dark. Pulled a little off pure black and
-    /// white so a working row still reads as tinted next to ordinary label
-    /// text. Their marks are told apart by shape, not color.
     static let monochromeAccent = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.isDarkAppearance
             ? NSColor(srgbRed: 242 / 255, green: 242 / 255, blue: 242 / 255, alpha: 1)
@@ -43,12 +31,7 @@ private extension NSAppearance {
     var isDarkAppearance: Bool { bestMatch(from: [.darkAqua, .aqua]) == .darkAqua }
 }
 
-/// A small (i) button that pops an explanation over the control it sits next
-/// to: room for the "how and why" that would clutter a menu row as a caption
-/// (what a switch flips, when a password is needed, how the administrator
-/// helper makes it silent).
 struct InfoButton: View {
-    /// Already-localized popover text (compose with `L(...)`).
     let text: String
     @State private var shown = false
 
@@ -71,10 +54,6 @@ struct InfoButton: View {
     }
 }
 
-/// A Form section header with an ``InfoButton`` after the title. The pairing is
-/// the rule for Preferences: the section's footer stays one plain line saying
-/// what the setting does, and the popover carries the detail (how it works, what
-/// it costs, when it doesn't apply) that used to make footers a wall of text.
 func sectionHeader(_ title: LocalizedStringKey, info: String) -> some View {
     HStack(spacing: 4) {
         Text(title)
@@ -82,23 +61,12 @@ func sectionHeader(_ title: LocalizedStringKey, info: String) -> some View {
     }
 }
 
-/// A one-line section footer, the short half of the ``sectionHeader`` pairing.
 func sectionFooter(_ text: LocalizedStringKey) -> some View {
     Text(text)
         .font(.caption)
         .foregroundStyle(.secondary)
 }
 
-/// A switch row that pushes the control to the container's trailing edge, so
-/// stacked switches line up in one column instead of each trailing its own
-/// label width. For plain stacks; grouped Forms already align their controls.
-/// Sized small to match the switches in the grouped Preferences forms, so
-/// every switch in the app renders at one size. An optional `info` text adds
-/// an ``InfoButton`` after the label.
-/// `switchLocked` freezes only the switch, for a setting something else is
-/// driving. The label and its ``InfoButton`` stay live (the explanation is
-/// exactly what a user reaches for then), and a click on the dead switch calls
-/// `onLockedTap` instead of being swallowed.
 func switchRow(
     _ title: LocalizedStringKey,
     isOn: Binding<Bool>,
@@ -121,7 +89,6 @@ func switchRow(
                 Toggle("", isOn: isOn)
                     .labelsHidden()
                     .disabled(true)
-                    // A disabled control takes no clicks, so catch them above it.
                     .overlay {
                         Rectangle()
                             .fill(.clear)
@@ -137,21 +104,16 @@ func switchRow(
     .controlSize(.small)
 }
 
-/// A short sideways shake, driven by a counter: each bump animates one shake.
 private struct ShakeEffect: GeometryEffect {
     var animatableData: CGFloat
 
     func effectValue(size: CGSize) -> ProjectionTransform {
-        // Three passes either side of centre, landing back on centre as the
-        // value reaches the next whole number.
         ProjectionTransform(CGAffineTransform(
             translationX: 5 * sin(animatableData * .pi * 6), y: 0
         ))
     }
 }
 
-/// Wraps ``ShakeEffect`` so the motion can be skipped under Reduce Motion,
-/// which needs an environment read and so can't live in a plain modifier.
 private struct Shake: ViewModifier {
     let count: Int
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -164,17 +126,11 @@ private struct Shake: ViewModifier {
 }
 
 extension View {
-    /// Shake this view whenever `count` changes. Point it at the line that
-    /// explains why a control is inert, so a click on that control draws the
-    /// eye to the answer instead of doing nothing.
     func shakes(on count: Int) -> some View {
         modifier(Shake(count: count))
     }
 }
 
-/// A plain, full-width menu row: no border, a subtle hover/press highlight, and
-/// left-aligned text, closer to a native menu item than the default `.bordered`
-/// pill button style, so it stays visually quiet next to prominent actions.
 struct MenuRowButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         MenuRow(configuration: configuration)
@@ -193,9 +149,6 @@ struct MenuRowButtonStyle: ButtonStyle {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(highlight)
                 )
-                // Ease the hover highlight in and out; presses stay instant
-                // (the value below changes without an animation) so clicks
-                // keep their immediate feel.
                 .animation(.easeOut(duration: 0.12), value: isHovering)
                 .contentShape(Rectangle())
                 .onHover { isHovering = $0 }
@@ -313,8 +266,6 @@ struct WindowPlacement: NSViewRepresentable {
 }
 
 extension View {
-    /// Center the window and bring it to the front when it opens. Applied
-    /// once per open; an already open window is left where the user put it.
     func centersAndFrontsWindow() -> some View {
         background(WindowPlacement())
     }
@@ -330,7 +281,6 @@ extension View {
     }
 }
 
-/// The panel-side repair behind ``View/keepsPanelKey()``.
 private struct PanelKeyAssert: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
@@ -344,20 +294,6 @@ private struct PanelKeyAssert: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
-/// The backing that keeps text readable over glass on any wallpaper: a material
-/// for blur, plus a wash of the window background color so a very dark or busy
-/// desktop can't pull the surface's luminance away from what the text color
-/// expects (in light mode that wash is the "white lighting" layer). The wash is
-/// translucent, so the surface still reads as glass.
-///
-/// Two strengths: the menu panel sits on the system's own panel chrome and
-/// needs only a light touch; full windows show far more wallpaper, so they get
-/// a stronger material and a heavier wash to stay readable in any environment.
-/// The user's window-transparency choice (Preferences ▸ General ▸
-/// Appearance), 0 = the frosted default, 1 = clearest glass. A process-wide
-/// observable rather than a parameter, so every glass surface (the menu
-/// panel and each window's plate) reads it in place and a slider change
-/// re-renders them all live, with no plumbing through seven call sites.
 @MainActor
 @Observable
 final class GlassClarity {
@@ -368,15 +304,7 @@ final class GlassClarity {
 private struct GlassReadabilityPlate: View {
     var material: Material = .thinMaterial
     var washOpacity: Double = 0.28
-    /// How much of the frosting survives at full clarity. The panel sits on
-    /// the system's own glass chrome and can go nearly bare. A window's
-    /// plate is all there is between the text and the wallpaper, so it
-    /// keeps a higher floor even at 100% see-through.
     var clarityFloor: Double = 0.08
-    /// nil follows the Appearance slider (the menu panel); a fixed value
-    /// opts out (the windows, which always keep their full frosted plate:
-    /// the setting is about the dropdown, and window text has nothing but
-    /// this plate between it and the wallpaper).
     var fixedClarity: Double?
 
     var body: some View {
@@ -444,18 +372,6 @@ private struct MenuPanelPlate: View {
     }
 }
 
-/// Steam drifting up the panel while it brews.
-///
-/// Built so the app does no work per frame. A seamless steam texture is
-/// generated once, on the CPU, when the panel opens (a few milliseconds),
-/// and Core Animation slides two copies of it upward at different speeds.
-/// Core Animation runs those animations in the render server, so the app
-/// itself sits idle while the steam moves. An earlier Metal shader version
-/// redrew the effect in the app 24 times a second and cost a third of a core.
-///
-/// It stops entirely when it isn't seen: the panel's views exist only while
-/// the panel is open, the animations are removed whenever the session isn't
-/// brewing, and Reduce Motion and Low Power Mode keep it off.
 private struct PanelSteam: View {
     var brewing: Bool
     var dark: Bool
@@ -483,9 +399,6 @@ private struct SteamLayerView: NSViewRepresentable {
     }
 }
 
-/// The layer tree behind ``PanelSteam``: a container faded toward the top,
-/// holding two drifting layers of the same tile at different speeds,
-/// mirrored, and strengths, so the wisps never visibly repeat.
 private final class SteamView: NSView {
     private let container = CALayer()
     private let fade = CAGradientLayer()
@@ -493,8 +406,6 @@ private final class SteamView: NSView {
     private var running = false
     private var dark: Bool?
     private var tile: CGImage?
-    /// The size the tiles were last laid out for. Layout passes at the same
-    /// size (frequent, as the panel's rows change) leave the steam moving.
     private var builtSize: CGSize = .zero
 
     override init(frame: NSRect) {
@@ -503,7 +414,6 @@ private final class SteamView: NSView {
         layer?.addSublayer(container)
         container.opacity = 0
         container.mask = fade
-        // Thickest at the bottom, gone before the header.
         fade.colors = [NSColor.black.cgColor, NSColor.black.withAlphaComponent(0.6).cgColor, NSColor.clear.cgColor]
         fade.locations = [0, 0.45, 0.85]
         fade.startPoint = CGPoint(x: 0.5, y: 0)
@@ -540,7 +450,6 @@ private final class SteamView: NSView {
         CATransaction.setAnimationDuration(1.2)
         container.opacity = running ? 1 : 0
         CATransaction.setCompletionBlock { [weak self] in
-            // Faded out: drop the animations so nothing moves unseen.
             guard let self, !self.running else { return }
             self.drifts.forEach { $0.removeAllAnimations() }
         }
@@ -548,9 +457,6 @@ private final class SteamView: NSView {
         if running { animate() }
     }
 
-    /// Lays each drift out as a column of tiles tall enough to scroll one
-    /// tile's height over the whole panel. Height changes reveal more of
-    /// the same moving texture instead of stretching it and restarting it.
     private func rebuild() {
         guard let tile, bounds.width > 0, bounds.height > 0 else { return }
         builtSize = bounds.size
@@ -576,8 +482,6 @@ private final class SteamView: NSView {
                 piece.contents = tile
                 piece.contentsGravity = .resize
                 piece.frame = CGRect(x: 0, y: CGFloat(row) * tileHeight, width: width, height: tileHeight)
-                // The second layer runs mirrored, so it never lines up with
-                // the first.
                 if index == 1 { piece.setAffineTransform(CGAffineTransform(scaleX: -1, y: 1)) }
             }
         }
@@ -615,21 +519,12 @@ private final class SteamView: NSView {
     }
 }
 
-/// A small, vertically seamless image of soft wisps: domain-warped value
-/// noise whose lattice wraps in y, so stacked copies join without a seam.
-/// Generated once per appearance and stretched to the panel, where its
-/// softness is the point.
 private enum SteamTexture {
     static let width = 96
     static let height = 192
-    /// Lattice cells across one tile height at the first octave. Every later
-    /// octave doubles it, so all of them wrap at the tile's edge.
     static let period = 6
 
     static func make(dark: Bool) -> CGImage? {
-        // White in the dark; brew-tinted in the light, where white vanishes.
-        // Resolved for the mode being built, not whatever appearance happens
-        // to be current while this runs.
         var tint = NSColor.orange
         NSAppearance(named: dark ? .darkAqua : .aqua)?.performAsCurrentDrawingAppearance {
             tint = NSColor(Color.keepressoBrew).usingColorSpace(.deviceRGB) ?? .orange
@@ -651,7 +546,6 @@ private enum SteamTexture {
                 let warpY = fbm(u * 0.7 + 5.2, v)
                 let n = fbm(u + warpX * 1.6, v + warpY * 1.6)
                 let wisps = smoothstep(0.50, 0.80, n)
-                // Soft at the sides of the panel.
                 let side = smoothstep(0, 0.12, Double(x) / Double(width))
                     * smoothstep(1, 0.88, Double(x) / Double(width))
                 let alpha = wisps * side * peak
@@ -683,7 +577,6 @@ private enum SteamTexture {
         return Double(h ^ (h >> 16)) / Double(UInt32.max)
     }
 
-    /// Value noise whose y lattice wraps every `wrap` cells.
     private static func noise(_ x: Double, _ y: Double, wrap: Int) -> Double {
         let cellX = Int(floor(x)), cellY = Int(floor(y))
         var fx = x - floor(x), fy = y - floor(y)
@@ -697,8 +590,6 @@ private enum SteamTexture {
         return top + (bottom - top) * fy
     }
 
-    /// Four octaves. The y input is in units of first-octave cells, so octave
-    /// `o` wraps at `period << o` cells, exactly one tile height.
     private static func fbm(_ x: Double, _ y: Double) -> Double {
         var value = 0.0, amplitude = 0.5, frequency = 1.0
         for octave in 0..<4 {
@@ -711,8 +602,6 @@ private enum SteamTexture {
     }
 }
 
-/// The system's under-window-background material, blending with whatever is
-/// behind the window. A background only: it never takes a click.
 private struct BehindWindowFrost: NSViewRepresentable {
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = PassthroughEffectView()
@@ -758,16 +647,11 @@ extension View {
             // clear look); only the readability tint fades away.
             self.glassEffect(.regular.tint(cardTint), in: shape)
         } else {
-            // The tint sits behind the material, so it shows through the blur
-            // softly instead of flat.
             self.background(shape.fill(.ultraThinMaterial).opacity(1 - 0.9 * clarity))
                 .background(cardTint, in: shape)
         }
     }
 
-    /// The style for a primary call to action: real Liquid Glass on macOS 26,
-    /// the familiar bordered prominent button before. Both pick up the brew
-    /// accent from the surrounding `tint`.
     @ViewBuilder
     func prominentActionStyle() -> some View {
         if #available(macOS 26.0, *) {

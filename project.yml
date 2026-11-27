@@ -12,9 +12,6 @@ packages:
     path: .
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
-    # Pin to an exact version so a floating "latest 2.x" can't flow a
-    # compromised Sparkle tag straight into a signed, notarized release.
-    # Bump this deliberately when a new Sparkle ships.
     exactVersion: "2.10.1"
 
 targets:
@@ -33,9 +30,6 @@ targets:
           copyFiles:
             destination: wrapper
             subpath: Contents/Library/LaunchDaemons
-      # The bundled agent skill, copied as a folder so users can copy the
-      # whole directory into their agent's skills folder (see Preferences ▸
-      # Automation and docs). Lands at Contents/Resources/AgentSkill.
       - path: Sources/Keepresso/AgentSkill
         type: folder
         buildPhase: resources
@@ -57,18 +51,12 @@ targets:
         copy:
           destination: wrapper
           subpath: Contents/Helpers
-      # The privileged helper daemon (SMAppService LaunchDaemon). Its plist's
-      # BundleProgram points at Contents/MacOS/keepresso-helper; no name clash
-      # with the app executable, unlike the CLI.
       - target: keepresso-helper
         embed: true
         codeSign: true
         copy:
           destination: wrapper
           subpath: Contents/MacOS
-      # The MCP stdio server, next to the CLI in Contents/Helpers. Agents
-      # reference it by absolute path in their MCP configuration; nothing
-      # symlinks it onto PATH.
       - target: keepresso-mcp
         embed: true
         codeSign: true
@@ -82,14 +70,10 @@ targets:
         CFBundleDisplayName: Keepresso
         CFBundleShortVersionString: "1.30.0"
         CFBundleVersion: "47"
-        LSUIElement: true            # menu-bar agent: no Dock icon
+        LSUIElement: true
         LSMinimumSystemVersion: "14.0"
-        # The shipped localizations (Localizable.strings under *.lproj); keep
-        # in sync with tools/localization/gen_strings.py.
         CFBundleLocalizations: [en, de, es, fr, it, hu, pt-BR, tr, ru, ja, ko, pl, uk, zh-Hans, zh-Hant]
         NSHumanReadableCopyright: "© 2026 Keepresso contributors. GNU GPL v3.0."
-        # keepresso://start[?duration=<minutes>] / stop / toggle, so scripts and
-        # launchers (Shortcuts, Raycast, Alfred) can drive a session.
         CFBundleURLTypes:
           - CFBundleURLName: sh.gyorgy.keepresso
             CFBundleURLSchemes: [keepresso]
@@ -134,9 +118,6 @@ targets:
         # Keepresso ships via GitHub/Homebrew, not the Mac App Store.
         ENABLE_APP_SANDBOX: false
 
-  # The caffeinate-style `keepresso` CLI. Also buildable as a SwiftPM
-  # executable (`swift build`) for the toolchain-only dev loop; this target
-  # exists so the release archive builds, embeds, and signs it with the app.
   keepresso-cli:
     type: tool
     platform: macOS
@@ -152,11 +133,8 @@ targets:
         SWIFT_VERSION: "5.9"
         ENABLE_HARDENED_RUNTIME: true
         CODE_SIGN_STYLE: Automatic
-        # Embedded in the app; not an install product of its own.
         SKIP_INSTALL: true
 
-  # The MCP stdio server: automation leases and status for AI agents, over
-  # newline-delimited JSON-RPC. Same dual-build arrangement as the CLI.
   keepresso-mcp:
     type: tool
     platform: macOS
@@ -174,10 +152,6 @@ targets:
         CODE_SIGN_STYLE: Automatic
         SKIP_INSTALL: true
 
-  # The privileged helper daemon: registered by the app as an SMAppService
-  # LaunchDaemon (one admin approval, ever) and driven over XPC, so
-  # closed-display mode and the AWDL watchdog stop asking for the password on
-  # every app run. Also buildable with `swift build` for the dev loop.
   keepresso-helper:
     type: tool
     platform: macOS
@@ -207,14 +181,11 @@ targets:
     settings:
       base:
         PRODUCT_NAME: keepresso-helper
-        # The code-signing identifier both sides verify over XPC; must match
-        # HelperService.helperCodeSignIdentifier.
         PRODUCT_BUNDLE_IDENTIFIER: sh.gyorgy.keepresso.helper
         CREATE_INFOPLIST_SECTION_IN_BINARY: true
         SWIFT_VERSION: "5.9"
         ENABLE_HARDENED_RUNTIME: true
         CODE_SIGN_STYLE: Automatic
-        # Embedded in the app; not an install product of its own.
         SKIP_INSTALL: true
 
   # Widget extension: desktop widgets on macOS 14+, plus the Control Center
@@ -226,8 +197,6 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - path: Sources/KeepressoWidget
-      # The shared brand-mark geometry (CoreGraphics only), so the widgets
-      # draw the real cup instead of an SF Symbols lookalike.
       - path: Sources/Keepresso/BrandCupMark.swift
       # The widget/control intents, compiled into both targets so
       # `openAppWhenRun` can run them in the app process (launching it when
@@ -243,8 +212,6 @@ targets:
         CFBundleDisplayName: Keepresso
         CFBundleShortVersionString: "1.30.0"
         CFBundleVersion: "47"
-        # Same 15 localizations as the app; keep in sync with
-        # tools/localization/gen_strings.py.
         CFBundleLocalizations: [en, de, es, fr, it, hu, pt-BR, tr, ru, ja, ko, pl, uk, zh-Hans, zh-Hant]
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
@@ -254,18 +221,12 @@ targets:
         # Widget extensions must be sandboxed (only the appex; the app itself
         # stays unsandboxed for IOPMAssertion).
         com.apple.security.app-sandbox: true
-        # Shared session state with the app; same signing-time expansion as
-        # the app target (see WidgetBridge.appGroupID).
         com.apple.security.application-groups:
           - $(TeamIdentifierPrefix)sh.gyorgy.keepresso
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: sh.gyorgy.keepresso.widget
-        # Brand caramel as the widget accent, else interactive widget buttons
-        # fall back to system blue.
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        # Keep in lockstep with the app target's versions on every release
-        # bump (the release scripts read the app's, the first in this file).
         MARKETING_VERSION: "1.30.0"
         CURRENT_PROJECT_VERSION: "47"
         SWIFT_VERSION: "5.9"

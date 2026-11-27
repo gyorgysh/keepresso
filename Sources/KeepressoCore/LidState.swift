@@ -3,8 +3,6 @@ import IOKit
 
 /// Reads whether the built-in lid is currently closed.
 public protocol LidStateReading: AnyObject, Sendable {
-    /// `true`/`false` if readable, `nil` on a Mac with no lid (e.g. a Mac mini
-    /// or Studio) or if the property can't be read.
     func isClosed() -> Bool?
 }
 

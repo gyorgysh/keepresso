@@ -2,9 +2,6 @@ import Foundation
 import Testing
 @testable import KeepressoCore
 
-/// The harmless selectors used by the anonymous test endpoint. The
-/// exported object intentionally implements only these; calling any other
-/// HelperXPCProtocol verb would raise.
 private final class OverlappingHelper: NSObject, @unchecked Sendable {
     let slowCallStarted = DispatchSemaphore(value: 0)
     private var version: Int
@@ -43,10 +40,6 @@ private final class OverlappingHelper: NSObject, @unchecked Sendable {
         lock.lock(); self.version = version; lock.unlock()
     }
 
-    /// Generous on purpose: on a 3-core CI runner under full-suite parallel
-    /// load, the background hop plus the XPC handshake can take seconds
-    /// (locally this is milliseconds). Only the wait grows, never what the
-    /// test asserts.
     func waitForSlowCall() -> Bool {
         slowCallStarted.wait(timeout: .now() + 30) == .success
     }
@@ -102,16 +95,6 @@ private final class AnonymousHelperListener: NSObject, NSXPCListenerDelegate, @u
     }
 }
 
-/// One blocking helper call, running on a thread of its own.
-///
-/// Not `Task.detached`: that borrows a thread from the cooperative pool, which
-/// is only as wide as the machine has cores. On a two or three core CI runner,
-/// with the rest of the suite running in parallel, a blocked call can hold the
-/// pool long enough that the overlapping call never starts and the test fails
-/// for the wrong reason. Not `DispatchQueue.global()` either: under the same
-/// full-suite load the workqueue did not schedule the block for ~20s while
-/// over a thousand sibling tests churned. A dedicated thread starts via
-/// `pthread_create`, immune to pool pressure on either pool.
 private final class BackgroundCallState: @unchecked Sendable {
     let finished = DispatchSemaphore(value: 0)
     let lock = NSLock()
@@ -123,8 +106,6 @@ private final class BackgroundCall: @unchecked Sendable {
     private let thread: Thread
 
     init(_ work: @escaping @Sendable () -> Bool) {
-        // Locals, so the thread takes no `self` capture: `self.thread` is
-        // not set yet and must not be captured during init.
         let state = BackgroundCallState()
         let thread = Thread { [state] in
             let ok = work()
@@ -140,8 +121,6 @@ private final class BackgroundCall: @unchecked Sendable {
         thread.start()
     }
 
-    /// The call's result, or nil when it hadn't returned in time. Generous
-    /// like `waitForSlowCall` above: same loaded-runner reason.
     func value(timeout: TimeInterval = 30) -> Bool? {
         guard state.finished.wait(timeout: .now() + timeout) == .success else { return nil }
         state.lock.lock()
@@ -150,14 +129,8 @@ private final class BackgroundCall: @unchecked Sendable {
     }
 }
 
-// A generous client timeout: these tests are about the order calls finish in,
-// not about how long one waits. The regression they guard fails fast (the
-// error handler answers the moment a connection is cancelled underneath).
 private let testCallTimeout: TimeInterval = 30
 
-/// A semaphore wait on a Swift Testing worker can starve the anonymous
-/// listener's replies on small runners. Suspend the test while a dedicated
-/// thread performs each blocking call, including rendezvous and teardown waits.
 private func blockingValue<Value: Sendable>(_ work: @escaping @Sendable () -> Value) async -> Value {
     await withCheckedContinuation { continuation in
         Thread { continuation.resume(returning: work()) }.start()
@@ -179,8 +152,6 @@ private func blockingValue<Value: Sendable>(_ work: @escaping @Sendable () -> Va
     #expect(started)
     guard started else { _ = await blockingValue { slow.value() }; return }
     #expect(await blockingValue { client.ping() })
-    // ping() has returned, including its connection-release housekeeping.
-    // The other reply must still be deliverable on the shared connection.
     delegate.helper.finishSlowCall()
     #expect(await blockingValue { slow.value() } == true)
 }
@@ -197,7 +168,6 @@ private func blockingValue<Value: Sendable>(_ work: @escaping @Sendable () -> Va
     )
     #expect(await blockingValue { client.setSleepHold(true) })
     #expect(await blockingValue { client.setSleepHold(false) })
-    // No further ping should be needed to let the old daemon retire.
     #expect(await blockingValue { delegate.waitForDisconnect() })
 }
 
@@ -223,7 +193,6 @@ private func blockingValue<Value: Sendable>(_ work: @escaping @Sendable () -> Va
     let endpoint = listener.endpoint
     let client = XPCHelperClient(timeout: testCallTimeout, connectionFactory: { NSXPCConnection(listenerEndpoint: endpoint) })
     #expect(await blockingValue { !client.setLowPowerHold(true) })
-    // A failed rendezvous must not pass as a successful version guard.
     #expect(delegate.helper.pingCallCount == 1)
     #expect(delegate.helper.lowPowerCallCount == 0)
 }
@@ -267,22 +236,15 @@ private func blockingValue<Value: Sendable>(_ work: @escaping @Sendable () -> Va
         let client = XPCHelperClient(timeout: testCallTimeout, connectionFactory: { NSXPCConnection(listenerEndpoint: endpoint) })
         #expect(await blockingValue { adapter ? client.setAdapterLowPowerHold(true) : client.setLowPowerHold(true) })
         delegate.helper.replaceVersion(with: adapter ? 11 : 9)
-        // An older daemon cannot confirm restoration, but its connection must
-        // be free to retire so the current daemon can settle the restore debt.
         #expect(await blockingValue { !(adapter ? client.setAdapterLowPowerHold(false) : client.setLowPowerHold(false)) })
         #expect(await blockingValue { delegate.waitForNoConnections() })
         #expect(delegate.helper.lowPowerCallCount == 1)
     }
 }
 
-// This blocking rendezvous shares the isolated XPC cohort so it cannot
-// occupy a cooperative worker while the full core suite needs the pool.
 @Test @MainActor func lowPowerDisarmDuringBatteryWriteNeverEngagesAdapterAndRestoresImmediately() async throws {
     let helper = HelperRoutingTestClient()
     let controller = ClosedLidLowPowerController(helper: helper)
-    // A suspended async test may need the worker occupied by the paused
-    // write. Dispatch the simulated settings change directly to the main
-    // queue, then release the call, preserving the intended ordering.
     let barrier = BlockingLowPowerTestCall { finish in
         DispatchQueue.main.async {
             MainActor.assumeIsolated {

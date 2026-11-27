@@ -35,7 +35,6 @@ private func minutes(_ m: Double) -> Date {
     #expect(engine.isSatisfied())
 }
 
-// MARK: - The in-progress predicate
 
 @Test func timedEventSpanningNowIsInProgress() {
     let windows = [CalendarEventWindow(start: minutes(0), end: minutes(30))]
@@ -45,39 +44,30 @@ private func minutes(_ m: Double) -> Date {
 }
 
 @Test func startIsInclusiveAndEndExclusive() {
-    // Back-to-back events must hand over cleanly, without double-counting the
-    // shared boundary.
     let windows = [CalendarEventWindow(start: minutes(0), end: minutes(30))]
     #expect(EventKitCalendarMonitor.hasTimedEvent(in: windows, at: minutes(0)))
     #expect(!EventKitCalendarMonitor.hasTimedEvent(in: windows, at: minutes(30)))
 }
 
 @Test func allDayEventsNeverCountAsInProgress() {
-    // A birthday must not keep the Mac awake for 24 hours.
     let allDay = [CalendarEventWindow(start: minutes(-600), end: minutes(840), isAllDay: true)]
     #expect(!EventKitCalendarMonitor.hasTimedEvent(in: allDay, at: minutes(10)))
 }
 
-// MARK: - Stale-while-revalidate cache
 
 @Test func calendarMonitorServesCachedWindowsAndRefreshesInBackground() async {
     let stub = CalendarFetchStub(windows: [CalendarEventWindow(start: minutes(0), end: minutes(30))])
     let clock = CalendarTestClock()
     let monitor = EventKitCalendarMonitor(ttl: 60, now: { clock.now }, fetch: stub.fetch)
 
-    // First read: nothing cached yet, kicks off the background fetch.
     #expect(!monitor.isEventInProgress)
     #expect(await calendarEventually { monitor.isEventInProgress })
 
-    // Within the TTL, reads reuse the cached windows without refetching, and
-    // containment stays per-tick accurate: past the event's end the verdict
-    // flips even though the cache is still fresh.
     clock.advance(10 * 60)
     #expect(monitor.isEventInProgress)
     clock.advance(25 * 60)
     #expect(stub.callCount == 1)
 
-    // Past the TTL the refresh lands in the background.
     stub.windows = []
     _ = monitor.isEventInProgress
     #expect(await calendarEventually { stub.callCount == 2 })
@@ -93,7 +83,6 @@ private func minutes(_ m: Double) -> Date {
     #expect(!monitor.isEventInProgress)
 }
 
-// MARK: - Test doubles (mirroring VPNTriggerTests' thread-safe stubs)
 
 private final class CalendarFetchStub: @unchecked Sendable {
     private let lock = NSLock()

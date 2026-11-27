@@ -35,15 +35,10 @@ public protocol CalendarMonitoring: AnyObject {
 /// access grant the fetch yields nothing and the trigger simply never fires;
 /// the app surfaces the missing grant in Setup.
 public final class EventKitCalendarMonitor: CalendarMonitoring {
-    /// How far past the TTL each fetch looks, so events that begin before the
-    /// next refresh are already cached.
     static let fetchHorizon: TimeInterval = 120
 
     private let ttl: TimeInterval
     private let now: () -> Date
-    /// Produces the event windows around the current moment (`nil` when
-    /// calendar access is missing). Injectable so the cache and the
-    /// in-progress predicate can be unit-tested.
     private let fetch: @Sendable () -> [CalendarEventWindow]?
     private let lock = NSLock()
     private var cachedWindows: [CalendarEventWindow] = []
@@ -90,8 +85,6 @@ public final class EventKitCalendarMonitor: CalendarMonitoring {
         return body()
     }
 
-    /// Pure predicate: a timed (non-all-day) event spans this moment. Start is
-    /// inclusive, end exclusive, so back-to-back events hand over cleanly.
     static func hasTimedEvent(in windows: [CalendarEventWindow], at date: Date) -> Bool {
         windows.contains { !$0.isAllDay && $0.start <= date && date < $0.end }
     }

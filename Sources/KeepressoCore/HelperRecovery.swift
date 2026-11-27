@@ -56,7 +56,7 @@ public enum HelperRecoveryProbe {
         for delay in delays {
             guard !Task.isCancelled else { return nil }
             if delay > 0 {
-                do { try await wait(delay) } catch is CancellationError { return nil } catch { /* transient sleep failure: still ping */ }
+                do { try await wait(delay) } catch is CancellationError { return nil } catch {  }
             }
             guard !Task.isCancelled else { return nil }
             if let version = await ping() { return version }

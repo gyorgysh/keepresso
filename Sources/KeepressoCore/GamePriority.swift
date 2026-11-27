@@ -27,8 +27,6 @@ public final class GamePriorityController {
     /// The pid currently boosted, or nil. Drives the Setup screen's caption.
     public private(set) var boostedPID: Int?
 
-    /// Applies or releases the hold. The app wires the helper's XPC client
-    /// behind a detached task; tests inject a recorder.
     private let hold: (_ holding: Bool, _ pid: Int) -> Void
 
     public init(hold: @escaping (_ holding: Bool, _ pid: Int) -> Void) {

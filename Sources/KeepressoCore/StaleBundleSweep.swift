@@ -2,16 +2,9 @@ import Foundation
 
 /// Outcome of one stale-bundle sweep, for logging and tests.
 public enum StaleBundleSweepResult: Equatable, Sendable {
-    /// No previous copy to consider: no bookmark yet, the bookmark no longer
-    /// resolves (the old copy is really gone), or it still points at the
-    /// running bundle (no update happened).
     case nothingToSweep
-    /// A previous copy exists but stays untouched, with the reason: it lives
-    /// outside any Trash folder, or it isn't this app.
     case leftAlone(path: String, reason: String)
-    /// The trashed previous copy was deleted.
     case removed(path: String)
-    /// The trashed previous copy was found but couldn't be deleted.
     case removalFailed(path: String, message: String)
 }
 

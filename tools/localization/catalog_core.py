@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
-# KeepressoCore localized strings: English source -> {lang: translation}.
-# Product/technical terms kept verbatim: Keepresso, Mac, macOS, Wi-Fi, VPN,
-# Bluetooth, SSH, VNC, FileVault, tokenstat.ai, AWDL, AirDrop, Handoff.
 
 CORE = {
-    # --- Trigger / rule labels ---
     "On AC power": {"hu": "Hálózati tápon", "es": "Con corriente CA", "fr": "Sur secteur", "de": "Am Netzstrom", "zh-Hans": "接通电源时"},
     "On battery": {"hu": "Akkumulátorról", "es": "Con batería", "fr": "Sur batterie", "de": "Im Akkubetrieb", "zh-Hans": "使用电池时"},
     "Charging": {"hu": "Töltés alatt", "es": "Cargando", "fr": "En charge", "de": "Wird geladen", "zh-Hans": "正在充电"},
@@ -27,12 +23,10 @@ CORE = {
     "Network above %@": {"hu": "Hálózat %@ felett", "es": "Red por encima de %@", "fr": "Réseau au-dessus de %@", "de": "Netzwerk über %@", "zh-Hans": "网络高于 %@"},
     "App %@": {"hu": "%@ alkalmazás", "es": "App %@", "fr": "App %@", "de": "App %@", "zh-Hans": "App %@"},
 
-    # --- Time window ---
     "Every day": {"hu": "Minden nap", "es": "Todos los días", "fr": "Tous les jours", "de": "Täglich", "zh-Hans": "每天"},
     "Weekdays": {"hu": "Hétköznap", "es": "Días laborables", "fr": "En semaine", "de": "Wochentags", "zh-Hans": "工作日"},
     "Weekends": {"hu": "Hétvégén", "es": "Fines de semana", "fr": "Le week-end", "de": "Am Wochenende", "zh-Hans": "周末"},
 
-    # --- Session end action ---
     "Do nothing": {"hu": "Ne tegyen semmit", "es": "No hacer nada", "fr": "Ne rien faire", "de": "Nichts tun", "zh-Hans": "不执行任何操作"},
     "Sleep the display": {"hu": "Kijelző altatása", "es": "Suspender la pantalla", "fr": "Éteindre l’écran", "de": "Display in Ruhezustand", "zh-Hans": "使显示器进入睡眠"},
     "Lock the screen": {"hu": "Képernyő zárolása", "es": "Bloquear la pantalla", "fr": "Verrouiller l’écran", "de": "Bildschirm sperren", "zh-Hans": "锁定屏幕"},
@@ -53,7 +47,6 @@ CORE = {
     "waiting counts": {"hu": "várakozás számít", "es": "esperar cuenta", "fr": "attente compte", "de": "Warten zählt", "zh-Hans": "等待也算工作"},
     "%@ (%@)": {"hu": "%@ (%@)", "es": "%@ (%@)", "fr": "%@ (%@)", "de": "%@ (%@)", "zh-Hans": "%@（%@）"},
 
-    # --- Built-in preset names ---
     "AI Agent": {"hu": "AI-ügynök", "es": "Agente de IA", "fr": "Agent IA", "de": "KI-Agent", "zh-Hans": "AI 智能体"},
     "On AC Power": {"hu": "Hálózati tápon", "es": "Con corriente CA", "fr": "Sur secteur", "de": "Am Netzstrom", "zh-Hans": "接通电源"},
     "External Display Connected": {"hu": "Külső kijelző csatlakoztatva", "es": "Pantalla externa conectada", "fr": "Écran externe connecté", "de": "Externes Display verbunden", "zh-Hans": "已连接外接显示器"},
@@ -64,7 +57,6 @@ CORE = {
     "Cloud Gaming": {"hu": "Felhőalapú játék", "es": "Juego en la nube", "fr": "Cloud gaming", "de": "Cloud-Gaming", "zh-Hans": "云游戏"},
     "Remote Control": {"hu": "Távvezérlés", "es": "Control remoto", "fr": "Contrôle à distance", "de": "Fernsteuerung", "zh-Hans": "远程控制"},
 
-    # --- Headless readiness (Setup screen) ---
     "Remote Login (SSH)": {"hu": "Távoli bejelentkezés (SSH)", "es": "Inicio de sesión remoto (SSH)", "fr": "Connexion à distance (SSH)", "de": "Entfernte Anmeldung (SSH)", "zh-Hans": "远程登录 (SSH)"},
     "Remote Login is on, so you can reach this Mac over SSH.": {"hu": "A távoli bejelentkezés be van kapcsolva, így SSH-n keresztül eléri ezt a Macet.", "es": "El inicio de sesión remoto está activado, por lo que puedes acceder a este Mac por SSH.", "fr": "La connexion à distance est activée, vous pouvez donc atteindre ce Mac via SSH.", "de": "Die entfernte Anmeldung ist aktiviert, du kannst diesen Mac also per SSH erreichen.", "zh-Hans": "远程登录已开启，因此你可以通过 SSH 访问这台 Mac。"},
     "Remote Login is off. You might want to enable it for SSH access to a headless Mac.": {"hu": "A távoli bejelentkezés ki van kapcsolva. Érdemes lehet bekapcsolni egy monitor nélküli Mac SSH-eléréséhez.", "es": "El inicio de sesión remoto está desactivado. Quizá quieras activarlo para acceder por SSH a un Mac sin pantalla.", "fr": "La connexion à distance est désactivée. Vous pouvez l’activer pour un accès SSH à un Mac sans écran.", "de": "Die entfernte Anmeldung ist deaktiviert. Für SSH-Zugriff auf einen Mac ohne Bildschirm solltest du sie aktivieren.", "zh-Hans": "远程登录已关闭。若要通过 SSH 访问无显示器的 Mac，建议开启它。"},
@@ -102,7 +94,6 @@ CORE = {
     "Automatic login is off. After a reboot the Mac waits at the login window for a password.": {"hu": "Az automatikus bejelentkezés ki van kapcsolva. Újraindítás után a Mac a bejelentkezési ablakban vár a jelszóra.", "es": "El inicio de sesión automático está desactivado. Tras reiniciar, el Mac espera la contraseña en la ventana de inicio de sesión.", "fr": "La connexion automatique est désactivée. Après un redémarrage, le Mac attend le mot de passe à la fenêtre de connexion.", "de": "Die automatische Anmeldung ist deaktiviert. Nach einem Neustart wartet der Mac am Anmeldefenster auf das Passwort.", "zh-Hans": "自动登录已关闭。重启后，Mac 会在登录窗口等待输入密码。"},
     "Turn on automatic login for this account.": {"hu": "Kapcsolja be az automatikus bejelentkezést ehhez a fiókhoz.", "es": "Activa el inicio de sesión automático para esta cuenta.", "fr": "Activez la connexion automatique pour ce compte.", "de": "Aktiviere die automatische Anmeldung für dieses Konto.", "zh-Hans": "为此账户开启自动登录。"},
 
-    # --- Notifications ---
     "Keepresso stopped": {"hu": "A Keepresso leállt", "es": "Keepresso se detuvo", "fr": "Keepresso s’est arrêté", "de": "Keepresso wurde gestoppt", "zh-Hans": "Keepresso 已停止"},
     "Your keep-awake session has ended.": {"hu": "Az ébrentartási munkamenet véget ért.", "es": "Tu sesión para mantener despierto ha terminado.", "fr": "Votre session de maintien en éveil est terminée.", "de": "Deine Wachhalte-Sitzung ist beendet.", "zh-Hans": "你的保持唤醒会话已结束。"},
     "Keepresso stops soon": {"hu": "A Keepresso hamarosan leáll", "es": "Keepresso se detendrá pronto", "fr": "Keepresso s’arrête bientôt", "de": "Keepresso stoppt bald", "zh-Hans": "Keepresso 即将停止"},
@@ -114,7 +105,6 @@ CORE = {
     "Your Mac is still awake. It's been %@.": {"hu": "A Mac még ébren van. Már %@ eltelt.", "es": "Tu Mac sigue despierto. Han pasado %@.", "fr": "Votre Mac est toujours éveillé. Cela fait %@.", "de": "Dein Mac ist noch wach. Es sind %@ vergangen.", "zh-Hans": "你的 Mac 仍处于唤醒状态，已持续 %@。"},
     "Your Mac has been kept awake for %@.": {"hu": "A Macet %@ ideje tartja ébren.", "es": "Tu Mac se ha mantenido despierto durante %@.", "fr": "Votre Mac est maintenu éveillé depuis %@.", "de": "Dein Mac wird seit %@ wach gehalten.", "zh-Hans": "你的 Mac 已保持唤醒 %@。"},
 
-    # --- Decisions log reasons ---
     "Started manually": {"hu": "Kézzel elindítva", "es": "Iniciado manualmente", "fr": "Démarré manuellement", "de": "Manuell gestartet", "zh-Hans": "已手动启动"},
     "Restarted manually": {"hu": "Kézzel újraindítva", "es": "Reiniciado manualmente", "fr": "Redémarré manuellement", "de": "Manuell neu gestartet", "zh-Hans": "已手动重新启动"},
     "Started by a command": {"hu": "Paranccsal elindítva", "es": "Iniciado por un comando", "fr": "Démarré par une commande", "de": "Durch einen Befehl gestartet", "zh-Hans": "由命令启动"},
@@ -127,11 +117,9 @@ CORE = {
     "Trigger conditions met": {"hu": "A triggerfeltételek teljesülnek", "es": "Condiciones de disparo cumplidas", "fr": "Conditions de déclenchement remplies", "de": "Auslöserbedingungen erfüllt", "zh-Hans": "触发条件已满足"},
     "Trigger conditions ended": {"hu": "A triggerfeltételek megszűntek", "es": "Condiciones de disparo finalizadas", "fr": "Conditions de déclenchement terminées", "de": "Auslöserbedingungen beendet", "zh-Hans": "触发条件已结束"},
 
-    # --- Trigger-gated session reason + grace-period rule label ---
     "Triggers: %@": {"hu": "Triggerek: %@", "es": "Disparadores: %@", "fr": "Déclencheurs : %@", "de": "Auslöser: %@", "zh-Hans": "触发条件：%@"},
     "%@ (+%ds)": {"hu": "%@ (+%d mp)", "es": "%@ (+%d s)", "fr": "%@ (+%d s)", "de": "%@ (+%d s)", "zh-Hans": "%@（+%d 秒）"},
 
-    # --- Helper / watchdog / sleep-setting errors ---
     "Couldn't create the watchdog flag file.": {"hu": "Nem sikerült létrehozni a figyelő jelzőfájlját.", "es": "No se pudo crear el archivo indicador del vigilante.", "fr": "Impossible de créer le fichier indicateur de la surveillance.", "de": "Die Kennungsdatei der Überwachung konnte nicht erstellt werden.", "zh-Hans": "无法创建看守标志文件。"},
     "Couldn't run the watchdog command.": {"hu": "Nem sikerült futtatni a figyelő parancsát.", "es": "No se pudo ejecutar el comando del vigilante.", "fr": "Impossible d’exécuter la commande de la surveillance.", "de": "Der Befehl der Überwachung konnte nicht ausgeführt werden.", "zh-Hans": "无法运行看守命令。"},
     "The watchdog couldn't be started.": {"hu": "A figyelőt nem sikerült elindítani.", "es": "No se pudo iniciar el vigilante.", "fr": "Impossible de démarrer la surveillance.", "de": "Die Überwachung konnte nicht gestartet werden.", "zh-Hans": "无法启动看守。"},
@@ -143,18 +131,15 @@ CORE = {
     "The Keepresso helper isn't responding.": {"hu": "A Keepresso segéd nem válaszol.", "es": "El asistente de Keepresso no responde.", "fr": "L’assistant Keepresso ne répond pas.", "de": "Der Keepresso-Hilfsdienst antwortet nicht.", "zh-Hans": "Keepresso 助理无响应。"},
     "The Keepresso helper couldn't change the setting.": {"hu": "A Keepresso segéd nem tudta módosítani a beállítást.", "es": "El asistente de Keepresso no pudo cambiar el ajuste.", "fr": "L’assistant Keepresso n’a pas pu modifier le réglage.", "de": "Der Keepresso-Hilfsdienst konnte die Einstellung nicht ändern.", "zh-Hans": "Keepresso 助理无法更改设置。"},
 
-    # --- Experimental virtual display errors ---
     "Virtual displays aren't available on this macOS version.": {"hu": "A virtuális kijelzők nem érhetők el ezen a macOS-verzión.", "es": "Las pantallas virtuales no están disponibles en esta versión de macOS.", "fr": "Les écrans virtuels ne sont pas disponibles sur cette version de macOS.", "de": "Virtuelle Displays sind auf dieser macOS-Version nicht verfügbar.", "zh-Hans": "此 macOS 版本不支持虚拟显示器。"},
     "Couldn't create the virtual display.": {"hu": "Nem sikerült létrehozni a virtuális kijelzőt.", "es": "No se pudo crear la pantalla virtual.", "fr": "Impossible de créer l’écran virtuel.", "de": "Das virtuelle Display konnte nicht erstellt werden.", "zh-Hans": "无法创建虚拟显示器。"},
 
-    # --- Diagnostics: power-assertion effect descriptions ---
     "Preventing system sleep": {"hu": "Megakadályozza a rendszer elalvását", "es": "Evitando la suspensión del sistema", "fr": "Empêche la veille du système", "de": "Verhindert den Systemruhezustand", "zh-Hans": "正在阻止系统睡眠"},
     "Preventing display sleep": {"hu": "Megakadályozza a kijelző elalvását", "es": "Evitando la suspensión de la pantalla", "fr": "Empêche la veille de l’écran", "de": "Verhindert den Display-Ruhezustand", "zh-Hans": "正在阻止显示器睡眠"},
     "Keeping disks awake": {"hu": "Ébren tartja a lemezeket", "es": "Manteniendo los discos activos", "fr": "Maintient les disques actifs", "de": "Hält die Festplatten aktiv", "zh-Hans": "正在让磁盘保持活动"},
     "Declaring the user active": {"hu": "Aktívnak nyilvánítja a felhasználót", "es": "Declarando al usuario como activo", "fr": "Déclare l’utilisateur actif", "de": "Erklärt den Benutzer als aktiv", "zh-Hans": "正在将用户声明为活动"},
     "Holding off idle sleep for a background task": {"hu": "Késlelteti az inaktív elalvást egy háttérfeladat miatt", "es": "Aplazando la suspensión por inactividad para una tarea en segundo plano", "fr": "Diffère la veille d’inactivité pour une tâche en arrière-plan", "de": "Verzögert den Ruhezustand bei Inaktivität für eine Hintergrundaufgabe", "zh-Hans": "正在为后台任务推迟空闲睡眠"},
 
-    # --- Jitter-test result summary clauses (joined with ", ") ---
     "Not enough replies to measure.": {"hu": "Nincs elég válasz a méréshez.", "es": "No hay suficientes respuestas para medir.", "fr": "Pas assez de réponses pour mesurer.", "de": "Nicht genug Antworten zum Messen.", "zh-Hans": "回复不足，无法测量。"},
     "Baseline %d ms": {"hu": "alapérték %d ms", "es": "base %d ms", "fr": "référence %d ms", "de": "Basiswert %d ms", "zh-Hans": "基线 %d ms"},
     "%d spike up to %d ms": {"hu": "%d kiugrás %d ms-ig", "es": "%d pico de hasta %d ms", "fr": "%d pic jusqu’à %d ms", "de": "%d Ausschlag bis %d ms", "zh-Hans": "%d 次尖峰，最高 %d ms"},
@@ -162,7 +147,6 @@ CORE = {
     "max %d ms": {"hu": "max. %d ms", "es": "máx. %d ms", "fr": "max %d ms", "de": "max. %d ms", "zh-Hans": "最高 %d ms"},
     "%d lost": {"hu": "%d elveszett", "es": "%d perdidas", "fr": "%d perdues", "de": "%d verloren", "zh-Hans": "%d 个丢失"},
 
-    # --- Streaming readiness: Wired network check ---
     "Wired network": {"hu": "Vezetékes hálózat", "es": "Red por cable", "fr": "Réseau filaire", "de": "Kabelnetzwerk", "zh-Hans": "有线网络"},
     "Couldn't read the network interfaces.": {"hu": "Nem sikerült beolvasni a hálózati interfészeket.", "es": "No se pudieron leer las interfaces de red.", "fr": "Impossible de lire les interfaces réseau.", "de": "Die Netzwerkschnittstellen konnten nicht gelesen werden.", "zh-Hans": "无法读取网络接口。"},
     "Ethernet is connected (%@). A wired link sidesteps Wi-Fi jitter entirely, the most reliable fix.": {"hu": "Az Ethernet csatlakoztatva (%@). A vezetékes kapcsolat teljesen megkerüli a Wi-Fi jittert, ez a legmegbízhatóbb megoldás.", "es": "Ethernet está conectado (%@). Un enlace por cable evita por completo el jitter de Wi-Fi, la solución más fiable.", "fr": "Ethernet est connecté (%@). Une liaison filaire évite entièrement la gigue du Wi-Fi, la solution la plus fiable.", "de": "Ethernet ist verbunden (%@). Eine Kabelverbindung umgeht WLAN-Jitter vollständig, die zuverlässigste Lösung.", "zh-Hans": "已连接以太网 (%@)。有线连接可完全避开 Wi-Fi 抖动，是最可靠的解决办法。"},
@@ -171,9 +155,6 @@ CORE = {
     "No wired network adapter found.": {"hu": "Nem található vezetékes hálózati adapter.", "es": "No se encontró ningún adaptador de red por cable.", "fr": "Aucun adaptateur réseau filaire trouvé.", "de": "Kein Kabelnetzwerk-Adapter gefunden.", "zh-Hans": "未找到有线网络适配器。"},
     "A USB-C or Thunderbolt Ethernet adapter sidesteps Wi-Fi jitter entirely.": {"hu": "Egy USB-C vagy Thunderbolt Ethernet-adapter teljesen megkerüli a Wi-Fi jittert.", "es": "Un adaptador Ethernet USB-C o Thunderbolt evita por completo el jitter de Wi-Fi.", "fr": "Un adaptateur Ethernet USB-C ou Thunderbolt évite entièrement la gigue du Wi-Fi.", "de": "Ein USB-C- oder Thunderbolt-Ethernet-Adapter umgeht WLAN-Jitter vollständig.", "zh-Hans": "USB-C 或 Thunderbolt 以太网适配器可完全避开 Wi-Fi 抖动。"},
 
-    # --- Streaming readiness: Wi-Fi channel check ---
-    # The "channel %d at %d MHz" / "channel %d" clauses are substituted into the
-    # sentence keys below; the sentences carry the band prefix and grammar.
     "Wi-Fi channel": {"hu": "Wi-Fi csatorna", "es": "Canal de Wi-Fi", "fr": "Canal Wi-Fi", "de": "WLAN-Kanal", "zh-Hans": "Wi-Fi 信道"},
     "Not connected to Wi-Fi, or its details are unreadable.": {"hu": "Nincs Wi-Fi-kapcsolat, vagy a részletei nem olvashatók.", "es": "Sin conexión a Wi-Fi, o sus detalles no se pueden leer.", "fr": "Non connecté au Wi-Fi, ou ses détails sont illisibles.", "de": "Nicht mit dem WLAN verbunden, oder die Details sind nicht lesbar.", "zh-Hans": "未连接 Wi-Fi，或其详细信息无法读取。"},
     "If you game or stream over Wi-Fi, re-check while connected.": {"hu": "Ha Wi-Fin játszik vagy streamel, ellenőrizze újra csatlakoztatva.", "es": "Si juegas o transmites por Wi-Fi, vuelve a comprobarlo mientras estés conectado.", "fr": "Si vous jouez ou streamez en Wi-Fi, revérifiez une fois connecté.", "de": "Wenn du über WLAN spielst oder streamst, prüfe erneut, während du verbunden bist.", "zh-Hans": "如果你通过 Wi-Fi 游戏或串流，请在连接时重新检查。"},
@@ -190,14 +171,12 @@ CORE = {
     "channel 44, AWDL's 5 GHz social channel in the EU": {"hu": "44. csatorna, az AWDL 5 GHz-es közösségi csatornája az EU-ban", "es": "el canal 44, el canal social de AWDL en 5 GHz en la UE", "fr": "le canal 44, le canal social d’AWDL en 5 GHz dans l’UE", "de": "Kanal 44, der 5-GHz-Social-Channel von AWDL in der EU", "zh-Hans": "44 信道，AWDL 在欧盟的 5 GHz 社交信道"},
     "channel 149, AWDL's 5 GHz social channel where UNII-3 is allowed (the US, Canada, and most of the world)": {"hu": "149. csatorna, az AWDL 5 GHz-es közösségi csatornája ott, ahol a UNII-3 engedélyezett (az USA, Kanada és a világ nagy része)", "es": "el canal 149, el canal social de AWDL en 5 GHz donde se permite UNII-3 (EE. UU., Canadá y gran parte del mundo)", "fr": "le canal 149, le canal social d’AWDL en 5 GHz là où l’UNII-3 est autorisé (les États-Unis, le Canada et la majeure partie du monde)", "de": "Kanal 149, der 5-GHz-Social-Channel von AWDL dort, wo UNII-3 erlaubt ist (die USA, Kanada und der Großteil der Welt)", "zh-Hans": "149 信道，AWDL 在允许 UNII-3 的地区（美国、加拿大及世界大部分地区）的 5 GHz 社交信道"},
 
-    # --- Streaming readiness: Bluetooth during play check ---
     "Bluetooth during play": {"hu": "Bluetooth játék közben", "es": "Bluetooth durante el juego", "fr": "Bluetooth pendant le jeu", "de": "Bluetooth beim Spielen", "zh-Hans": "游戏时的蓝牙"},
     "Bluetooth is on. It shares the radio chip with Wi-Fi, so heavy Bluetooth traffic (audio, controllers) can add its own blips.": {"hu": "A Bluetooth be van kapcsolva. A rádiócsipet megosztja a Wi-Fivel, így az erős Bluetooth-forgalom (hang, kontrollerek) saját apró kimaradásokat okozhat.", "es": "El Bluetooth está activado. Comparte el chip de radio con la Wi-Fi, así que un tráfico Bluetooth intenso (audio, mandos) puede añadir sus propios microcortes.", "fr": "Le Bluetooth est activé. Il partage la puce radio avec le Wi-Fi, donc un trafic Bluetooth intense (audio, manettes) peut ajouter ses propres micro-coupures.", "de": "Bluetooth ist an. Es teilt sich den Funkchip mit dem WLAN, daher kann starker Bluetooth-Verkehr (Audio, Controller) eigene kleine Aussetzer verursachen.", "zh-Hans": "蓝牙已开启。它与 Wi-Fi 共用无线芯片，因此繁重的蓝牙流量（音频、手柄）可能带来自己的瞬时卡顿。"},
     "Nothing to fix: just a variable to know about if stutter persists on a clean channel.": {"hu": "Nincs mit javítani: csak egy tényező, amiről érdemes tudni, ha az akadozás megmarad egy tiszta csatornán.", "es": "No hay nada que arreglar: solo es una variable a tener en cuenta si los tirones persisten en un canal limpio.", "fr": "Rien à corriger : juste un paramètre à connaître si les saccades persistent sur un canal propre.", "de": "Nichts zu beheben: nur ein Faktor, den man kennen sollte, falls das Ruckeln auf einem sauberen Kanal anhält.", "zh-Hans": "无需修复：只是一个在干净信道上仍出现卡顿时需要了解的因素。"},
     "Bluetooth is off, so it isn't competing with Wi-Fi for the radio.": {"hu": "A Bluetooth ki van kapcsolva, így nem verseng a Wi-Fivel a rádióért.", "es": "El Bluetooth está desactivado, así que no compite con la Wi-Fi por la radio.", "fr": "Le Bluetooth est désactivé, il ne concurrence donc pas le Wi-Fi pour la radio.", "de": "Bluetooth ist aus, es konkurriert also nicht mit dem WLAN um den Funk.", "zh-Hans": "蓝牙已关闭，因此不会与 Wi-Fi 争用无线电。"},
     "Couldn't read the Bluetooth radio state.": {"hu": "Nem sikerült beolvasni a Bluetooth-rádió állapotát.", "es": "No se pudo leer el estado de la radio Bluetooth.", "fr": "Impossible de lire l’état de la radio Bluetooth.", "de": "Der Zustand des Bluetooth-Funks konnte nicht gelesen werden.", "zh-Hans": "无法读取蓝牙无线电状态。"},
 
-    # --- Streaming readiness: standing tips (Game Mode, cloud gaming, Location) ---
     "Game Mode": {"hu": "Játék mód", "es": "Modo Juego", "fr": "Mode Jeu", "de": "Spielemodus", "zh-Hans": "游戏模式"},
     "macOS turns on Game Mode by itself when a game runs full screen: the game gets CPU and GPU priority, and Bluetooth controllers and audio get faster sampling. If the game-controller icon doesn't appear in the menu bar while playing, put the game into full screen.": {"hu": "A macOS magától bekapcsolja a Játék módot, amikor egy játék teljes képernyőn fut: a játék CPU- és GPU-prioritást kap, a Bluetooth-kontrollerek és a hang pedig gyorsabb mintavételezést. Ha a játékvezérlő ikon nem jelenik meg a menüsorban játék közben, tegye a játékot teljes képernyőre.", "es": "macOS activa el Modo Juego por sí solo cuando un juego se ejecuta a pantalla completa: el juego obtiene prioridad de CPU y GPU, y los mandos Bluetooth y el audio obtienen un muestreo más rápido. Si el icono del mando no aparece en la barra de menús mientras juegas, pon el juego a pantalla completa.", "fr": "macOS active le Mode Jeu de lui-même quand un jeu s’exécute en plein écran : le jeu obtient la priorité CPU et GPU, et les manettes Bluetooth et l’audio bénéficient d’un échantillonnage plus rapide. Si l’icône de manette n’apparaît pas dans la barre des menus pendant le jeu, passez le jeu en plein écran.", "de": "macOS aktiviert den Spielemodus von selbst, wenn ein Spiel im Vollbild läuft: Das Spiel erhält CPU- und GPU-Priorität, und Bluetooth-Controller und Audio erhalten eine schnellere Abtastung. Wenn das Controller-Symbol beim Spielen nicht in der Menüleiste erscheint, versetze das Spiel in den Vollbildmodus.", "zh-Hans": "当游戏全屏运行时，macOS 会自行开启游戏模式：游戏获得 CPU 和 GPU 优先级，蓝牙手柄和音频获得更快的采样。如果游戏时菜单栏中未出现游戏手柄图标，请将游戏切换到全屏。"},
     "How Game Mode works:": {"hu": "Hogyan működik a Játék mód:", "es": "Cómo funciona el Modo Juego:", "fr": "Comment fonctionne le Mode Jeu :", "de": "So funktioniert der Spielemodus:", "zh-Hans": "游戏模式的工作原理："},
@@ -214,8 +193,6 @@ CORE = {
 }
 
 
-# --- Agent hooks (Claude Code connection) ---
-# Short menu tokens: brewing rows truncate on long phrases, so keep these brief.
 _AGENT_HOOKS = {
     "run": {"hu": "futtat", "es": "ejecuta", "fr": "exécute", "de": "Befehl", "zh-Hans": "运行"},
     "write": {"hu": "ír", "es": "escribe", "fr": "écrit", "de": "schreibt", "zh-Hans": "写入"},
@@ -233,10 +210,6 @@ _AGENT_HOOKS = {
 CORE.update(_AGENT_HOOKS)
 
 
-# ---------------------------------------------------------------------------
-# v1.15 thermal safety net: pressure level names and the session's
-# heat-pause status lines and notification.
-# ---------------------------------------------------------------------------
 _THERMAL_V115 = {
     "Critical": {"hu": "Kritikus", "es": "Crítico", "fr": "Critique", "de": "Kritisch", "zh-Hans": "危急"},
     "Fair": {"hu": "Elfogadható", "es": "Aceptable", "fr": "Modéré", "de": "Mäßig", "zh-Hans": "一般"},
@@ -249,7 +222,6 @@ _THERMAL_V115 = {
 }
 CORE.update(_THERMAL_V115)
 
-# Automation leases (decision-log strings), new in the 1.17 cycle.
 _LEASES_V117 = {
     "Automation lease: %@": {"hu": "Automatizálási bérlet: %@", "es": "Concesión de automatización: %@", "fr": "Bail d’automatisation : %@", "de": "Automatisierungs-Lease: %@", "zh-Hans": "自动化租约：%@"},
     "Automation lease acquired": {"hu": "Automatizálási bérlet megszerezve", "es": "Concesión de automatización obtenida", "fr": "Bail d’automatisation obtenu", "de": "Automatisierungs-Lease erhalten", "zh-Hans": "已获取自动化租约"},
@@ -257,21 +229,18 @@ _LEASES_V117 = {
 }
 CORE.update(_LEASES_V117)
 
-# Controller trigger, new in the 1.17 cycle (second batch).
 _V117B = {
     "Game controller connected": {"hu": "Játékvezérlő csatlakoztatva", "es": "Mando de juego conectado", "fr": "Manette de jeu connectée", "de": "Controller verbunden", "zh-Hans": "已连接游戏手柄"},
     "Steam is downloading": {"hu": "Steam letölt", "es": "Steam está descargando", "fr": "Steam télécharge", "de": "Steam lädt herunter", "zh-Hans": "Steam 正在下载"},
 }
 CORE.update(_V117B)
 
-# 1.18: Scheduled AI runs, dim-when-idle, mic call trigger, welcome flow
 _V118_CORE = {
     "Microphone in use by %@": {"hu": "Mikrofon használatban: %@", "es": "Micrófono en uso por %@", "fr": "Microphone utilisé par %@", "de": "Mikrofon in Benutzung von %@", "zh-Hans": "麦克风正被 %@ 使用"},
     "Microphone in use by app": {"hu": "Mikrofon használatban egy alkalmazásnál", "es": "Micrófono en uso por app", "fr": "Microphone utilisé par une app", "de": "Mikrofon in Benutzung von App", "zh-Hans": "麦克风正被 App 使用"},
 }
 CORE.update(_V118_CORE)
 
-# 1.23: lid-shut display policy options and notices
 _V123_CORE = {
     "Brightness control is unavailable, turning the display off instead.": {"hu": "A fényerőszabályozás nem érhető el, ezért ehelyett kikapcsolja a kijelzőt.", "es": "El control de brillo no está disponible, se apagará la pantalla en su lugar.", "fr": "Le contrôle de la luminosité est indisponible, l'écran est éteint à la place.", "de": "Helligkeitssteuerung nicht verfügbar, das Display wird stattdessen ausgeschaltet.", "zh-Hans": "亮度控制不可用，将改为关闭显示器。"},
     "Keepresso never touches the display.": {"hu": "A Keepresso soha nem nyúl a kijelzőhöz.", "es": "Keepresso nunca toca la pantalla.", "fr": "Keepresso ne touche jamais à l'écran.", "de": "Keepresso ändert nichts am Display.", "zh-Hans": "Keepresso 不会改动显示器。"},

@@ -1,8 +1,6 @@
 import SwiftUI
 import KeepressoCore
 
-/// Startup/update waits use a neutral hint. Actual feature errors and an
-/// exhausted recovery retain their warning styling.
 struct HelperFeatureNotice: View {
     @Bindable var model: AppModel
     let message: String

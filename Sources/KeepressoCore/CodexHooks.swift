@@ -78,12 +78,6 @@ public enum CodexHooks {
         dataRootURL(home: home, environment: environment).appendingPathComponent("hooks.json")
     }
 
-    /// The shell command an installed hook runs.
-    ///
-    /// Codex fails open: a hook that writes nothing, or exits non-zero, lets
-    /// the action proceed. That is the opposite of Cursor, where an empty
-    /// answer on a permission step blocks the tool call, so this can be the
-    /// same inert no-op ``AgentHooks`` uses without the defensive `printf`.
     static func hookCommand(event: String, cliPath: String) -> String {
         "c=\(AgentHooks.shellSingleQuoted(cliPath)); [ -x \"$c\" ] || "
             + "c=/Applications/Keepresso.app/Contents/Helpers/keepresso; "
@@ -95,7 +89,6 @@ public enum CodexHooks {
         record.agent == "codex"
     }
 
-    // MARK: - Handling one invocation
 
     /// Applies one hook invocation. The payload and the events are Claude
     /// Code's shape, so this decodes and reduces with the shared code.
@@ -169,7 +162,6 @@ public enum CodexHooks {
         }
     }
 
-    // MARK: - hooks.json editing
 
     /// Merges one entry per mapped event into `hooks`, preserving the user's
     /// own entries and anything here we cannot read. Both levels are arrays,
@@ -182,16 +174,8 @@ public enum CodexHooks {
     public static func installHooks(into data: Data?, cliPath: String) throws -> Data {
         var root = try parseRoot(data)
         var hooks = root["hooks"] as? [String: Any] ?? [:]
-        // Sweep our entries out of every event first, not only the ones about
-        // to be rewritten. An entry left under an event an older version
-        // installed is still ours and still fires, and Repair is just a
-        // re-install, so a re-install has to be able to clear it.
         for (event, value) in hooks {
             guard let groups = value as? [Any] else { continue }
-            // Only events that actually hold one of ours are touched. Counting
-            // our commands is the exact test: an array's length can stay the
-            // same while our entry is stripped out of a group beside a sibling
-            // we left alone.
             guard groups.contains(where: { !keepressoCommands(in: $0).isEmpty }) else { continue }
             let kept = stripKeepressoEntries(groups)
             if kept.isEmpty {
@@ -207,7 +191,6 @@ public enum CodexHooks {
                     [
                         "type": "command",
                         "command": hookCommand(event: event, cliPath: cliPath),
-                        // Codex clamps SessionEnd to a maximum of three seconds.
                         "timeout": event == "SessionEnd" ? 3 : 5,
                     ] as [String: Any],
                 ],
@@ -286,10 +269,7 @@ public enum CodexHooks {
     /// that happen, so the UI has to say it out loud instead.
     public static let needsUserApprovalNote = true
 
-    // MARK: - Shapes
 
-    /// Same element-by-element walk as the other two: an entry we cannot read
-    /// is carried through untouched rather than costing the user their hooks.
     static func stripKeepressoEntries(_ groups: [Any]) -> [Any] {
         groups.compactMap { element -> Any? in
             guard let group = element as? [String: Any] else { return element }
@@ -320,7 +300,6 @@ public enum CodexHooks {
     }
 
     private static func hasSupportedTimeout(_ entry: [String: Any], event: String) -> Bool {
-        // Codex accepts an optional UInt64, with null also selecting its default.
         guard let value = entry["timeout"], !(value is NSNull) else { return true }
         guard let number = value as? NSNumber,
               CFGetTypeID(number) != CFBooleanGetTypeID(),
@@ -329,10 +308,6 @@ public enum CodexHooks {
         return event != "SessionEnd" || seconds <= 3
     }
 
-    /// Reads the file down to the two keys Codex tolerates. A top-level key we
-    /// don't recognise is dropped rather than written back, because carrying
-    /// it forward would keep the file in the state where Codex loads none of
-    /// its hooks at all.
     private static func parseRoot(_ data: Data?) throws -> [String: Any] {
         guard let data, !data.isEmpty else { return [:] }
         guard let object = try? JSONSerialization.jsonObject(with: data),

@@ -1,19 +1,10 @@
 #!/usr/bin/env bash
-#
-# package-dmg.sh: wrap Keepresso.app in the installer disk image.
-#
-#   ./scripts/package-dmg.sh <app-bundle> <output.dmg> [volume-name]
-#
 # The window carries the background in tools/dmg, with the app and an
 # Applications shortcut fixed where its arrow points, and the app icon on the
 # volume. dmgbuild writes that layout straight into the image's .DS_Store, so
 # it works on a headless runner where scripting Finder does not. It installs
 # into .build/ from the pinned, hashed requirements on first use, and needs
 # Python 3.10 or newer (the system python3 is older; brew install python).
-#
-# Signing and notarization are the caller's. Sign the app before calling this,
-# and sign, notarize and staple the image afterwards.
-#
 set -euo pipefail
 
 APP="${1:?usage: package-dmg.sh <app-bundle> <output.dmg> [volume-name]}"
@@ -30,8 +21,6 @@ die() { printf '\033[1;31mError:\033[0m %s\n' "$1" >&2; exit 1; }
 VOLUME_ICON="$APP/Contents/Resources/AppIcon.icns"
 [ -f "$VOLUME_ICON" ] || die "no AppIcon.icns in $APP"
 
-# The first python3 on PATH that is new enough, then Homebrew's, which a
-# runner service often leaves off its PATH.
 find_python() {
   local candidate
   for candidate in "$(command -v python3 || true)" /opt/homebrew/bin/python3 /usr/local/bin/python3; do
@@ -69,8 +58,6 @@ tiffutil -cathidpicheck "$DMG_DIR/background.png" "$DMG_DIR/background@2x.png" \
   -out "$STAGE/background.tiff" > /dev/null 2>&1 || die "tiffutil could not build the background"
 
 rm -f "$DMG"
-# hdiutil warns that each of its verbs is deprecated on every call. Drop those
-# lines and keep anything else, with dmgbuild's own exit status.
 set +e
 "$VENV/bin/dmgbuild" \
   -s "$DMG_DIR/dmg-settings.py" \

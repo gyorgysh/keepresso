@@ -1,8 +1,6 @@
 import AppIntents
 import KeepressoCore
 
-/// Hands the App Intents (which the system instantiates on its own) the app's
-/// single ``AppModel``. Set once at launch by the app delegate.
 @MainActor
 enum IntentContext {
     static weak var model: AppModel?
@@ -22,9 +20,6 @@ private func intentModel() throws -> AppModel {
     return model
 }
 
-/// "Start Keeping Awake", optionally for a set number of minutes. Runs through
-/// the same path as `keepresso://start`, so it pauses triggers first and the
-/// session actually sticks.
 struct StartKeepingAwakeIntent: AppIntent {
     static let title: LocalizedStringResource = "Start Keeping Awake"
     static let description = IntentDescription(
@@ -46,7 +41,6 @@ struct StartKeepingAwakeIntent: AppIntent {
     }
 }
 
-/// "Stop Keeping Awake": ends the session and lets the Mac sleep normally.
 struct StopKeepingAwakeIntent: AppIntent {
     static let title: LocalizedStringResource = "Stop Keeping Awake"
     static let description = IntentDescription(
@@ -60,7 +54,6 @@ struct StopKeepingAwakeIntent: AppIntent {
     }
 }
 
-/// "Toggle Keep Awake": flips the session, using the saved default duration.
 struct ToggleKeepAwakeIntent: AppIntent {
     static let title: LocalizedStringResource = "Toggle Keep Awake"
     static let description = IntentDescription(
@@ -74,7 +67,6 @@ struct ToggleKeepAwakeIntent: AppIntent {
     }
 }
 
-/// Surfaces the intents in Spotlight and Siri without manual setup.
 struct KeepressoShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(

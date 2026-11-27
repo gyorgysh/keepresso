@@ -7,10 +7,6 @@ private func check(_ checks: [ReadinessCheck], _ id: String) -> ReadinessCheck {
 }
 
 @Test func transportErrorsStayPortalSuspiciousExceptWhenOffline() {
-    // Hotel and airport portals routinely fail with DNS/refused/RST rather
-    // than redirecting: those stay `.timeout` so detection and the
-    // portal-specific remediation keep firing. Only `.notConnectedToInternet`
-    // unambiguously means offline (`.failed`).
     #expect(SystemCaptiveProbe.resultForTransportError(URLError(.timedOut)) == .timeout)
     #expect(SystemCaptiveProbe.resultForTransportError(URLError(.cannotFindHost)) == .timeout)
     #expect(SystemCaptiveProbe.resultForTransportError(URLError(.dnsLookupFailed)) == .timeout)

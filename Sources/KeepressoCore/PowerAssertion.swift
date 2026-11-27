@@ -8,15 +8,10 @@ import IOKit.pwr_mgt
 /// Calling ``apply(_:reason:)`` is idempotent: it reconciles the live
 /// assertions to exactly the requested set, creating and releasing as needed.
 public protocol PowerAsserting: AnyObject {
-    /// Reconcile held assertions to exactly `kinds`. Assertions not in the set
-    /// are released; new ones are created with `reason` as their human-readable
-    /// name (shown in `pmset -g assertions`).
     func apply(_ kinds: Set<PowerAssertionKind>, reason: String)
 
-    /// Release every held assertion. Equivalent to `apply([], reason:)`.
     func releaseAll()
 
-    /// The kinds currently held. Primarily for diagnostics and tests.
     var held: Set<PowerAssertionKind> { get }
 }
 
@@ -26,9 +21,7 @@ public extension PowerAsserting {
 
 /// The distinct power assertions Keepresso can hold.
 public enum PowerAssertionKind: String, CaseIterable, Sendable {
-    /// `kIOPMAssertPreventUserIdleSystemSleep`, system stays awake.
     case system
-    /// `kIOPMAssertPreventUserIdleDisplaySleep`, display stays awake.
     case display
 
     var ioKitAssertionType: String {
@@ -55,12 +48,10 @@ public final class IOKitPowerAssertionManager: PowerAsserting {
     public var held: Set<PowerAssertionKind> { Set(ids.keys) }
 
     public func apply(_ kinds: Set<PowerAssertionKind>, reason: String) {
-        // Release assertions no longer wanted.
         for kind in ids.keys where !kinds.contains(kind) {
             release(kind)
         }
         var failures: Set<PowerAssertionKind> = []
-        // Create assertions newly wanted.
         for kind in kinds where ids[kind] == nil {
             if !create(kind, reason: reason.isEmpty ? "Keepresso is brewing" : reason) {
                 failures.insert(kind)

@@ -67,8 +67,6 @@ public final class ClosedLidFanFloorController {
                 requestedPercent = desired; holdingPercent = desired
                 failed = suspended
             } else {
-                // A failed engage can still leave a daemon holder that its timer retries.
-                // Keep the request accounted for so turning the option off releases it.
                 if desired != nil { requestedPercent = desired }
                 holdingPercent = nil; failed = true
             }

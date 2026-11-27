@@ -8,11 +8,8 @@ import IOKit.ps
 public struct PowerSourceSnapshot: Equatable, Sendable {
     /// What is currently powering the machine.
     public enum Provider: String, Codable, Sendable {
-        /// Running on wall/AC power (or any external adapter).
         case ac
-        /// Running on the internal battery.
         case battery
-        /// Couldn't be determined (rare; treated as "neither").
         case unknown
     }
 
@@ -43,7 +40,6 @@ public struct PowerSourceSnapshot: Equatable, Sendable {
 /// Mirrors the ``PowerAsserting`` seam: ``IOKitPowerSourceMonitor`` is the real
 /// backend; tests inject a fake that returns canned snapshots.
 public protocol PowerSourceMonitoring: AnyObject {
-    /// The power situation right now. Reading is cheap; callers may poll it.
     var current: PowerSourceSnapshot { get }
 }
 
@@ -59,8 +55,6 @@ public final class IOKitPowerSourceMonitor: PowerSourceMonitoring {
             return PowerSourceSnapshot(provider: .unknown, isCharging: false, hasBattery: false)
         }
 
-        // System-wide provider (AC vs battery), independent of how many sources
-        // are attached.
         let provider: PowerSourceSnapshot.Provider
         switch IOPSGetProvidingPowerSourceType(blob)?.takeUnretainedValue() as String? {
         case kIOPSACPowerValue: provider = .ac
@@ -68,7 +62,6 @@ public final class IOKitPowerSourceMonitor: PowerSourceMonitoring {
         default: provider = .unknown
         }
 
-        // Walk the individual sources to learn about the battery, if any.
         var hasBattery = false
         var isCharging = false
         var percentage: Int?

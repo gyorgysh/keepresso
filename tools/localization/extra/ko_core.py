@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# Korean overlay for catalog_core.py: English source -> Korean.
 CORE = {
     "On AC power": "전원 연결 시",
     "On battery": "배터리 사용 시",
@@ -161,7 +160,6 @@ CORE = {
     "AI agent working": "AI 에이전트 작업 중",
 }
 
-# Korean overlay for catalog_widget.py: English source -> Korean.
 WIDGET = {
     "Keep Awake": "깨어 있게 유지",
     "See and control whether Keepresso is keeping the Mac awake.": "Keepresso가 Mac을 깨어 있게 유지하고 있는지 확인하고 제어합니다.",
@@ -178,7 +176,6 @@ WIDGET = {
 }
 
 
-# --- Agent hooks (Claude Code connection) ---
 CORE.update({
     "run": "실행",
     "write": "쓰기",
@@ -194,7 +191,6 @@ CORE.update({
     "IDE": "IDE",
 })
 
-# v1.15 thermal safety net: pressure levels and heat-pause lines.
 CORE.update({
     "Critical": "위험",
     "Fair": "양호",
@@ -204,7 +200,6 @@ CORE.update({
     "Paused on high temperature": "고온으로 일시 정지됨",
     "Paused, the Mac is running hot": "일시 정지됨, Mac 온도가 높음",
     "Serious": "심각",
-    # 1.16.0 fill (16)
     'Lock the screen': '화면 잠금',
     'Sleep the Mac': 'Mac 잠자기',
     'Session started': '세션 시작됨',
@@ -227,19 +222,16 @@ CORE.update({
 
 })
 
-# 1.17 fill: shared gaming/Steam condition labels (also in APP).
 CORE.update({
     "Game controller connected": "게임 컨트롤러 연결됨",
     "Steam is downloading": "Steam이 다운로드 중",
 })
 
-# 1.18 strings
 CORE.update({
     "Microphone in use by %@": "%@이(가) 마이크 사용 중",
     "Microphone in use by app": "앱이 마이크 사용 중",
 })
 
-# 1.23 strings
 CORE.update({
     "Brightness control is unavailable, turning the display off instead.": "밝기 조절을 사용할 수 없어 대신 디스플레이를 끕니다.",
     "Keepresso never touches the display.": "Keepresso는 디스플레이에 아무것도 하지 않습니다.",

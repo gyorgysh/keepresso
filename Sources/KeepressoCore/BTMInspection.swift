@@ -6,16 +6,9 @@ public struct BTMFindings: Equatable, Sendable {
     /// The daemon record's effective state, worst-to-best across the
     /// duplicate records BTM keeps per store.
     public enum DaemonState: Equatable, Sendable {
-        /// A record exists and is enabled; the registration itself is fine
-        /// (an unresponsive daemon then points at launchd or the binary).
         case enabled
-        /// The record exists but the user's Background Activity switch is
-        /// off. No amount of re-registering flips it; only the user can.
         case disabled
-        /// BTM refuses the item outright (it does this to team-less
-        /// executables, and keeps a tombstone like this after unregister).
         case disallowed
-        /// No daemon record at all: registering is the fix.
         case missing
     }
 
@@ -74,7 +67,6 @@ public enum BTMInspection {
         return BTMFindings(daemonState: state, staleCopyPaths: staleCopies)
     }
 
-    /// One record block from the dump.
     struct Record {
         var fields: [String: String] = [:]
 
@@ -83,8 +75,6 @@ public enum BTMInspection {
         var bundleIdentifier: String? { fields["Bundle Identifier"] }
         var url: String? { fields["URL"] }
 
-        /// Tokens inside the disposition brackets, e.g.
-        /// `[disabled, allowed, not notified] (0x2)` → disabled, allowed, ...
         private var dispositionFlags: [String] {
             guard let raw = fields["Disposition"],
                   let open = raw.firstIndex(of: "["),
@@ -96,7 +86,6 @@ public enum BTMInspection {
                 .map { $0.trimmingCharacters(in: .whitespaces) }
         }
 
-        // Exact token matches: "disabled" contains "enabled" as a substring.
         var isEnabled: Bool { dispositionFlags.contains("enabled") }
         var isDisallowed: Bool { dispositionFlags.contains("disallowed") }
     }
@@ -119,8 +108,6 @@ public enum BTMInspection {
             else { continue }
             let key = String(line[..<colon.lowerBound])
             let value = String(line[colon.upperBound...]).trimmingCharacters(in: .whitespaces)
-            // First writer wins: an embedded-items list must not overwrite
-            // the record's own fields.
             if current?.fields[key] == nil { current?.fields[key] = value }
         }
         if let current { records.append(current) }
@@ -137,8 +124,6 @@ public enum BTMInspection {
 
 /// Source of the raw dump, injectable so tests feed fixtures.
 public protocol BTMDumpProviding: Sendable {
-    /// The `sfltool dumpbtm` output, or nil when unavailable (some macOS
-    /// versions gate it behind root; callers then fall back to acting blind).
     func dumpBTM() -> String?
 }
 

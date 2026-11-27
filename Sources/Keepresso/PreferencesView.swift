@@ -3,9 +3,6 @@ import AppKit
 import UniformTypeIdentifiers
 import KeepressoCore
 
-/// The Preferences window. Holds the settings that used to crowd the menu
-/// dropdown: keep-awake options, triggers, the reminder, disk keep-alive, and
-/// launch-at-login, grouped into tabs.
 struct PreferencesView: View {
     let updater: any Updating
     @Bindable var model: AppModel
@@ -45,23 +42,15 @@ struct PreferencesView: View {
                     Divider()
 
                     content
-                        // topLeading, not top: a tab whose content hugs its width
-                        // (Triggers with the switch off) must still sit left like
-                        // every Form tab, not float centered.
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        // A fast crossfade between sections; no sliding.
                         .animation(.easeOut(duration: 0.15), value: section)
                 }
                 .id(mountGeneration)
-                // The helper can be approved (or revoked) over in System Settings at
-                // any time; re-read on every open so the section tells the truth.
                 .onAppear { model.helper.refresh() }
             } else {
                 Color.clear
             }
         }
-        // 580 leaves 540 for the tab strip, which fits every language after
-        // ``SectionTabs`` picks a text size for it.
         .frame(width: 580, height: 560)
         .tint(.keepressoBrew)
         .glassWindowBackground()
@@ -90,7 +79,6 @@ struct PreferencesView: View {
     }
 }
 
-// MARK: - Section tabs
 
 /// The section switcher across the top of the Preferences window.
 ///
@@ -106,9 +94,6 @@ private struct SectionTabs: View {
     @Binding var selection: PreferencesView.Section
 
     var body: some View {
-        // First layout that fits wins. The last one is the floor: it also
-        // shrinks its labels, so a language longer than any shipped today
-        // still stays inside the window.
         ViewThatFits(in: .horizontal) {
             row(size: 13, padding: 12, minimumScale: 1)
             row(size: 13, padding: 8, minimumScale: 1)
@@ -138,10 +123,6 @@ private struct SectionTabs: View {
     }
 }
 
-/// One tab in ``SectionTabs``. Selection reads as the brew tint on a soft
-/// plate, the same way a picked row reads in the welcome window, rather than
-/// as a filled capsule: the label keeps its weight either way, so choosing a
-/// tab never changes how wide the row wants to be.
 private struct SectionTab: View {
     let section: PreferencesView.Section
     let isSelected: Bool
@@ -175,15 +156,10 @@ private struct SectionTab: View {
     }
 }
 
-// MARK: - Activity (awake explainer)
 
-/// Answers "why is my Mac awake?" (every process's live power assertions) and
-/// "why did Keepresso act?" (the session decision log). Read-only.
 private struct ActivityTab: View {
     @Bindable var model: AppModel
 
-    /// Live assertions, refreshed while the pane is mounted. Cleared on
-    /// disappear so a closed Preferences window does not keep the snapshot.
     @State private var assertions: [PowerAssertionInfo] = []
 
     var body: some View {
@@ -268,8 +244,6 @@ private struct ActivityTab: View {
             model.refreshAwakeStats()
         }
         .onDisappear { assertions = [] }
-        // Parent Preferences unmounts this tab while the window is hidden; the
-        // receive only exists while mounted, so the poll dies with the tab.
         .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
             assertions = model.currentAssertions()
         }
@@ -322,39 +296,30 @@ private struct ActivityTab: View {
     }
 }
 
-// MARK: - General
 
 private struct GeneralTab: View {
     let updater: any Updating
     @Bindable var model: AppModel
     @Environment(\.openWindow) private var openWindow
     @State private var launchAtLogin = LoginItem.isEnabled
-    /// Bumped when the lid-closed row is clicked while the automation owns it.
     @State private var lidRowShakes = 0
-    /// The result of the last export/import, shown inline under the buttons.
     @State private var transferNote: TransferNote?
 
-    /// A one-line outcome for the settings backup buttons.
     private struct TransferNote { let message: String; let isError: Bool }
 
     private var session: SessionController { model.session }
 
-    /// The duration presets offered by the quick-stop shortcut pickers.
     private static let quickStopOptions: [TimeInterval] = [
         5 * 60, 10 * 60, 15 * 60, 20 * 60, 30 * 60, 45 * 60,
         60 * 60, 90 * 60, 2 * 60 * 60, 3 * 60 * 60, 4 * 60 * 60,
     ]
 
-    /// The picker choices for one shortcut row: the shared presets plus the
-    /// row's current value when it isn't one of them (an imported custom
-    /// duration must not render as an empty selection).
     private func quickStopChoices(including current: TimeInterval) -> [TimeInterval] {
         Self.quickStopOptions.contains(current)
             ? Self.quickStopOptions
             : (Self.quickStopOptions + [current]).sorted()
     }
 
-    /// The first preset not already used, seeding "Add Shortcut".
     private var nextFreeQuickStop: TimeInterval? {
         Self.quickStopOptions.first { !model.quickStopDurations.contains($0) }
     }
@@ -423,9 +388,6 @@ private struct GeneralTab: View {
             } footer: {
                 sectionFooter("Keepresso follows your system language by default.")
             }
-            // The slider sets Keepresso's own frost and wash under the panel,
-            // which show on every macOS, including 27 where the system draws
-            // the panel's glass itself.
             Section {
                 LabeledContent("See-through") {
                     HStack(spacing: 8) {
@@ -456,8 +418,6 @@ private struct GeneralTab: View {
             } footer: {
                 sectionFooter("The menu-bar dropdown's glass, from frosty to clear Liquid Glass.")
             }
-            // High up on purpose: this is the one-time set-and-forget step that
-            // makes every privileged switch below (and AWDL pausing) silent.
             Section {
                 HelperStatusRows(model: model)
             } header: {
@@ -600,9 +560,6 @@ private struct GeneralTab: View {
                     sectionFooter("Lets the Mac sleep once charge drops below this level, and switches off closed-display mode so a lid-closed Mac can sleep too.")
                 }
             }
-            // The thermal net is a lid-closed safety: a desktop has no lid to
-            // trap heat behind, so it gets no section (battery is the same
-            // laptop proxy the closed-display wording uses below).
             if model.machineHasBattery {
                 thermalSection
             }
@@ -638,8 +595,6 @@ private struct GeneralTab: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
-        // Slide the conditional rows (battery threshold, error notes) in and
-        // out instead of popping them.
         .animation(.snappy(duration: 0.25), value: model.batteryAutoPauseEnabled)
         .animation(.snappy(duration: 0.25), value: model.thermalSafety)
         .animation(.snappy(duration: 0.25), value: model.fanDryRun.phase)
@@ -652,9 +607,6 @@ private struct GeneralTab: View {
         .onAppear {
             model.refreshClosedDisplay()
             model.refreshAccessibilityTrust()
-            // Re-read the login-item state on appear: it can drift if the user
-            // changed it in System Settings, or the app was moved out of
-            // /Applications, while this tab was built but not shown.
             launchAtLogin = LoginItem.isEnabled
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -672,7 +624,6 @@ private struct GeneralTab: View {
         }
     }
 
-    /// Idle waits offered by the "Only after idle" keep-active mode.
     private static let pokeIdleMinuteChoices = [1, 2, 3, 4, 5, 10, 15, 20, 30]
 
     private var presenceFooter: String {
@@ -702,15 +653,8 @@ private struct GeneralTab: View {
         return footer
     }
 
-    /// The fan boost strength a fresh "Boost fans first" toggle starts at.
     private static let defaultFanBoostPercent = 80
 
-    /// The thermal safety net: with the lid closed and the sleep override
-    /// holding the Mac awake, watch a heat signal, and once it stays over the
-    /// threshold for the sustain window, pause the session and lift the
-    /// override so the Mac can sleep and cool. The battery pause's sibling,
-    /// so it sits right beside it. Laptops only: the arming condition needs
-    /// a lid.
     private var thermalSection: some View {
         Section {
             Toggle("Pause when running hot", isOn: Binding(
@@ -741,7 +685,6 @@ private struct GeneralTab: View {
                             model.thermalSafety = updated
                         }
                     )) {
-                        // Labels come from Core so the level names localize once.
                         ForEach([ThermalPressureLevel.fair, .serious, .critical], id: \.self) { level in
                             Text(verbatim: level.label).tag(level)
                         }
@@ -780,14 +723,6 @@ private struct GeneralTab: View {
                     Text("2 minutes").tag(120)
                     Text("5 minutes").tag(300)
                 }
-                // Everything above (watching, thresholds, the pause itself)
-                // is unprivileged and always works. Everything below is the
-                // helper-only territory: fan writes are root-enforced by the
-                // SMC, and the automatic closed-display lift at the pause
-                // stage must be prompt-free. Without the helper the whole
-                // group collapses to one row that says what's locked and
-                // offers the install, instead of live-looking toggles with
-                // warning captions under each.
                 if model.helperInstalled {
                     if model.machineHasFans {
                         Toggle("Boost fans first", isOn: Binding(
@@ -852,10 +787,6 @@ private struct GeneralTab: View {
         }
     }
 
-    /// The pmset disablesleep switch. On a laptop it's "closed-display mode"
-    /// (keep running with the lid shut); a desktop has no lid, so the same
-    /// switch is presented as a hard "disable sleep" override. Shown on both,
-    /// so a desktop that latched the setting always has a way to unlatch it.
     private var closedDisplaySection: some View {
         Section {
             Toggle(model.machineHasBattery ? "Keep awake with the lid closed" : "Disable system sleep",
@@ -863,11 +794,6 @@ private struct GeneralTab: View {
                 get: { model.closedDisplayEnabled },
                 set: { model.setClosedDisplay($0) }
             ))
-            // "Only while brewing" is authoritative: while it's on this row
-            // reports the automation's state instead of offering a manual
-            // override the next tick would undo. Clicking it shakes the line
-            // below, which names what is driving it. The section header's info
-            // button stays live, so the explanation is still one click away.
             .disabled(model.closedDisplayBusy || model.closedDisplayOnlyWhileBrewing)
             .overlay {
                 if model.closedDisplayOnlyWhileBrewing {
@@ -1000,7 +926,6 @@ private struct GeneralTab: View {
         AppLanguage.relaunch()
     }
 
-    // MARK: - Settings backup
 
     private func exportSettings() {
         let panel = NSSavePanel()
@@ -1059,12 +984,8 @@ private struct GeneralTab: View {
         )
     }
 
-    /// How long with no input before dim-don't-sleep dims the panel.
     private static let dimDefaultDelay: TimeInterval = 300
 
-    /// On/off binding for dim-don't-sleep. Turning it on picks a sensible delay
-    /// and clears the (never-surfaced) screen-saver yield, since after idle you
-    /// either let the display sleep or dim it, not both.
     private var dimBinding: Binding<Bool> {
         Binding(
             get: { session.options.dimDisplayAfter != nil },
@@ -1078,7 +999,6 @@ private struct GeneralTab: View {
     }
 }
 
-// MARK: - Triggers
 
 private struct TriggersTab: View {
     @Bindable var model: AppModel
@@ -1121,13 +1041,6 @@ private struct TriggersTab: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
-        // Every hook row refreshes its own tool's state on appear, but a row
-        // whose tool is undetected and unconnected renders nothing at all, and
-        // a Group hands its modifiers to children it doesn't have: no content,
-        // no onAppear, so the state that would have produced content is never
-        // read. That left the rows visible only after the setup window had
-        // happened to refresh them. Reading here, from a view that always
-        // exists, is what makes the rows appear on their own.
         .onAppear { model.refreshAgentHookStatuses() }
         .animation(.snappy(duration: 0.25), value: model.triggersEnabled)
         .animation(.snappy(duration: 0.25), value: model.triggersPaused)
@@ -1173,7 +1086,6 @@ private struct TriggersTab: View {
     }
 }
 
-// MARK: - Reminder
 
 private struct ReminderTab: View {
     @Bindable var model: AppModel
@@ -1187,7 +1099,6 @@ private struct ReminderTab: View {
         ("8 hours", 8 * 60 * 60),
     ]
 
-    /// Lead times for the "ending soon" heads-up.
     private static let noticeOptions: [(label: String, interval: TimeInterval)] = [
         ("1 minute before", 60),
         ("2 minutes before", 2 * 60),
@@ -1195,9 +1106,6 @@ private struct ReminderTab: View {
         ("10 minutes before", 10 * 60),
     ]
 
-    /// The picker rows: the presets plus the current value when it isn't one
-    /// of them, so an imported custom lead time doesn't render as an empty
-    /// selection.
     private func noticeChoices(including current: TimeInterval) -> [TimeInterval] {
         let presets = Self.noticeOptions.map(\.interval)
         return presets.contains(current) ? presets : (presets + [current]).sorted()
@@ -1278,19 +1186,13 @@ private struct ReminderTab: View {
     }
 }
 
-// MARK: - Automation (end action + outbound hooks + wake)
 
 private struct AutomationTab: View {
     @Bindable var model: AppModel
     @State private var draft: HookDraft?
     @State private var editingID: UUID?
-    /// Transient feedback after a copy action, with paste guidance. Cleared
-    /// after a few seconds; superseded by the next copy.
     @State private var copiedConfirmation: String?
     @State private var copiedResetTask: Task<Void, Never>?
-    /// A separate confirmation for the run-instructions copy in Scheduled AI
-    /// runs, kept apart so it shows next to that button, not up in the
-    /// Automation access section where ``copiedConfirmation`` lives.
     @State private var runInstructionsCopied = false
     @State private var runInstructionsResetTask: Task<Void, Never>?
 
@@ -1324,7 +1226,6 @@ private struct AutomationTab: View {
         }
     }
 
-    // MARK: Scheduled AI runs (automation wake sync)
 
     private var automationSyncSection: some View {
         Section {
@@ -1341,10 +1242,6 @@ private struct AutomationTab: View {
         }
     }
 
-    /// Helper missing, approving, or updating: waking cannot work, so lock the
-    /// section like Scheduled wake above rather than offer live-looking switches
-    /// that do nothing. Already-discovered runs show read-only, so the value
-    /// waiting behind the helper is visible and worth installing for.
     @ViewBuilder
     private var automationSyncLockedContent: some View {
         HelperLockedRow(model: model, context: .scheduledAIRuns)
@@ -1359,9 +1256,6 @@ private struct AutomationTab: View {
         }
     }
 
-    /// Helper ready: the live controls. The master switch reveals which sources
-    /// are scanned and when, the discovered runs (or an empty state), the next
-    /// armed wake, and the hold length.
     @ViewBuilder
     private var automationSyncReadyContent: some View {
         Toggle("Wake for scheduled AI runs", isOn: Binding(
@@ -1413,10 +1307,6 @@ private struct AutomationTab: View {
         }
     }
 
-    /// Points past the fixed window: for a run that outlasts it, the task's own
-    /// agent should hold a lease for the whole session. Offers a paste-ready
-    /// directive to drop into the scheduled task's prompt, so this is something
-    /// a user can actually set up, not just read about in the tooltip.
     @ViewBuilder
     private var automationRunLeaseGuidance: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1445,7 +1335,6 @@ private struct AutomationTab: View {
         }
     }
 
-    /// Which sources are scanned, when they were last read, and a manual re-read.
     private var automationSyncStatusRow: some View {
         HStack(spacing: 8) {
             Text(automationSyncStatusText)
@@ -1465,8 +1354,6 @@ private struct AutomationTab: View {
         return L("Scanning Claude Desktop, Codex, and tokenstat.ai · checked %@", Self.relativeChecked(checked))
     }
 
-    /// Enabled with nothing discovered: an invitation, not a dead end. Says
-    /// where to create a run and offers a re-read.
     private var automationSyncEmptyState: some View {
         VStack(spacing: 8) {
             Image(systemName: "calendar")
@@ -1487,9 +1374,6 @@ private struct AutomationTab: View {
         .padding(.vertical, 6)
     }
 
-    /// The sources that have discovered runs, in the list's existing order, so
-    /// only platforms the user actually has appear (no Codex switch for someone
-    /// who only runs Claude Desktop, and vice versa).
     private var automationSourcesWithRuns: [ScheduledAutomation.Source] {
         var ordered: [ScheduledAutomation.Source] = []
         for automation in model.syncedAutomations where !ordered.contains(automation.source) {
@@ -1498,8 +1382,6 @@ private struct AutomationTab: View {
         return ordered
     }
 
-    /// A platform header with its own on/off switch. Off by default, so the user
-    /// opts each platform in and none is forced on.
     private func automationPlatformRow(_ source: ScheduledAutomation.Source) -> some View {
         LabeledContent {
             Toggle("", isOn: Binding(
@@ -1515,9 +1397,6 @@ private struct AutomationTab: View {
         }
     }
 
-    /// One run under its platform. With the platform on, a switch mutes or
-    /// unmutes it; with the platform off (or the source itself paused it), the
-    /// run is still listed but dimmed and controlless, since it will not wake.
     private func automationRunRow(_ automation: ScheduledAutomation, sourceEnabled: Bool) -> some View {
         let woken = sourceEnabled && automation.enabled && !model.isAutomationMuted(automation.id)
         return HStack(spacing: 8) {
@@ -1543,7 +1422,6 @@ private struct AutomationTab: View {
         .opacity(woken ? 1 : 0.5)
     }
 
-    /// A read-only row for the locked state: name and schedule, no control.
     private func automationPreviewRow(_ automation: ScheduledAutomation) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "clock")
@@ -1571,8 +1449,6 @@ private struct AutomationTab: View {
         return L("%@ · next %@", automation.source.label, Self.wakeStamp.string(from: next))
     }
 
-    /// Medium date + short time, shared by the row subtitles and the next-wake
-    /// line, so the section reads one way.
     private static let wakeStamp: DateFormatter = {
         let f = DateFormatter()
         f.dateStyle = .medium
@@ -1580,8 +1456,6 @@ private struct AutomationTab: View {
         return f
     }()
 
-    /// A short "checked …" hint. Very recent reads read as "just now" rather than
-    /// the formatter's blunter "0 seconds ago".
     private static func relativeChecked(_ date: Date) -> String {
         if Date().timeIntervalSince(date) < 45 { return L("just now") }
         let f = RelativeDateTimeFormatter()
@@ -1641,7 +1515,6 @@ private struct AutomationTab: View {
         }
     }
 
-    // MARK: End action
 
     private var endActionSection: some View {
         Section {
@@ -1688,7 +1561,6 @@ private struct AutomationTab: View {
         }
     }
 
-    // MARK: Scheduled wake
 
     private var scheduledWakeSection: some View {
         Section {
@@ -1697,8 +1569,6 @@ private struct AutomationTab: View {
                 wakeScheduleEditor
             case .needsHelper, .awaitingApproval, .helperUpdating:
                 if model.wakeSchedule != nil {
-                    // Settings survived without a live helper: say so, do not
-                    // pretend the controls are live, offer clear + unlock.
                     Label {
                         Text(L("A wake schedule is saved, but it is not active on this Mac until the administrator helper is ready. The system will not wake from this plan."))
                             .fixedSize(horizontal: false, vertical: true)
@@ -1721,7 +1591,6 @@ private struct AutomationTab: View {
         }
     }
 
-    // MARK: Automation access
 
     private var automationLeasesSection: some View {
         Section {
@@ -1746,10 +1615,6 @@ private struct AutomationTab: View {
                     model.copyAgentInstructions()
                     flashCopied(L("Copied. Paste it to your agent in a new chat to teach it to manage Keepresso."))
                 }
-                // A borderless button-style menu so it reads like the plain
-                // buttons beside it (accent text, a small chevron) and adapts to
-                // light and dark, instead of the default pull-down's bezel that
-                // looked like a washed-out gray fill on a dark background.
                 Menu("Copy MCP Setup") {
                     Button("For Claude Code (JSON)") { copyMCP(.mcpServersJSON) }
                     Button("For Gemini CLI (JSON)") { copyMCP(.mcpServersJSON) }
@@ -1782,8 +1647,6 @@ private struct AutomationTab: View {
         Toggle("Wake schedule", isOn: Binding(
             get: { model.wakeSchedule != nil },
             set: { on in
-                // Enabling is only offered when the helper is ready; the
-                // model also refuses a bare enable without it.
                 model.wakeSchedule = on ? (model.wakeSchedule ?? WakeScheduleConfig()) : nil
             }
         ))
@@ -1817,10 +1680,6 @@ private struct AutomationTab: View {
                     "Time",
                     selection: Binding(
                         get: {
-                            // Wall-clock components on both sides, never
-                            // elapsed time since midnight: on a DST
-                            // transition day the two differ by an hour, and
-                            // pmset takes wall-clock time.
                             let secs = model.wakeSchedule?.repeatSecondsFromMidnight ?? 0
                             let calendar = Calendar.current
                             return calendar.date(
@@ -1874,7 +1733,6 @@ private struct AutomationTab: View {
         }
     }
 
-    /// Compact read-only summary when the schedule is saved but inactive.
     @ViewBuilder
     private var wakeScheduleSummary: some View {
         if let config = model.wakeSchedule {
@@ -1902,8 +1760,6 @@ private struct AutomationTab: View {
 
     @ViewBuilder
     private var wakeScheduleFooter: some View {
-        // When locked, the row above already names the helper requirement.
-        // Only show the AC caveat and live system state once the editor is open.
         if model.wakeHelperGate == .ready {
             VStack(alignment: .leading, spacing: 4) {
                 Text(L("Reliable on AC power. On battery the firmware may skip the wake."))
@@ -1924,12 +1780,6 @@ private struct AutomationTab: View {
                 }
                 if !model.systemWakeState.scheduledWakes.isEmpty
                     || model.systemWakeState.repeatingSummary != nil {
-                    // The list above is the whole-Mac pmset schedule, not just
-                    // ours: say so, since a wake showing while our toggle is off
-                    // otherwise reads as a leftover we won't clear. Avoid
-                    // promising other apps' wakes are untouched: installing our
-                    // schedule runs pmset cancelall (see HelperEngine), which
-                    // clears them momentarily before macOS re-adds its own.
                     Text(L("This is the Mac's whole wake schedule, including macOS's own (Do Not Disturb, backups). Turning Keepresso's schedule off clears the wake it set."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -1938,7 +1788,6 @@ private struct AutomationTab: View {
         }
     }
 
-    // MARK: Event hooks
 
     private var eventHooksSection: some View {
         Section {
@@ -2026,16 +1875,10 @@ private struct AutomationTab: View {
     }
 }
 
-/// Locked stand-in for Automation features that need the administrator
-/// helper (scheduled wake). Same idea as ``ThermalHelperLockedRow``, but
-/// stacked: a side-by-side lock + long sentence + button squeezes the text
-/// into narrow columns and ugly mid-phrase wraps.
-/// Editable fields for one hook, independent of the live settings list.
 private struct HookDraft: Identifiable, Equatable {
     enum Kind: String, CaseIterable, Identifiable {
         case shortcut, webhook, shell
         var id: String { rawValue }
-        /// Short enough for a three-way segmented control without clipping.
         var label: String {
             switch self {
             case .shortcut: return L("Shortcut")
@@ -2118,9 +1961,6 @@ private struct HookEditorSheet: View {
                         Text(event.label).tag(event)
                     }
                 }
-                // Short labels only: "Run a Shortcut" / "POST a webhook" /
-                // "Run a shell command" overflow a three-way segment and clip
-                // to "hortcut" at this sheet width.
                 Picker("Do", selection: $draft.kind) {
                     ForEach(HookDraft.Kind.allCases) { kind in
                         Text(kind.label).tag(kind)
@@ -2155,7 +1995,6 @@ private struct HookEditorSheet: View {
     }
 }
 
-// MARK: - Display (experimental virtual display)
 
 private struct DisplayTab: View {
     @Bindable var model: AppModel
@@ -2220,7 +2059,6 @@ private struct DisplayTab: View {
     }
 }
 
-// MARK: - Disk
 
 private struct DiskTab: View {
     @Bindable var model: AppModel

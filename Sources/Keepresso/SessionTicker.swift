@@ -2,10 +2,6 @@ import Foundation
 import IOKit
 import KeepressoCore
 
-/// Drives ``SessionController/reconcile(now:systemIdleSeconds:)`` once a second
-/// while the app is running, feeding it the real HID idle time so the
-/// screen-saver-yield and timed-session expiry can fire. Also pumps the
-/// ``DiskKeepAliveController`` on the same tick (it throttles itself).
 @MainActor
 final class SessionTicker {
     private let session: SessionController
@@ -13,22 +9,11 @@ final class SessionTicker {
     private let closedDisplay: ClosedDisplayController
     private let powerSource: PowerSourceMonitoring
     private let thermalGuard: ThermalGuardController?
-    /// Receives the thermal guard's escalation effects (fan boost, pause,
-    /// releases) each tick they occur; AppModel turns them into helper calls
-    /// and notifications.
     private let onThermalEffects: (([ThermalEffect]) -> Void)?
-    /// Feeds the guard's arming: the net only escalates with the lid closed
-    /// while the sleep override holds the Mac awake (the left-in-a-bag case).
     private let lid: LidStateReading
-    /// Tells a clamshell Mac driving a monitor apart from a lid shut over
-    /// nothing: only the latter has no display left worth holding awake.
     private let externalDisplay: DisplayMonitoring
-    /// Live game-frontmost reading for the keep-active idle-only mode.
-    /// `nil` (the default) passes false, so the workspace sweep only runs
-    /// when the host wires it, which it does only while the mode is on.
     private let gameFrontmost: (() -> Bool)?
     private var thermalArming = ThermalArming()
-    /// Runs after each reconcile, e.g. to mirror session state to the widget.
     private let onTick: (() -> Void)?
     private var timer: Timer?
 
@@ -61,13 +46,6 @@ final class SessionTicker {
         let timer = Timer(timeInterval: 1.0, repeats: true) { [weak session, weak disk, weak closedDisplay, weak self] _ in
             MainActor.assumeIsolated {
                 if let session {
-                    // Only run the per-second IOKit sweeps reconcile can actually
-                    // use: the idle read feeds the screen-saver yield (off by
-                    // default), the battery read feeds auto-pause (off by default).
-                    // Report a discharging level only while actually on battery:
-                    // on AC (even at a low charge, even while charging up from
-                    // empty) the Mac isn't going to run flat, so auto-pause must
-                    // not fire and any latched pause may lift.
                     var battery = SessionController.BatteryReading.unknown
                     if session.consumesBatteryReading, let power = self?.powerSource.current {
                         if power.provider == .battery, let percent = power.percentage {
@@ -76,17 +54,6 @@ final class SessionTicker {
                             battery = .onAC
                         }
                     }
-                    // The thermal guard ticks whenever it's configured (its
-                    // fan stage runs even with stop-brewing off, so this
-                    // can't hide behind consumesThermalReading); the session
-                    // only reads its verdict when the pause stage is on.
-                    // Armed only with the lid shut and the sleep override on:
-                    // closedDisplay.isEnabled is read at launch and refreshed
-                    // on every toggle and menu open, so it's current by the
-                    // time a lid can close on a configured override.
-                    // At most one lid read a tick, shared by the thermal arming
-                    // and the display reading below, and skipped entirely when
-                    // neither of them would look at it.
                     let needsLid = self?.thermalGuard != nil || session.consumesDisplayReading
                     let lidClosed = needsLid ? self?.lid.isClosed() : nil
                     var thermal = ThermalReading.unknown

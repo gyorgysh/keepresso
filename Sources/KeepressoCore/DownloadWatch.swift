@@ -4,9 +4,6 @@ import Foundation
 /// trigger logic is unit-testable without a real folder. Mirrors the other
 /// filesystem seams (``DiskTouching``).
 public protocol DownloadFolderScanning: AnyObject {
-    /// When the most recently written in-progress download in `folder` was last
-    /// written to, or `nil` when the folder holds no partial-download markers
-    /// at all (see ``FileManagerDownloadScanner``).
     func newestPartialDownloadWrite(in folder: URL) -> Date?
 }
 
@@ -26,9 +23,6 @@ public final class FileManagerDownloadScanner: DownloadFolderScanning {
     }
 
     public func newestPartialDownloadWrite(in folder: URL) -> Date? {
-        // A shallow listing is enough: browsers write the partial at the top of
-        // the download folder. Safari's `.download` is itself a folder, but its
-        // name still carries the extension, so name matching catches it either way.
         guard let entries = try? fileManager.contentsOfDirectory(
             at: folder, includingPropertiesForKeys: [.contentModificationDateKey, .isDirectoryKey]
         ) else { return nil }
@@ -40,11 +34,6 @@ public final class FileManagerDownloadScanner: DownloadFolderScanning {
         return newest
     }
 
-    /// The newest write anywhere in one marker. Safari's `.download` is a
-    /// bundle whose own timestamp stops moving while the file inside it grows,
-    /// so a folder marker is judged by what it contains. A marker we cannot
-    /// stat at all counts as no evidence rather than as a live download: an
-    /// unreadable leftover must not pin the Mac awake.
     private func lastWrite(of entry: URL) -> Date? {
         let values = try? entry.resourceValues(forKeys: [.contentModificationDateKey, .isDirectoryKey])
         var newest = values?.contentModificationDate
@@ -62,16 +51,10 @@ public final class FileManagerDownloadScanner: DownloadFolderScanning {
         return newest
     }
 
-    /// Extensions browsers/download tools give a file that is still downloading:
-    /// Chrome/Chromium `.crdownload`, Safari `.download`, Firefox `.part`, Edge
-    /// `.partial`, Opera `.opdownload`. Deliberately **not** `.tmp`: countless
-    /// unrelated apps leave `.tmp` files behind, and matching it would pin the
-    /// Mac awake on a stray temp file that never gets cleaned up.
     static let partialExtensions: Set<String> = [
         "crdownload", "download", "part", "partial", "opdownload",
     ]
 
-    /// Pure match, exposed for direct unit testing.
     static func isPartialDownload(_ name: String) -> Bool {
         partialExtensions.contains((name as NSString).pathExtension.lowercased())
     }
@@ -127,8 +110,6 @@ public final class DownloadInFolderTrigger: Trigger {
             active = false
             return
         }
-        // A timestamp in the future (a clock change, a file copied off another
-        // machine) reads as fresh rather than as abandoned.
         active = now().timeIntervalSince(written) < Self.abandonedAfter
     }
 

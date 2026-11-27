@@ -8,20 +8,16 @@ private final class FakeThroughputReader: NetworkThroughputReading {
     func currentBytesPerSecond() -> Double? { readings.isEmpty ? nil : readings.removeFirst() }
 }
 
-/// Run the pure step over a sample sequence (bytes/sec) and return the final state.
 private func run(_ samples: [Double?], thresholdKB: Int, from state: NetworkThroughputTrigger.SmoothingState = .init()) -> NetworkThroughputTrigger.SmoothingState {
     samples.reduce(state) { NetworkThroughputTrigger.step($0, sampleBytesPerSecond: $1, thresholdKilobytesPerSecond: thresholdKB) }
 }
 
 @Test func sustainedHighThroughputFires() {
-    // 1 MB/s sustained, threshold 500 KB/s.
     let state = run(Array(repeating: 1_000_000, count: 12), thresholdKB: 500)
     #expect(state.isSatisfied)
 }
 
 @Test func aBriefBurstDoesNotFire() {
-    // Quiet, one 1.5 MB/s second, quiet again: smoothed over the low base the
-    // average never reaches the 500 KB/s threshold, so no session starts.
     let state = run([10_000, 10_000, 1_500_000, 10_000, 10_000], thresholdKB: 500)
     #expect(!state.isSatisfied)
 }
@@ -29,11 +25,8 @@ private func run(_ samples: [Double?], thresholdKB: Int, from state: NetworkThro
 @Test func throughputHysteresisPreventsFlapping() {
     var state = run(Array(repeating: 2_000_000, count: 12), thresholdKB: 500)
     #expect(state.isSatisfied)
-    // Hovering just under the threshold (450 KB/s) but above the release band
-    // (70% of 500 KB/s = 350 KB/s) keeps it on...
     state = run(Array(repeating: 450_000, count: 12), thresholdKB: 500, from: state)
     #expect(state.isSatisfied)
-    // ...but dropping clearly below turns it off.
     state = run(Array(repeating: 100_000, count: 30), thresholdKB: 500, from: state)
     #expect(!state.isSatisfied)
 }
@@ -42,8 +35,8 @@ private func run(_ samples: [Double?], thresholdKB: Int, from state: NetworkThro
     var state = run(Array(repeating: 1_000_000, count: 12), thresholdKB: 500)
     #expect(state.isSatisfied)
     state = run([nil, nil, nil], thresholdKB: 500, from: state)
-    #expect(state.isSatisfied) // a transient read failure / counter wrap doesn't drop it
-    #expect(!run([nil, nil], thresholdKB: 500).isSatisfied) // but no data ever seen stays off
+    #expect(state.isSatisfied)
+    #expect(!run([nil, nil], thresholdKB: 500).isSatisfied)
 }
 
 @MainActor
@@ -58,9 +51,9 @@ private func run(_ samples: [Double?], thresholdKB: Int, from state: NetworkThro
 @Test func throughputIsSatisfiedIsAPureReadThatDoesNotStep() {
     let reader = FakeThroughputReader(Array(repeating: 1_000_000, count: 5))
     let trigger = NetworkThroughputTrigger(thresholdKilobytesPerSecond: 500, reader: reader)
-    for _ in 0 ..< 100 { _ = trigger.isSatisfied() } // no ticks: nothing read
-    #expect(!trigger.isSatisfied())     // never armed
-    #expect(reader.readings.count == 5) // reader untouched
+    for _ in 0 ..< 100 { _ = trigger.isSatisfied() }
+    #expect(!trigger.isSatisfied())
+    #expect(reader.readings.count == 5)
 }
 
 @Test func getifaddrsReaderComputesBytesPerSecondBetweenSamples() {
@@ -68,14 +61,12 @@ private func run(_ samples: [Double?], thresholdKB: Int, from state: NetworkThro
     var samples: [UInt64] = [1000, 1500]
     let reader = GetifaddrsThroughputReader(ttl: 0.5, now: { current }, readBytes: { samples.removeFirst() })
 
-    #expect(reader.currentBytesPerSecond() == nil) // first sample: nothing to diff against
+    #expect(reader.currentBytesPerSecond() == nil)
     current = current.addingTimeInterval(1)
-    #expect(reader.currentBytesPerSecond() == 500) // 500 bytes over 1 second
+    #expect(reader.currentBytesPerSecond() == 500)
 }
 
 @Test func getifaddrsReaderSkipsABackwardsCounter() {
-    // A wrap / interface reset makes the total go down; report nil (skip that
-    // interval) rather than a bogus negative rate.
     var current = Date(timeIntervalSinceReferenceDate: 0)
     var samples: [UInt64] = [5000, 1000]
     let reader = GetifaddrsThroughputReader(ttl: 0.5, now: { current }, readBytes: { samples.removeFirst() })

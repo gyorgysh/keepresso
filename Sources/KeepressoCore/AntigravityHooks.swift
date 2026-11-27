@@ -16,21 +16,6 @@ import Foundation
 /// the payload shape, the event names and the config file differ.
 public enum AntigravityHooks {
 
-    // MARK: - Events
-    //
-    // Antigravity has exactly one blocking event, `PreToolUse`, whose stdout
-    // is a verdict on the tool call ("allow", "deny", "ask", "force_ask").
-    // Its documentation does not say what an empty, unparseable or failed hook
-    // response means there, and the one comparable system that does document
-    // it, Cursor, blocks the action. Keepresso's hook command is built to be a
-    // silent no-op when the CLI is missing (a deleted app, a stale entry), and
-    // a silent no-op on a permission step would deny every tool call in the
-    // session.
-    //
-    // So Keepresso installs on observation events only, and ``installedEvents``
-    // must never grow a blocking one. The same rule cuts the other way: a hook
-    // must never answer "allow" either, because that would wave through calls
-    // the user's own approval settings meant to stop.
 
     /// The events Keepresso installs, exactly the ones ``reduce(event:toolName:fullyIdle:)``
     /// maps. Every one is an observation step whose output cannot allow, deny
@@ -39,11 +24,8 @@ public enum AntigravityHooks {
         "PreInvocation", "PostToolUse", "PostInvocation", "Stop",
     ]
 
-    /// The events whose stdout Antigravity reads as a verdict. Kept as an
-    /// explicit tripwire for ``installedEvents``, never installed on.
     static let blockingEvents: Set<String> = ["PreToolUse"]
 
-    // MARK: - Payload
 
     /// The hook payload Antigravity delivers on stdin. Tolerant like the other
     /// two: every field optional, unknown fields ignored.
@@ -91,7 +73,6 @@ public enum AntigravityHooks {
         public var directory: String? { workspacePaths?.first }
     }
 
-    // MARK: - Event reduction
 
     /// Maps an Antigravity hook event to its effect on the session record.
     /// Unknown events return `nil` (write nothing), so a new event name can
@@ -101,29 +82,18 @@ public enum AntigravityHooks {
     ) -> AgentHooks.HookEventEffect? {
         switch event {
         case "PreInvocation":
-            // The model is about to be called: the turn has started, and this
-            // is the edge that beats any staleness in the file-write evidence.
             return .set(.working, detail: nil)
         case "PostToolUse":
             return .set(.working, detail: toolName.flatMap(detailToken(forTool:)))
         case "PostInvocation":
-            // Between steps: still working, but no longer on whatever tool the
-            // last PostToolUse named.
             return .set(.working, detail: nil)
         case "Stop":
-            // `fullyIdle` false means execution ended but the agent has more to
-            // do, so only a fully idle Stop ends the session's work. A payload
-            // without the field is read as the plain end it looks like.
             return .set(fullyIdle == false ? .working : .idle, detail: nil)
         default:
             return nil
         }
     }
 
-    /// The semantic token for one of Antigravity's tool names, which are
-    /// snake_case where Claude Code's are capitalised. Anything unrecognised
-    /// falls through to the shared `tool:<name>` catch-all the app renders as
-    /// "using <name>".
     static func detailToken(forTool tool: String) -> String? {
         switch tool {
         case "run_command", "run_terminal_command", "terminal": return "running-command"
@@ -135,7 +105,6 @@ public enum AntigravityHooks {
         }
     }
 
-    // MARK: - Handling one invocation
 
     /// Applies one hook invocation end to end: decode the payload, reduce the
     /// event, resolve the owning process, write or delete the record. Never
@@ -190,12 +159,6 @@ public enum AntigravityHooks {
         }
     }
 
-    /// The pid of the Antigravity `language_server` above a hook process.
-    ///
-    /// Matched on the executable path, not the command name: `language_server`
-    /// is a generic name several editors ship, and only the enclosing app
-    /// bundle says whose it is. (The `ps` side has the full command line and
-    /// keys on the IDE-name flag instead; both name the same process.)
     static func findEditorHost(
         startingAt pid: Int32,
         depthLimit: Int = 20,
@@ -214,7 +177,6 @@ public enum AntigravityHooks {
         return nil
     }
 
-    /// Whether an executable path is Antigravity's agent host.
     static func isEditorHostPath(_ path: String) -> Bool {
         path.contains("Antigravity.app/") && path.hasSuffix("/language_server")
     }
@@ -225,7 +187,6 @@ public enum AntigravityHooks {
         record.agent == "antigravity" || record.agent == "agy"
     }
 
-    // MARK: - hooks.json install/remove
 
     /// Ownership marker inside every installed hook command, what
     /// ``removeHooks(from:)`` keys on. Never change it: released versions must
@@ -249,28 +210,18 @@ public enum AntigravityHooks {
             .appendingPathComponent("hooks.json")
     }
 
-    /// The shell command an installed hook runs. Prints `{}` first,
-    /// unconditionally, for the reason spelled out on ``installedEvents``: the
-    /// empty object is a valid response for every installed event and carries
-    /// no opinion, so it can neither allow nor block anything, and it is
-    /// already on stdout even if the binary is missing or wedged.
     static func hookCommand(event: String, cliPath: String) -> String {
         "printf '{}'; c=\(AgentHooks.shellSingleQuoted(cliPath)); [ -x \"$c\" ] || "
             + "c=/Applications/Keepresso.app/Contents/Helpers/keepresso; "
             + "\"$c\" antigravity-hook \(event) >/dev/null 2>&1; : # \(hookMarker)"
     }
 
-    /// One event's entry: a single group holding a single command hook. No
-    /// `matcher`, so `PostToolUse` reports every tool rather than a filtered
-    /// subset.
     static func entry(event: String, cliPath: String) -> [String: Any] {
         [
             "hooks": [
                 [
                     "type": "command",
                     "command": hookCommand(event: event, cliPath: cliPath),
-                    // Our CLI answers in milliseconds; a tight timeout means
-                    // even a wedged disk can't stall a session.
                     "timeout": 5,
                 ] as [String: Any]
             ]
@@ -288,8 +239,6 @@ public enum AntigravityHooks {
             ours[event] = [entry(event: event, cliPath: cliPath)]
         }
         root[hookName] = ours
-        // An older install could have left entries inside somebody else's hook
-        // object; sweep those too, so Repair really does clear everything ours.
         for (name, value) in root where name != hookName {
             guard let object = value as? [String: Any],
                   let swept = strippingOurEntries(from: object) else { continue }
@@ -306,8 +255,6 @@ public enum AntigravityHooks {
         for (name, value) in root {
             guard let object = value as? [String: Any],
                   let swept = strippingOurEntries(from: object) else { continue }
-            // An object left with nothing but its `enabled` flag is the empty
-            // shell of an install of ours; anything else is the user's, stays.
             if swept.filter({ $0.key != "enabled" }).isEmpty {
                 root.removeValue(forKey: name)
             } else {
@@ -317,12 +264,6 @@ public enum AntigravityHooks {
         return try serialize(root)
     }
 
-    /// One hook object with every entry of ours taken out, or `nil` when it
-    /// held none.
-    ///
-    /// Emptiness is decided by looking for our marker, never by comparing
-    /// counts: our entry can share a group with somebody else's, and stripping
-    /// it leaves the number of groups exactly as it was.
     static func strippingOurEntries(from object: [String: Any]) -> [String: Any]? {
         var result = object
         var changed = false
@@ -349,8 +290,6 @@ public enum AntigravityHooks {
             report.missing = Set(installedEvents)
             return report
         }
-        // Ours can only be disabled as a whole, and a disabled hook does not
-        // fire, so that is a repair rather than a healthy install.
         let enabled = ((root[hookName] as? [String: Any])?["enabled"] as? Bool) ?? true
         var commands: [String: [String]] = [:]
         for (_, value) in root {
@@ -391,9 +330,6 @@ public enum AntigravityHooks {
         return report.isHealthy ? .installed : .needsRepair(report)
     }
 
-    /// Our commands inside an event's groups. Walked as `[Any]` for the reason
-    /// spelled out on ``AgentHooks/stripKeepressoEntries(_:)``: one element we
-    /// cannot read must never cost the user the rest of their hooks.
     static func keepressoCommands(in groups: [Any]) -> [String] {
         groups.flatMap { group -> [String] in
             guard let group = group as? [String: Any],
@@ -407,8 +343,6 @@ public enum AntigravityHooks {
         }
     }
 
-    /// Drops our hooks from an event's groups, pruning groups left empty and
-    /// carrying anything unrecognised through untouched.
     static func stripKeepressoGroups(_ groups: [Any]) -> [Any] {
         groups.compactMap { element -> Any? in
             guard var group = element as? [String: Any],

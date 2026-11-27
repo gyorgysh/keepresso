@@ -42,25 +42,21 @@ import CoreGraphics
     var options = SleepPreventionOptions(
         simulateUserActivity: true,
         activitySimulationMethod: .specifiedKey,
-        activitySimulationKeyCode: 0x4F, // F18
+        activitySimulationKeyCode: 0x4F,
         activitySimulationKeyModifiers: [.control]
     )
     #expect(options.activityPokeKind == .key(0x4F, modifiers: [.control]))
 
-    // Any key outside F13 to F20 is sent bare: Command-Q every minute
-    // would quit the front app.
-    options.activitySimulationKeyCode = 0x0C // Q
+    options.activitySimulationKeyCode = 0x0C
     options.activitySimulationKeyModifiers = [.command]
     #expect(options.activityPokeKind == .key(0x0C))
-    options.activitySimulationKeyCode = 0x78 // F2
+    options.activitySimulationKeyCode = 0x78
     options.activitySimulationKeyModifiers = [.control]
     #expect(options.activityPokeKind == .key(0x78))
 
-    // A modifier key carries its own flag: extra modifiers are dropped.
-    options.activitySimulationKeyCode = 0x3B // Control
+    options.activitySimulationKeyCode = 0x3B
     #expect(options.activityPokeKind == .key(0x3B))
 
-    // The fixed methods never pick up the specified key's modifiers.
     options.activitySimulationMethod = .f15
     #expect(options.activityPokeKind == .key(ActivitySimulationMethod.f15KeyCode))
 }
@@ -74,11 +70,9 @@ import CoreGraphics
     let data = try JSONEncoder().encode(options)
     #expect(try JSONDecoder().decode(SleepPreventionOptions.self, from: data) == options)
 
-    // An older blob has no modifiers field: none.
     let old = Data(#"{"activitySimulationMethod":"specifiedKey","activitySimulationKeyCode":79}"#.utf8)
     #expect(try JSONDecoder().decode(SleepPreventionOptions.self, from: old).activitySimulationKeyModifiers == [])
 
-    // Bits a newer build might add are masked off, a wrong type falls back.
     let future = Data(#"{"activitySimulationKeyModifiers":255}"#.utf8)
     #expect(try JSONDecoder().decode(SleepPreventionOptions.self, from: future).activitySimulationKeyModifiers == .all)
     let wrong = Data(#"{"activitySimulationKeyModifiers":"control"}"#.utf8)
@@ -90,6 +84,6 @@ import CoreGraphics
     #expect(all.symbols == "⌃⌥⇧⌘")
     #expect(ActivityKeyModifiers(eventFlags: all.eventFlags) == all)
     #expect(ActivityKeyModifiers([.control]).eventFlags == .maskControl)
-    #expect(ActivityKeyModifiers.acceptsModifiers(keyCode: 0x4F)) // F18
-    #expect(!ActivityKeyModifiers.acceptsModifiers(keyCode: 0x0C)) // Q
+    #expect(ActivityKeyModifiers.acceptsModifiers(keyCode: 0x4F))
+    #expect(!ActivityKeyModifiers.acceptsModifiers(keyCode: 0x0C))
 }

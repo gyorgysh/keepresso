@@ -45,11 +45,6 @@ public struct AutomationSyncConfig: Equatable, Codable, Sendable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
-        // Forgiving like the rest of the settings types (see RuleSet): read the
-        // sources as raw strings and keep the ones this build knows. A value a
-        // newer build wrote (a future source) drops just that entry, rather than
-        // throwing and taking every other setting down to defaults with it,
-        // since the settings store loads through a single `try?`.
         let rawSources = (try? c.decode([String].self, forKey: .enabledSources)) ?? []
         enabledSources = Set(rawSources.compactMap(ScheduledAutomation.Source.init(rawValue:)))
         mutedIDs = try c.decodeIfPresent(Set<String>.self, forKey: .mutedIDs) ?? []

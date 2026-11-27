@@ -23,38 +23,23 @@ final class HelperAvailability: @unchecked Sendable {
     }
 }
 
-/// Outcome of ``HelperManager/verifyAndRepairIfNeeded()``.
 enum HelperHealth {
-    /// Not installed (or approval still pending): nothing to verify.
     case notApplicable
-    /// The daemon answered the version handshake.
     case healthy
-    /// The registration had gone stale; re-registering brought it back.
     case repaired
-    /// The repair needs a fresh approval in System Settings.
     case needsApproval
-    /// Still not responding after a repair.
     case broken
 }
 
-/// Registration and status of the privileged helper daemon, over
-/// `SMAppService`. Installing is the one-time trade the user makes to stop
-/// the per-run password prompts: macOS asks for administrator credentials
-/// once, when the daemon is approved in System Settings (Login Items, "Allow
-/// in the Background"), and the approval survives reboots, app updates, and
-/// relaunches.
 @MainActor
 @Observable
 final class HelperManager {
     @ObservationIgnored private lazy var service = SMAppService.daemon(plistName: HelperService.plistName)
     private let client: XPCHelperClient
-    /// Mirrored status for the Core routing closures (off-main readers).
     let availability = HelperAvailability()
 
     private(set) var status: SMAppService.Status = .notRegistered
     private(set) var lastError: String?
-    /// True while a health check (and possibly a repair) is in flight, so the
-    /// attention window can show progress instead of a stale verdict.
     private(set) var isChecking = false
     private(set) var hasCompletedHealthCheck = false
     /// The protocol version the daemon last answered with, `nil` before any
@@ -63,10 +48,6 @@ final class HelperManager {
     /// serving until it idles out, while the binary on disk is already new.
     private(set) var daemonProtocolVersion: Int?
 
-    /// Whether the answering daemon predates this app's protocol. Features
-    /// added in newer protocols (the fan boost) gate on this; it clears by
-    /// itself once the old image retires (see ``watchDaemonUpdate()``), with
-    /// no reinstall and no password.
     var daemonOutdated: Bool {
         guard let daemonProtocolVersion else { return false }
         return daemonProtocolVersion < HelperService.protocolVersion
@@ -76,28 +57,17 @@ final class HelperManager {
         isInstalled && (daemonProtocolVersion ?? 0) >= HelperService.protocolVersion
     }
 
-    /// Polls while the user is over in System Settings deciding, so the UI
-    /// flips to "installed" by itself once they approve.
     @ObservationIgnored private var approvalPoll: Task<Void, Never>?
 
-    /// Single-flight guard for the health check, so a launch-time check and a
-    /// failure-triggered one join the same run instead of stacking repairs.
     @ObservationIgnored private var healthCheck: Task<HelperHealth, Never>?
     @ObservationIgnored private var healthCheckGeneration = 0
-    /// Single-flight guard for the stale-daemon watch (see ``watchDaemonUpdate()``).
     @ObservationIgnored private var daemonUpdateWatch: Task<Void, Never>?
     @ObservationIgnored private var daemonUpdateGeneration = 0
-    /// Quiet post-update settlement (see ``watchPostUpdateSettlement()``).
     @ObservationIgnored private var postUpdateWatch: Task<Void, Never>?
     @ObservationIgnored private var postUpdateGeneration = 0
-    /// One settling window per run: after it is spent, a still-silent daemon
-    /// is genuinely broken and the next check may say so.
     @ObservationIgnored private var postUpdateSettlingSpent = false
-    /// True while the post-update window is open, so the UI can show
-    /// progress instead of a stale verdict.
     private(set) var isWaitingForUpdatedHelper = false
     @ObservationIgnored private var recoverySuppressed = false
-    /// One repair per app run: registration churn must never loop.
     @ObservationIgnored private var repairAttempted = false
     /// Whether this copy may talk to Background Task Management at all.
     /// Reading `SMAppService.status` is not passive: BTM repoints the app's
@@ -137,7 +107,6 @@ final class HelperManager {
     var isInstalled: Bool { status == .enabled }
     var awaitingApproval: Bool { status == .requiresApproval }
 
-    /// Re-read the daemon's registration status and mirror it for the seams.
     func refresh() {
         guard managesDaemon else { return }
         let wasInstalled = status == .enabled
@@ -146,9 +115,6 @@ final class HelperManager {
         if status != .enabled {
             daemonProtocolVersion = nil
         } else if daemonOutdated {
-            // Still waiting out a stale daemon image; re-arm the watch in
-            // case an earlier one gave up (e.g. a hold kept the old process
-            // alive through the whole window).
             watchDaemonUpdate()
         }
         if status == .enabled, !wasInstalled, !recoverySuppressed {
@@ -161,9 +127,6 @@ final class HelperManager {
         }
     }
 
-    /// Register the daemon. First time through, macOS wants the user's
-    /// one-time approval: we open the Login Items pane for them and poll until
-    /// they've decided.
     func install() {
         guard managesDaemon else {
             lastError = L("This copy of Keepresso isn't in the Applications folder, so it leaves the helper alone. Install from /Applications.")
@@ -195,10 +158,6 @@ final class HelperManager {
         }
     }
 
-    /// Unregister the daemon. The caller (``AppModel``) releases any live
-    /// holds first, so nothing is left held by a service that's going away.
-    /// Note System Settings can keep a stale row under Login Items for a
-    /// while after a successful unregister; the status here is authoritative.
     @discardableResult
     func uninstall() async -> Bool {
         guard managesDaemon else { return false }
@@ -226,8 +185,6 @@ final class HelperManager {
             lastError = L("Removed. System Settings may keep showing Keepresso under App Background Activity until macOS refreshes its list; restarting the Mac clears the leftover row.")
         }
         let removed = status == .notRegistered || status == .notFound
-        // A helper that is still registered keeps its automatic health
-        // checks: suppression is for a service that is actually going away.
         if !removed { recoverySuppressed = false }
         return removed
     }
@@ -260,7 +217,6 @@ final class HelperManager {
         return health
     }
 
-    /// Explicit removal/reinstallation wins over an older automatic check.
     func cancelRecoveryWork() {
         recoverySuppressed = true
         approvalPoll?.cancel(); approvalPoll = nil
@@ -366,10 +322,6 @@ final class HelperManager {
         return .broken
     }
 
-    /// Whether the patient handshake schedule was already spent this run.
-    /// Only the first check gets it; every later one uses the short schedule,
-    /// so a genuinely dead daemon still surfaces promptly for the rest of the
-    /// session.
     @ObservationIgnored private var longProbeUsed = false
 
     /// Pings at roughly 0, 1, 4, 14, 34, 64, 94 and 124 seconds.
@@ -401,10 +353,6 @@ final class HelperManager {
         return await HelperRecoveryProbe.version(ping: { await self.pingedVersion() })
     }
 
-    /// Whether a matching daemon answers, off the main actor (a dead daemon
-    /// means waiting out the XPC timeout). Any answer also refreshes the
-    /// recorded daemon version, so a repair that spawned the new binary
-    /// clears a stale ``daemonOutdated`` on its own.
     private func pings() async -> Bool {
         let version = await pingedVersion()
         guard !Task.isCancelled else { return false }
@@ -412,8 +360,6 @@ final class HelperManager {
         return version == HelperService.protocolVersion
     }
 
-    /// The daemon's answered protocol version, or nil when nothing replied,
-    /// off the main actor.
     private func pingedVersion() async -> Int? {
         guard !Task.isCancelled else { return nil }
         let client = self.client
@@ -439,8 +385,6 @@ final class HelperManager {
             for attempt in 0..<36 {
                 guard let self, !Task.isCancelled, self.status == .enabled else { return }
                 if attempt % 6 == 0 {
-                    // Re-nudge occasionally; the request is sticky daemon-side
-                    // but a daemon relaunched for another reason loses it.
                     let client = self.client
                     await Task.detached { client.retireStaleDaemon() }.value
                 }
@@ -454,11 +398,6 @@ final class HelperManager {
         }
     }
 
-    /// No answer right after an app update usually means the old daemon image
-    /// is still on its way out, not a broken registration. Keep pinging
-    /// quietly every 30 to 60 seconds for a few minutes and clear the error
-    /// the moment the new helper answers. No repair, no reinstall, no prompt
-    /// while the window is open.
     func watchPostUpdateSettlement() {
         guard postUpdateWatch == nil, !postUpdateSettlingSpent, !recoverySuppressed else { return }
         postUpdateGeneration &+= 1
@@ -483,8 +422,6 @@ final class HelperManager {
                 if self.daemonOutdated { self.watchDaemonUpdate() }
                 return
             }
-            // Still silent after a few minutes: the window is spent, so the
-            // next check may treat it as genuinely broken.
             if let self, !Task.isCancelled, self.postUpdateGeneration == generation {
                 self.postUpdateSettlingSpent = true
                 if self.daemonProtocolVersion == nil, self.lastError == nil {
@@ -494,8 +431,6 @@ final class HelperManager {
         }
     }
 
-    /// The new helper answered through the normal check: the update settled,
-    /// so the quiet window can close without spending itself on a timeout.
     private func settlePostUpdateWindow() {
         postUpdateSettlingSpent = true
         postUpdateGeneration &+= 1
@@ -503,11 +438,6 @@ final class HelperManager {
         isWaitingForUpdatedHelper = false
     }
 
-    /// One ping, for callers watching a recovery (the attention window's
-    /// approval step, where the status alone can't signal success). Any
-    /// answered version counts: right after an update the pre-update image
-    /// answers with an older protocol while it waits to retire, and that is
-    /// still a live daemon, never a reason to keep a reinstall prompt up.
     func daemonResponds() async -> Bool {
         let version = await pingedVersion()
         guard !Task.isCancelled else { return false }
@@ -530,8 +460,6 @@ final class HelperManager {
         }.value
     }
 
-    /// Open System Settings at the approval toggle again, for when the user
-    /// dismissed it the first time.
     func openApprovalSettings() {
         SMAppService.openSystemSettingsLoginItems()
         pollWhileAwaitingApproval()
@@ -540,8 +468,6 @@ final class HelperManager {
     private func pollWhileAwaitingApproval() {
         approvalPoll?.cancel()
         approvalPoll = Task { [weak self] in
-            // Up to five minutes of deciding time; each pass is one cheap
-            // status read.
             for _ in 0..<150 {
                 try? await Task.sleep(for: .seconds(2))
                 guard let self, !Task.isCancelled else { return }

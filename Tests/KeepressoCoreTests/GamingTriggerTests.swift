@@ -23,7 +23,6 @@ private final class FakeGamingMonitor: GamingMonitoring {
         frontmostBundleID: "com.example.editor",
         frontmostCategoryType: "public.app-category.productivity"
     )))
-    // A `-games` suffix outside the app-category namespace must not match.
     #expect(!GamingTrigger.isGame(GamingSnapshot(
         frontmostBundleID: "com.example.odd",
         frontmostCategoryType: "com.example.category.games"
@@ -39,17 +38,13 @@ private final class FakeGamingMonitor: GamingMonitoring {
 }
 
 @Test func gamingTriggerMatchesSteamGamesByLibraryPath() {
-    // Steam games often skip the category declaration (ports, Wine
-    // wrappers), but they all run from a steamapps library folder.
     #expect(GamingTrigger.isGame(GamingSnapshot(
         frontmostBundleID: "com.example.port",
         frontmostBundlePath: "/Users/g/Library/Application Support/Steam/steamapps/common/Hades/Hades.app"
     )))
-    // Custom library volumes count too.
     #expect(GamingTrigger.isGame(GamingSnapshot(
         frontmostBundlePath: "/Volumes/Games/SteamLibrary/steamapps/common/Factorio/factorio.app"
     )))
-    // Steam itself (the launcher, storefront) is not a game.
     #expect(!GamingTrigger.isGame(GamingSnapshot(
         frontmostBundleID: "com.valvesoftware.steam",
         frontmostBundlePath: "/Applications/Steam.app"
@@ -73,8 +68,6 @@ private final class FakeGamingMonitor: GamingMonitoring {
 }
 
 @Test func factoryWrapsGamingTriggerInReleaseGrace() {
-    // Alt-tabbing to Discord or a walkthrough must not drop the session;
-    // only staying away past the grace does.
     let monitor = FakeGamingMonitor(bundleID: "com.nvidia.gfnpc.mall")
     var now = Date(timeIntervalSinceReferenceDate: 0)
     let factory = TriggerFactory(gaming: monitor, now: { now })

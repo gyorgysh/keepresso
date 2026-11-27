@@ -17,15 +17,12 @@ final class BluetoothAuthorizer: NSObject, CBCentralManagerDelegate {
     /// user answers would dismiss the system prompt.
     private var manager: CBCentralManager?
 
-    /// The current authorization status, refreshed via the delegate callback.
     private(set) var status: CBManagerAuthorization = CBManager.authorization
 
-    /// Whether paired devices can be listed.
     var isAuthorized: Bool {
         status == .allowedAlways
     }
 
-    /// Whether we can still ask (vs. the user having denied).
     var canRequest: Bool {
         status == .notDetermined
     }

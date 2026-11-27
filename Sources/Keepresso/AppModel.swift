@@ -5,31 +5,13 @@ import UniformTypeIdentifiers
 import UserNotifications
 import KeepressoCore
 
-/// App-level glue around ``SessionController``: owns persisted settings, builds
-/// the live trigger engine from saved rules, and keeps the two in sync.
-///
-/// The controller stays UI-free and persistence-free (it lives in
-/// `KeepressoCore`); this `@Observable` model is the thin app-side layer that
-/// loads/saves ``KeepressoSettings`` and re-derives the controller's
-/// ``SessionController/triggerGate`` whenever the rule set changes.
 @MainActor
 @Observable
 final class AppModel {
     let session: SessionController
     let disk: DiskKeepAliveController
-    /// Controls closed-display mode (the global `pmset disablesleep` setting that
-    /// keeps the Mac awake with the lid shut). Its state is read live from the
-    /// system, so nothing about it is persisted in ``KeepressoSettings``.
-    /// Writes route through the privileged helper daemon when it's installed
-    /// (no prompt) and through the osascript admin prompt otherwise.
     let closedDisplay: ClosedDisplayController
-    /// Closed-display mode's "only while brewing" automation: flips
-    /// `disablesleep` on when the session starts and off when it ends. Holds
-    /// go through the helper daemon when installed (never a prompt); the
-    /// fallback is the session-scoped root loop (one admin prompt per app run).
     let closedDisplayAuto: ClosedDisplayAutoController
-    /// Backs the headless-readiness Setup screen. Populated on demand via
-    /// ``refreshReadiness()``, empty until the Setup window first appears.
     let readiness = SystemReadinessController()
     /// Experimental headless virtual display (private CoreGraphics API), off by
     /// default. Uses the real backend; `nil` config means no virtual display.
@@ -43,68 +25,36 @@ final class AppModel {
     /// available and a built-in display present). The Preferences option is
     /// hidden when false, never shown as a dead toggle.
     var brightnessSupported: Bool { brightnessBackend.isSupported }
-    /// Backs the Gaming & Streaming Setup screen's check list. Populated on
-    /// demand via ``refreshStreaming()``, like ``readiness``.
     let streaming = StreamingReadinessController()
-    /// Keyboard Cleaner: hidutil remap plus crash-restore marker. Not a brew.
     let keyboardLock: KeyboardLockController
-    /// Overlay windows live on the model so closing Keyboard Cleaner does not
-    /// drop the lock or the covering windows.
     var keyboardLockOverlay: KeyboardLockOverlay?
-    /// Public Wi-Fi assistant. Populated on demand via ``refreshCaptive()``.
     let captive = CaptiveNetworkController()
-    /// The built-in AWDL jitter diagnosis (ping burst + analysis).
     let jitter = JitterTestController()
-    /// The AWDL watchdog: the helper daemon when installed, else the
-    /// session-scoped root loop behind one admin prompt per app run.
     let awdl: AWDLWatchdogController
-    /// The thermal safety net: watches the configured heat signal, applies the
-    /// dwell/hysteresis, and hands escalation effects to
-    /// ``handleThermalEffects(_:)`` via the ticker. Off while its config is nil.
     let thermalGuard = ThermalGuardController(
         pressure: SystemThermalPressure(),
         sensors: MachineThermalSensors()
     )
-    /// Registration and status of the privileged helper daemon, the one-time
-    /// password alternative to the per-run osascript prompts.
     let helper: HelperManager
-    /// Outbound event hooks ("on session end, run a Shortcut").
     let hookDispatcher: EventHookDispatcher
-    /// Decision log on disk (JSONL under Application Support).
     let logPersister: DecisionLogPersister
-    /// Live `pmset -g sched` view for Preferences.
     @ObservationIgnored private let wakeReader: WakeScheduleReading
-    /// Cached system wake schedule for the Automation tab.
     private(set) var systemWakeState: SystemWakeState = .empty
-    /// Seven-day awake stats from the persisted log.
     private(set) var awakeStats: AwakeStats = .empty
-    /// Discovers local AI automations (Claude Desktop, Codex) to wake for.
     let automationSyncController = AutomationSyncController()
-    /// The next automation-sync wake, as computed from discovery.
     @ObservationIgnored private var automationNextWake: Date?
-    /// The one-shot last installed into the system schedule (manual or
-    /// automation, whichever is earlier). Re-arming keys off this, not
-    /// ``automationNextWake`` alone, so a manual one-shot firing and unmasking a
-    /// later automation wake still gets that wake installed.
     @ObservationIgnored private var lastArmedEffectiveOneShot: Date?
-    /// Throttles the slow-cadence discovery driven off the one-second ticker.
     @ObservationIgnored private var lastAutomationRefreshAt: Date?
-    /// Avoids opening a second hold window for one system wake.
     @ObservationIgnored private var lastAutomationHoldAt: Date?
 
     private let store: SettingsStore
     private let notifier: UserNotificationReminder
-    /// Direct line to the helper daemon for the thermal fan boost (the other
-    /// privileged features go through their Routed* controllers).
     @ObservationIgnored private let helperClient: PrivilegedHelperCalling
     private(set) var settings: KeepressoSettings
-    /// Avoid double-starting on a single system wake.
     @ObservationIgnored private var lastWakeBrewAt: Date?
 
-    /// The default reminder interval used when the feature is first enabled.
     static let defaultReminderAfter: TimeInterval = 30 * 60
 
-    /// The default "ending soon" lead time used when the feature is first enabled.
     static let defaultEndingSoonNotice: TimeInterval = 5 * 60
 
     init(
@@ -116,11 +66,6 @@ final class AppModel {
         self.gate = TriggerGateController(factory: factory)
         let notifier = UserNotificationReminder()
         self.notifier = notifier
-        // The privileged seams route through the helper daemon whenever it's
-        // installed (silent XPC, no prompt) and fall back to the original
-        // osascript admin prompts otherwise. The availability box is the
-        // thread-safe bridge: the manager writes it, the detached-task
-        // closures read it at each engage.
         let helperClient = XPCHelperClient()
         self.helperClient = helperClient
         let helperManager = HelperManager(
@@ -165,16 +110,11 @@ final class AppModel {
         var loaded = store.load()
             .withFreshInstallDefaults(hasStoredSettings: store.hasStoredSettings)
         if !store.hasStoredSettings {
-            // Fresh install: persist the first-launch defaults now, before
-            // anything reads them back. Existing blobs are never rewritten
-            // here, corrupt or not.
             store.save(loaded)
         }
-        loaded.seedNewBuiltInPresets() // new built-ins reach existing users once
-        loaded.refreshBuiltInPresets() // and changed ones stay current
+        loaded.seedNewBuiltInPresets()
+        loaded.refreshBuiltInPresets()
         self.settings = loaded
-        // Session-end sleep prefers the helper's root `pmset sleepnow` when
-        // the daemon is up, then IOKit, then System Events.
         let systemSleeper = CompositeSystemSleeper(preferred: { [helperClient, helperInstalled] in
             guard helperInstalled() else { return false }
             return helperClient.sleepNow()
@@ -190,8 +130,6 @@ final class AppModel {
         self.session.endAction = loaded.endAction
         self.session.pauseBelowBatteryPercent = loaded.pauseBelowBatteryPercent
         self.session.pauseWhenHot = loaded.thermalSafety?.stopBrewing ?? false
-        // Leases surviving a relaunch are picked up by the first tick's
-        // directory scan; no launch-time special case.
         self.session.leases = loaded.automationLeasesEnabled ? leaseEngine : nil
         let hooks = EventHookDispatcher(runner: SystemHookRunner())
         hooks.hooks = loaded.eventHooks
@@ -199,14 +137,8 @@ final class AppModel {
         let logPersister = DecisionLogPersister()
         self.logPersister = logPersister
         self.wakeReader = PMSetWakeScheduleReader()
-        // Decision-log history loads asynchronously after the menu bar is up
-        // (see ``hydrateDecisionLog()``). Launch stays on the helper / wake /
-        // closed-display path; Activity and awake stats populate a beat later.
         self.statsHistory = []
         self.awakeStats = .empty
-        // Raw config here (self isn't fully initialized yet for the
-        // availability derivation); the first thermalAvailabilityTick one
-        // second later nils an unavailable boost stage out.
         self.thermalGuard.config = loaded.thermalSafety
         GlassClarity.shared.value = Double(loaded.glassClarity) / 100
         self.disk = DiskKeepAliveController()
@@ -219,9 +151,6 @@ final class AppModel {
         self.session.closedLidDisplayPolicy = loaded.closedLidDisplayPolicy
         self.controllerPoker.enabled = loaded.controllerPokeWhileGaming
         self.gamePriority.autoWithGaming = loaded.gamePriorityBoost
-        // Decision log → outbound hooks + disk. After every stored property
-        // is initialized so weak self is legal. Stats mirroring waits until
-        // hydrate seeds the history so a mid-hydrate event is not double-counted.
         self.session.log.onRecord = { [weak hooks, weak logPersister, weak self] event in
             hooks?.handle(sessionEvent: event)
             let persisted = PersistedSessionEvent(event, batteryPercent: event.batteryPercent)
@@ -229,26 +158,14 @@ final class AppModel {
             guard let self, self.decisionLogHydrated else { return }
             self.recordForStats(persisted)
         }
-        // With one of the auto features on and no helper installed, this run
-        // can hit a password prompt in the background (e.g. a trigger-started
-        // session engaging "Only while brewing"). Its "Keepresso needs your
-        // password" notification only shows if we're authorized to post it, so
-        // secure that now rather than in the same instant the prompt appears.
-        // A no-op once the user has decided either way.
         if !helperManager.isInstalled,
            loaded.closedDisplayOnlyWhileBrewing || loaded.awdlAutoWithGaming {
             notifier.requestAuthorization()
         }
-        // The thermal pause always announces itself in a notification (an
-        // otherwise silent stop just looks like the app quit), helper or not.
         if loaded.thermalSafety != nil || (loaded.hotspotFallback.enabled && loaded.hotspotFallback.notifyOnConnect) {
             notifier.requestAuthorization()
         }
-        // Launch idle: a manual session waits for the user's toggle, a gated
-        // one waits for its conditions (the ticker's reconcile activates it).
         applyTriggerGate()
-        // Give the decision log the satisfied rule labels when the gate flips
-        // the session on ("Triggers: Camera in use").
         session.triggerDescriber = { [weak self] in
             guard let states = self?.ruleStates() else { return nil }
             let held = states.filter(\.satisfied).map(\.rule.label)
@@ -256,7 +173,6 @@ final class AppModel {
         }
     }
 
-    // MARK: - Connection fallback and closed-lid power
 
     private let hotspotCredentials = KeychainHotspotCredentials()
     @ObservationIgnored private lazy var hotspotNetwork = CoreWLANHotspotNetworking()
@@ -269,8 +185,6 @@ final class AppModel {
         return controller
     }()
     @ObservationIgnored private(set) lazy var closedLidLowPowerController = ClosedLidLowPowerController(helper: helperClient)
-    /// The one lid reader for the app: the session ticker and the closed-lid
-    /// features share its reading within a tick.
     let lidState = CachedLidState()
     private let connectivityPower = IOKitPowerSourceMonitor()
     @ObservationIgnored private var sawLowPowerHelperError = false
@@ -299,16 +213,8 @@ final class AppModel {
         get { settings.closedLidMuteSpeakers }
         set { settings.closedLidMuteSpeakers = newValue; persist(); speakerMuteTick() }
     }
-    /// Runs every tick, even with the feature off, so the controller forgets a
-    /// handled lid-closed stretch and a re-enable (setter or import) mutes
-    /// again. With the feature off the lid is never read and the tick costs
-    /// nothing unless a mute is still held.
     @ObservationIgnored private var checkedSpeakerMuteMarker = false
     func speakerMuteTick() {
-        // A crashed run's mute is taken back on the first tick, not at launch:
-        // a copy relocating itself to /Applications must leave the marker to
-        // the copy that stays (it would otherwise unmute on its way out), and
-        // a relocation that fails gets it here once it stops relocating.
         if !checkedSpeakerMuteMarker, !AppRelocator.isRelocating {
             checkedSpeakerMuteMarker = true
             speakerMute.restoreIfNeeded()
@@ -357,57 +263,36 @@ final class AppModel {
             helperAvailable: helper.daemonReadyForCurrentFeatures, allowOnAC: settings.closedLidLowPowerOnAC)
     }
 
-    // MARK: - Awake explainer
 
-    /// Shared IOKit lister: Activity reads uncached, the menu "held by…" line
-    /// rides a few-second TTL so a 1 Hz panel tick is cheap.
     @ObservationIgnored private let menuAssertionCache = CachingAssertionLister(
         inner: IOPMAssertionLister(), ttl: 3)
 
-    /// Every power assertion currently held by any process (why the Mac is
-    /// awake right now, whoever's doing it). Fresh on demand for Activity.
     func currentAssertions() -> [PowerAssertionInfo] {
         menuAssertionCache.currentUncached()
     }
 
-    /// The most relevant power assertion held by some *other* process, for the
-    /// dropdown's "who else is keeping the Mac awake" line. `nil` when only
-    /// Keepresso (or nothing) is holding one. Lets the menu explain a Mac that
-    /// won't sleep even while Keepresso is idle. Display-only and TTL-cached.
     func topExternalAssertion() -> PowerAssertionInfo? {
         let myPID = ProcessInfo.processInfo.processIdentifier
         return menuAssertionCache.current().first { $0.effect != nil && $0.pid != myPID }
     }
 
-    // MARK: - Menu panel snapshot
 
-    /// Live values the open menu panel needs each second (elapsed, tick token
-    /// for countdowns). Updated from the session ticker while the panel is
-    /// visible so the panel does not need its own `Timer.publish`.
     let menuPanel = MenuPanelSnapshot()
 
     /// Whether the menu bar dropdown is on screen. The closed panel stays
     /// alive on current macOS; the ticker skips snapshot pulses while false.
     @ObservationIgnored var menuPanelVisible = false
 
-    /// Once-a-second pulse for the open menu panel. Cheap: elapsed is a date
-    /// delta, and the external-assertion line rides the TTL cache above.
     func pulseMenuPanelIfVisible() {
         guard menuPanelVisible else { return }
         menuPanel.pulse(elapsed: session.elapsed, external: topExternalAssertion())
     }
 
-    // MARK: - Decision log hydrate
 
-    /// Set once ``hydrateDecisionLog()`` finishes seeding history/stats.
     @ObservationIgnored private var decisionLogHydrated = false
 
-    /// Load persisted Activity history and awake stats off the launch critical
-    /// path. Safe to call once the menu bar chrome is up; helper verify, wake
-    /// apply, and closed-display refresh stay elsewhere on the early path.
     func hydrateDecisionLog() {
         Task(priority: .utility) { @MainActor in
-            // Let the run loop present the menu bar before a large JSONL decode.
             await Task.yield()
             guard !self.decisionLogHydrated else { return }
             let history = self.logPersister.loadAll()
@@ -420,20 +305,7 @@ final class AppModel {
         }
     }
 
-    // MARK: - Manual activation
 
-    /// Flip keep-awake by hand (the global hotkey and the menu switch), starting
-    /// with the saved duration.
-    ///
-    /// If triggers are actively gating the session, pause them first, the same
-    /// in-memory pause the menu's Manual mode uses and that ``handle(_:)``
-    /// applies to URL and widget commands. Without it a bare start/stop here
-    /// would be undone by the gate on the very next reconcile (once a second),
-    /// so a hotkey press would appear to spring back. After pausing, the menu
-    /// is in Manual mode and control stays manual until
-    /// the user resumes or relaunches (the pause isn't persisted). The pause is
-    /// a no-op when triggers are off or already paused, so the menu switch (only
-    /// reachable in those states) behaves exactly as before.
     func toggleManual() {
         let wasActive = session.isActive
         pauseTriggers()
@@ -445,9 +317,6 @@ final class AppModel {
         }
     }
 
-    /// Take manual control from trigger gating and begin a session with an
-    /// explicit duration. This is the customized menu path for requests such
-    /// as "keep awake for three hours regardless of the current triggers."
     func startManualOverride(mode: SessionMode) {
         pauseTriggers()
         settings.defaultMode = mode
@@ -455,25 +324,13 @@ final class AppModel {
         session.start(mode: mode)
     }
 
-    /// Start (or restart) a session running until the next occurrence of a
-    /// wall-clock time. The duration is computed here, at start, so it always
-    /// lands on the chosen time; the choice is deliberately not persisted as
-    /// the default mode (a saved "until 18:00" would go stale by tomorrow).
     func startUntil(hour: Int, minute: Int) {
         guard let mode = SessionMode.until(hour: hour, minute: minute) else { return }
-        // Take manual ownership first, exactly like `toggleManual` and the URL
-        // command path. Without this, starting while trigger gating is active
-        // but unsatisfied makes `start()`'s synchronous reconcile immediately
-        // release the session (triggers not met) and fire the end action, so
-        // asking to "keep awake until 18:00" could instead sleep or lock the Mac.
         pauseTriggers()
         session.start(mode: mode)
     }
 
-    // MARK: - Keep-awake options
 
-    /// Whether the session also reports user activity, so software with its
-    /// own idle timeout keeps the user present. Off by default.
     var simulateUserActivity: Bool {
         get { session.options.simulateUserActivity }
         set { updateOptions { $0.simulateUserActivity = newValue } }
@@ -492,8 +349,6 @@ final class AppModel {
         }
     }
 
-    /// The specified-key keep-active method's key and its modifiers, set
-    /// together so a new recording never keeps the previous modifiers.
     var activitySimulationKey: PresenceKey? {
         get {
             session.options.activitySimulationKeyCode.map {
@@ -508,25 +363,16 @@ final class AppModel {
         }
     }
 
-    /// Idle-only keep-active mode: poke only after this many idle minutes,
-    /// never while a game is frontmost. `nil` (the default) keeps the
-    /// always-on seconds-scale behavior.
     var activityPokeIdleMinutes: Int? {
         get { session.options.activityPokeIdleMinutes }
         set { updateOptions { $0.activityPokeIdleMinutes = newValue } }
     }
 
-    /// Live game-frontmost reading for the keep-active idle-only mode.
-    /// Guarded so the workspace sweep only runs while the mode is on; the
-    /// wrapped read is live (no grace linger), so suppression lifts the
-    /// moment the game leaves the front.
     func gameFrontmostForActivityPoke() -> Bool {
         guard session.options.activityPokeIdleMinutes != nil else { return false }
         return gamingWatcher.wrappedIsSatisfied
     }
 
-    /// Live Accessibility trust, refreshed when Preferences appears and while
-    /// polling after a prompt or a jump to System Settings.
     var accessibilityTrusted = false
 
     @ObservationIgnored private var accessibilityPoll: Task<Void, Never>?
@@ -561,7 +407,6 @@ final class AppModel {
         }
     }
 
-    /// Mutate the keep-awake options, mirror into settings, and persist.
     func updateOptions(_ mutate: (inout SleepPreventionOptions) -> Void) {
         var options = session.options
         mutate(&options)
@@ -570,13 +415,9 @@ final class AppModel {
         persist()
     }
 
-    // MARK: - Session mode (manual sessions)
 
-    /// The saved duration used to seed the custom layout's manual timer.
     var defaultMode: SessionMode { settings.defaultMode }
 
-    /// The chosen duration. While idle it reflects the saved default (so the
-    /// picker shows it before activating); while active it restarts the session.
     var mode: SessionMode {
         get { session.isActive ? session.mode : settings.defaultMode }
         set {
@@ -586,20 +427,12 @@ final class AppModel {
         }
     }
 
-    // MARK: - Triggers
 
     var triggersEnabled: Bool {
         get { settings.triggersEnabled }
         set {
             settings.triggersEnabled = newValue
-            triggersPaused = false // always starts unpaused
-            // Stop on both transitions: turning gating on hands activation to
-            // the gate; turning it off would otherwise leave a gate-held
-            // session running as a "manual" one with a stale duration. Leases
-            // are their own demand source, though: a lease-held session
-            // survives the flip untouched, and turning gating off while
-            // leases are live hands the session to them instead of stopping
-            // it out from under the agent's work.
+            triggersPaused = false
             if !session.isLeaseHeld {
                 if !newValue, session.isActive, !session.liveLeases.isEmpty {
                     session.handOffToLeases()
@@ -612,29 +445,12 @@ final class AppModel {
         }
     }
 
-    /// Whether trigger gating is temporarily suspended in favor of the manual
-    /// toggle. In-memory only (not part of ``KeepressoSettings``): quitting and
-    /// relaunching Keepresso always comes back unpaused.
     private(set) var triggersPaused = false
 
-    /// Suspend trigger gating and stop the session right away: pausing is
-    /// meant to answer "let my Mac sleep for now", not just hand the wheel to
-    /// the manual toggle while leaving it brewing. Control reverts to the
-    /// manual toggle (so it can be turned back on by hand) until
-    /// ``resumeTriggers()``. No-op if triggers aren't on or already paused.
-    ///
-    /// `cause` labels the stop in the decision log. It defaults to `.manual`
-    /// (the menu switching to Manual); ``handle(_:)`` passes `.command` so a
-    /// URL / Shortcuts / widget stop that has to pause a trigger-held session
-    /// first isn't misattributed as a manual stop.
     func pauseTriggers(cause: SessionCause = .manual) {
         guard settings.triggersEnabled, !triggersPaused else { return }
         triggersPaused = true
         applyTriggerGate()
-        // Live leases are their own demand source with their own explicit
-        // end control (the menu offers "End Automation Leases" before this
-        // while any are live): hand the session to them instead of a stop
-        // that lease demand would flap right back on the next tick.
         if session.isActive, !session.liveLeases.isEmpty {
             session.handOffToLeases()
             session.reconcile()
@@ -643,7 +459,6 @@ final class AppModel {
         }
     }
 
-    /// Hand activation back to the trigger engine. No-op if not currently paused.
     func resumeTriggers() {
         guard triggersPaused else { return }
         triggersPaused = false
@@ -695,11 +510,6 @@ final class AppModel {
         addRule(.downloadInFolder(url))
     }
 
-    /// Prompt for an application to scope a microphone rule to, returning its
-    /// display name and bundle id (read from the chosen bundle, so it is always
-    /// the real id, never a guess). Opens on an explicit click only. Restricted
-    /// to `.app` bundles, starting in /Applications. Returns `nil` if cancelled
-    /// or the pick has no bundle id.
     func pickApplication() -> (name: String, bundleID: String)? {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
@@ -718,13 +528,8 @@ final class AppModel {
         return (name, id)
     }
 
-    /// Owns the live engine gating the session and the menu's rule-state cache.
     @ObservationIgnored private let gate: TriggerGateController
 
-    /// Rebuild (or tear down) the controller's gate to match current settings,
-    /// then wire it to the session (nil while paused, so the manual toggle owns
-    /// activation). The reuse of live triggers across rebuilds lives in
-    /// ``TriggerGateController``.
     private func applyTriggerGate() {
         gate.rebuild(
             rules: settings.ruleSet.rules,
@@ -734,22 +539,16 @@ final class AppModel {
         session.triggerGate = (settings.triggersEnabled && !triggersPaused) ? gate.engine : nil
     }
 
-    /// Live satisfaction of each saved rule, aligned with ``rules`` order, or
-    /// `nil` when trigger gating is off. Drives the menu's next-trigger summary.
     func ruleStates() -> [RuleState]? {
         gate.ruleStates()
     }
 
-    /// One-line summary of trigger state for the menu header: what's holding the
-    /// session on, or what it's waiting for. `nil` when not gated or no rules.
     func triggerSummary() -> String? {
         guard let states = ruleStates(), !states.isEmpty else { return nil }
         func conditions(_ count: Int) -> String {
             L(count == 1 ? "%d condition" : "%d conditions", count)
         }
         if session.isActive {
-            // The per-condition list is shown right below, so summarize by count
-            // instead of repeating each label.
             let held = states.filter(\.satisfied).count
             return held == 0 ? L("Active") : L("Held by %@", conditions(held))
         }
@@ -762,10 +561,7 @@ final class AppModel {
         }
     }
 
-    // MARK: - Reminder
 
-    /// Whether the "still brewing" reminder is on. Enabling it requests
-    /// notification permission and seeds a default interval.
     var reminderEnabled: Bool {
         get { settings.reminderAfter != nil }
         set {
@@ -778,8 +574,6 @@ final class AppModel {
         }
     }
 
-    /// The reminder interval shown in the picker. Reads the default while the
-    /// feature is off so the picker has a sensible selection before enabling.
     var reminderAfter: TimeInterval {
         get { settings.reminderAfter ?? Self.defaultReminderAfter }
         set {
@@ -789,7 +583,6 @@ final class AppModel {
         }
     }
 
-    /// Whether the reminder repeats every interval (vs. firing once).
     var reminderRepeats: Bool {
         get { settings.reminderRepeats }
         set {
@@ -799,7 +592,6 @@ final class AppModel {
         }
     }
 
-    /// Whether the reminder also plays a sound.
     var reminderSound: Bool {
         get { settings.reminderSound }
         set {
@@ -809,8 +601,6 @@ final class AppModel {
         }
     }
 
-    /// Whether a notification fires when a session ends on its own. Enabling it
-    /// requests notification permission (same as the reminder).
     var notifyOnEnd: Bool {
         get { settings.notifyOnEnd }
         set {
@@ -821,7 +611,6 @@ final class AppModel {
         }
     }
 
-    /// What Keepresso does to the Mac when a session ends on its own.
     var endAction: SessionEndAction {
         get { settings.endAction }
         set {
@@ -831,7 +620,6 @@ final class AppModel {
         }
     }
 
-    /// Outbound event hooks. Writing replaces the live dispatcher list too.
     var eventHooks: [EventHook] {
         get { settings.eventHooks }
         set {
@@ -841,25 +629,18 @@ final class AppModel {
         }
     }
 
-    /// Suspend hook execution while the Automation tab is mid-edit so a
-    /// half-written command never runs against a live event.
     var hooksEditing: Bool {
         get { hookDispatcher.isSuspended }
         set { hookDispatcher.isSuspended = newValue }
     }
 
-    /// Fire the agent-idle hook when a live agent trigger just flipped. Called
-    /// from the ticker after reconcile (the trigger's tick runs inside it).
     func fireAgentIdleHookIfNeeded() {
         if gate.agentJustWentIdle() {
             hookDispatcher.fire(.agentWentIdle)
         }
     }
 
-    // MARK: - Wake schedules
 
-    /// Why scheduled-wake controls are locked or live. Same idea as
-    /// ``FanTestGate``: never grey a toggle silently.
     enum WakeHelperGate: Equatable {
         case ready
         case needsHelper
@@ -876,15 +657,9 @@ final class AppModel {
 
     var canEditWakeSchedule: Bool { wakeHelperGate == .ready }
 
-    /// Desired wake schedule (nil = off / clear system schedules). Enabling
-    /// without a ready helper is refused so Preferences never looks live
-    /// when the system cannot install the schedule.
     var wakeSchedule: WakeScheduleConfig? {
         get { settings.wakeSchedule }
         set {
-            // When the helper is not ready, only clearing (nil) is allowed so
-            // a saved-but-inactive plan can be discarded. Enabling or editing
-            // is refused; the UI already hides those controls.
             if newValue != nil, !canEditWakeSchedule { return }
             settings.wakeSchedule = newValue
             persist()
@@ -892,12 +667,7 @@ final class AppModel {
         }
     }
 
-    // MARK: - Automation wake sync
 
-    /// Settings for syncing wake schedules from local AI automations (Claude
-    /// Desktop, Codex). Toggling on requests notification permission (the hold
-    /// posts a heads-up), refreshes discovery, and arms the next wake; off drops
-    /// the automation wake.
     var automationSyncConfig: AutomationSyncConfig {
         get { settings.automationSync }
         set {
@@ -909,53 +679,40 @@ final class AppModel {
         }
     }
 
-    /// Discovered automations, most recent discovery, for the Automations UI.
     var syncedAutomations: [ScheduledAutomation] { automationSyncController.automations }
 
-    /// When discovery last read the sources, for the "checked …" hint. Nil until
-    /// the first read.
     var automationsLastChecked: Date? { automationSyncController.lastRefresh }
 
-    /// The next automation wake currently armed, for the UI.
     var automationNextWakeTime: Date? { automationNextWake }
 
-    /// Whether Keepresso wakes for a source's runs. A source stays off until the
-    /// user turns it on, so no platform is forced.
     func isAutomationSourceEnabled(_ source: ScheduledAutomation.Source) -> Bool {
         settings.automationSync.enabledSources.contains(source)
     }
 
-    /// Turn waking on or off for one source, then re-arm. Muting individual runs
-    /// still works on top of an enabled source.
     func setAutomationSourceEnabled(_ source: ScheduledAutomation.Source, _ on: Bool) {
         var config = settings.automationSync
         if on { config.enabledSources.insert(source) } else { config.enabledSources.remove(source) }
         automationSyncConfig = config
     }
 
-    /// Whether a discovered automation is muted (opted out of syncing).
     func isAutomationMuted(_ id: String) -> Bool { settings.automationSync.mutedIDs.contains(id) }
 
-    /// Mute or unmute one discovered automation, then re-arm.
     func setAutomationMuted(_ id: String, _ muted: Bool) {
         var config = settings.automationSync
         if muted { config.mutedIDs.insert(id) } else { config.mutedIDs.remove(id) }
         automationSyncConfig = config
     }
 
-    /// Re-read the sources now, for the Automations window on appear.
     func refreshSyncedAutomations() {
         automationSyncController.refresh()
         armAutomationWakesIfChanged()
     }
 
-    /// Slow-cadence discovery + re-arm from the ticker: read the tiny local
-    /// stores at most once a minute, and re-apply the wake only when it moves.
     func automationSyncTick() {
         guard settings.automationSync.enabled else {
             if automationNextWake != nil {
                 automationNextWake = nil
-                applyWakeScheduleToSystem() // drop the automation wake
+                applyWakeScheduleToSystem()
             }
             return
         }
@@ -965,7 +722,6 @@ final class AppModel {
         refreshAndArmAutomationWakes()
     }
 
-    /// Discover, then install the next wake if it changed.
     func refreshAndArmAutomationWakes() {
         automationSyncController.refresh()
         armAutomationWakesIfChanged()
@@ -989,17 +745,10 @@ final class AppModel {
         automationNextWake = config.enabled
             ? AutomationSync.nextWake(automationSyncController.automations, config: config, after: Date())
             : nil
-        // Re-apply when the effective one-shot moves, not just when the
-        // automation wake does: a manual one-shot firing (and being dropped)
-        // unmasks a later automation wake that must then be installed.
         guard effectiveWakeConfig().oneShot != lastArmedEffectiveOneShot else { return }
         applyWakeScheduleToSystem()
     }
 
-    /// Hold the Mac awake when this system wake was for a synced automation run.
-    /// Returns whether a hold was opened, so the manual wake-and-brew is skipped.
-    /// A scheduled agent can extend the hold by taking a lease; otherwise the
-    /// timed window lets the Mac sleep again when it ends.
     private func handleAutomationWake() -> Bool {
         let config = settings.automationSync
         guard config.enabled else { return false }
@@ -1009,15 +758,6 @@ final class AppModel {
         let now = Date()
         if let last = lastAutomationHoldAt, now.timeIntervalSince(last) < 60 { return true }
         lastAutomationHoldAt = now
-        // Open a fixed hold window, unless triggers own activation: a plain
-        // session would be released by the gate on the next reconcile (the same
-        // reason the manual wake-and-brew path skips when triggers are on). With
-        // triggers on, the wake still happened and a scheduled agent's own lease
-        // can hold the Mac for the run.
-        // Open a fixed hold window (and say so) only when we actually can:
-        // with triggers on, the gate would release a plain session, so we don't
-        // start one and don't claim a hold we didn't open. A scheduled agent's
-        // own lease covers the run in that case.
         if !triggersEnabled, !session.isActive {
             session.start(mode: .timed(duration: config.holdSeconds), cause: .command)
             notifier.notify(
@@ -1026,7 +766,7 @@ final class AppModel {
                 sound: false
             )
         }
-        refreshAndArmAutomationWakes() // the run we woke for is now current; arm the next
+        refreshAndArmAutomationWakes()
         return true
     }
 
@@ -1043,10 +783,6 @@ final class AppModel {
     }
     private static let wakeInstalledDefaultsKey = "wakeSchedulesInstalledByKeepresso"
 
-    /// The wake config actually installed: the user's manual schedule with the
-    /// next automation-sync wake layered onto the one-shot slot. The earlier of
-    /// a manual one-shot and the automation wake wins so neither is lost, and
-    /// the manual repeating pair is untouched.
     private func effectiveWakeConfig() -> WakeScheduleConfig {
         var config = settings.wakeSchedule ?? WakeScheduleConfig()
         config.oneShot = AutomationSync.effectiveOneShot(
@@ -1057,14 +793,6 @@ final class AppModel {
     @ObservationIgnored private var wakeApplyTask: Task<Void, Never>?
     @ObservationIgnored private var wakeApplyPending = false
 
-    /// Push settings to the helper (or clear). Installing needs the helper;
-    /// clearing is attempted when it answers so a disable after reinstall
-    /// still drops system schedules.
-    ///
-    /// Applies are serialized through one in-flight task and coalesced: rapid
-    /// changes (clear then re-enable, a manual edit racing an automation
-    /// re-arm) must reach the daemon in order, and a pass always reads the
-    /// latest desired config, so a stale apply cannot win the race.
     func applyWakeScheduleToSystem() {
         // A one-shot whose moment has passed can never install again (pmset
         // refuses past dates); drop it so later applies don't fail on it
@@ -1074,13 +802,7 @@ final class AppModel {
             persist()
         }
         let config = effectiveWakeConfig()
-        // Record what we're arming so the automation re-arm can tell when the
-        // effective one-shot has actually moved.
         lastArmedEffectiveOneShot = config.oneShot
-        // Always enqueue: the guard below lives with the execution-time config
-        // read in `performWakeApply`, so a schedule cancelled (or re-enabled)
-        // between enqueue and execution cannot install a stale config or skip
-        // a fresh one.
         wakeApplyPending = true
         if wakeApplyTask == nil {
             runWakeApplyLoop()
@@ -1109,7 +831,6 @@ final class AppModel {
     /// One apply pass, reading the desired config at execution time. The
     /// blocking handshake and XPC call run off the main actor.
     private func performWakeApply(client: PrivilegedHelperCalling) async {
-        // A one-shot that passed while this pass was queued can never install.
         if let date = settings.wakeSchedule?.oneShot, date <= Date() {
             settings.wakeSchedule?.oneShot = nil
             persist()
@@ -1164,10 +885,6 @@ final class AppModel {
         }
     }
 
-    /// One re-apply once the daemon finishes updating after an app update, so
-    /// a saved schedule doesn't sit uninstalled until the next Preferences
-    /// visit. Single-flight; gives up when the helper goes missing or after
-    /// two minutes.
     @ObservationIgnored private var wakeReapplyWatch: Task<Void, Never>?
 
     private func reapplyWakeScheduleWhenHelperReady() {
@@ -1183,7 +900,6 @@ final class AppModel {
                     self.applyWakeScheduleToSystem()
                     return
                 case .needsHelper:
-                    // Uninstalled while waiting; nothing to re-apply onto.
                     self.wakeReapplyWatch = nil
                     return
                 case .awaitingApproval, .helperUpdating:
@@ -1194,22 +910,14 @@ final class AppModel {
         }
     }
 
-    /// Re-read `pmset -g sched` for the Automation footer.
     func refreshSystemWakeState() {
         systemWakeState = wakeReader.current()
     }
 
-    /// The persisted history mirrored in memory, so per-event stats updates
-    /// don't re-read and re-decode the log file. Seeded once at init and
-    /// appended on every recorded event.
     @ObservationIgnored private var statsHistory: [PersistedSessionEvent] = []
 
-    /// Fold one just-recorded event into the mirror and re-summarize. Pure
-    /// compute, no disk: the persister already wrote the event.
     private func recordForStats(_ event: PersistedSessionEvent) {
         statsHistory.append(event)
-        // The stats window is seven days; a flap-heavy machine left running
-        // for months must not grow the mirror without bound.
         if statsHistory.count > 8192 {
             statsHistory.removeFirst(statsHistory.count - 4096)
         }
@@ -1220,12 +928,7 @@ final class AppModel {
         awakeStats = AwakeStatsAggregator.summarize(events: statsHistory)
     }
 
-    /// React to ``NSWorkspace.didWakeNotification``: if the wake matches a
-    /// Keepresso schedule with wake-and-brew on, start a session (or apply a
-    /// preset).
     func handleSystemWake() {
-        // A synced automation run takes precedence: hold for it and skip the
-        // manual wake-and-brew below.
         if handleAutomationWake() { return }
         guard let config = settings.wakeSchedule,
               WakeAndBrewPolicy.shouldStartSession(config: config, wakeDate: Date())
@@ -1239,7 +942,6 @@ final class AppModel {
             return
         }
         if triggersEnabled {
-            // Gate owns activation; just ensure triggers are live.
             return
         }
         let mode: SessionMode = {
@@ -1251,16 +953,11 @@ final class AppModel {
         session.start(mode: mode, cause: .command)
     }
 
-    // MARK: - Quick stop
 
-    /// Convert the running manual session to end this long from now (the
-    /// menu's quick "stop in N" shortcuts). Deliberately not persisted: it
-    /// changes only the live session, never the default duration.
     func stopSessionIn(_ interval: TimeInterval) {
         session.stopIn(interval)
     }
 
-    /// The menu's quick-stop shortcut durations, kept normalized.
     var quickStopDurations: [TimeInterval] {
         get { settings.quickStopDurations }
         set {
@@ -1269,8 +966,6 @@ final class AppModel {
         }
     }
 
-    /// Whether the "ending soon" heads-up is on. Enabling it requests
-    /// notification permission and seeds a default lead time.
     var endingSoonEnabled: Bool {
         get { settings.endingSoonNoticeSeconds != nil }
         set {
@@ -1283,8 +978,6 @@ final class AppModel {
         }
     }
 
-    /// The heads-up lead time shown in the picker. Reads the default while the
-    /// feature is off so the picker has a sensible selection before enabling.
     var endingSoonNotice: TimeInterval {
         get { settings.endingSoonNoticeSeconds ?? Self.defaultEndingSoonNotice }
         set {
@@ -1294,21 +987,11 @@ final class AppModel {
         }
     }
 
-    // MARK: - Battery-aware auto-pause
 
-    /// The default cutoff used when the feature is first enabled.
     static let defaultPauseBelowBatteryPercent = 20
 
-    /// Whether this Mac has an internal battery at all. Read once at launch
-    /// (battery hardware doesn't come and go): desktops (Mac mini, Studio,
-    /// Pro) report none, and Preferences hides the auto-pause section and the
-    /// battery trigger rules there, where they could never fire.
     @ObservationIgnored let machineHasBattery = IOKitPowerSourceMonitor().current.hasBattery
 
-    /// Whether an active session force-stops (letting the Mac sleep) once
-    /// battery charge drops below ``pauseBelowBatteryPercent``. Enabling it
-    /// requests notification permission: the pause announces itself in a
-    /// notification (an otherwise silent stop just looks like the app quit).
     var batteryAutoPauseEnabled: Bool {
         get { settings.pauseBelowBatteryPercent != nil }
         set {
@@ -1321,7 +1004,6 @@ final class AppModel {
         }
     }
 
-    /// The cutoff percentage shown in the picker (the default while off).
     var pauseBelowBatteryPercent: Int {
         get { settings.pauseBelowBatteryPercent ?? Self.defaultPauseBelowBatteryPercent }
         set {
@@ -1331,15 +1013,9 @@ final class AppModel {
         }
     }
 
-    // MARK: - Thermal safety
 
-    /// Whether this Mac has any fans, read once at launch like
-    /// ``machineHasBattery`` (a MacBook Air reports zero and hides the fan
-    /// boost UI entirely). `nil` fan counts (SMC unreachable) read as fanless.
     @ObservationIgnored let machineHasFans = (SMCFanInfo().fanCount() ?? 0) > 0
 
-    /// A separate XPC connection makes the fan floor its own daemon holder.
-    /// Heat boosts and fan diagnostics never release or overwrite this claim.
     @ObservationIgnored private(set) lazy var fanFloor = ClosedLidFanFloorController(helper: XPCHelperClient())
     @ObservationIgnored private var fanFloorArming = ThermalArming()
     @ObservationIgnored private var fanFloorCancelInFlight = false
@@ -1370,7 +1046,6 @@ final class AppModel {
         fanFloor.tick(percent: settings.closedLidMinimumFanPercent, armed: armed, supported: supported)
     }
 
-    /// Setting this re-derives the existing guard and session pause gate.
     var thermalSafety: ThermalSafetyConfig? {
         get { settings.thermalSafety }
         set {
@@ -1382,11 +1057,6 @@ final class AppModel {
         }
     }
 
-    /// The guard's view of the config: the fan-boost stage is nilled out
-    /// while a boost can't actually run (fanless Mac via an imported config,
-    /// helper missing or removed, daemon still pre-update), so an
-    /// unavailable stage 1 never eats a sustain window before the pause.
-    /// Settings keep the user's chosen strength untouched.
     private func effectiveThermalConfig(_ config: ThermalSafetyConfig?) -> ThermalSafetyConfig? {
         guard var config else { return nil }
         if config.fanBoostPercent != nil,
@@ -1396,16 +1066,8 @@ final class AppModel {
         return config
     }
 
-    /// Once per tick: re-derive the guard's effective config (helper state
-    /// changes on its own timetable) and, while an active boost claim
-    /// exists, watch for the daemon surrendering it. Cheap when idle: a
-    /// value compare, and no XPC unless a boost is showing.
     func thermalAvailabilityTick() {
         thermalGuard.config = effectiveThermalConfig(settings.thermalSafety)
-        // A stale "daemon outdated" verdict would silently keep the boost
-        // stage off; while it matters (boost configured), keep the version
-        // watch armed so the verdict converges (single-flight, no-op while
-        // one is already running).
         if settings.thermalSafety?.fanBoostPercent != nil || settings.closedLidMinimumFanPercent != nil,
            helperInstalled, helper.daemonOutdated {
             helper.watchDaemonUpdate()
@@ -1414,10 +1076,6 @@ final class AppModel {
         fanFloorTick()
     }
 
-    /// Poll the daemon's surrendered-boost flag every few seconds while the
-    /// app claims an active boost, so the menu never keeps advertising a
-    /// boost the firmware refused (the daemon gives up after repeated
-    /// failed writes and restores auto on its own).
     @ObservationIgnored private var fanDropCheckInFlight = false
     @ObservationIgnored private var ticksSinceFanDropCheck = 0
 
@@ -1433,8 +1091,6 @@ final class AppModel {
             guard let self else { return }
             self.fanDropCheckInFlight = false
             guard dropped == true, self.fanBoostActivePercent != nil else { return }
-            // Let go of our side too, so a daemon restart can't re-assert
-            // the hold the firmware already refused.
             self.setFanHold(percent: nil)
             self.notifier.notify(
                 title: L("Fan boost ended"),
@@ -1444,27 +1100,14 @@ final class AppModel {
         }
     }
 
-    /// Set when a thermal emergency lifted closed-display mode, so recovery
-    /// puts it back. In-memory only: a relaunch mid-emergency starts clean
-    /// rather than resurrecting a stale intent.
     @ObservationIgnored private var thermalLiftedClosedDisplay = false
 
-    /// Set when a battery safety pause lifted sticky closed-display mode, so
-    /// plugging in puts it back. Same lifetime rules as
-    /// ``thermalLiftedClosedDisplay``.
     @ObservationIgnored private var batteryLiftedClosedDisplay = false
 
-    /// Prior tick's ``SessionController/pausedByBattery``, so the helper-missing
-    /// notice fires once on the rising edge rather than every second.
     @ObservationIgnored private var sawBatteryPaused = false
 
-    /// The fan boost percent currently held through the helper, or nil when
-    /// the fans are under system control. Drives the menu's status line.
     private(set) var fanBoostActivePercent: Int?
 
-    /// Translate the guard's escalation effects into helper calls, the
-    /// closed-display lift, and notifications. Called from the ticker on any
-    /// tick that produced effects.
     func handleThermalEffects(_ effects: [ThermalEffect]) {
         if !effects.isEmpty {
             hookDispatcher.fire(.thermalStageChanged)
@@ -1472,8 +1115,6 @@ final class AppModel {
         for effect in effects {
             switch effect {
             case .boostFans(let percent):
-                // Fan writes are root-only, so this is daemon-or-skip, and the
-                // skip explains itself (the Preferences toggle also warns).
                 guard machineHasFans else { break }
                 guard helperInstalled else {
                     notifier.notify(
@@ -1492,14 +1133,6 @@ final class AppModel {
                     break
                 }
                 if fanDryRun.isRunning {
-                    // A real emergency never shares the fans with the
-                    // diagnostic: stop the test, wait for its release, then
-                    // take the hold. Re-check that the emergency is still
-                    // latched before engaging: cancelAndWait can outlast
-                    // several ticks (in-flight XPC calls block up to their
-                    // timeout), and a .restoreFans delivered meanwhile would
-                    // find nothing to release yet, so engaging here after
-                    // the guard cleared would leak the hold.
                     Task { [weak self] in
                         await self?.fanDryRun.cancelAndWait()
                         guard let self, self.thermalGuard.state.stage != .clear else { return }
@@ -1509,22 +1142,8 @@ final class AppModel {
                     setFanHold(percent: percent)
                 }
             case .restoreFans:
-                // Always send the release, even when no boost looks active
-                // here: a failed engage rolls fanBoostActivePercent back
-                // while the daemon keeps the holder and retries into
-                // success, so skipping on the local status would strand a
-                // live hold. The release is idempotent and costs one silent
-                // call when there is truly nothing to release.
                 setFanHold(percent: nil)
             case .pauseBrewing:
-                // The session pause itself latches through reconcile (the
-                // guard's reading), which posts the pause notification. Here:
-                // the closed-display lift, always, because the guard only
-                // fires with the lid shut and the override on, and pausing
-                // alone can't let that Mac sleep. Only through the prompt-free
-                // daemon path: never prompt for a password from an unattended
-                // safety action; without the helper the lift is skipped and
-                // the notification says so.
                 guard closedDisplayEnabled else { break }
                 guard helperInstalled else {
                     notifier.notify(
@@ -1544,9 +1163,6 @@ final class AppModel {
                 )
                 if thermalLiftedClosedDisplay {
                     thermalLiftedClosedDisplay = false
-                    // Battery pause still needs closed-display off. Hand the
-                    // restore latch over rather than turning the setting back
-                    // on underneath a low-battery pause.
                     if session.pausedByBattery {
                         batteryLiftedClosedDisplay = true
                     } else if helperInstalled {
@@ -1557,9 +1173,6 @@ final class AppModel {
         }
     }
 
-    /// Take (percent) or release (nil) the forced-fan hold through the helper,
-    /// off the main actor: the XPC call is synchronous with a timeout. The
-    /// status flips optimistically and rolls back if the daemon said no.
     private func setFanHold(percent: Int?) {
         fanBoostActivePercent = percent
         let client = helperClient
@@ -1578,13 +1191,7 @@ final class AppModel {
         }
     }
 
-    // MARK: - Fan dry run
 
-    /// The "Test Fans" system check in Preferences ▸ General ▸ Thermal: a
-    /// short supervised run through three boost levels with readings at each,
-    /// so the fan path can be trusted before the safety net ever needs it.
-    /// Its own controller is `@Observable`; the temperature comes from the
-    /// same reader the guard uses (hottest sensor the machine offers).
     @ObservationIgnored private(set) lazy var fanDryRun = FanDryRunController(
         helper: helperClient,
         fans: SMCFanInfo(),
@@ -1594,23 +1201,11 @@ final class AppModel {
         }
     )
 
-    /// Why the fan test can't start right now, so the UI can say it next to
-    /// the disabled button instead of greying out silently. `machineHasFans`
-    /// needs no case: the whole fan block is hidden on fanless Macs.
     enum FanTestGate: Equatable {
         case ready
-        /// Helper not installed (also every debug build, which stays
-        /// hands-off the daemon by design). The row offers the install
-        /// itself, so nobody has to scroll up hunting for the helper section.
         case needsHelper
-        /// Install started; macOS wants the one-time approval in System
-        /// Settings.
         case awaitingApproval
-        /// Installed, but the pre-update daemon image is still serving and
-        /// doesn't speak the fan protocol yet.
         case helperUpdating
-        /// The safety net currently holds the fans; an emergency always
-        /// outranks a diagnostic.
         case boostActive
     }
 
@@ -1622,16 +1217,11 @@ final class AppModel {
         return .ready
     }
 
-    /// Whether the test may start right now.
     var canRunFanDryRun: Bool { fanTestGate == .ready }
 
-    // MARK: - Global hotkey
 
-    /// Registers the system-wide keep-awake toggle shortcut.
     @ObservationIgnored private let hotKeyManager = GlobalHotKeyManager()
 
-    /// The system-wide shortcut that toggles keep-awake, or `nil` for none.
-    /// Setting it re-registers the live hotkey and persists.
     var hotKey: HotKeyShortcut? {
         get { settings.hotKey }
         set {
@@ -1641,9 +1231,6 @@ final class AppModel {
         }
     }
 
-    /// (Re)register the global hotkey from the saved shortcut. Called at launch
-    /// and whenever the shortcut changes. A refusal is logged, not surfaced:
-    /// the manager keeps the previous shortcut working.
     func registerHotKey() {
         let ok = hotKeyManager.update(to: settings.hotKey) { [weak self] in self?.toggleManual() }
         if !ok {
@@ -1651,9 +1238,6 @@ final class AppModel {
         }
     }
 
-    /// The Keyboard Cleaner overlay is up: a global toggle must not fire from
-    /// a wet finger or a swallowed key. Restored on Unlock, duration end, and
-    /// app quit.
     func suspendHotKeyForKeyboardLock() {
         hotKeyManager.update(to: nil) { }
     }
@@ -1671,9 +1255,6 @@ final class AppModel {
         keyboardLockOverlay = overlay
     }
 
-    /// Unlock from the overlay or the settings window. Overlay stays up if
-    /// restore did not land, so a cancelled password prompt does not uncover
-    /// a still-remapped keyboard.
     func unlockKeyboardFromOverlay() async {
         await keyboardLock.unlock()
         guard !keyboardLock.isLocked else { return }
@@ -1686,42 +1267,27 @@ final class AppModel {
         keyboardLockOverlay = nil
     }
 
-    // MARK: - Start on launch
 
-    /// Whether a manual session starts as soon as the app launches (when
-    /// triggers aren't gating activation).
     var startOnLaunch: Bool {
         get { settings.startOnLaunch }
         set { settings.startOnLaunch = newValue; persist() }
     }
 
-    /// Start a manual session at launch if the user asked for it. Skipped when
-    /// triggers own activation (the gate would fight it) or a session is already
-    /// running. Called once from the app delegate after relocation.
     func startOnLaunchIfNeeded() {
         guard settings.startOnLaunch, !settings.triggersEnabled, !session.isActive else { return }
         session.start(mode: settings.defaultMode)
     }
 
-    // MARK: - First-run onboarding
 
-    /// Whether the first-run welcome window has been shown. Set `true` the first
-    /// time it opens so it appears exactly once; the menu can reopen it anytime.
     var hasOnboarded: Bool {
         get { settings.hasOnboarded }
         set { settings.hasOnboarded = newValue; persist() }
     }
 
-    /// The current notification authorization status, so the welcome window can
-    /// show whether notifications are already granted, not yet asked, or denied,
-    /// rather than blindly offering "Enable".
     func notificationAuthorizationStatus() async -> UNAuthorizationStatus {
         await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
     }
 
-    /// Request notification permission and report the resulting status. Prompts
-    /// only on this explicit call (never on window open) and no-ops once decided;
-    /// the welcome window uses the returned status to reflect the real outcome.
     @discardableResult
     func requestNotificationAuthorization() async -> UNAuthorizationStatus {
         let center = UNUserNotificationCenter.current()
@@ -1729,9 +1295,7 @@ final class AppModel {
         return await center.notificationSettings().authorizationStatus
     }
 
-    // MARK: - Menu-bar countdown
 
-    /// Whether the menu-bar icon shows a live countdown for timed sessions.
     var showCountdownInMenuBar: Bool {
         get { settings.showCountdownInMenuBar }
         set {
@@ -1740,8 +1304,6 @@ final class AppModel {
         }
     }
 
-    /// Whether the menu panel shows its option toggles and app entries, or the
-    /// collapsed status-and-controls-only layout (the panel's "Show less" row).
     var menuPanelExpanded: Bool {
         get { settings.menuPanelExpanded }
         set {
@@ -1750,8 +1312,6 @@ final class AppModel {
         }
     }
 
-    /// The custom menu layout is opt-in so upgrades retain the menu users
-    /// already know.
     var menuCustomizationEnabled: Bool {
         get { settings.menuCustomizationEnabled }
         set {
@@ -1760,7 +1320,6 @@ final class AppModel {
         }
     }
 
-    /// A saved granular layout is used only behind the existing opt-in flag.
     var advancedMenuLayout: MenuLayout? {
         settings.customizedMenuLayout
     }
@@ -1776,9 +1335,6 @@ final class AppModel {
         persist()
     }
 
-    /// How see-through the panel and windows are, 0 (frosted default) to 100
-    /// (clearest glass). Mirrored into ``GlassClarity`` so every glass
-    /// surface updates live while the slider moves.
     var glassClarity: Int {
         get { settings.glassClarity }
         set {
@@ -1788,13 +1344,9 @@ final class AppModel {
         }
     }
 
-    // MARK: - Presets
 
-    /// Saved trigger-rule bundles, in display order.
     var presets: [Preset] { settings.presets }
 
-    /// Replace the current rule set with a preset's, turn on trigger gating,
-    /// and rebuild the live engine.
     func applyPreset(_ preset: Preset) {
         settings.ruleSet = preset.ruleSet
         if settings.triggersEnabled {
@@ -1802,15 +1354,10 @@ final class AppModel {
             applyTriggerGate()
             persist()
         } else {
-            // Route through the setter so a manual session is stopped silently
-            // before gating takes over. Setting the flag directly would let the
-            // next reconcile end it with natural-end effects (notification,
-            // configured sleep/lock action) the user never asked for.
             triggersEnabled = true
         }
     }
 
-    /// Save the current rule set under a new name.
     func saveCurrentRulesAsPreset(named name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
@@ -1818,63 +1365,34 @@ final class AppModel {
         persist()
     }
 
-    /// Remove a saved preset (built-in or user-created).
     func removePreset(_ preset: Preset) {
         settings.presets.removeAll { $0.id == preset.id }
         persist()
     }
 
-    /// Built-in presets the user has deleted, which ``restoreDefaultPresets()``
-    /// can bring back. Empty when every built-in is present.
     var missingBuiltInPresets: [Preset] { settings.missingBuiltInPresets }
 
-    /// Re-add any deleted built-in presets, leaving user-created and renamed
-    /// presets untouched.
     func restoreDefaultPresets() {
         settings.restoreMissingBuiltInPresets()
         persist()
     }
 
-    // MARK: - Settings export / import
 
-    /// Encode the current configuration (options, triggers, reminder, presets,
-    /// everything in ``KeepressoSettings``) as a portable, version-stamped JSON
-    /// export the user can back up or move to another Mac.
     func exportSettingsData() throws -> Data {
         try SettingsTransfer.exportData(settings, appVersion: AppInfo.version)
     }
 
-    /// Replace the entire live configuration with an imported settings file,
-    /// then re-derive everything that hangs off settings. Throws a
-    /// ``SettingsTransferError`` if `data` isn't a valid Keepresso export,
-    /// leaving the current configuration untouched.
-    ///
-    /// - Returns: how many `.shell` event hooks were disabled for safety on the
-    ///   way in (see ``KeepressoSettings/disarmingImportedShellHooks()``), so
-    ///   the caller can flag them for review.
     @discardableResult
     func importSettings(from data: Data) throws -> Int {
         let (disarmed, disabledShellHooks) =
             try SettingsTransfer.importSettings(from: data).disarmingImportedShellHooks()
         var imported = disarmed
-        // An export from an older build can predate built-ins added since; seed
-        // and refresh them the same way launch does so the import isn't
-        // missing new defaults or carrying outdated ones.
         imported.seedNewBuiltInPresets()
         imported.refreshBuiltInPresets()
         apply(imported)
         return disabledShellHooks
     }
 
-    /// Adopt a wholesale-new settings value and push every derived piece of
-    /// state into the controller/backends that own it, mirroring ``init``. The
-    /// piecemeal setters elsewhere each re-derive only their own slice; this is
-    /// the one path that swaps the lot at once (import).
-    ///
-    /// Ends any running session first: the new config takes over cleanly, the
-    /// same reason the ``triggersEnabled`` setter stops (a gate-held session
-    /// must not linger as a manual one with a stale duration once the rules
-    /// that were holding it are gone).
     private func apply(_ newSettings: KeepressoSettings) {
         session.stop()
         revokeLeases()
@@ -1892,7 +1410,6 @@ final class AppModel {
         session.leases = newSettings.automationLeasesEnabled ? leaseEngine : nil
         hookDispatcher.hooks = newSettings.eventHooks
         applyWakeScheduleToSystem()
-        // The guard's didSet queues fan/pause releases if it was mid-emergency.
         thermalGuard.config = effectiveThermalConfig(newSettings.thermalSafety)
         GlassClarity.shared.value = Double(newSettings.glassClarity) / 100
         disk.config = newSettings.diskKeepAlive
@@ -1905,18 +1422,10 @@ final class AppModel {
         controllerPoker.enabled = newSettings.controllerPokeWhileGaming
         gamePriority.autoWithGaming = newSettings.gamePriorityBoost
         if !newSettings.closedDisplayOnlyWhileBrewing {
-            // An import that turns the automation off must also release any
-            // hold it had (autoTick won't, it early-returns once it's off).
             Task { await closedDisplayAuto.stopIfHolding() }
         }
-        triggersPaused = false // a fresh config always comes in unpaused, like launch
+        triggersPaused = false
         applyTriggerGate()
-        // Any imported feature that speaks through a notification (safety
-        // pauses, reminders, the password notice for the helperless auto
-        // features) needs authorization, exactly as `init` and the per-feature
-        // setters request it. Without this, an import on a Mac that never
-        // granted notifications would let a battery or thermal pause stop the
-        // session with no banner, looking as if the app just quit.
         if newSettings.pauseBelowBatteryPercent != nil
             || newSettings.thermalSafety?.stopBrewing == true
             || newSettings.reminderAfter != nil
@@ -1931,16 +1440,9 @@ final class AppModel {
         persist()
     }
 
-    // MARK: - Control Center widget bridge
 
-    /// Writes session state to the App Group and reloads the widgets.
     @ObservationIgnored private let widgetSync = WidgetStateSync()
 
-    /// Mirror the session state into the App Group and refresh the widgets.
-    /// Called from the ticker every second; cheap because it no-ops until the
-    /// state actually changes. `endsAt` is rounded to a whole second so the
-    /// per-tick recomputation lands on the same instant and doesn't defeat the
-    /// change check.
     func syncWidgetState() {
         let endsAt = session.remaining.map {
             Date(timeIntervalSinceReferenceDate: (Date().timeIntervalSinceReferenceDate + $0).rounded())
@@ -1959,9 +1461,6 @@ final class AppModel {
         )
     }
 
-    /// On quit, leave the widgets showing "off": the session's assertions die
-    /// with this process, and a stale "Brewing" tile would lie until the next
-    /// launch.
     func writeWidgetStateStopped() {
         widgetSync.write(
             SharedSessionState(
@@ -1973,11 +1472,6 @@ final class AppModel {
         )
     }
 
-    /// Consume a pending widget command, if any, and drive the app through the
-    /// same seams the menu bar uses. Called when a widget's Darwin
-    /// notification arrives and once at launch (the Control Center intent
-    /// opens the app, so a not-yet-running app lands here with the command
-    /// waiting).
     func applyPendingWidgetCommand() {
         guard let command = widgetSync.consumeCommand() else { return }
         switch command {
@@ -1986,8 +1480,6 @@ final class AppModel {
         case .stop:
             if session.isActive { handle(.stop) }
         case .pauseTriggers:
-            // .command, not the default .manual: the decision log should say
-            // a widget did it, matching the start/stop cases above.
             pauseTriggers(cause: .command)
         case .resumeTriggers:
             resumeTriggers()
@@ -1995,16 +1487,9 @@ final class AppModel {
         syncWidgetState()
     }
 
-    // MARK: - Automation leases
 
-    /// The engine the session polls for lease demand, and the revocation
-    /// surface for explicit stops.
     @ObservationIgnored private let leaseEngine = LeaseEngine()
 
-    /// Whether outside tools may hold automation leases (Preferences ▸
-    /// Automation). Turning it off revokes every live lease, so their
-    /// clients hear "revoked" at the next heartbeat instead of wondering
-    /// why the Mac sleeps.
     var automationLeasesEnabled: Bool {
         get { settings.automationLeasesEnabled }
         set {
@@ -2016,18 +1501,10 @@ final class AppModel {
         }
     }
 
-    /// An explicit user stop must win over lease demand: end every live
-    /// lease first, or the session would flap back on the very next tick
-    /// with no feedback. Clients discover the revocation on heartbeat.
     private func revokeLeases() {
         leaseEngine.revokeAll(now: Date())
     }
 
-    /// The menu's explicit lease stop, offered beside the mode switch while
-    /// leases are live: revoke every lease so clients hear "revoked" on
-    /// their next heartbeat. A lease-held session stops silently (a user
-    /// gesture, not a natural end, so no end action fires); a trigger-held
-    /// one just loses its lease rows on the immediate reconcile.
     func endAutomationLeases() {
         revokeLeases()
         if session.isLeaseHeld {
@@ -2038,21 +1515,16 @@ final class AppModel {
         syncWidgetState()
     }
 
-    // MARK: - Teach-your-agent helpers
 
-    /// The bundled skill folder inside Resources.
     private var agentSkillURL: URL {
         Bundle.main.bundleURL
             .appendingPathComponent("Contents/Resources/AgentSkill/keep-awake", isDirectory: true)
     }
 
-    /// The embedded MCP server binary, absolute path of THIS install (a dev
-    /// build's path differs from /Applications).
     private var mcpServerPath: String {
         Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/keepresso-mcp").path
     }
 
-    /// Copy a simple text pointing to the bundled skill folder path.
     func copyAgentInstructions() {
         let skillPath = agentSkillURL.appendingPathComponent("SKILL.md").path
         let text = "Install SKILL.md from \(skillPath) globally"
@@ -2061,10 +1533,6 @@ final class AppModel {
         pasteboard.setString(text, forType: .string)
     }
 
-    /// Paste-ready MCP configuration per agent flavor. Claude Code, Gemini
-    /// CLI, and Grok all read the same `mcpServers` JSON shape; they get
-    /// their own menu entries anyway because users look for their tool's
-    /// name, not its file format.
     enum MCPSetupFormat {
         case mcpServersJSON
         case codexTOML
@@ -2098,17 +1566,10 @@ final class AppModel {
         pasteboard.setString(snippet, forType: .string)
     }
 
-    /// Show the bundled skill folder in Finder so it can be copied into an
-    /// agent's skills directory.
     func revealAgentSkill() {
         NSWorkspace.shared.activateFileViewerSelecting([agentSkillURL])
     }
 
-    /// Copy a paste-ready directive for a scheduled task's own prompt: have its
-    /// agent hold a Keepresso lease for the whole run, so the Mac stays awake
-    /// past the fixed hold window and only sleeps once the work is actually done.
-    /// Assumes the skill or MCP is already set up (see the buttons above); this
-    /// is the "what to do during the run" half.
     func copyAutomationRunInstructions() {
         let text = """
         Keep this Mac awake for the entire run using Keepresso. Use the \
@@ -2124,11 +1585,7 @@ final class AppModel {
         pasteboard.setString(text, forType: .string)
     }
 
-    // MARK: - Automation wake requests
 
-    /// Whether outside tools may change the wake schedule (Preferences ▸
-    /// Automation). Off by default: a wake schedule is a root-applied
-    /// system change, so it stays opt-in, unlike leases.
     var automationWakeControlEnabled: Bool {
         get { settings.automationWakeControlEnabled }
         set {
@@ -2137,15 +1594,9 @@ final class AppModel {
         }
     }
 
-    /// The last processed request and its outcome, mirrored into
-    /// `status.json` so `keepresso wake set` / `clear` can confirm.
     @ObservationIgnored private var lastWakeRequestId: String?
     @ObservationIgnored private var lastWakeRequestOutcome: String?
 
-    /// Process a pending automation wake request, if any. Runs on the
-    /// `sync-leases` doorbell. The request is claimed (deleted) before any
-    /// side effect so a client that timed out and claimed the same id cannot
-    /// still be applied, and a replaced request is left for the next pass.
     private func processAutomationWakeRequest() {
         guard let request = AutomationWakeRequestFile.read() else { return }
         guard AutomationWakeRequestFile.claim(requestId: request.requestId) else { return }
@@ -2157,14 +1608,10 @@ final class AppModel {
             case .invalid:
                 outcome = .invalid
             case .apply(nil):
-                // Clearing is always allowed, helper or not, matching the
-                // Preferences "Turn Off Wake Schedule" path.
                 wakeSchedule = nil
                 outcome = .applied
             case .apply(let config?):
                 if canEditWakeSchedule {
-                    // Keep the user's session-on-wake behavior; the request
-                    // only speaks about times.
                     var merged = config
                     if let existing = settings.wakeSchedule {
                         merged.startSessionOnWake = existing.startSessionOnWake
@@ -2182,35 +1629,16 @@ final class AppModel {
         lastWakeRequestOutcome = outcome.rawValue
     }
 
-    // MARK: - URL scheme commands
 
-    /// Handle a `keepresso://` command from ``URLCommand/parse(_:)``. Acts like
-    /// the manual toggle/duration picker. When trigger gating is on it pauses
-    /// triggers first (the same in-memory pause as the menu's Manual mode,
-    /// nothing persisted): otherwise the gate would silently override the
-    /// command on the next once-a-second reconcile, turning it into a no-op
-    /// with no feedback to the script that fired it.
     func handle(_ command: URLCommand) {
-        // The automation doorbell is not a session command: it must not
-        // pause triggers or touch the session, only process pending
-        // automation inputs and bring the next reconcile (and the
-        // acknowledgments in status.json) forward to now.
         if command == .syncLeases {
             processAutomationWakeRequest()
-            // Out-of-process lease writes landed on disk; drop the listing
-            // cache so reconcile's tick sees the new (or revoked) records.
             leaseEngine.invalidateStoreCache()
             session.reconcile()
-            // Unconditional write: a stale status.json left by another
-            // process (an old instance's quit snapshot) must not swallow
-            // this acknowledgment.
             widgetSync.forceNextWrite()
             syncWidgetState()
             return
         }
-        // Capture before pausing: pauseTriggers() stops the session. Pass
-        // .command so pausing a trigger-held session logs the stop as the
-        // command that caused it, not "Stopped manually".
         let wasActive = session.isActive
         pauseTriggers(cause: .command)
         switch command {
@@ -2220,8 +1648,6 @@ final class AppModel {
             revokeLeases()
             session.stop(cause: .command)
         case .toggle:
-            // Mirror toggleManual(), using the saved default duration rather
-            // than the controller's in-memory mode (never seeded after launch).
             if wasActive {
                 revokeLeases()
                 session.stop(cause: .command)
@@ -2229,19 +1655,15 @@ final class AppModel {
                 session.start(mode: settings.defaultMode, cause: .command)
             }
         case .syncLeases:
-            break // handled above
+            break
         }
     }
 
-    // MARK: - Disk keep-alive
 
-    /// Whether a disk is being kept spun up.
     var diskKeepAliveEnabled: Bool { settings.diskKeepAlive != nil }
 
-    /// The folder being touched, or `nil` when off.
     var diskKeepAliveDirectory: URL? { settings.diskKeepAlive?.directory }
 
-    /// The touch cadence shown in the picker (default while off).
     var diskKeepAliveInterval: TimeInterval {
         get { settings.diskKeepAlive?.interval ?? DiskKeepAliveConfig.defaultInterval }
         set {
@@ -2251,8 +1673,6 @@ final class AppModel {
         }
     }
 
-    /// Prompt for a folder and start keeping its volume spun up. Keeps the
-    /// current interval; cancelling leaves the feature unchanged.
     func chooseDiskFolder() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
@@ -2264,7 +1684,6 @@ final class AppModel {
         setDiskConfig(DiskKeepAliveConfig(directory: url, interval: diskKeepAliveInterval))
     }
 
-    /// Turn the feature off.
     func disableDiskKeepAlive() { setDiskConfig(nil) }
 
     private func setDiskConfig(_ config: DiskKeepAliveConfig?) {
@@ -2275,7 +1694,6 @@ final class AppModel {
 
     private func persist() { store.save(settings) }
 
-    // MARK: - Closed-display mode
 
     /// Re-read the system sleep setting that backs the closed-display toggle.
     /// Non-blocking: the underlying `pmset` read runs off the main thread.
@@ -2286,18 +1704,11 @@ final class AppModel {
         Task { await closedDisplay.refresh(force: force) }
     }
 
-    // MARK: - Claude Code hooks
 
-    /// Where the Claude Code hook install stands. Refreshed by explicit
-    /// actions and when the Triggers pane appears; a cheap read of one file.
     private(set) var claudeHooks: AgentHooks.HookInstallState = .notInstalled
 
-    /// The last hook install/remove failure, shown under the status row.
     private(set) var claudeHooksError: String?
 
-    /// Whether Claude Code is on this Mac at all. A connect row for a tool the
-    /// user doesn't have is noise, and acting on it would leave a settings
-    /// file behind for something they never installed.
     private(set) var claudeCodePresent = false
 
     func refreshClaudeHooksStatus() {
@@ -2308,18 +1719,10 @@ final class AppModel {
                 cliPath: Self.bundledCLIPath, format: Self.claudeHookFormat())
             autoRepairIfNeeded(.claudeCode)
         } catch {
-            // An existing file we can't read must report as unreadable, not
-            // "not installed": the latter invites the install click, and an
-            // install that mistakes a full settings.json for a missing one
-            // would replace the user's whole Claude Code configuration.
             claudeHooks = .unreadable
         }
     }
 
-    /// Merge Keepresso's hook entries into `~/.claude/settings.json` so
-    /// Claude Code sessions report exact working/waiting/idle edges. Runs on
-    /// the user's Connect click, or from ``autoRepairIfNeeded(_:)`` for a
-    /// connection that already exists; never to create one on its own.
     func installClaudeHooks() {
         let format = Self.claudeHookFormat()
         mutateClaudeSettings { existing in
@@ -2327,40 +1730,23 @@ final class AppModel {
         }
     }
 
-    /// The Claude Code hook set for this Mac. Newer events are only written
-    /// when every Claude Code installed here understands them: before
-    /// 2.1.101 an unknown event name made Claude Code ignore the whole
-    /// settings file. Re-read on every check, so an upgrade adds the event
-    /// and a downgrade takes it out again through the normal repair.
     private static func claudeHookFormat() -> AgentHooks.SettingsFormat {
         let versions = ClaudeCodeVersions.detect(
             home: FileManager.default.homeDirectoryForCurrentUser.path)
         return .claude(includingStopFailure: versions.supportsStopFailure)
     }
 
-    /// Remove exactly Keepresso's hook entries, leaving everything else in
-    /// the settings file untouched. Clears the session records too: with no
-    /// hooks left to emit Stop or SessionEnd, a retained working record
-    /// would hold the trigger for as long as its agent runs.
     func removeClaudeHooks() {
         if mutateClaudeSettings({ try AgentHooks.removeHooks(from: $0) }) {
-            // Cursor, Codex, Antigravity, and Grok share this folder and
-            // keep writing. Only Claude Code's records go.
             AgentHooks.purgeRecords(where: AgentHooks.shouldPurgeOnClaudeUninstall)
         }
     }
 
-    // MARK: - Cursor hooks
 
-    /// Where the Cursor hook install stands. Cursor covers two kinds of
-    /// session with one config: the `cursor-agent` CLI, and the agent built
-    /// into the Cursor app, which runs inside the editor and has no process
-    /// for the scan to find, so hooks are the only way to see it at all.
     private(set) var cursorHooks: AgentHooks.HookInstallState = .notInstalled
 
     private(set) var cursorHooksError: String?
 
-    /// Whether Cursor is on this Mac at all. See ``claudeCodePresent``.
     private(set) var cursorPresent = false
 
     func refreshCursorHooksStatus() {
@@ -2387,18 +1773,11 @@ final class AppModel {
         }
     }
 
-    // MARK: - Antigravity hooks
 
-    /// Where the Antigravity hook install stands. Like Cursor, one config
-    /// covers two kinds of session: the `agy` CLI, and the agent inside the
-    /// Antigravity app. The app's agent is the reason this matters most, its
-    /// host process is up whether or not anything is being asked of it, so
-    /// hooks are the only exact signal there is.
     private(set) var antigravityHooks: AgentHooks.HookInstallState = .notInstalled
 
     private(set) var antigravityHooksError: String?
 
-    /// Whether Antigravity is on this Mac at all. See ``claudeCodePresent``.
     private(set) var antigravityPresent = false
 
     func refreshAntigravityHooksStatus() {
@@ -2442,10 +1821,7 @@ final class AppModel {
         }
     }
 
-    // MARK: - Oh My Pi extension
 
-    /// OMP is detected natively with no setup. This optional extension lets
-    /// the shared activity trigger use exact session lifecycle edges.
     private(set) var ompHooks: AgentHooks.HookInstallState = .notInstalled
     private(set) var ompHooksError: String?
     private(set) var ompPresent = false
@@ -2477,8 +1853,6 @@ final class AppModel {
         }
     }
 
-    /// A file of the user's own at our extension's path blocks both connect
-    /// and remove. Say so, since only they can move it.
     private static func ompExtensionError(_ error: Error) -> String {
         if case OMPHooks.InstallError.extensionAlreadyOwnedByAnotherFile = error {
             return L("Another keepresso-agent-activity.ts is in OMP's extensions folder. Move it, then try again.")
@@ -2486,11 +1860,7 @@ final class AppModel {
         return L("Couldn't update the OMP extension.")
     }
 
-    // MARK: - Agent tools, addressed uniformly
 
-    /// The tools the agentic setup step should list, and their live state.
-    /// The per-tool members below stay the API the Preferences rows use; this
-    /// is the view over all of them that onboarding walks.
     var agentSetupTools: [AgentTool] {
         AgentTool.setupTools(present: isAgentToolPresent, connected: { hookState(of: $0) != .notInstalled })
     }
@@ -2534,16 +1904,10 @@ final class AppModel {
         }
     }
 
-    /// Whether this copy is the installed app, in /Applications or
-    /// ~/Applications. Repair bakes the running copy's CLI path into every
-    /// connected tool's config, so a dev build or a stray copy launched once
-    /// must not rewrite them all (and send Codex users back to approve their
-    /// hooks) just by starting.
     static var runsFromApplicationsFolder: Bool {
         AppRelocator.runsFromApplications
     }
 
-    /// Re-read every tool's install state. Cheap: a few small file reads.
     func refreshAgentHookStatuses() {
         refreshClaudeHooksStatus()
         refreshCursorHooksStatus()
@@ -2555,40 +1919,16 @@ final class AppModel {
         refreshCompatHooksStatus()
     }
 
-    /// Tools already repaired once this run.
     private var repairedThisRun: Set<AgentTool> = []
 
-    /// Quietly put a connection that has drifted back in order.
-    ///
-    /// This only ever runs for a tool the user already connected. A missing
-    /// install is never created behind their back: that still takes an
-    /// explicit Connect, because writing a tool's config is not something to
-    /// decide for someone. What this fixes is our own mess, and only ours: a
-    /// path that moved when the app moved, a duplicate entry, one left under
-    /// an event a later version retired, and the events a newer version
-    /// added. Left to a button, a connection someone opted into would sit
-    /// silently broken until they happened to open Preferences and look.
-    ///
-    /// Attempted once per tool per run, so a repair that cannot stick (a
-    /// read-only file, a config another program keeps rewriting) is tried
-    /// once rather than on every refresh. An unreadable file is never touched
-    /// at all.
     private func autoRepairIfNeeded(_ tool: AgentTool) {
-        // Status reads also happen when Preferences, Rules, or Welcome opens.
-        // Keep development copies read-only there as well as at startup.
         guard Self.runsFromApplicationsFolder else { return }
         guard case .needsRepair = hookState(of: tool) else { return }
-        // Inserted before repairing: connecting refreshes status again, which
-        // lands back here, and this is what stops it recurring.
         guard repairedThisRun.insert(tool).inserted else { return }
         connectAgentTool(tool)
     }
 
-    // MARK: - Codex hooks
 
-    /// Where the Codex hook install stands. Codex will not run a newly
-    /// installed hook until the user reviews it, so "installed" here means the
-    /// entries are written, not that they are firing yet.
     private(set) var codexHooks: AgentHooks.HookInstallState = .notInstalled
     private(set) var codexHooksError: String?
     private(set) var codexPresent = false
@@ -2634,12 +1974,7 @@ final class AppModel {
         }
     }
 
-    // MARK: - Grok hooks
 
-    /// Where the Grok hook install stands. Grok's global hooks are already
-    /// trusted, so "installed" here means the file is written and current.
-    /// A session that was already open still needs `/hooks` then `r`, or a
-    /// new session, before it emits into this file.
     private(set) var grokHooks: AgentHooks.HookInstallState = .notInstalled
     private(set) var grokHooksError: String?
     private(set) var grokPresent = false
@@ -2662,8 +1997,6 @@ final class AppModel {
         }
     }
 
-    /// Delete Keepresso's `keepresso.json`. Sibling files in `~/.grok/hooks/`
-    /// are the user's. Records for grok sessions are purged with it.
     func removeGrokHooks() {
         let url = GrokHooks.hooksURL()
         defer { refreshGrokHooksStatus() }
@@ -2695,13 +2028,7 @@ final class AppModel {
         }
     }
 
-    // MARK: - Qwen Code, Devin, and Kimi Code hooks
 
-    /// Install state for the three tools whose hooks follow Claude Code's
-    /// model (see ``CompatHooks``). Qwen and Devin keep them in a JSON
-    /// settings file in Claude's exact shape; Kimi in `[[hooks]]` tables in
-    /// its `config.toml`. All three read user-level hooks without a trust
-    /// step, so "installed" means firing from the next session on.
     private(set) var compatHooks: [CompatHooks.Tool: AgentHooks.HookInstallState] = [:]
     private(set) var compatHooksErrors: [CompatHooks.Tool: String] = [:]
     private(set) var compatPresent: Set<CompatHooks.Tool> = []
@@ -2760,17 +2087,10 @@ final class AppModel {
         }
     }
 
-    // MARK: - Hermes plugin
 
-    /// Where the Hermes install stands: Keepresso's plugin folder written and
-    /// current, and the plugin enabled in Hermes' config. A Hermes process
-    /// that was already running (the gateway especially) loads it only after
-    /// a restart.
     private(set) var hermesHooks: AgentHooks.HookInstallState = .notInstalled
     private(set) var hermesHooksError: String?
     private(set) var hermesPresent = false
-    /// A `hermes plugins` command is running. The state reads "not enabled"
-    /// until it finishes, which must not count as drift worth repairing.
     @ObservationIgnored private var hermesCLIRunning = false
 
     func refreshHermesPluginStatus() {
@@ -2794,8 +2114,6 @@ final class AppModel {
     /// prompting (the plugin replaces no tools). The CLI is Python and takes
     /// a second or two to start, so it runs off the main thread.
     func installHermesPlugin() {
-        // A Remove still finishing would delete what this writes; the click
-        // lands once that command is done (Repair is offered again).
         guard !hermesCLIRunning else { return }
         let directory = HermesHooks.pluginDirectoryURL()
         do {
@@ -2815,10 +2133,6 @@ final class AppModel {
         runHermesCLI(["plugins", "enable", HermesHooks.pluginName, "--no-allow-tool-override"])
     }
 
-    /// Disable the plugin in Hermes, then delete Keepresso's folder and drop
-    /// its records. The order matters: Hermes refuses to disable a plugin
-    /// whose folder is already gone. The user's other plugins and settings
-    /// are left alone.
     func removeHermesPlugin() {
         let finish = { [weak self] in
             guard let self else { return }
@@ -2828,16 +2142,12 @@ final class AppModel {
                     try FileManager.default.removeItem(at: directory)
                 }
                 AgentHooks.purgeRecords(where: HermesHooks.ownsRecord)
-                // A failed disable leaves only a harmless enabled entry (see
-                // below), so a completed removal is not an error.
                 self.hermesHooksError = nil
             } catch {
                 self.hermesHooksError = L("Couldn't update the Hermes plugin.")
             }
             self.refreshHermesPluginStatus()
         }
-        // Without a Hermes CLI the enabled entry stays behind, which is
-        // harmless: Hermes skips a listed plugin that has no folder.
         guard HermesHooks.hermesCommand() != nil else { return finish() }
         runHermesCLI(["plugins", "disable", HermesHooks.pluginName], then: finish)
     }
@@ -2891,14 +2201,6 @@ final class AppModel {
         Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/keepresso").path
     }
 
-    /// Writes `data` over `url` atomically, then puts the file's old POSIX
-    /// permissions back.
-    ///
-    /// An atomic write swaps in a brand-new inode, which takes the umask's
-    /// permissions rather than the file's. Someone who had deliberately
-    /// tightened their settings file to owner-only would find it world
-    /// readable again after connecting, which is our doing and not theirs.
-    /// A settings file can hold API keys, so this is worth the extra stat.
     private static func writePreservingPermissions(_ data: Data, to url: URL) throws {
         let manager = FileManager.default
         let previous = (try? manager.attributesOfItem(atPath: url.path))?[.posixPermissions] as? NSNumber
@@ -2908,14 +2210,6 @@ final class AppModel {
         }
     }
 
-    /// Rewrites an agent tool's config file through `transform`, using
-    /// ``ConfigFileUpdate`` to retry changes detected before the write.
-    /// Other tools do not share a lock, so this is a best-effort merge.
-    /// A symlinked file (dotfiles setups) is resolved so the atomic write
-    /// replaces the real file, not the link.
-    /// Throws ``AgentHooks/SettingsUnreadableError`` for a file that exists
-    /// but can't be read: treating that as absence would replace the user's
-    /// whole config with just our hooks.
     private static func updateConfigFile(
         at url: URL, _ transform: (Data?) throws -> Data
     ) throws {
@@ -2929,23 +2223,15 @@ final class AppModel {
             transform: transform)
     }
 
-    /// Rewrites `~/.claude/settings.json` through `transform` and reports
-    /// whether the write landed, so callers can gate follow-up cleanup on it.
     @discardableResult
     private func mutateClaudeSettings(_ transform: (Data?) throws -> Data) -> Bool {
         let url = AgentHooks.claudeSettingsURL()
         defer { refreshClaudeHooksStatus() }
         do {
-            // readSettings distinguishes "no file yet" from "exists but
-            // unreadable" and throws on the latter: treating a read failure
-            // as absence would make the atomic write below replace the
-            // user's whole settings file with just our hooks.
             try Self.updateConfigFile(at: url, transform)
             claudeHooksError = nil
             return true
         } catch is AgentHooks.SettingsUnreadableError {
-            // The refreshed status row already explains the unreadable file;
-            // a second identical line under it would just stack.
             claudeHooksError = nil
             return false
         } catch {
@@ -2954,14 +2240,9 @@ final class AppModel {
         }
     }
 
-    // MARK: - Privileged helper
 
-    /// Whether the helper daemon is installed and approved, so the privileged
-    /// toggles are prompt-free.
     var helperInstalled: Bool { helper.isInstalled }
 
-    /// Register the helper daemon (opens System Settings for the one-time
-    /// approval when macOS wants it).
     func installHelper() {
         guard !helperOperationInFlight else { return }
         helperRecoveryFailed = false; helperApprovalRequired = false
@@ -2970,9 +2251,6 @@ final class AppModel {
         verifyHelper()
     }
 
-    /// Unregister the helper daemon. Any live holds are released first, so
-    /// nothing stays held by a service that's going away; the osascript
-    /// fallback takes over from the next engage.
     func removeHelper() {
         guard beginHelperOperation() else { return }
         Task {
@@ -3002,20 +2280,11 @@ final class AppModel {
         return true
     }
 
-    /// Why the helper attention window is up: the automatic repair got stuck
-    /// on something only the user can do.
     enum HelperAttention: Equatable {
-        /// macOS wants the one-time approval again (Login Items switch).
         case needsApproval
-        /// The daemon stayed unresponsive after a repair; offer a reinstall.
         case broken
     }
 
-    /// Set when the helper self-heal needs the user (approve again, or
-    /// reinstall); the always-alive menu bar label opens the attention window
-    /// on this edge. `.broken` surfaces only after a quiet minute of retry,
-    /// so a slow daemon never pops a window. Cleared once a check comes back
-    /// healthy or the user dismisses the window.
     private(set) var helperAttention: HelperAttention?
     private(set) var helperRecoveryPending = false
     private(set) var helperRecoveryFailed = false
@@ -3085,11 +2354,7 @@ final class AppModel {
                     await self.verifyHelperAndFollowUp()
                     return
                 }
-                // Visible (.broken, .needsApproval): keep watching for the
-                // recovery that clears it.
                 if self.helperAttention != nil || self.helperApprovalRequired { continue }
-                // Quiet phase: no banner, no window. A dismissal after an
-                // escalation stays dismissed.
                 if escalated { return }
                 // After an app update the helper can legitimately need a few
                 // minutes (the old image idles out while launchd starts the
@@ -3105,11 +2370,6 @@ final class AppModel {
         }
     }
 
-    /// Check that the installed helper daemon actually responds, repairing a
-    /// stale registration when it doesn't (see
-    /// ``HelperManager/verifyAndRepairIfNeeded()``). Called at launch, where
-    /// the breakage typically surfaces (it follows an app update plus a
-    /// reboot), and again from the failure edges of the privileged features.
     func verifyHelper() {
         guard !helperOperationInFlight else { return }
         let generation = helperVerificationGeneration
@@ -3136,20 +2396,13 @@ final class AppModel {
         case .healthy:
             helperRecoveryFailed = false; helperApprovalRequired = false
             helperAttention = nil
-            // A failed engage may have raced daemon startup or reconnection.
-            // A successful ping is recovery even without re-registration;
-            // otherwise the automation stays held off for the whole session.
             closedDisplayAuto.retryEngage()
             awdl.retryEngage()
         case .notApplicable:
-            // Mid-reinstall the status parks at requiresApproval; keep the
-            // window on the approval step rather than declaring success.
             helperApprovalRequired = helper.awaitingApproval
             helperAttention = helper.awaitingApproval ? .needsApproval : nil
         case .repaired:
             helperRecoveryFailed = false; helperApprovalRequired = false
-            // Healed silently; let features a failed engage put on hold try
-            // again on their next tick instead of waiting out the session.
             helperAttention = nil
             closedDisplayAuto.retryEngage()
             awdl.retryEngage()
@@ -3173,15 +2426,10 @@ final class AppModel {
         if helperAttention != nil { watchForHelperRecovery() }
     }
 
-    /// The user closed the attention window; stop pointing at it. The helper's
-    /// state itself stays visible in Preferences.
     func dismissHelperAttention() {
         helperAttention = nil
     }
 
-    /// A fresh start for a helper the automatic repair couldn't revive:
-    /// release any holds, unregister, and register again. May land in
-    /// `requiresApproval`, which the attention window walks the user through.
     func reinstallHelper() {
         guard beginHelperOperation() else { return }
         Task {
@@ -3208,15 +2456,11 @@ final class AppModel {
         }
     }
 
-    // MARK: - Closed-display mode
 
-    /// Whether the Mac is currently kept awake with the lid closed.
     var closedDisplayEnabled: Bool { closedDisplay.isEnabled ?? false }
 
-    /// Any error message from the last attempt to change the setting.
     var closedDisplayError: String? { closedDisplay.lastError }
 
-    /// True while the administrator prompt is on screen.
     var closedDisplayBusy: Bool { closedDisplay.isBusy }
 
     /// Turn closed-display mode on or off. Prompts for administrator rights
@@ -3231,11 +2475,6 @@ final class AppModel {
     /// again (Welcome, Preferences, …); SecurityAgent otherwise leaves it
     /// buried under every other app.
     func setClosedDisplay(_ on: Bool, userInitiated: Bool = true) {
-        // A user toggling closed-display during a thermal or battery pause has
-        // taken over the intent: cancel any pending "restore when safe" so
-        // recovery doesn't silently turn it back on against their choice. The
-        // lift/restore calls pass `userInitiated: false` so they don't clear
-        // their own pending restore.
         if userInitiated {
             thermalLiftedClosedDisplay = false
             batteryLiftedClosedDisplay = false
@@ -3248,19 +2487,12 @@ final class AppModel {
         let needsAuthDance = !helperInstalled
         runAfterPossibleAuthPrompt(needsPrompt: needsAuthDance) {
             _ = await self.closedDisplay.set(on)
-            // A failure through the installed helper points at a stale daemon
-            // registration: check and repair it (dedupes, once per run).
             if self.closedDisplay.lastError != nil, self.helperInstalled {
                 self.verifyHelper()
             }
         }
     }
 
-    /// Wait (bounded) for an in-flight sleep write to settle, so quit-time
-    /// coverage reads post-toggle state and the quit-time clear doesn't
-    /// bounce off a busy controller. Caps at ~2s; quitting must stay prompt.
-    /// A still-busy controller after that reads stale, which the acting path
-    /// re-checks before touching anything.
     private func waitForSleepWriteToSettle() async {
         for _ in 0..<20 {
             guard closedDisplay.isBusy else { return }
@@ -3268,21 +2500,6 @@ final class AppModel {
         }
     }
 
-    /// Quit-time coverage for the quit modal, from cached state so
-    /// `applicationShouldTerminate` can decide and run the modal inline (see
-    /// ``QuitSleepModal/ask(coverage:device:qualifier:)`` for why it must not
-    /// await first). The cached pmset reading is the ticker's, seconds old at
-    /// worst, and "Turn off and quit" re-reads for real before acting.
-    ///
-    /// Both paths write the same `disablesleep` bit, so "on" alone says
-    /// nothing: what matters is whether quitting orphans it. The scoped hold
-    /// self-cleans on exit, so the automation holding it is never
-    /// modal-worthy. Anything else live is a persistent latch that survives
-    /// quit unmanaged, whichever run set it: that is exactly the "did you
-    /// forget to turn it off" the modal exists for.
-    ///
-    /// The hold is read, not released: releasing here would strip lid
-    /// coverage from a session the user may yet keep by cancelling.
     func quitSleepCoverageNow() -> QuitSleepCheck.Coverage {
         // Preview hook: the override variant needs a real persistent
         // `disablesleep` latch, which costs an administrator prompt to set up
@@ -3309,13 +2526,6 @@ final class AppModel {
             overrideLive: closedDisplay.isEnabled == true && !closedDisplayAuto.isHolding)
     }
 
-    /// Lid mode is live, but the brewing automation is the one holding it, so
-    /// quitting ends it without the user doing anything.
-    ///
-    /// The modal still says so. Nothing is stranded, which is why this is not
-    /// folded into ``QuitSleepCheck/Coverage`` and never gets the "did you
-    /// forget" framing, but quitting does take away lid coverage the user has
-    /// right now, and that is worth a line before it happens.
     func quitScopedLidMode() -> Bool {
         closedDisplay.isEnabled == true && closedDisplayAuto.isHolding
     }
@@ -3351,8 +2561,6 @@ final class AppModel {
         if case .failed(let message) = result {
             NSLog("Keepresso: quit-time sleep restore failed: %@", message)
         }
-        // Verify against the system, not the result: a dismissed prompt or a
-        // wrong password must not read as success.
         await closedDisplay.refresh(force: true)
         let cleared = closedDisplay.isEnabled != true
         if !cleared {
@@ -3397,12 +2605,6 @@ final class AppModel {
         }
     }
 
-    /// Whether closed-display mode follows the session instead of staying on
-    /// until manually turned off (see
-    /// ``ClosedDisplayAutoController/onlyWhileBrewing``). Persisted. Turning it
-    /// on pre-authorizes the root helper now, in this window, so the next
-    /// session start doesn't pop a password dialog out of nowhere. One prompt
-    /// here, prompt-free automation afterward. No-op if already authorized.
     var closedDisplayOnlyWhileBrewing: Bool {
         get { settings.closedDisplayOnlyWhileBrewing }
         set {
@@ -3415,26 +2617,14 @@ final class AppModel {
             // daemon would flip the real setting on and off for nothing).
             closedDisplayCoordinator.rearmForeignHoldClear()
             if newValue && !closedDisplayAuto.isAuthorized && !helperInstalled {
-                // A fallback engage may later need a password mid-session; be
-                // able to say so even behind other windows.
                 notifier.requestAuthorization()
                 runAfterPossibleAuthPrompt(needsPrompt: true) {
                     await self.closedDisplayAuto.prime()
-                    // The user is right here answering prompts, so this is the
-                    // one moment a fallback clear may ask for the password.
-                    // Priming flips the real setting on and off, so re-read it
-                    // before deciding anything.
                     self.refreshThenEnforceClosedDisplay(allowPrompt: true)
                 }
             } else if newValue {
                 refreshThenEnforceClosedDisplay()
             } else {
-                // Turning it off mid-session: release the hold (autoTick won't,
-                // it early-returns once the feature's off), then re-read the
-                // system setting once the helper has had a cycle to apply it.
-                // Force the read: a menu open moments earlier leaves a fresh
-                // cache that would swallow this one, and autoTick is already
-                // gated off, so nothing else would correct it.
                 Task {
                     await closedDisplayAuto.stopIfHolding()
                     try? await Task.sleep(for: .seconds(3))
@@ -3444,10 +2634,7 @@ final class AppModel {
         }
     }
 
-    // MARK: - Display policy (lid-shut panel behavior)
 
-    /// What the watchdog does with the panel while the lid is shut.
-    /// Persisted. `displayOff` preserves the long-standing behavior.
     var closedLidDisplayPolicy: ClosedLidDisplayPolicy {
         get { settings.closedLidDisplayPolicy }
         set {
@@ -3458,23 +2645,14 @@ final class AppModel {
         }
     }
 
-    /// Why the watchdog last held off without sleeping (leave-alone notice or
-    /// the brightness-unavailable fallback), for the menu to show. `nil`
-    /// while the policy is working as configured.
     var displayDarkeningReason: String? { closedDisplay.lastDecisionReason }
 
-    /// Any error message from the automation's last engage attempt.
     var closedDisplayAutoError: String? { closedDisplayAuto.lastError }
 
-    /// True while the automation's administrator prompt is on screen.
     var closedDisplayAutoBusy: Bool { closedDisplayAuto.isBusy }
 
-    /// Sequencer for the "only while brewing" automation. It owns the edge
-    /// detection and latches; this model only samples the inputs and runs the
-    /// side effects it asks for.
     @ObservationIgnored private let closedDisplayCoordinator = ClosedDisplayCoordinator()
 
-    /// The coordinator's view of the world, sampled fresh at each decision.
     private var closedDisplayConditions: ClosedDisplayCoordinator.Conditions {
         .init(
             onlyWhileBrewing: settings.closedDisplayOnlyWhileBrewing,
@@ -3488,8 +2666,6 @@ final class AppModel {
         )
     }
 
-    /// Run one decision. Everything that touches AppKit, the notifier or the
-    /// system lives here; everything that decides lives in the coordinator.
     private func perform(_ action: ClosedDisplayCoordinator.Action) {
         switch action {
         case .announceEngagePrompt:
@@ -3527,9 +2703,6 @@ final class AppModel {
         }
     }
 
-    /// Re-read the system setting, then let the automation act on the result.
-    /// The refresh is what makes the enforcement trustworthy, so the two always
-    /// travel together.
     private func refreshThenEnforceClosedDisplay(
         after delay: Duration? = nil,
         allowPrompt: Bool = false
@@ -3537,9 +2710,7 @@ final class AppModel {
         let token = closedDisplayCoordinator.beginRefresh()
         Task {
             if let delay { try? await Task.sleep(for: delay) }
-            // Superseded while sleeping: leave the latch for the newer task.
             guard closedDisplayCoordinator.refreshIsCurrent(token) else { return }
-            // Enforcement must not trust a stale menu-open cache.
             await closedDisplay.refresh(force: true)
             guard closedDisplayCoordinator.endRefresh(
                 token,
@@ -3554,8 +2725,6 @@ final class AppModel {
         }
     }
 
-    /// Once-a-second pulse for closed-display mode's "only while brewing"
-    /// automation.
     func closedDisplayAutoTick() {
         for action in closedDisplayCoordinator.tick(closedDisplayConditions) {
             perform(action)
@@ -3570,8 +2739,6 @@ final class AppModel {
     func syncBatteryPauseClosedDisplay() {
         let paused = session.pausedByBattery
         let onlyWhileBrewing = settings.closedDisplayOnlyWhileBrewing
-        // Session-tied automation owns the setting; drop any sticky-restore
-        // latch so a later plug-in cannot turn closed-display on against it.
         if onlyWhileBrewing {
             batteryLiftedClosedDisplay = false
             sawBatteryPaused = paused
@@ -3594,8 +2761,6 @@ final class AppModel {
             batteryLiftedClosedDisplay = true
             setClosedDisplay(false, userInitiated: false)
         case .skipLiftNeedsHelper:
-            // Latch so decide goes idle on later ticks (no per-second nags);
-            // sawBatteryPaused is the rising-edge gate for the banner itself.
             batteryLiftedClosedDisplay = true
             if !sawBatteryPaused {
                 notifier.notify(
@@ -3611,41 +2776,29 @@ final class AppModel {
         sawBatteryPaused = paused
     }
 
-    // MARK: - Virtual display (experimental)
 
     /// Whether the private virtual-display API exists on this macOS.
     var virtualDisplaySupported: Bool { virtualDisplay.isSupported }
 
-    /// Whether a virtual display is configured.
     var virtualDisplayEnabled: Bool { settings.virtualDisplay != nil }
 
-    /// The current virtual-display configuration, or `nil` when off.
     var virtualDisplayConfig: VirtualDisplayConfig? { settings.virtualDisplay }
 
-    /// Any error from the last attempt to create the virtual display.
     var virtualDisplayError: String? { virtualDisplay.lastError }
 
-    /// Set (or clear, with `nil`) the virtual display and persist the choice.
     func setVirtualDisplay(_ config: VirtualDisplayConfig?) {
         settings.virtualDisplay = config
         virtualDisplay.config = config
         persist()
     }
 
-    // MARK: - Gaming & Streaming
 
-    /// Re-probe the streaming checks and the AWDL watchdog state for the
-    /// Gaming & Streaming Setup window (on appear and its Re-check button).
     func refreshStreaming() {
         Task { await streaming.refresh() }
         refreshAWDLState()
-        // The window shows the helper's install state alongside the watchdog.
         helper.refresh()
     }
 
-    /// Re-probe association, captive HTTP, and DNS for the Public Wi-Fi
-    /// assistant. Off-main inside the controller. Opening the window does
-    /// not request Location or an administrator password.
     func refreshCaptive() {
         Task { await captive.refresh() }
         helper.refresh()
@@ -3671,10 +2824,6 @@ final class AppModel {
         }.value
     }
 
-    /// Lock the keyboard for Keyboard Cleaner. If the helper is not
-    /// installed this may show the administrator-password dialog: activate
-    /// first so the dialog is focused, and do not show the overlay until
-    /// this returns. Cancel leaves the keyboard live.
     func lockKeyboard(duration: TimeInterval?) async -> KeyboardLockResult {
         let helperCanLockSilently = helperInstalled
             && (helper.daemonProtocolVersion ?? 0) >= KeyboardLocker.helperMinProtocol
@@ -3695,20 +2844,12 @@ final class AppModel {
         return result
     }
 
-    /// Re-read just the AWDL flag and interface state; cheap enough for the
-    /// streaming window's periodic pulse (one `ifconfig` per call).
     func refreshAWDLState() {
         Task { await awdl.refresh() }
     }
 
-    /// Start or stop the AWDL watchdog. Starting prompts for administrator
-    /// rights, so the app becomes active first (same reason as
-    /// ``setClosedDisplay(_:)``: an unfocused password dialog looks stuck).
     func setAWDLWatchdog(_ on: Bool) {
         if !on {
-            // Manual override during an auto-gaming grace: clear the grace so the
-            // countdown stops now, and hold auto off so the next tick doesn't
-            // immediately re-pause while the game (or its grace) is still around.
             gamingWatcher.resetGrace()
             awdl.holdAutoOff()
         }
@@ -3721,7 +2862,6 @@ final class AppModel {
         runAfterPossibleAuthPrompt(needsPrompt: dance) {
             if on {
                 await self.awdl.start()
-                // Same stale-registration suspicion as ``setClosedDisplay(_:)``.
                 if self.awdl.lastError != nil, self.helperInstalled {
                     self.verifyHelper()
                 }
@@ -3731,8 +2871,6 @@ final class AppModel {
         }
     }
 
-    /// Whether the watchdog follows a gaming trigger (see
-    /// ``AWDLWatchdogController/autoWithGaming``). Persisted.
     var awdlAutoWithGaming: Bool {
         get { settings.awdlAutoWithGaming }
         set {
@@ -3750,28 +2888,17 @@ final class AppModel {
                     await self.awdl.prime()
                 }
             } else if !newValue {
-                // Turning auto off mid-bout: clear the grace and lift any pause it
-                // started (autoTick won't, it early-returns once the feature's off).
                 gamingWatcher.resetGrace()
                 Task { await awdl.stopIfAuto() }
             }
         }
     }
 
-    /// Watches for a frontmost game on its own, independent of the trigger
-    /// config, so AWDL auto-pause just works without the user first enabling
-    /// triggers and adding a "Playing a game" rule. Wrapped in a grace so
-    /// alt-tabbing out of a game doesn't immediately drop the pause; the
-    /// window length is the user's ``awdlGraceSeconds`` (init overwrites this
-    /// placeholder with the persisted value).
     @ObservationIgnored private let gamingWatcher = GracePeriodTrigger(
         wrapping: GamingTrigger(),
         grace: 60
     )
 
-    /// How long the auto pause lingers after the game leaves the front, in
-    /// seconds. Persisted; applies immediately, including to a linger that is
-    /// already counting down.
     var awdlGraceSeconds: TimeInterval {
         get { settings.awdlGraceSeconds }
         set {
@@ -3781,8 +2908,6 @@ final class AppModel {
         }
     }
 
-    /// Whether auto mode posts a notification when it pauses (a game is detected)
-    /// and resumes AWDL. A password-required notice is always sent regardless.
     var awdlNotifications: Bool {
         get { settings.awdlNotifications }
         set {
@@ -3796,35 +2921,27 @@ final class AppModel {
     @ObservationIgnored private var wasGamingActive = false
     @ObservationIgnored private var sawAWDLError = false
 
-    /// Sees connected game controllers for the poke and the trigger-free
-    /// Setup toggle.
     @ObservationIgnored private let controllerMonitor = GCControllerMonitor()
 
     /// Declares user activity during controller play (gamepad input doesn't
     /// reliably reset the HID idle timer). Enabled flag mirrored from settings.
     @ObservationIgnored let controllerPoker = ControllerActivityPoker()
 
-    /// Boosts the frontmost game's CPU priority through the helper daemon.
-    /// Lazy so the hold closure can capture self after init completes.
     @ObservationIgnored private(set) lazy var gamePriority = GamePriorityController { [weak self] holding, pid in
         guard let self, self.helperInstalled else { return }
         let client = self.helperClient
         Task.detached { _ = client.setPriorityHold(holding, pid: pid) }
     }
 
-    /// Raise the frontmost game's CPU priority while playing (Gaming &
-    /// Streaming Setup). Helper-only; the view locks the toggle otherwise.
     var gamePriorityBoost: Bool {
         get { settings.gamePriorityBoost }
         set {
             settings.gamePriorityBoost = newValue
-            gamePriority.autoWithGaming = newValue // turning off releases now
+            gamePriority.autoWithGaming = newValue
             persist()
         }
     }
 
-    /// Keep the display awake during controller play (Gaming & Streaming
-    /// Setup).
     var controllerPokeWhileGaming: Bool {
         get { settings.controllerPokeWhileGaming }
         set {
@@ -3834,17 +2951,12 @@ final class AppModel {
         }
     }
 
-    /// Once-a-second pulse for every gaming-driven automation: the AWDL
-    /// watchdog's auto mode, the game priority boost, and the controller
-    /// activity poke. Detects a game directly via ``gamingWatcher`` (no
-    /// trigger or active session required). The guard keeps per-tick work
-    /// from running while every gaming feature is off.
     func awdlAutoTick() {
         let wantsPulse = settings.awdlAutoWithGaming
             || settings.gamePriorityBoost
             || settings.controllerPokeWhileGaming
         guard wantsPulse else { return }
-        gamingWatcher.tick() // advance the grace window once per pulse
+        gamingWatcher.tick()
         let gameInFront = gamingWatcher.wrappedIsSatisfied
         let gamingActive = gamingWatcher.isSatisfied()
 
@@ -3862,7 +2974,6 @@ final class AppModel {
 
         guard settings.awdlAutoWithGaming else { return }
         notifyAWDLEdges(gameInFront: gameInFront, gamingActive: gamingActive)
-        // Same stale-registration suspicion as ``closedDisplayAutoTick()``.
         let awdlFailed = awdl.lastError != nil
         if awdlFailed, !sawAWDLError, helperInstalled {
             verifyHelper()
@@ -3902,25 +3013,13 @@ final class AppModel {
         }
     }
 
-    /// Why the AWDL watchdog is (or isn't) currently pausing Wi-Fi discovery,
-    /// for the menu and the Gaming & Streaming window. Lets the user see the
-    /// auto-gaming grace window instead of wondering why AWDL is still paused
-    /// after they quit the game.
     enum AWDLStatus: Equatable {
-        /// The watchdog isn't running and auto mode is off; AWDL is normal.
         case off
-        /// Auto mode is on but no game is in front yet: armed and watching.
         case watchingForGame
-        /// Running because the user turned it on by hand.
         case pausedManually
-        /// Running because a game (or cloud-gaming app) is in the foreground.
         case pausedForGame
-        /// The game closed; AWDL stays paused for a short grace, resuming in
-        /// this many seconds.
         case resumingAfterGame(seconds: Int)
 
-        /// Whether AWDL is actively paused right now (vs off or merely watching).
-        /// The menu shows only these; the streaming window shows watching too.
         var isPausing: Bool {
             switch self {
             case .pausedManually, .pausedForGame, .resumingAfterGame: return true
@@ -3929,12 +3028,8 @@ final class AppModel {
         }
     }
 
-    /// The live AWDL watchdog status. Reads ``gamingWatcher`` as of the last
-    /// ``awdlAutoTick()``, so the grace countdown is current within a second.
     var awdlStatus: AWDLStatus {
         guard awdl.isRunning else {
-            // Not paused. Say we're armed and watching when auto mode is on, so
-            // the user knows it's waiting for a game rather than doing nothing.
             return settings.awdlAutoWithGaming ? .watchingForGame : .off
         }
         if settings.awdlAutoWithGaming {
@@ -3946,46 +3041,31 @@ final class AppModel {
         return .pausedManually
     }
 
-    // MARK: - Setup / headless readiness
 
-    /// Re-probe the system for the Setup screen. The shell-outs (`pmset`,
-    /// `fdesetup`, `defaults`) are quick; called on the Setup window's appear
-    /// and its "Re-check" button. App-level permission checks (which need app
-    /// frameworks, not the shell) are rebuilt alongside.
     func refreshReadiness() {
         Task { await readiness.refresh() }
         permissionChecks.rebuild(for: settings.ruleSet.rules)
     }
 
-    /// Builds the app-permission rows and appends them after the system checks.
     @ObservationIgnored private lazy var permissionChecks = PermissionChecksBuilder(readiness: readiness)
 
-    // MARK: - Live system info for the "add condition" menu
 
-    /// The SSID currently joined, for the "add current Wi-Fi" shortcut.
     func currentSSID() -> String? { CoreWLANNetworkMonitor().current.ssid }
 
-    /// Currently mounted volumes (boot volume excluded), for the
-    /// "add mounted volume" menu.
     func mountedVolumes() -> [String] {
         FileManagerVolumeMonitor().current.volumeNames.sorted {
             $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
         }
     }
 
-    /// Paired Bluetooth device names, for the "add Bluetooth device" menu.
     func pairedBluetoothDevices() -> [String] {
         IOBluetoothDeviceMonitor().current.pairedDeviceNames.sorted {
             $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
         }
     }
 
-    /// One row of the "add running app" menu.
     struct RunningApp: Identifiable, Hashable {
-        /// Where the bundle lives on disk. Also the row's identity, so two
-        /// instances of the same app (`open -n`) collapse into one row.
         let installPath: String
-        /// What the row shows.
         let name: String
         let bundleID: String
         /// The path to pin a rule to, set only when several installs share
@@ -3996,7 +3076,6 @@ final class AppModel {
         var id: String { installPath }
     }
 
-    /// Regular (Dock-visible) running apps, for the "add running app" menu.
     func runningApps() -> [RunningApp] {
         var candidates: [(name: String, bundleID: String, installPath: String, fileName: String)] = []
         var seenPaths = Set<String>()
@@ -4004,7 +3083,6 @@ final class AppModel {
         where app.activationPolicy == .regular {
             guard let id = app.bundleIdentifier, let url = app.bundleURL else { continue }
             let path = url.standardizedFileURL.path
-            // A second instance of the same bundle is the same row.
             guard seenPaths.insert(path).inserted else { continue }
             let fileName = url.deletingPathExtension().lastPathComponent
             // Prefer the Dock-localized name; fall back to the bundle filename
@@ -4012,9 +3090,6 @@ final class AppModel {
             candidates.append((app.localizedName ?? fileName, id, path, fileName))
         }
 
-        // Only a bundle ID running from more than one place is ambiguous
-        // (Xcode + Xcode Beta). Those rows carry a path lock; everything else
-        // stays matched by ID alone.
         let installsPerID = Dictionary(grouping: candidates, by: \.bundleID).mapValues(\.count)
         // When the ambiguous installs also share a localized name, show the
         // on-disk bundle filename so the rows stay tellable apart.
@@ -4052,14 +3127,6 @@ final class AppModel {
         return apps.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    /// Well-known call apps offered as one-click choices in the mic-scope
-    /// editor, for when the user is setting up a rule while not currently on a
-    /// call. Some apps ship under more than one bundle id (Teams classic vs the
-    /// new client, Telegram from the App Store vs Telegram Desktop); the preset
-    /// carries every variant so it matches whichever is installed, since the
-    /// matcher fires on any id in a rule's list. Anything not here is added via
-    /// the live "using the mic now" list or the app picker, both of which read
-    /// the real bundle id and never guess (e.g. TeamSpeak, whose ids vary).
     static let callAppPresets: [(name: String, bundleIDs: [String])] = [
         ("Discord", ["com.hnc.Discord"]),
         ("Slack", ["com.tinyspeck.slackmacgap"]),

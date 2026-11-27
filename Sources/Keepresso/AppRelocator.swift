@@ -9,10 +9,6 @@ import KeepressoCore
 /// Silent and best-effort by design: any failure just leaves the app running
 /// from where it is. Development builds are never touched.
 enum AppRelocator {
-    /// True once this instance has decided to hand over to the /Applications
-    /// copy (or to an already running one) and terminate. Launch-time one-shots
-    /// (the welcome window) check this so they don't fire, and persist state,
-    /// in a process that is about to die.
     private(set) static var isRelocating = false
 
     /// True when this copy runs from an Applications folder (system or user):
@@ -39,7 +35,6 @@ enum AppRelocator {
             return
         }
 
-        // Already in an Applications folder (system or user): nothing to do.
         if runsFromApplications {
             return
         }
@@ -83,14 +78,10 @@ enum AppRelocator {
             do {
                 try fm.copyItem(at: bundleURL, to: dest)
             } catch {
-                return // best-effort: keep running from the current location
+                return
             }
         }
 
-        // Launch the /Applications copy, then terminate. No running instance
-        // exists (checked above), so this starts it rather than duplicating it.
-        // If the handover fails, stay up rather than quitting with nothing
-        // running.
         isRelocating = true
         NSWorkspace.shared.openApplication(at: dest, configuration: NSWorkspace.OpenConfiguration()) { app, error in
             DispatchQueue.main.async {
@@ -103,7 +94,6 @@ enum AppRelocator {
         }
     }
 
-    /// Another live instance of this app running from `bundleURL`, if any.
     private static func runningInstance(at bundleURL: URL) -> NSRunningApplication? {
         guard let bundleID = Bundle.main.bundleIdentifier else { return nil }
         return NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {
@@ -111,8 +101,6 @@ enum AppRelocator {
         }
     }
 
-    /// `CFBundleVersion` (the monotonically bumped build number) of the bundle
-    /// at a URL, or `nil` when unreadable.
     private static func buildNumber(of bundleURL: URL) -> Int? {
         guard let raw = Bundle(url: bundleURL)?
             .object(forInfoDictionaryKey: "CFBundleVersion") as? String else { return nil }

@@ -1,10 +1,6 @@
 import SwiftUI
 import AppKit
 
-/// Template images for the system menu bar, rendered from ``BrandCupMark``:
-/// a filled cup with steam while brewing, an outline cup while idle. Template
-/// (monochrome) so macOS tints them for the bar's appearance and highlight
-/// state, exactly like an SF Symbol.
 @MainActor
 enum MenuBarIcon {
     static let idle = render(active: false)
@@ -18,11 +14,6 @@ enum MenuBarIcon {
     /// also avoids the status item's refusal to widen for changed label
     /// content (see ``MenuBarLabel``).
     static let pausedLowBattery = renderPausedLowBattery()
-    /// A blank 1pt sliver the custom label shows in place of the cup when the
-    /// cup is turned off. Keeping one `Image` in the label at all times means
-    /// turning the cup back on swaps this image for a wider one, which the
-    /// status item does resize for, instead of inserting a sibling `Image`,
-    /// which it clips (see ``MenuBarLabel``).
     static let hidden: NSImage = {
         let image = NSImage(size: NSSize(width: 1, height: BrandCupMark.grid), flipped: true) { _ in true }
         image.isTemplate = true
@@ -38,9 +29,6 @@ enum MenuBarIcon {
             ctx.setStrokeColor(NSColor.black.cgColor)
 
             if !active {
-                // No steam in this state, so don't reserve its headroom: grow
-                // the cup a touch and center its ink in the canvas, keeping
-                // the glyph's optical size in line with neighboring icons.
                 let ink = BrandCupMark.cupInk
                 ctx.translateBy(x: side / 2, y: side / 2)
                 ctx.scaleBy(x: 1.1, y: 1.1)
@@ -50,7 +38,6 @@ enum MenuBarIcon {
             if active {
                 ctx.addPath(BrandCupMark.cup())
                 ctx.fillPath()
-                // Erase the crema stripe out of the fill (negative space).
                 ctx.setBlendMode(.destinationOut)
                 ctx.addPath(BrandCupMark.crema())
                 ctx.fillPath()
@@ -80,11 +67,8 @@ enum MenuBarIcon {
         return image
     }
 
-    /// The last sip's footprint in the mark's grid, shared with
-    /// ``BrandCupGlyph`` so the menu header shows the same pool.
     static let lowSipRect = CGRect(x: 2.8, y: 10.5, width: 10.2, height: 2.2)
 
-    /// The idle cup with a small yellow pool of coffee left at the bottom.
     private static func renderPausedLowBattery() -> NSImage {
         let side = BrandCupMark.grid
         let image = NSImage(size: NSSize(width: side, height: side), flipped: true) { _ in
@@ -92,13 +76,11 @@ enum MenuBarIcon {
             ctx.setLineCap(.round)
             ctx.setStrokeColor(NSColor.labelColor.cgColor)
 
-            // Recentered like the idle cup (no steam headroom to reserve).
             let ink = BrandCupMark.cupInk
             ctx.translateBy(x: side / 2, y: side / 2)
             ctx.scaleBy(x: 1.1, y: 1.1)
             ctx.translateBy(x: -ink.midX, y: -ink.midY)
 
-            // The last sip, clipped to the cup's rounded bottom.
             ctx.saveGState()
             ctx.addPath(BrandCupMark.cup())
             ctx.clip()
@@ -122,18 +104,8 @@ enum MenuBarIcon {
     }
 }
 
-/// The brand cup (body, handle, saucer, no steam) as a SwiftUI view for real
-/// windows, where color runs normally: brew accent when filled, secondary as
-/// an outline. `fill` is the pour level, 0 (empty outline) through 1 (the
-/// solid brewing cup); animating it raises the brew inside the outline and
-/// dissolves the outline near the brim, so starting a session reads as a
-/// pour rather than a swap. ``BrewingCupView`` drives that animation and
-/// draws its own steam above this.
 struct BrandCupGlyph: View {
     var fill: CGFloat
-    /// Show the battery pause's last sip: a small yellow pool at the bottom
-    /// of the (otherwise empty) cup, matching ``MenuBarIcon/pausedLowBattery``
-    /// so the menu header and the bar tell the same story.
     var lowSip = false
 
     init(filled: Bool, lowSip: Bool = false) {
@@ -154,7 +126,6 @@ struct BrandCupGlyph: View {
 
             ZStack {
                 if lowSip {
-                    // Under the outline, clipped to the cup's rounded bottom.
                     Path(BrandCupMark.cup()).applying(transform)
                         .fill(Color(nsColor: .systemYellow))
                         .mask {
@@ -162,8 +133,6 @@ struct BrandCupGlyph: View {
                                 .fill(.black)
                         }
                 }
-                // The empty cup, gone once the pour reaches the brim so the
-                // full state matches the solid brewing mark exactly.
                 Group {
                     Path(BrandCupMark.cupAndHandle()).applying(transform)
                         .stroke(Color.secondary, style: .init(lineWidth: BrandCupMark.outlineWidth * scale, lineCap: .round))
@@ -172,8 +141,6 @@ struct BrandCupGlyph: View {
                 }
                 .opacity(outlineOpacity)
 
-                // The brew, rising from the saucer up. The crema stripe and
-                // the handle are revealed by the same rising mask.
                 Group {
                     ZStack {
                         Path(BrandCupMark.cup()).applying(transform)
@@ -198,8 +165,6 @@ struct BrandCupGlyph: View {
         }
     }
 
-    /// The outline holds while the brew rises, then dissolves over the last
-    /// quarter of the pour.
     private var outlineOpacity: Double {
         fill <= 0.75 ? 1 : Double((1 - fill) / 0.25)
     }

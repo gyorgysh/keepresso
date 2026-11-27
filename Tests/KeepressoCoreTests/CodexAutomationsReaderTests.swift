@@ -16,7 +16,6 @@ private func reader(_ tomls: String...) -> CodexAutomationsReader {
     CodexAutomationsReader { tomls }
 }
 
-// The exact shape Codex writes, inline table and array included.
 private let weeklyReviewTOML = """
 version = 1
 id = "weekly-review"
@@ -40,7 +39,7 @@ updated_at = 1784889527597
     let a = all[0]
     #expect(a.source == .codex)
     #expect(a.key == "weekly-review")
-    #expect(a.name == "Weekly review")   // the real name, not derived from the id
+    #expect(a.name == "Weekly review")
     #expect(a.enabled)
     #expect(a.id == "codex:weekly-review")
     let cal = utc()
@@ -88,7 +87,6 @@ updated_at = 1784889527597
     #expect(fields["name"] == "Weekly review")
     #expect(fields["execution_environment"] == "local")
     #expect(fields["rrule"] == "RRULE:FREQ=WEEKLY;BYHOUR=16;BYMINUTE=0;BYDAY=FR")
-    // The inline table and array are skipped, not mis-parsed.
     #expect(fields["target"] == nil)
     #expect(fields["cwds"] == nil)
 }

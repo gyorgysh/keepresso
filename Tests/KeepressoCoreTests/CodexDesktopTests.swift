@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-// MARK: - Helpers
 
 private func processTree(
     _ rows: [(pid: Int32, ppid: Int32, comm: String)],
@@ -21,7 +20,6 @@ private func tempHooksDir() -> URL {
 private let desktopCommand =
     "/Applications/ChatGPT.app/Contents/Resources/codex -c features.code_mode_host=true app-server --analytics-default-enabled"
 
-// MARK: - Origin and host classification
 
 @Test func chatGPTCommClassifiesAsIDE() {
     #expect(AgentHooks.origin(forComm: "ChatGPT") == .ide)
@@ -58,7 +56,6 @@ private let desktopCommand =
     #expect(!PSAgentActivityMonitor.isCodexAppServerCommand("/opt/homebrew/bin/codex exec"))
 }
 
-// MARK: - ps scan: evidence-only host
 
 @Test func codexAppServerIsEvidenceOnlyWithZeroCPU() throws {
     typealias Sample = PSAgentActivityMonitor.ProcessSample
@@ -80,15 +77,12 @@ private let desktopCommand =
 }
 
 @Test func staleIdleOnAppServerDoesNotWorkFromSubtreeCPU() {
-    // Report case 2: once the idle verdict ages out, CPU on the shared host
-    // must not read as work. evidenceOnly + CPU 0 is that guarantee.
     var state = AgentActivityTrigger.State()
     state = AgentActivityTrigger.step(
         state, sample: 20, hookState: nil, evidenceOnly: true)
     #expect(!state.isWorking)
 }
 
-// MARK: - Hook write: skip app-server, ownerPid on ChatGPT
 
 @Test func desktopHookWritesOwnerPidNotAgentPid() throws {
     let dir = tempHooksDir()
@@ -147,11 +141,8 @@ private let desktopCommand =
     #expect(records[0].origin == .terminal)
 }
 
-// MARK: - Join: conversations stay separate
 
 @Test func twoDesktopConversationsBothSurviveAsHookOnly() throws {
-    // Report case 1, after the write-side change: a newer idle chat must not
-    // idle a different working chat on the same host.
     let host: Int32 = 60
     let working = AgentHooks.HookRecord(
         sessionId: "still-working", state: .working, origin: .ide,
@@ -181,8 +172,6 @@ private let desktopCommand =
 }
 
 @Test func leftoverAppServerAgentPidIsNormalizedToOwnerPid() throws {
-    // Records written before the fix named the app-server as agentPid.
-    // Reading them must not forever-trust that pid, and must not collapse.
     let dir = tempHooksDir()
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: dir) }
@@ -212,7 +201,6 @@ private let desktopCommand =
     #expect(join.unclaimed.contains { $0.sessionId == "still-working" && $0.state == .working })
 }
 
-// MARK: - Stale policy
 
 @Test func dedicatedCodexCLIKeepsForeverWhileAliveWorking() {
     let dir = tempHooksDir()
@@ -238,7 +226,6 @@ private let desktopCommand =
 }
 
 @Test func staleSharedHostWorkingPastTenMinutesIsDropped() {
-    // Report case 3: a missed Stop must not hold for the life of ChatGPT.app.
     let dir = tempHooksDir()
     defer { try? FileManager.default.removeItem(at: dir) }
     let now = Date()
@@ -311,7 +298,6 @@ private let desktopCommand =
     #expect(records.isEmpty)
 }
 
-// MARK: - Rollout corroboration
 
 @Test func codexRolloutWriteMatchesSessionIdInFilename() throws {
     let root = FileManager.default.temporaryDirectory
@@ -333,8 +319,7 @@ private let desktopCommand =
     try FileManager.default.setAttributes(
         [.modificationDate: Date(timeIntervalSince1970: 1_900_000_000)], ofItemAtPath: other.path)
 
-    // Pin "now" inside that calendar day so today/yesterday lookup hits `day`.
-    let now = Date(timeIntervalSince1970: 1_787_529_600) // 2026-08-24 00:00 UTC+0 approx
+    let now = Date(timeIntervalSince1970: 1_787_529_600)
     let found = PSAgentActivityMonitor.codexRolloutWrite(
         forSessionId: sessionId, home: root.path, now: now)
     #expect(found == written)

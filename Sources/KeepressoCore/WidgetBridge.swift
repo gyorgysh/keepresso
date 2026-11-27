@@ -91,7 +91,6 @@ public enum WidgetBridge {
     static let commandKey = "widget.desiredActive"
     static let commandStampKey = "widget.commandStamp"
 
-    // MARK: - App → widget (session state)
 
     public static func writeState(_ state: SharedSessionState, to defaults: UserDefaults) {
         guard let data = try? JSONEncoder().encode(state) else { return }
@@ -103,7 +102,6 @@ public enum WidgetBridge {
         return try? JSONDecoder().decode(SharedSessionState.self, from: data)
     }
 
-    // MARK: - Widget → app (toggle command)
 
     public static func writeCommand(
         _ command: WidgetCommand,

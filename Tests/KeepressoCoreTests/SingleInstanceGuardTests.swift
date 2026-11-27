@@ -32,8 +32,6 @@ private func instance(
 }
 
 @Test func ignoresSiblingsRunningFromADifferentBundlePath() {
-    // The relocation hand-off launches the /Applications copy from the DMG or
-    // Downloads: a different path, so it must not be mistaken for a duplicate.
     let current = instance(pid: 200, at: installed, launchedAfter: 60)
     let elsewhere = instance(pid: 100, at: derived, launchedAfter: 0)
     #expect(SingleInstanceGuard.peerToYieldTo(current: current, peers: [elsewhere]) == nil)
@@ -47,15 +45,12 @@ private func instance(
 }
 
 @Test func aSiblingListedAsItselfIsNotAPeer() {
-    // Defensive: the running-applications list can include the current process.
     let current = instance(pid: 100, launchedAfter: 0)
     let selfEntry = instance(pid: 100, launchedAfter: 0)
     #expect(SingleInstanceGuard.peerToYieldTo(current: current, peers: [selfEntry]) == nil)
 }
 
 @Test func aTiedLaunchDateNeverYields() {
-    // Equal timestamps mean neither can prove it is the newcomer: both stay up
-    // rather than risk both quitting.
     let current = instance(pid: 200, launchedAfter: 10)
     let tied = instance(pid: 100, launchedAfter: 10)
     #expect(SingleInstanceGuard.peerToYieldTo(current: current, peers: [tied]) == nil)

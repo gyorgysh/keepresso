@@ -1,15 +1,6 @@
 import Foundation
 
-/// Daemon-backed and routing implementations of the existing privileged seams
-/// (``SleepSettingControlling``, ``SleepWatchdogLaunching``,
-/// ``AWDLWatchdogLaunching``), so ``ClosedDisplayController``,
-/// ``ClosedDisplayAutoController`` and ``AWDLWatchdogController`` gain the
-/// password-free path without changing a line: when the helper daemon is
-/// installed the "spawn a root loop" step degrades to a prompt-free ping and
-/// the flag file becomes an XPC hold; when it isn't, everything routes to the
-/// original osascript backends.
 
-// MARK: - Daemon-backed seams
 
 /// ``SleepWatchdogLaunching`` over the helper daemon. The "flag" is the
 /// client's connection-scoped sleep hold; `startHelper` is a version-checked
@@ -40,10 +31,6 @@ public final class HelperDaemonSleepWatchdog: SleepWatchdogLaunching, @unchecked
 
     public func removeFlag() {
         let ok = helper.setSleepHold(false)
-        // Only drop the local bookkeeping when the daemon confirmed the
-        // release. A failed XPC call leaves the hold live on the other
-        // side; reporting "not holding" would stop retries and leave
-        // disablesleep on.
         guard ok else { return }
         lock.lock()
         holding = false
@@ -101,7 +88,6 @@ public final class HelperDaemonAWDLWatchdog: AWDLWatchdogLaunching, @unchecked S
     }
 }
 
-// MARK: - Routing
 
 /// Routes ``SleepWatchdogLaunching`` calls to the daemon backend while the
 /// helper is installed and to the osascript fallback otherwise. The choice is
@@ -132,10 +118,6 @@ public final class RoutedSleepWatchdog: SleepWatchdogLaunching, @unchecked Senda
     }
 
     public func removeFlag() {
-        // Release both sides: the daemon hold only if the daemon could have
-        // taken one (skipping the XPC round-trip otherwise), the flag file
-        // always (deleting a missing file is free and covers a mode switch
-        // mid-hold).
         if helperInstalled() || daemon.isFlagPresent() {
             daemon.removeFlag()
         }

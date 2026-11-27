@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# Ukrainian overlay for catalog_app.py: English source -> Ukrainian.
 APP = {
     "Add": "Додати",
     "Add:": "Додати:",
@@ -444,7 +443,6 @@ APP = {
 }
 
 
-# --- Agent hooks (Claude Code connection) ---
 APP.update({
     "Claude Code connected: sessions report working and waiting exactly.": "Claude Code підключено: сеанси точно повідомляють про роботу й очікування.",
     "Connect Claude Code for exact session tracking (adds hooks to its settings).": "Підключіть Claude Code для точного відстеження сеансів (додає хуки до його налаштувань).",
@@ -497,7 +495,6 @@ APP.update({
 })
 
 
-# --- Desktop "disable sleep" naming ---
 APP.update({
     'Disable system sleep': 'Вимкнути сон системи',
     'Disable sleep': 'Блокування сну',
@@ -512,7 +509,6 @@ APP.update({
 })
 
 
-# v1.15 thermal safety net, fan test, helper texts, glass slider.
 APP.update({
     "(max %@)": "(макс. %@)",
     "15 seconds": "15 секунд",
@@ -574,7 +570,6 @@ APP.update({
     "Appearance": "Оформлення",
     "If the Mac runs hot with the lid closed, the session pauses so it can sleep and cool down.": "Якщо Mac перегрівається із закритою кришкою, сеанс призупиняється, щоб він міг заснути й охолонути.",
     "The menu-bar dropdown's glass, from frosty to clear Liquid Glass.": "Скло випадного меню в рядку меню, від матового до чистого Liquid Glass.",
-    # 1.16.0
     'Cancel': 'Скасувати',
     'Off': 'Вимк.',
     'Time': 'Час',
@@ -623,7 +618,6 @@ APP.update({
     'When something happens in Keepresso, run a Shortcut, POST a webhook, or run a shell command. Useful for a push to your phone when an overnight agent finishes (ntfy, or a Shortcut that sends a notification). Hooks are suspended while you edit them, so a half-written command never runs. No administrator helper needed. User-authored shell commands are intentional in this unsandboxed app: only add commands you trust.': 'Коли в Keepresso щось відбувається, запускайте команду, вебхук або shell. Зручно для пуша на телефон після нічного агента (ntfy чи команда зі сповіщенням). Хуки призупинені під час редагування. Помічник не потрібен. Користувацький shell навмисний у незапісочниці: додавайте лише довірені команди.',
     'These cover the times a session ends without you: a timer expiring, or trigger conditions dropping. Stopping it yourself stays silent, since you already know. The warning is a heads-up a few minutes before a timed session runs out, so you can extend it before the Mac drops off. Actions that put the Mac to sleep live under Automation.': 'Коли сеанс завершується без вас: таймер або тригери. Ручна зупинка мовчить. Попередження за кілька хвилин до кінця таймера. Дії сну Mac розташовані в Автоматизації.',
 
-    # 1.16.0 fill (17)
     '/bin/sh -c …': '/bin/sh -c …',
     'Add Hook': 'Додати хук',
     'Add Hook…': 'Додати хук…',
@@ -642,7 +636,6 @@ APP.update({
     'Webhook': 'Вебхук',
     'https://…': 'https://…',
 
-    # 1.17 automation leases
     'Held awake by an automation lease': 'Не спить через оренду автоматизації',
     'Held awake by %d automation leases': 'Не спить через %d оренд автоматизації',
     'and %d more': 'і ще %d',
@@ -654,8 +647,6 @@ APP.update({
 
 })
 
-# Teach-your-agent actions, end-action wording, and gaming comfort,
-# new in the 1.17 cycle (second batch).
 APP.update({
     'Copy Agent Instructions': 'Копіювати інструкції для агента',
     'Let AI agents and scripts keep the Mac awake while work is running. It cannot wake a sleeping Mac.': 'Дозволяє ШІ-агентам і сценаріям не давати Mac заснути під час роботи. Не може розбудити Mac, який уже спить.',
@@ -704,7 +695,6 @@ APP.update({
         'Враховується, поки Steam активно завантажує або оновлює гру в будь-якій зі своїх бібліотек, і дозволяє Mac заснути, щойно завантаження завершиться або буде призупинено. Зчитує власні дані обліку Steam, дозвіл не потрібен.',
 })
 
-# 1.18 strings
 APP.update({
     "%@ · next %@": "%@ · наступний %@",
     "%d automation leases are waiting (safety pause)": "%d оренд автоматизації очікують (пауза безпеки)",
@@ -764,18 +754,15 @@ APP.update({
     "just now": "щойно",
 })
 
-# 1.23 strings
 APP.update({
     "If the lid shuts": "Якщо кришка закриється",
     "Normally a MacBook sleeps the moment you shut the lid unless a display is attached. This keeps it running with the lid shut and nothing plugged in, on power or battery. What the screen itself does when the lid closes is your choice below (“If the lid shuts”): turn it off, keep it powered at zero brightness so a remote session stays live, or leave it alone. It works by flipping a system setting (pmset disablesleep), so it stays in effect until you turn it off: closed and on battery, the Mac can still drain over time, so don't leave it on in a bag. “Only while brewing” ties it to the session instead, on when a keep-awake session starts, off when it ends or Keepresso quits (even after a crash). Both need administrator rights: silent with the administrator helper installed (see the top of this tab), otherwise macOS asks for your password, once per app run for “Only while brewing”.": "Зазвичай MacBook засинає одразу після закриття кришки, якщо не підключено дисплей. Ця функція дозволяє йому продовжувати працювати із закритою кришкою і без підключених пристроїв, від мережі чи від акумулятора. Що саме робить сам дисплей, коли кришка закривається, вирішуєте ви нижче («Якщо кришка закриється»): вимкнути його, тримати увімкненим на яскравості 0%, щоб віддалений сеанс залишався активним, або не чіпати його. Працює завдяки перемиканню системного параметра (pmset disablesleep), який залишається чинним, доки ви його не вимкнете: із закритою кришкою та від акумулятора Mac усе ж може з часом розрядитися, тому не залишайте це ввімкненим у сумці. «Лише під час заварювання» натомість прив'язує це до сеансу: вмикається, коли починається сеанс підтримки активності, вимикається, коли він завершується або Keepresso закривається (навіть після збою). Обидва варіанти потребують прав адміністратора: без запитів, якщо встановлено помічник із правами адміністратора (див. вгорі цієї вкладки), інакше macOS запитує ваш пароль, один раз за запуск застосунку для «Лише під час заварювання».",
 })
 
-# Presence: "Only while brewing" off footer
 APP.update({
     "Also runs between sessions, which can keep the Mac from sleeping.": "Працює і між сеансами, через що Mac може не засинати.",
 })
 
-# Closed-lid speaker mute
 APP.update({
     "Mute built-in speakers while the lid is closed": "Вимикати звук вбудованих динаміків із закритою кришкою",
     "Mutes the built-in speakers with the lid closed and closed-display mode active. Headphones and other outputs keep playing. Unmutes when the lid opens or the mode ends, unless you had muted them yourself.": "Вимикає звук вбудованих динаміків із закритою кришкою та активним режимом закритого дисплея. Навушники й інші пристрої виведення звуку продовжують відтворювати звук. Вмикає звук після відкриття кришки або завершення режиму, якщо ви не вимкнули його самі.",

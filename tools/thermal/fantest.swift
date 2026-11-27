@@ -1,16 +1,6 @@
 // Hardware validation driver for the SMC fan path (see the thermal milestone's
 // validation matrix). Reads always work; the forced-write test needs root,
 // since the SMC enforces that per key.
-//
-// Build and run from the repo root:
-//
-//   swiftc -parse-as-library -o /tmp/fantest \
-//     Sources/KeepressoCore/SMC.swift Sources/KeepressoCore/Thermal.swift \
-//     Sources/KeepressoCore/HelperEngine.swift Sources/KeepressoCore/Localization.swift \
-//     tools/thermal/fantest.swift
-//   /tmp/fantest              # read-only: fans, sensors
-//   sudo /tmp/fantest boost   # forced-fan test: boost to 70% for 15 s, restore
-//
 // The boost test reports exactly what the firmware answered (including the
 // M3+ 0x82 rejection and whether the Ftst unlock cleared it), re-asserts once
 // a second the way the helper daemon does, and always restores auto control,
@@ -46,7 +36,6 @@ struct FanTest {
         }
 
         let fans = SMCFanController()
-        // Restore on Ctrl-C too; never leave fans pinned.
         signal(SIGINT) { _ in
             _ = SMCFanController().restoreAuto()
             print("\nrestored auto on interrupt")
@@ -65,7 +54,7 @@ struct FanTest {
         }
         for second in 1...15 {
             Thread.sleep(forTimeInterval: 1)
-            _ = fans.setForced(percent: 70) // the daemon's re-assert tick
+            _ = fans.setForced(percent: 70)
             if second % 5 == 0 {
                 let rpm = info.currentRPM().map { String(format: "%.0f", $0) } ?? "?"
                 print("t+\(second)s F0Ac: \(rpm) RPM")

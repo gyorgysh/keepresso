@@ -2,10 +2,6 @@ import SwiftUI
 import AppKit
 import KeepressoCore
 
-/// A Preferences row that records a global keyboard shortcut. Clicking "Record"
-/// captures the next key combination (via a *local* event monitor, which needs
-/// no permission), requiring at least one modifier so the shortcut is safe to
-/// register system-wide. Escape cancels; Delete/Backspace while recording clears.
 struct ShortcutRecorder: View {
     @Binding var shortcut: HotKeyShortcut?
     @State private var recording = false
@@ -42,12 +38,9 @@ struct ShortcutRecorder: View {
     }
 
     private func handle(_ event: NSEvent) {
-        // Escape cancels without changing anything.
         if event.keyCode == UInt16(kVK_Escape_) { stop(); return }
 
         let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
-        // A global hotkey needs at least one modifier; ignore a bare key so the
-        // user can keep trying rather than recording something unusable.
         guard !modifiers.isEmpty else { return }
 
         shortcut = HotKeyShortcut(
@@ -58,13 +51,10 @@ struct ShortcutRecorder: View {
     }
 }
 
-/// The key Keep me active's specified-key method taps, plus any modifiers
-/// sent with it on the same event.
 struct PresenceKey: Equatable {
     var keyCode: Int
     var modifiers: ActivityKeyModifiers
 
-    /// A menu-style label like "⌃F18".
     var displayString: String {
         modifiers.symbols + (HotKeyShortcut.keyName(for: keyCode) ?? L("Key %d", keyCode))
     }
@@ -83,8 +73,6 @@ struct PresenceKeyRecorder: View {
     @Binding var key: PresenceKey?
     @State private var recording = false
     @State private var monitor: Any?
-    /// The modifier key pressed most recently while recording, recorded on
-    /// its own if every modifier is released before another key goes down.
     @State private var pendingModifier: Int?
 
     var body: some View {
@@ -144,21 +132,17 @@ struct PresenceKeyRecorder: View {
         }
         let held = event.modifierFlags.intersection([.command, .option, .control, .shift])
         if !held.isEmpty {
-            // A modifier went down (or one of several came up): wait to see
-            // whether a key follows.
             if pendingModifier == nil || Self.isPress(event) {
                 pendingModifier = Int(event.keyCode)
             }
             return
         }
-        // Every modifier is up with no key in between: record the tap alone.
         if let code = pendingModifier {
             key = PresenceKey(keyCode: code, modifiers: [])
             stop()
         }
     }
 
-    /// Whether a flags-changed event is its own modifier going down.
     private static func isPress(_ event: NSEvent) -> Bool {
         guard let own = ActivityKeyModifiers.modifier(forKeyCode: Int(event.keyCode)) else { return false }
         return modifiers(of: event.modifierFlags).contains(own)

@@ -2,14 +2,12 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-/// A fixed calendar so the tests don't depend on the machine's locale/zone.
 private let utc: Calendar = {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(identifier: "UTC")!
     return calendar
 }()
 
-/// 2026-07-03 is a Friday; offset days from there for other weekdays.
 private func date(day: Int, hour: Int, minute: Int = 0) -> Date {
     utc.date(from: DateComponents(year: 2026, month: 7, day: day, hour: hour, minute: minute))!
 }
@@ -20,7 +18,6 @@ private func evaluate(_ rule: TimeWindowRule, day: Int, hour: Int, minute: Int =
     TimeWindowTrigger.evaluate(rule, at: date(day: day, hour: hour, minute: minute), calendar: utc)
 }
 
-// MARK: - Plain (non-wrapping) windows
 
 @Test func insideWindowFires() {
     let nineToSix = TimeWindowRule(startMinutes: 9 * 60, endMinutes: 18 * 60)
@@ -40,7 +37,6 @@ private func evaluate(_ rule: TimeWindowRule, day: Int, hour: Int, minute: Int =
     #expect(evaluate(nineToSix, day: friday, hour: 17, minute: 59))
 }
 
-// MARK: - Weekday filtering
 
 @Test func emptyWeekdaysMeansEveryDay() {
     let rule = TimeWindowRule(startMinutes: 0, endMinutes: 23 * 60)
@@ -49,26 +45,22 @@ private func evaluate(_ rule: TimeWindowRule, day: Int, hour: Int, minute: Int =
 }
 
 @Test func weekdayFilterExcludesOtherDays() {
-    // Weekdays in Calendar numbering: Mon=2 … Fri=6.
     let workHours = TimeWindowRule(startMinutes: 9 * 60, endMinutes: 18 * 60, weekdays: [2, 3, 4, 5, 6])
     #expect(evaluate(workHours, day: friday, hour: 12))
     #expect(!evaluate(workHours, day: saturday, hour: 12))
     #expect(!evaluate(workHours, day: sunday, hour: 12))
 }
 
-// MARK: - Windows wrapping past midnight
 
 @Test func wrappedWindowCoversBothSidesOfMidnight() {
     let overnight = TimeWindowRule(startMinutes: 22 * 60, endMinutes: 6 * 60)
     #expect(evaluate(overnight, day: friday, hour: 23))
     #expect(evaluate(overnight, day: saturday, hour: 3))
     #expect(!evaluate(overnight, day: saturday, hour: 12))
-    #expect(!evaluate(overnight, day: saturday, hour: 6, minute: 0)) // end exclusive
+    #expect(!evaluate(overnight, day: saturday, hour: 6, minute: 0))
 }
 
 @Test func wrappedWindowMorningBelongsToTheStartDay() {
-    // A Friday-only overnight window still covers Saturday 3:00 (it started
-    // Friday), but not Sunday 3:00 (Saturday isn't a start day).
     let fridayNight = TimeWindowRule(startMinutes: 22 * 60, endMinutes: 6 * 60, weekdays: [6])
     #expect(evaluate(fridayNight, day: friday, hour: 23))
     #expect(evaluate(fridayNight, day: saturday, hour: 3))
@@ -77,7 +69,6 @@ private func evaluate(_ rule: TimeWindowRule, day: Int, hour: Int, minute: Int =
 }
 
 @Test func sundayMorningWrapsBackToSaturday() {
-    // Yesterday-of-Sunday must compute as Saturday (7), not weekday 0.
     let saturdayNight = TimeWindowRule(startMinutes: 22 * 60, endMinutes: 6 * 60, weekdays: [7])
     #expect(evaluate(saturdayNight, day: sunday, hour: 2))
 }
@@ -86,10 +77,9 @@ private func evaluate(_ rule: TimeWindowRule, day: Int, hour: Int, minute: Int =
     let allDay = TimeWindowRule(startMinutes: 9 * 60, endMinutes: 9 * 60, weekdays: [6])
     #expect(evaluate(allDay, day: friday, hour: 9))
     #expect(evaluate(allDay, day: friday, hour: 23, minute: 59))
-    #expect(evaluate(allDay, day: saturday, hour: 8, minute: 59)) // morning tail of Friday's window
+    #expect(evaluate(allDay, day: saturday, hour: 8, minute: 59))
 }
 
-// MARK: - Trigger plumbing and labels
 
 @MainActor
 @Test func triggerReadsTheInjectedClock() {

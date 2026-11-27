@@ -22,7 +22,6 @@ final class UserNotificationReminder: NSObject, ReminderNotifying, UNUserNotific
         center.delegate = self
     }
 
-    /// Present notifications even while Keepresso is the active app.
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
@@ -47,8 +46,6 @@ final class UserNotificationReminder: NSObject, ReminderNotifying, UNUserNotific
         completionHandler()
     }
 
-    /// Ask for permission to post alerts. No-op after the first decision; safe
-    /// to call whenever the user enables reminders.
     func requestAuthorization() {
         center.requestAuthorization(options: [.alert, .sound]) { granted, error in
             if let error {

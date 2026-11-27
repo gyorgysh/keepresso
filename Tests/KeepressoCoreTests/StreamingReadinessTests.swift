@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-// MARK: - Wired-port parsing
 
 private let realHardwarePorts = """
 Hardware Port: Ethernet Adapter (en4)
@@ -40,8 +39,6 @@ Ethernet Address: aa:bb:cc:dd:ee:00
 
 @Test func wiredPortParsingKeepsEthernetAndLANOnly() {
     let devices = ReadinessCheck.wiredPortDevices(fromHardwarePorts: realHardwarePorts)
-    // Ethernet adapters and LAN dongles are wired candidates; Wi-Fi, bare
-    // Thunderbolt ports, bridges, tethered phones, and PAN are not.
     #expect(devices == ["en4", "en7", "en8"])
 }
 
@@ -59,11 +56,9 @@ private func ifconfigBlock(_ device: String, status: String?) -> String {
         + ifconfigBlock("en7", status: "active")
     #expect(ReadinessCheck.isActive(device: "en7", inIfconfig: output))
     #expect(!ReadinessCheck.isActive(device: "en4", inIfconfig: output))
-    // en0's active status must not bleed into a device without one.
     #expect(!ReadinessCheck.isActive(device: "en5", inIfconfig: output))
 }
 
-// MARK: - Ethernet check
 
 @Test func connectedEthernetIsOK() {
     let snapshot = StreamingSnapshot(
@@ -87,7 +82,6 @@ private func ifconfigBlock(_ device: String, status: String?) -> String {
     #expect(ReadinessCheck.ethernet(StreamingSnapshot()).status == .unknown)
 }
 
-// MARK: - Wi-Fi channel check
 
 @Test func band24IsAWarningPointingAtChannel6() {
     let check = ReadinessCheck.wifiChannel(StreamingSnapshot(
@@ -105,7 +99,6 @@ private func ifconfigBlock(_ device: String, status: String?) -> String {
         wifiChannel: 44, wifiBand: .ghz5, wifiWidthMHz: 80, wifiCountryCode: "DE"))
     #expect(eu.status == .ok)
 
-    // Aligned channel but narrow width: still ok, nudged toward 80 MHz.
     let narrow = ReadinessCheck.wifiChannel(StreamingSnapshot(
         wifiChannel: 149, wifiBand: .ghz5, wifiWidthMHz: 40, wifiCountryCode: "US"))
     #expect(narrow.status == .ok)
@@ -118,8 +111,6 @@ private func ifconfigBlock(_ device: String, status: String?) -> String {
     #expect(us.status == .tip)
     #expect(us.remediation?.hint.contains("channel 149") == true)
 
-    // Country unreadable (Location-gated): both regions named, and the
-    // aligned-channel fast path must not fire on either.
     let unknown = ReadinessCheck.wifiChannel(StreamingSnapshot(
         wifiChannel: 44, wifiBand: .ghz5, wifiWidthMHz: 80))
     #expect(unknown.status == .tip)
@@ -128,8 +119,6 @@ private func ifconfigBlock(_ device: String, status: String?) -> String {
 }
 
 @Test func band24NamesTheFiveGHzTargetChannel() {
-    // The 2.4 GHz warning should also point at the region's 5 GHz channel, so a
-    // user moving off 2.4 GHz knows where to land.
     let eu = ReadinessCheck.wifiChannel(StreamingSnapshot(
         wifiChannel: 6, wifiBand: .ghz2, wifiWidthMHz: 20, wifiCountryCode: "FR"))
     #expect(eu.remediation?.hint.contains("channel 44") == true)
@@ -139,7 +128,6 @@ private func ifconfigBlock(_ device: String, status: String?) -> String {
 }
 
 @Test func nonEUCountryUsesChannel149() {
-    // Canada allows UNII-3, so 149 (not 44) is the aligned channel.
     let ca = ReadinessCheck.wifiChannel(StreamingSnapshot(
         wifiChannel: 149, wifiBand: .ghz5, wifiWidthMHz: 80, wifiCountryCode: "CA"))
     #expect(ca.status == .ok)
@@ -151,11 +139,8 @@ private func ifconfigBlock(_ device: String, status: String?) -> String {
     #expect(ReadinessCheck.wifiChannel(StreamingSnapshot()).status == .unknown)
 }
 
-// MARK: - Bluetooth check
 
 @Test func bluetoothStateIsParsedFromSystemProfilerJSON() {
-    // system_profiler is deliberately the source (IOBluetooth/CoreBluetooth
-    // would throw the Bluetooth privacy prompt just for the power state).
     let on = """
     {"SPBluetoothDataType": [{"controller_properties": {"controller_state": "attrib_on"}}]}
     """
@@ -175,7 +160,6 @@ private func ifconfigBlock(_ device: String, status: String?) -> String {
     #expect(ReadinessCheck.bluetoothRadio(StreamingSnapshot()).status == .unknown)
 }
 
-// MARK: - Controller
 
 private final class FakeStreamingProbe: StreamingProbing, @unchecked Sendable {
     var result: StreamingSnapshot
@@ -187,7 +171,7 @@ private final class FakeStreamingProbe: StreamingProbing, @unchecked Sendable {
 @Test func streamingControllerAppendsTheStandingNotes() async {
     let controller = StreamingReadinessController(
         probe: FakeStreamingProbe(result: StreamingSnapshot(bluetoothOn: false)))
-    #expect(controller.checks.isEmpty) // blank until the first refresh
+    #expect(controller.checks.isEmpty)
 
     await controller.refresh()
     let ids = controller.checks.map(\.id)
@@ -196,7 +180,6 @@ private final class FakeStreamingProbe: StreamingProbing, @unchecked Sendable {
         "stream-game-mode", "stream-browser-gaming",
         "stream-location-note", "stream-read-more",
     ])
-    // The read-more note links the blog post the screen is built around.
     let readMore = controller.checks.last!
     #expect(readMore.remediation?.links.first?.url.absoluteString
         == "https://gyorgy.sh/blog/macos-awdl-network-jitter")

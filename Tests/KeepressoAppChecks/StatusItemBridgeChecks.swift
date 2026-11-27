@@ -1,6 +1,3 @@
-// Run with scripts/check-status-item-bridge.sh on macOS 27 or later.
-// Minimal collaborators let these checks compile the actual app-side bridge
-// without starting Keepresso, Sparkle, or the privileged helper.
 import AppKit
 @MainActor protocol Updating { var canCheckForUpdates: Bool { get }; var updateAvailable: Bool { get }; func checkForUpdates() }
 struct ProbeUpdater: Updating { let canCheckForUpdates = true; let updateAvailable = false; func checkForUpdates() {} }
@@ -39,13 +36,13 @@ final class PanelSpy: NSWindow {
             precondition(session.cancellations == 1 && panel.closes == 0)
             bridge.panelWindow = nil
             bridge.dismissPanel(from: item)
-            precondition(session.cancellations == 2) // A detached view still ends tracking.
+            precondition(session.cancellations == 2)
             item.session = nil
             bridge.panelWindow = panel
             bridge.dismissPanel(from: item)
             precondition(panel.closes == 1)
             bridge.dismissPanel(from: item)
-            precondition(panel.closes == 1) // Already hidden: no duplicate close.
+            precondition(panel.closes == 1)
             print("PASS: session cancellation, detached panel, legacy fallback, hidden-panel idempotence")
         } else {
             print("SKIP: expanded-interface checks require macOS 27")

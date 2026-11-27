@@ -31,14 +31,9 @@ public struct VirtualDisplayConfig: Codable, Equatable, Sendable {
 /// **private** CoreGraphics API (`CGVirtualDisplay`), so it lives in the app
 /// behind this protocol; ``KeepressoCore`` stays clean and tests use a fake.
 public protocol VirtualDisplaying: AnyObject {
-    /// Whether the underlying API exists on this macOS (it's private and may
-    /// vanish across releases).
     var isSupported: Bool { get }
-    /// Whether a virtual display is currently held.
     var isActive: Bool { get }
-    /// Create the virtual display. Returns false if unsupported or it failed.
     func start(_ config: VirtualDisplayConfig) -> Bool
-    /// Tear down the virtual display.
     func stop()
 }
 

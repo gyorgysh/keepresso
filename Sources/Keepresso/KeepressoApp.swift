@@ -1,8 +1,6 @@
 import SwiftUI
 import KeepressoCore
 
-/// Keepresso is a menu-bar agent (`LSUIElement`): no Dock icon, no main window.
-/// The entire UI lives in a `MenuBarExtra`.
 @main
 struct KeepressoApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -22,8 +20,6 @@ struct KeepressoApp: App {
         // command) by presenting the first declared window, popping the
         // Setup checklist over whatever the user is doing.
 
-        // The headless-readiness Setup checklist, opened from the menu via
-        // `openWindow(id: "setup")`.
         Window("Keepresso Setup", id: Self.setupWindowID) {
             SetupView(model: appDelegate.model)
         }
@@ -66,16 +62,12 @@ struct KeepressoApp: App {
         .windowResizability(.contentSize)
         .handlesExternalEvents(matching: [])
 
-        // Opened automatically (from `MenuBarLabelView`) when the helper
-        // daemon's self-heal needs the user: approve once more, or reinstall.
         Window("Keepresso Helper", id: Self.helperWindowID) {
             HelperAttentionView(model: appDelegate.model)
         }
         .windowResizability(.contentSize)
         .handlesExternalEvents(matching: [])
 
-        // Shown once on first launch (see `MenuBarLabelView`) and reopenable from
-        // the menu via `openWindow(id: "welcome")`.
         Window("Welcome to Keepresso", id: Self.welcomeWindowID) {
             WelcomeView(model: appDelegate.model)
         }
@@ -83,7 +75,6 @@ struct KeepressoApp: App {
         .handlesExternalEvents(matching: [])
     }
 
-    /// Scene ids shared with the menu's window-opening buttons.
     static let setupWindowID = "setup"
     static let streamingWindowID = "streaming"
     static let keyboardCleanerWindowID = "keyboard-cleaner"
@@ -95,14 +86,6 @@ struct KeepressoApp: App {
     static let helperWindowID = "helper"
 }
 
-/// The menu-bar icon, plus a one-shot trigger that opens the welcome window on
-/// the very first launch. The label view is alive from launch (the icon shows
-/// immediately), unlike the dropdown content, which is built lazily on first
-/// click, so a launch-time open belongs here. Guarded by ``AppModel/hasOnboarded``,
-/// which only the welcome's Get Started button flips: a launch that never
-/// shows the window (a failed open, or the relocation hand-off below), or one
-/// where the user closes it without confirming (a language-switch relaunch),
-/// doesn't burn the first run.
 private struct MenuBarLabelView: View {
     let updater: any Updating
     @Bindable var model: AppModel
@@ -126,18 +109,10 @@ private struct MenuBarLabelView: View {
             // alive view, so it lends its environment to the bridge.
             bridge.openWindow = { openWindow(id: $0) }
             guard !model.hasOnboarded else { return }
-            // First launch from a DMG: this instance is about to copy
-            // itself to /Applications and quit. Flashing the welcome here
-            // would persist hasOnboarded into the shared defaults and the
-            // relaunched copy, the one fresh installs actually keep,
-            // would never show it.
             guard !AppRelocator.isRelocating else { return }
             NSApp.activate(ignoringOtherApps: true)
             openWindow(id: KeepressoApp.welcomeWindowID)
         }
-        // The helper self-heal got stuck on a step only the user can do:
-        // walk them through it. This view is the app's one always-alive
-        // view, so the edge is caught no matter what else is open.
         .onChange(of: model.helperAttention) { _, attention in
             guard attention != nil else { return }
             NSApp.activate(ignoringOtherApps: true)
@@ -146,15 +121,10 @@ private struct MenuBarLabelView: View {
     }
 }
 
-/// Owns the long-lived ``AppModel`` (settings + session) and the per-second
-/// ticker so they outlive any transient menu UI.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model: AppModel
-    /// Sparkle-backed auto-updater, behind the ``Updating`` seam. Started here so
-    /// it schedules background checks for the app's whole lifetime.
     let updater: any Updating = SparkleUpdater()
-    /// Right-click context menu on the menu-bar icon (see ``StatusItemBridge``).
     private(set) lazy var statusItemBridge = StatusItemBridge(updater: updater)
 
     override init() {
@@ -172,8 +142,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         StaleBundleCleaner.sweepAtStartup(afterUpdate: updated)
         model = AppModel(appUpdatedSinceLastRun: updated)
         super.init()
-        // After AppModel: its notifier is the notification-center delegate,
-        // without which a banner posted mid-launch is silently dropped.
         StaleBundleCleaner.notifyIfSweepNeedsUser()
     }
     private lazy var ticker = SessionTicker(
@@ -197,11 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.model.pulseMenuPanelIfVisible()
         }
     )
-    /// Listens for the Control Center toggle's Darwin doorbell.
     private var widgetObserver: WidgetCommandObserver?
-    /// Set when this launch is a duplicate handing over to an already running
-    /// copy (see ``yieldIfDuplicateInstance()``). The terminate that follows
-    /// must not run the usual quit chores, they belong to the copy staying up.
     private var yieldingToPeer = false
 
     /// macOS normally refuses to launch a second instance of a running bundle,
@@ -232,63 +196,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // A duplicate instance is on its way out (see applicationWillFinishLaunching);
-        // don't start any of the running machinery it would have to tear down.
         if yieldingToPeer { return }
-        // A previous run may have crashed while the keyboard was remapped.
-        // Restore before relocate or anything else that would want keys.
-        // If restore could not land, put the overlay back so Unlock is
-        // reachable instead of leaving special keys dead with no chrome.
         model.keyboardLock.restoreIfNeeded()
         if model.keyboardLock.isLocked {
             model.suspendHotKeyForKeyboardLock()
             model.showKeyboardLockOverlay()
         }
-        // If launched from the DMG / Downloads, move into /Applications and
-        // relaunch from there (this instance quits if it relocates).
         AppRelocator.relocateIfNeeded()
-        // Right-click on the menu-bar icon shows the app-entries context menu.
         statusItemBridge.install()
-        // Give the Shortcuts intents their way to the live model.
         IntentContext.model = model
-        // Activity history / awake stats: after the menu bar chrome is up, not
-        // on AppModel.init's critical path.
         model.hydrateDecisionLog()
-        // Read the closed-display (pmset disablesleep) state now: it persists
-        // across reboots, and the ticker's lid handling stays inert until the
-        // controller knows the mode is on, not just once a menu opens.
         model.refreshClosedDisplay(force: true)
-        // Any AWDL watchdog flag surviving from a previous process is stale
-        // (the loop it kept alive has already exited via its pid check).
         Task { await model.awdl.cleanupAtLaunch() }
-        // Same for the closed-display sleep watchdog's flag.
         Task { await model.closedDisplayAuto.cleanupAtLaunch() }
         // The helper daemon can be "enabled" yet unlaunchable (launchd's
         // record goes stale after an app update plus a reboot); check it now,
         // and repair the registration, before the first engage fails on it.
         model.verifyHelper()
-        // Check the agent hook installs now rather than only when Preferences
-        // opens, so an update's new or changed hook events reach tools the
-        // user already connected. Repairs only; never connects a new tool.
-        // Only the installed copy does this at launch (see
-        // runsFromApplicationsFolder).
         if AppModel.runsFromApplicationsFolder {
             model.refreshAgentHookStatuses()
         }
         ticker.start()
-        // Register the global keep-awake toggle shortcut, if the user set one.
         model.registerHotKey()
-        // Start a session right away if "Start keep-awake on launch" is on.
         model.startOnLaunchIfNeeded()
-        // Re-sync wake schedules with the helper (settings survive; the system
-        // schedule is the source of truth for the machine). Discover local
-        // automations first so a wake persisted from a previous run is re-armed
-        // in the same apply rather than dropped before the first discovery tick.
         model.primeAutomationDiscovery()
         model.applyWakeScheduleToSystem()
         model.refreshSystemWakeState()
-        // Wake-and-brew: a system wake near a Keepresso schedule can start a
-        // session or apply a preset.
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil,
@@ -298,28 +231,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // compiler rather than letting the call warn as implicitly async.
             MainActor.assumeIsolated { model?.handleSystemWake() }
         }
-        // The Control Center toggle: consume a command that may have launched
-        // us, then keep listening while running.
         widgetObserver = WidgetCommandObserver { [weak model] in model?.applyPendingWidgetCommand() }
         model.applyPendingWidgetCommand()
         model.syncWidgetState()
     }
 
-    /// Set once the user has answered the quit question, so the termination
-    /// they triggered on the way out goes straight through.
     private var quitConfirmed = false
-    /// The question is on screen. A second Cmd-Q re-focuses it instead of
-    /// stacking another window or quitting behind it.
     private var quitModal: QuitSleepModal?
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        // A duplicate handing over quits silently, a relocate handover quits
-        // into a copy that owns the state, and an answered question quits.
         guard !yieldingToPeer, !AppRelocator.isRelocating, !quitConfirmed else {
             return .terminateNow
         }
-        // Logging out, restarting or shutting down: never hold the system up
-        // with a dialog it cannot see the point of.
         if let reason = NSAppleEventManager.shared().currentAppleEvent?
             .attributeDescriptor(forKeyword: AEKeyword(kAEQuitReason)),
            reason.enumCodeValue != 0 {
@@ -363,10 +286,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     NSApp.terminate(nil)
                 case .turnOffAndQuit:
                     Task { @MainActor in
-                        // Only quit once the override is confirmed off. A
-                        // dismissed password prompt or a failed write leaves
-                        // the app running, rather than quitting and stranding
-                        // the setting the user just asked to clear.
                         guard await self.model.clearSleepOverrideForQuit() else { return }
                         self.quitConfirmed = true
                         NSApp.terminate(nil)
@@ -384,17 +303,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // screen dark. A no-op when nothing was dimmed, so it's safe even on the
         // yield-to-peer path below (nothing is dimmed that early).
         model.session.restoreDisplayBrightness()
-        // Same for the lid-shut zero-brightness policy, which holds its saved
-        // level in the watchdog rather than the session. A no-op unless the
-        // lid is shut under that policy right now.
         model.closedDisplay.restoreDisplayBrightness()
-        // Unmute speakers muted for a closed lid. A no-op unless held; if it
-        // can't land now, the marker makes the next launch retry. A relocate
-        // handover leaves it to the copy that stays.
         if !AppRelocator.isRelocating { model.speakerMute.release() }
-        // A duplicate handing over to the copy that stays up must not write
-        // "stopped" into the shared widget state: that copy owns it and may be
-        // keeping the Mac awake right now.
         if yieldingToPeer { return }
         // Unlock before we go so a quit mid-wipe does not leave keys dead.
         // Deliberately the synchronous prompt-free restore: termination cannot

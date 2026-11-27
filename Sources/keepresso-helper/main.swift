@@ -2,22 +2,6 @@ import Foundation
 import KeepressoCore
 import SystemConfiguration
 
-/// The Keepresso privileged helper daemon.
-///
-/// A tiny root LaunchDaemon registered from the app via `SMAppService`
-/// (approved once by the user, with administrator credentials, in System
-/// Settings). It exposes exactly two reversible switches over XPC, sleep
-/// (`pmset disablesleep`) and AWDL (`ifconfig awdl0 down`), so the app never
-/// needs another password prompt for them. All behavior lives in
-/// ``HelperEngine`` (KeepressoCore, unit-tested); this file is the XPC and
-/// launchd wiring around it.
-///
-/// launchd launches it on demand (`MachServices`) and at boot (`RunAtLoad`,
-/// so leftover state from a crash or power loss is restored); it exits again
-/// once idle.
-
-/// One XPC client connection. Holds are attributed to `clientID`, and the
-/// connection's death releases them (see ``HelperEngine/clientDisconnected(_:)``).
 final class HelperConnection: NSObject, HelperXPCProtocol {
     private let engine: HelperEngine
     private let clientID: Int
@@ -106,11 +90,6 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
     }
 
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection newConnection: NSXPCConnection) -> Bool {
-        // Only the Keepresso app may connect: Apple-issued signature, the
-        // app's identifier, and the same Team ID as this helper (read from our
-        // own signature at runtime, never hardcoded). Then the console user's
-        // uid: a second local account running the same signed app must not
-        // drive machine-wide root verbs.
         if let requirement = HelperService.anchoredPeerRequirement(
             identifier: HelperService.appCodeSignIdentifier
         ) {
@@ -148,8 +127,6 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
             clientID: clientID,
             onTerminateRequest: { [weak self] in self?.requestTerminate() }
         )
-        // Invalidation is the connection's definitive end (interruption never
-        // fires for a peer process exit on the daemon side of a mach service).
         newConnection.invalidationHandler = { [weak self, engine] in
             engine.clientDisconnected(clientID)
             self?.connectionEnded()
@@ -158,7 +135,6 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendab
         return true
     }
 
-    /// Whether the daemon may exit right now: no clients, no holds.
     var isIdle: Bool {
         lock.lock()
         let clients = liveConnections
@@ -213,16 +189,11 @@ let engine = HelperEngine(
     sleepDisabledReader: HelperEngine.readSleepDisabled,
     lowPower: PMSetBatteryLowPowerControl()
 )
-// Settle anything a previous life left behind (crash or reboot mid-hold)
-// before accepting new work.
 engine.restoreAtLaunch()
 
-// Keep the bundled CLI on PATH for DMG installs (Homebrew does this itself
-// via the cask's `binary` stanza). Our own executable path leads to the app
-// bundle: .../Keepresso.app/Contents/MacOS/keepresso-helper.
 let bundleContents = URL(fileURLWithPath: CommandLine.arguments[0])
-    .deletingLastPathComponent()  // Contents/MacOS
-    .deletingLastPathComponent()  // Contents
+    .deletingLastPathComponent()
+    .deletingLastPathComponent()
 engine.ensureCLILink(
     cliPath: bundleContents.appendingPathComponent("Helpers/keepresso").path
 )

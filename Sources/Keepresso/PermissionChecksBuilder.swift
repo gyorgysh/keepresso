@@ -5,26 +5,15 @@ import EventKit
 import UserNotifications
 import KeepressoCore
 
-/// Builds the app-permission rows for the headless-readiness Setup screen and
-/// hands them to the ``SystemReadinessController``. Extracted from ``AppModel``:
-/// the five checks shared one shape (a Bool, an ok/warn status, ok/warn detail
-/// strings, a remediation), and which permissions to show was three near-identical
-/// rule scans. Both now collapse to ``makeCheck(...)`` and
-/// ``TriggerRule/requiredPermission``.
 @MainActor
 final class PermissionChecksBuilder {
     private let readiness: SystemReadinessController
-    /// Monotonic token; only the newest rebuild's async notification result is
-    /// applied, so a slower earlier rebuild can't clobber a newer list.
     private var generation = 0
-    /// The rules of the last rebuild, so a late Location answer can redo it.
     private var lastRules: [TriggerRule]?
     private var locationObserver: NSObjectProtocol?
 
     init(readiness: SystemReadinessController) {
         self.readiness = readiness
-        // The Location status is read from a cache that fills asynchronously
-        // (see ``LocationAuthorization``), so rebuild once it lands or changes.
         locationObserver = NotificationCenter.default.addObserver(
             forName: LocationAuthorization.didChange,
             object: LocationAuthorization.shared,
@@ -37,14 +26,9 @@ final class PermissionChecksBuilder {
         }
     }
 
-    /// Rebuild the permission rows for the current rules. The login-item and the
-    /// per-rule permission statuses read synchronously; the notification status
-    /// is async, so it lands a moment later (guarded by ``generation``).
     func rebuild(for rules: [TriggerRule]) {
         lastRules = rules
         var base = [loginItemCheck()]
-        // One row per distinct permission the rule set actually needs, in the
-        // permission enum's declared order (location, bluetooth, calendar).
         for permission in TriggerRule.Permission.allCases
         where rules.contains(where: { $0.requiredPermission == permission }) {
             base.append(check(for: permission))
@@ -68,7 +52,6 @@ final class PermissionChecksBuilder {
         }
     }
 
-    // MARK: - Individual checks
 
     private func loginItemCheck() -> ReadinessCheck {
         makeCheck(
@@ -134,8 +117,6 @@ final class PermissionChecksBuilder {
         )
     }
 
-    /// The shared shape: an ok/warn status plus, when not OK, a remediation that
-    /// points at the relevant System Settings pane.
     private func makeCheck(
         id: String,
         title: String,

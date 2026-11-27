@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import KeepressoCore
 
-/// In-memory toucher that records every write and can be told to fail.
 private final class FakeToucher: DiskTouching {
     private(set) var touched: [URL] = []
     var shouldFail = false
@@ -30,7 +29,7 @@ private func makeController() -> (DiskKeepAliveController, FakeToucher, Clock) {
 @Test func disabledNeverTouches() {
     let (controller, toucher, clock) = makeController()
     clock.advance(60 * 60)
-    controller.tick(now: clock.now) // config nil
+    controller.tick(now: clock.now)
     #expect(toucher.touched.isEmpty)
 }
 
@@ -46,15 +45,15 @@ private func makeController() -> (DiskKeepAliveController, FakeToucher, Clock) {
 @Test func throttlesWithinInterval() {
     let (controller, toucher, clock) = makeController()
     controller.config = DiskKeepAliveConfig(directory: dir, interval: 300)
-    controller.tick(now: clock.now) // first touch
+    controller.tick(now: clock.now)
 
     clock.advance(299)
     controller.tick(now: clock.now)
-    #expect(toucher.touched.count == 1) // still inside the interval
+    #expect(toucher.touched.count == 1)
 
-    clock.advance(2) // 301s since the first touch
+    clock.advance(2)
     controller.tick(now: clock.now)
-    #expect(toucher.touched.count == 2) // interval elapsed → touch again
+    #expect(toucher.touched.count == 2)
 }
 
 @MainActor
@@ -65,9 +64,9 @@ private func makeController() -> (DiskKeepAliveController, FakeToucher, Clock) {
     #expect(toucher.touched.count == 1)
 
     clock.advance(10)
-    controller.config = DiskKeepAliveConfig(directory: dir, interval: 600) // changed
+    controller.config = DiskKeepAliveConfig(directory: dir, interval: 600)
     controller.tick(now: clock.now)
-    #expect(toucher.touched.count == 2) // throttle reset by the new config
+    #expect(toucher.touched.count == 2)
 }
 
 @MainActor
@@ -77,7 +76,7 @@ private func makeController() -> (DiskKeepAliveController, FakeToucher, Clock) {
     controller.config = DiskKeepAliveConfig(directory: dir, interval: 300)
     controller.tick(now: clock.now)
     #expect(controller.lastTouchFailed)
-    #expect(controller.lastTouch != nil) // attempt still timestamped, so we back off
+    #expect(controller.lastTouch != nil)
 }
 
 @MainActor
@@ -88,7 +87,7 @@ private func makeController() -> (DiskKeepAliveController, FakeToucher, Clock) {
     controller.config = nil
     clock.advance(10 * 60)
     controller.tick(now: clock.now)
-    #expect(toucher.touched.count == 1) // no further touches once off
+    #expect(toucher.touched.count == 1)
 }
 
 @Test func configEncodesRoundTrip() throws {

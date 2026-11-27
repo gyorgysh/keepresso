@@ -15,7 +15,6 @@ public struct MediaActivitySnapshot: Equatable, Sendable {
     /// Bundle ids of the processes currently capturing the microphone, from
     /// the macOS 14 per-process CoreAudio API. Lets an app-scoped mic rule ask
     /// "is *Discord* on a call" rather than "is *anything* using the mic".
-    ///
     /// These are the *capturing* process's ids, which for Electron/Chromium
     /// call apps is a child helper (`com.hnc.Discord.helper.Renderer`), not the
     /// top-level app, so callers match by bundle-id prefix. Empty when the mic
@@ -77,8 +76,6 @@ public final class CoreMediaActivityMonitor: MediaActivityMonitoring {
         self.init(probe: Self.probeSystem)
     }
 
-    /// The probe and clock are injectable so the cache can be unit-tested
-    /// without real AV hardware.
     init(
         ttl: TimeInterval = 1.5,
         now: @escaping () -> Date = Date.init,
@@ -89,11 +86,8 @@ public final class CoreMediaActivityMonitor: MediaActivityMonitoring {
 
     public var current: MediaActivitySnapshot { cache.current }
 
-    /// The real probe: sweep CoreMediaIO video devices and CoreAudio devices.
     static func probeSystem() -> MediaActivitySnapshot {
         let audio = audioActivity()
-        // Only walk the per-process list when the mic is actually live: an idle
-        // mic yields an empty capturer set without touching the process API.
         let capturers = audio.inputRunning ? currentMicCapturers() : []
         return MediaActivitySnapshot(
             cameraInUse: cameraInUse(),
@@ -103,7 +97,6 @@ public final class CoreMediaActivityMonitor: MediaActivityMonitoring {
         )
     }
 
-    // MARK: - CoreMediaIO (camera)
 
     private static func cameraInUse() -> Bool {
         var address = CMIOObjectPropertyAddress(
@@ -136,10 +129,7 @@ public final class CoreMediaActivityMonitor: MediaActivityMonitoring {
         }
     }
 
-    // MARK: - CoreAudio (microphone + playback)
 
-    /// Whether any input-capable device and any output-capable device is
-    /// running somewhere, in one sweep of the device list.
     private static func audioActivity() -> (inputRunning: Bool, outputRunning: Bool) {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
@@ -189,7 +179,6 @@ public final class CoreMediaActivityMonitor: MediaActivityMonitoring {
             && dataSize > 0
     }
 
-    // MARK: - CoreAudio (per-process microphone capture, macOS 14+)
 
     /// The processes capturing from the microphone right now, each with the
     /// bundle id CoreAudio attributes to it. Reads the process-object list
@@ -245,7 +234,6 @@ public final class CoreMediaActivityMonitor: MediaActivityMonitoring {
         let status = withUnsafeMutablePointer(to: &out) { ptr in
             AudioObjectGetPropertyData(process, &address, 0, nil, &size, ptr)
         }
-        // Core Audio hands back a +1 CFString; take ownership so it is released.
         guard status == noErr else { return nil }
         return out?.takeRetainedValue() as String?
     }

@@ -1,20 +1,11 @@
 #!/usr/bin/env swift
-//
-// make-icon.swift — generate Keepresso's Liquid Glass icon source layers.
-//
 // Splits the website's brand mark (espresso cup, crema stripe, handle, saucer,
 // three steam wisps) into stackable layers for Apple's Icon Composer (Xcode 26),
 // which assembles them into `Sources/Keepresso/AppIcon.icon` with the glass
 // material and the light / dark / tinted / clear appearances. Re-run after
 // tweaking the mark, then re-import the layers in Icon Composer:
-//
-//   swift scripts/make-icon.swift
-//
-// Output: docs/assets/icon-layers/{background,cup,steam}-{light,dark}.png (1024px).
-//
 import AppKit
 
-// Resolve the repo root from this script's location.
 let scriptURL = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
 let root = scriptURL.deletingLastPathComponent().deletingLastPathComponent()
 
@@ -22,33 +13,30 @@ func srgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat) -> NSColor {
     NSColor(srgbRed: r / 255, green: g / 255, blue: b / 255, alpha: 1)
 }
 
-/// The palette for one appearance, taken from the website's tokens.
 struct IconPalette {
     let backgroundTop: NSColor
     let backgroundBottom: NSColor
-    let cup: NSColor    // cup body, handle, saucer
-    let crema: NSColor  // the stripe inside the cup
+    let cup: NSColor
+    let crema: NSColor
     let steam: NSColor
 }
 
 let lightPalette = IconPalette(
-    backgroundTop: srgb(250, 245, 236),    // paper #FAF5EC
-    backgroundBottom: srgb(238, 223, 196), // deeper crema
-    cup: srgb(45, 32, 21),                 // dark roast ink
-    crema: srgb(180, 83, 9),               // caramel #B45309
-    steam: srgb(194, 65, 12)               // copper #C2410C
+    backgroundTop: srgb(250, 245, 236),
+    backgroundBottom: srgb(238, 223, 196),
+    cup: srgb(45, 32, 21),
+    crema: srgb(180, 83, 9),
+    steam: srgb(194, 65, 12)
 )
 
 let darkPalette = IconPalette(
-    backgroundTop: srgb(40, 30, 19),       // warm roast
-    backgroundBottom: srgb(18, 14, 10),    // deep roast #120E0A
-    cup: srgb(247, 241, 232),              // warm white ink #F7F1E8
-    crema: srgb(232, 163, 92),             // amber #E8A35C
+    backgroundTop: srgb(40, 30, 19),
+    backgroundBottom: srgb(18, 14, 10),
+    cup: srgb(247, 241, 232),
+    crema: srgb(232, 163, 92),
     steam: srgb(232, 163, 92)
 )
 
-/// The brand-mark geometry in the website SVG's 64-point grid (y pointing down).
-/// Fills: cup body and crema stripe. Strokes: handle, saucer, steam wisps.
 enum BrandMark {
     static func cup() -> CGPath {
         let p = CGMutablePath()
@@ -86,7 +74,6 @@ enum BrandMark {
         return p
     }
 
-    /// Three staggered S-curve wisps above the cup, like the site's hero mark.
     static func steamWisps() -> [CGPath] {
         [(22.5, 12.0), (30.0, 9.0), (37.5, 12.0)].map { (x, y) in
             let p = CGMutablePath()
@@ -144,7 +131,7 @@ func renderLayer(_ layer: IconLayer, pixels: CGFloat, dark: Bool) -> Data {
             ctx.setStrokeColor(palette.cup.cgColor)
             ctx.setLineWidth(3.4); ctx.addPath(BrandMark.handle()); ctx.strokePath()
             ctx.setLineWidth(3.6); ctx.addPath(BrandMark.saucer()); ctx.strokePath()
-        } else { // steam
+        } else {
             ctx.setStrokeColor(palette.steam.cgColor)
             ctx.setLineWidth(3.2)
             for wisp in BrandMark.steamWisps() { ctx.addPath(wisp); ctx.strokePath() }

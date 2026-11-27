@@ -1,7 +1,6 @@
 import SwiftUI
 import KeepressoCore
 
-/// One presentation of hook state for both onboarding and Preferences.
 struct AgentHookConnectionRow: View {
     @Bindable var model: AppModel
     let tool: AgentTool
@@ -21,8 +20,6 @@ struct AgentHookConnectionRow: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(verbatim: tool.displayName).font(compact ? .caption.weight(.medium) : .callout.weight(.medium))
                     if !compact {
-                        // The after-install step replaces the scope line, so a
-                        // connected tool still takes two lines, not three.
                         Group {
                             if let installedNote { Text(installedNote) } else { Text(subtitle) }
                         }
@@ -46,7 +43,6 @@ struct AgentHookConnectionRow: View {
         .padding(.vertical, compact ? 2 : 0)
         .accessibilityElement(children: .contain)
     }
-    /// What the user still has to do in the tool itself once connected.
     private var installedNote: LocalizedStringKey? {
         guard case .installed = state else { return nil }
         switch tool {
@@ -80,8 +76,6 @@ struct AgentHookConnectionRow: View {
     }
     private var subtitle: LocalizedStringKey {
         switch tool {
-        // Claude Code also runs inside the Claude desktop app, which reads
-        // the same settings file, like Codex inside ChatGPT.
         case .grok, .omp, .qwen, .devin, .kimi: return "CLI sessions"
         case .hermes: return "CLI and gateway sessions"
         default: return "App and CLI sessions"

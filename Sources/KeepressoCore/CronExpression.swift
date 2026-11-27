@@ -11,13 +11,13 @@ import Foundation
 /// instead of depending on the machine's. Cron is wall-clock local time, which
 /// is how Claude Desktop stores and shows it.
 public struct CronExpression: Equatable, Sendable {
-    private let minutes: Set<Int>       // 0...59
-    private let hours: Set<Int>         // 0...23
-    private let daysOfMonth: Set<Int>   // 1...31
-    private let months: Set<Int>        // 1...12
-    private let daysOfWeek: Set<Int>    // 0...6, Sunday = 0 (7 normalized to 0)
-    private let domRestricted: Bool     // the day-of-month field was not "*"
-    private let dowRestricted: Bool     // the day-of-week field was not "*"
+    private let minutes: Set<Int>
+    private let hours: Set<Int>
+    private let daysOfMonth: Set<Int>
+    private let months: Set<Int>
+    private let daysOfWeek: Set<Int>
+    private let domRestricted: Bool
+    private let dowRestricted: Bool
 
     /// Parse a standard 5-field expression. Returns `nil` for anything this
     /// codec doesn't speak (wrong field count, out-of-range value, names, or the
@@ -41,7 +41,6 @@ public struct CronExpression: Equatable, Sendable {
         dowRestricted = fields[4] != "*"
     }
 
-    /// Expand one field into the set of values it allows, or `nil` if malformed.
     static func parseField(_ field: String, min: Int, max: Int) -> Set<Int>? {
         var result = Set<Int>()
         for part in field.split(separator: ",") {
@@ -54,15 +53,12 @@ public struct CronExpression: Equatable, Sendable {
             }
             var lo = min, hi = max
             if base == "*" {
-                // Full range, optionally stepped.
             } else if let dash = base.firstIndex(of: "-") {
                 guard let a = Int(base[..<dash]),
                       let b = Int(base[base.index(after: dash)...]) else { return nil }
                 lo = a; hi = b
             } else if let v = Int(base) {
                 lo = v
-                // `n/step` means from n up to the field max, stepping; a bare `n`
-                // is just that single value.
                 hi = stepSplit.count == 2 ? max : v
             } else {
                 return nil
@@ -81,7 +77,7 @@ public struct CronExpression: Equatable, Sendable {
     public func next(after date: Date, calendar: Calendar) -> Date? {
         let unit: Set<Calendar.Component> = [.year, .month, .day, .hour, .minute]
         guard let truncated = calendar.date(from: calendar.dateComponents(unit, from: date)) else { return nil }
-        var candidate = truncated.addingTimeInterval(60)  // strictly after, minute resolution
+        var candidate = truncated.addingTimeInterval(60)
         let horizon = calendar.date(byAdding: .year, value: 5, to: truncated) ?? truncated.addingTimeInterval(5 * 366 * 86400)
 
         while candidate <= horizon {
@@ -117,9 +113,6 @@ public struct CronExpression: Equatable, Sendable {
         return result
     }
 
-    /// The classic Vixie day rule: when both day-of-month and day-of-week are
-    /// restricted, a day matches if it satisfies *either*; otherwise only the
-    /// restricted field applies (and neither restricted means every day).
     private func dayMatches(day: Int, weekday: Int) -> Bool {
         let cronDow = weekday - 1  // Calendar 1...7 (Sun...Sat) -> cron 0...6
         let domMatch = daysOfMonth.contains(day)
